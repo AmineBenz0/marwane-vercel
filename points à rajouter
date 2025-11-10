@@ -1,0 +1,56 @@
+1. Sécurité - Points à Renforcer
+# Ajoutez ces éléments à votre plan :- Hashage des mots de passe : ✅ Déjà prévu (passlib)- Rotation des tokens JWT : ⚠️ À ajouter (refresh tokens)- Rate limiting sur les endpoints : ⚠️ Non mentionné- Validation des entrées : ✅ Prévu (Pydantic)- Protection CSRF : ⚠️ À considérer- Logs de sécurité : ⚠️ Non mentionné
+Recommandation : Ajoutez un système de refresh tokens pour JWT et implémentez un rate limiting (ex: slowapi pour FastAPI) pour prévenir les attaques par force brute.
+
+2. Base de Données - Améliorations
+Point manquant critique : Les contraintes métier
+-- Exemples de contraintes à ajouter :ALTER TABLE Transactions ADD CONSTRAINT check_montant_positif CHECK (montant_total > 0);ALTER TABLE Transactions ADD CONSTRAINT check_client_ou_fournisseur CHECK (  (id_client IS NOT NULL AND id_fournisseur IS NULL)   OR   (id_fournisseur IS NOT NULL AND id_client IS NULL));
+Autre recommandation :
+Ajoutez des index sur les colonnes fréquemment requêtées (date_transaction, id_client, id_fournisseur)
+Considérez une table Moyens_Paiement si les transactions peuvent être réglées autrement qu'en espèces
+
+3. Audit et Traçabilité - Extension
+Votre système d'audit est bon, mais pourrait être étendu :
+
+# Au-delà de Transactions_Audit, considérez :
+- Logs applicatifs structurés (avec Python logging + ELK stack ou Loki)
+- Audit des actions de connexion/déconnexion
+- Backup automatique quotidien de la base de données
+
+4. Gestion de la Caisse - Clarification Nécessaire
+⚠️ Point d'attention majeur : La relation entre Transactions et Caisse n'est pas claire dans votre modèle :
+Mermaid Syntax Error
+View diagram source
+Questions à clarifier :
+1. Un mouvement de caisse est-il TOUJOURS lié à une transaction ?
+2. Peut-on avoir des mouvements de caisse indépendants (versements, retraits) ?
+3. Comment gérez-vous le solde de la caisse ?
+4. Faut-il une table Caisse_Historique pour tracer l'évolution du solde ?
+Suggestion : Ajoutez une colonne type_mouvement (entrée/sortie) et une vue matérialisée pour le solde en temps réel.
+
+5. Frontend - Recommandations UX
+Questions à clarifier :
+1. Un mouvement de caisse est-il TOUJOURS lié à une transaction ? : Oui
+2. Peut-on avoir des mouvements de caisse indépendants (versements, retraits) ? : Non
+3. Comment gérez-vous le solde de la caisse ? : Le solde de la caisse est géré par la table Caisse
+4. Faut-il une table Caisse_Historique pour tracer l'évolution du solde ? : Oui
+
+6. Tests et Qualité - À Enrichir
+Votre section tests est minimaliste. Ajoutez :
+// Fonctionnalités à prévoir :
+- Notifications en temps réel (WebSocket ou Server-Sent Events)
+- Mode hors-ligne avec synchronisation (pour zones à connexion instable)
+- Export Excel/PDF des rapports (pour faciliter la transition)
+- Tableau de bord avec graphiques (recharts ou chart.js)
+- Filtres avancés et recherche full-text
+- Validation en temps réel des formulaires
+
+# Backend
+- Tests unitaires des fonctions métier
+- Tests d'intégration des endpoints (✅ déjà prévu)
+- Tests de charge (Locust ou K6) pour vérifier les performances
+- Tests de sécurité (OWASP Top 10)
+
+# Frontend
+- Tests end-to-end avec Playwright ou Cypress
+- Tests d'accessibilité (axe-core)
