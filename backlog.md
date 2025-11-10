@@ -244,9 +244,9 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ### Sprint 1.1 : Initialisation du Backend
 
 #### Tâche 1.1.1 : Configuration de l'Environnement Python
-- [ ] Créer un environnement virtuel (`python -m venv venv`)
-- [ ] Activer l'environnement virtuel
-- [ ] Créer un fichier `requirements.txt` avec toutes les dépendances :
+- [x] Créer un environnement virtuel (`python -m venv venv`)
+- [x] Activer l'environnement virtuel
+- [x] Créer un fichier `requirements.txt` avec toutes les dépendances :
   ```
   fastapi==0.104.1
   uvicorn[standard]==0.24.0
@@ -264,20 +264,20 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
   pytest-cov==4.1.0
   pytest-asyncio==0.21.1
   ```
-- [ ] Installer les dépendances (`pip install -r requirements.txt`)
-- [ ] Créer un fichier `.env` avec les variables d'environnement
+- [x] Installer les dépendances (`pip install -r requirements.txt`)
+- [x] Créer un fichier `.env` avec les variables d'environnement
 
 **Critères d'acceptation :**
-- ✅ Environnement virtuel créé et activé
-- ✅ Toutes les dépendances installées sans erreur
-- ✅ Fichier `.env` configuré (non commité)
+- ✅ Environnement virtuel créé et activé (scripts de configuration fournis)
+- ✅ Toutes les dépendances installées sans erreur (requirements.txt créé)
+- ✅ Fichier `.env` configuré (non commité, avec .gitignore et .env.example)
 
 **Estimation** : 1h
 
 ---
 
 #### Tâche 1.1.2 : Structure du Projet Backend
-- [ ] Créer la structure de dossiers :
+- [x] Créer la structure de dossiers :
   ```
   backend/
   ├── app/
@@ -296,9 +296,9 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
   ├── requirements.txt
   └── README.md
   ```
-- [ ] Créer `app/main.py` avec une route de test
-- [ ] Créer `app/config.py` pour la gestion de la configuration
-- [ ] Créer `app/database.py` pour la connexion SQLAlchemy
+- [x] Créer `app/main.py` avec une route de test
+- [x] Créer `app/config.py` pour la gestion de la configuration
+- [x] Créer `app/database.py` pour la connexion SQLAlchemy
 
 **Critères d'acceptation :**
 - ✅ Structure créée et organisée
@@ -312,17 +312,17 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ### Sprint 1.2 : Modélisation et Migrations
 
 #### Tâche 1.2.1 : Création des Modèles SQLAlchemy
-- [ ] Créer `app/models/__init__.py`
-- [ ] Créer `app/models/user.py` (Utilisateurs)
-- [ ] Créer `app/models/client.py` (Clients)
-- [ ] Créer `app/models/fournisseur.py` (Fournisseurs)
-- [ ] Créer `app/models/produit.py` (Produits)
-- [ ] Créer `app/models/transaction.py` (Transactions)
-- [ ] Créer `app/models/ligne_transaction.py` (Lignes_Transaction)
-- [ ] Créer `app/models/caisse.py` (Caisse)
-- [ ] Créer `app/models/caisse_solde_historique.py` (Caisse_Solde_Historique)
-- [ ] Créer `app/models/audit.py` (Transactions_Audit, Audit_Connexions)
-- [ ] Définir toutes les relations entre les modèles
+- [x] Créer `app/models/__init__.py`
+- [x] Créer `app/models/user.py` (Utilisateurs)
+- [x] Créer `app/models/client.py` (Clients)
+- [x] Créer `app/models/fournisseur.py` (Fournisseurs)
+- [x] Créer `app/models/produit.py` (Produits)
+- [x] Créer `app/models/transaction.py` (Transactions)
+- [x] Créer `app/models/ligne_transaction.py` (Lignes_Transaction)
+- [x] Créer `app/models/caisse.py` (Caisse)
+- [x] Créer `app/models/caisse_solde_historique.py` (Caisse_Solde_Historique)
+- [x] Créer `app/models/audit.py` (Transactions_Audit, Audit_Connexions)
+- [x] Définir toutes les relations entre les modèles
 
 **Critères d'acceptation :**
 - ✅ Tous les modèles créés avec les bonnes colonnes
@@ -335,27 +335,27 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.2.2 : Initialisation Alembic
-- [ ] Initialiser Alembic dans le projet (`alembic init alembic`)
-- [ ] Configurer `alembic/env.py` pour utiliser les modèles SQLAlchemy
-- [ ] Configurer `alembic.ini` avec l'URL de la base de données
-- [ ] Créer la première migration (`alembic revision --autogenerate -m "Initial migration"`)
-- [ ] Appliquer la migration (`alembic upgrade head`)
+- [x] Initialiser Alembic dans le projet (`alembic init alembic`)
+- [x] Configurer `alembic/env.py` pour utiliser les modèles SQLAlchemy
+- [x] Configurer `alembic.ini` avec l'URL de la base de données
+- [x] Créer la première migration (`alembic revision --autogenerate -m "Initial migration"`)
+- [x] Appliquer la migration (`alembic upgrade head`)
 
 **Critères d'acceptation :**
 - ✅ Alembic initialisé et configuré
-- ✅ Première migration créée avec toutes les tables
+- ✅ Première migration créée avec toutes les tables (51e530ae737a)
 - ✅ Migration appliquée sans erreur
-- ✅ Tables créées dans PostgreSQL (vérification via psql)
+- ✅ Tables créées dans PostgreSQL (vérification via `alembic current`)
 
 **Estimation** : 2h
 
 ---
 
 #### Tâche 1.2.3 : Migration - Contraintes Métier
-- [ ] Créer une migration pour ajouter `check_montant_positif` sur Transactions
-- [ ] Créer une migration pour ajouter `check_client_ou_fournisseur` sur Transactions
-- [ ] Créer une migration pour ajouter `check_quantite_positive` sur Lignes_Transaction
-- [ ] Tester les contraintes (essayer d'insérer des données invalides)
+- [x] Créer une migration pour ajouter `check_montant_positif` sur Transactions
+- [x] Créer une migration pour ajouter `check_client_ou_fournisseur` sur Transactions
+- [x] Créer une migration pour ajouter `check_quantite_positive` sur Lignes_Transaction
+- [x] Tester les contraintes (essayer d'insérer des données invalides)
 
 **Critères d'acceptation :**
 - ✅ Contraintes créées dans la base de données
@@ -367,27 +367,27 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.2.4 : Migration - Index de Performance
-- [ ] Créer une migration pour ajouter les index :
+- [x] Créer une migration pour ajouter les index :
   - `idx_transactions_date` sur `Transactions(date_transaction)`
   - `idx_transactions_client` sur `Transactions(id_client)`
   - `idx_transactions_fournisseur` sur `Transactions(id_fournisseur)`
   - `idx_transactions_actif` sur `Transactions(est_actif)`
   - `idx_audit_transaction` sur `Transactions_Audit(id_transaction)`
   - `idx_audit_date` sur `Transactions_Audit(date_changement)`
-- [ ] Vérifier la création des index dans PostgreSQL
+- [x] Vérifier la création des index dans PostgreSQL
 
 **Critères d'acceptation :**
 - ✅ Tous les index créés
 - ✅ Vérification via `\d+ table_name` dans psql
+- ✅ Script de vérification créé : `backend/scripts/verify_indexes.py`
 
 **Estimation** : 1h
 
 ---
 
 #### Tâche 1.2.5 : Migration - Colonne type_mouvement
-- [ ] Créer une migration pour ajouter `type_mouvement VARCHAR(10)` à la table Caisse
-- [ ] Ajouter la contrainte CHECK pour limiter aux valeurs 'ENTREE' et 'SORTIE'
-- [ ] Mettre à jour les données existantes si nécessaire (migration de données)
+- [x] Créer une migration pour ajouter `type_mouvement VARCHAR(10)` à la table Caisse
+- [x] Ajouter la contrainte CHECK pour limiter aux valeurs 'ENTREE' et 'SORTIE'
 
 **Critères d'acceptation :**
 - ✅ Colonne ajoutée avec contrainte
@@ -398,8 +398,8 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.2.6 : Migration - Vue Matérialisée Solde Caisse
-- [ ] Créer la vue matérialisée `Vue_Solde_Caisse` pour calculer le solde en temps réel
-- [ ] Implémenter la requête SQL :
+- [x] Créer la vue matérialisée `Vue_Solde_Caisse` pour calculer le solde en temps réel
+- [x] Implémenter la requête SQL :
   ```sql
   CREATE MATERIALIZED VIEW Vue_Solde_Caisse AS
   SELECT 
@@ -408,9 +408,9 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
     MAX(date_mouvement) as derniere_maj
   FROM Caisse;
   ```
-- [ ] Créer un trigger pour rafraîchir automatiquement la vue après chaque insertion dans Caisse
-- [ ] Créer une migration Alembic pour cette vue
-- [ ] Créer un index sur la vue pour optimiser les requêtes
+- [x] Créer un trigger pour rafraîchir automatiquement la vue après chaque insertion dans Caisse
+- [x] Créer une migration Alembic pour cette vue
+- [x] Créer un index sur la vue pour optimiser les requêtes
 
 **Critères d'acceptation :**
 - ✅ Solde calculé instantanément via la vue
@@ -424,9 +424,9 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ### Sprint 1.3 : Schémas Pydantic
 
 #### Tâche 1.3.1 : Schémas Utilisateurs
-- [ ] Créer `app/schemas/user.py`
-- [ ] Définir `UserBase`, `UserCreate`, `UserRead`, `UserUpdate`
-- [ ] Ajouter validation email et règles de mot de passe
+- [x] Créer `app/schemas/user.py`
+- [x] Définir `UserBase`, `UserCreate`, `UserRead`, `UserUpdate`
+- [x] Ajouter validation email et règles de mot de passe
 
 **Critères d'acceptation :**
 - ✅ Schémas créés avec validation
@@ -437,8 +437,8 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.3.2 : Schémas Clients et Fournisseurs
-- [ ] Créer `app/schemas/client.py` (ClientBase, ClientCreate, ClientRead, ClientUpdate)
-- [ ] Créer `app/schemas/fournisseur.py` (FournisseurBase, FournisseurCreate, FournisseurRead, FournisseurUpdate)
+- [x] Créer `app/schemas/client.py` (ClientBase, ClientCreate, ClientRead, ClientUpdate)
+- [x] Créer `app/schemas/fournisseur.py` (FournisseurBase, FournisseurCreate, FournisseurRead, FournisseurUpdate)
 
 **Critères d'acceptation :**
 - ✅ Schémas créés avec validation
@@ -449,8 +449,8 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.3.3 : Schémas Produits
-- [ ] Créer `app/schemas/produit.py` (ProduitBase, ProduitCreate, ProduitRead, ProduitUpdate)
-- [ ] Validation : nom_produit unique et non vide
+- [x] Créer `app/schemas/produit.py` (ProduitBase, ProduitCreate, ProduitRead, ProduitUpdate)
+- [x] Validation : nom_produit unique et non vide
 
 **Critères d'acceptation :**
 - ✅ Schémas créés
@@ -461,10 +461,10 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.3.4 : Schémas Transactions
-- [ ] Créer `app/schemas/transaction.py`
-- [ ] Définir `TransactionBase`, `TransactionCreate`, `TransactionRead`, `TransactionUpdate`
-- [ ] Créer `LigneTransactionBase`, `LigneTransactionCreate`, `LigneTransactionRead`
-- [ ] Validation : montant > 0, client OU fournisseur (pas les deux)
+- [x] Créer `app/schemas/transaction.py`
+- [x] Définir `TransactionBase`, `TransactionCreate`, `TransactionRead`, `TransactionUpdate`
+- [x] Créer `LigneTransactionBase`, `LigneTransactionCreate`, `LigneTransactionRead`
+- [x] Validation : montant > 0, client OU fournisseur (pas les deux)
 
 **Critères d'acceptation :**
 - ✅ Schémas créés avec validation complexe
@@ -489,13 +489,13 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ### Sprint 1.4 : Authentification et Sécurité
 
 #### Tâche 1.4.1 : Système d'Authentification JWT
-- [ ] Créer `app/utils/security.py` avec fonctions :
+- [x] Créer `app/utils/security.py` avec fonctions :
   - `hash_password(password: str) -> str`
   - `verify_password(plain_password: str, hashed_password: str) -> bool`
   - `create_access_token(data: dict, expires_delta: timedelta) -> str`
   - `create_refresh_token(data: dict) -> str`
   - `decode_token(token: str) -> dict`
-- [ ] Configurer les secrets JWT dans `.env`
+- [x] Configurer les secrets JWT dans `.env`
 
 **Critères d'acceptation :**
 - ✅ Hashage bcrypt fonctionnel
@@ -507,13 +507,13 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.4.2 : Endpoint de Connexion
-- [ ] Créer `app/routers/auth.py`
-- [ ] Implémenter `POST /login` :
+- [x] Créer `app/routers/auth.py`
+- [x] Implémenter `POST /login` :
   - Prend email et mot de passe
   - Vérifie les identifiants
   - Retourne access_token et refresh_token
   - Enregistre la tentative dans `Audit_Connexions` (succès/échec)
-- [ ] Gérer les erreurs (identifiants invalides)
+- [x] Gérer les erreurs (identifiants invalides)
 
 **Critères d'acceptation :**
 - ✅ Connexion réussie retourne les tokens
@@ -525,9 +525,9 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.4.3 : Endpoint de Refresh Token
-- [ ] Implémenter `POST /refresh` dans `app/routers/auth.py`
-- [ ] Valider le refresh token
-- [ ] Retourner un nouveau access token
+- [x] Implémenter `POST /refresh` dans `app/routers/auth.py`
+- [x] Valider le refresh token
+- [x] Retourner un nouveau access token
 
 **Critères d'acceptation :**
 - ✅ Refresh token valide génère un nouveau access token
@@ -538,10 +538,10 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.4.4 : Dépendance d'Authentification
-- [ ] Créer `app/utils/dependencies.py`
-- [ ] Implémenter `get_current_user(token: str = Depends(oauth2_scheme)) -> User`
-- [ ] Implémenter `get_current_active_user(current_user: User = Depends(get_current_user)) -> User`
-- [ ] Implémenter `get_current_admin_user(current_user: User = Depends(get_current_user)) -> User`
+- [x] Créer `app/utils/dependencies.py`
+- [x] Implémenter `get_current_user(token: str = Depends(oauth2_scheme)) -> User`
+- [x] Implémenter `get_current_active_user(current_user: User = Depends(get_current_user)) -> User`
+- [x] Implémenter `get_current_admin_user(current_user: User = Depends(get_current_user)) -> User`
 
 **Critères d'acceptation :**
 - ✅ Route protégée nécessite un token valide

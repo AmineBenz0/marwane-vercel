@@ -17,7 +17,7 @@ services:
       - comptabilite_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-comptabilite_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-comptabilite_user} -d ${POSTGRES_DB:-comptabilite_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
