@@ -235,7 +235,7 @@ function Dashboard() {
             icon={<AccountBalanceIcon />}
             color="primary"
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
           />
         </Grid>
         
@@ -258,7 +258,7 @@ function Dashboard() {
             icon={<TrendingUpIcon />}
             color="success"
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
           />
         </Grid>
         
@@ -270,7 +270,7 @@ function Dashboard() {
             icon={<TrendingDownIcon />}
             color="warning"
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
           />
         </Grid>
       </Grid>
@@ -307,7 +307,7 @@ function Dashboard() {
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  label={{ value: 'Montant (€)', angle: 90, position: 'insideRight' }}
+                  label={{ value: 'Montant (MAD)', angle: 90, position: 'insideRight' }}
                 />
                 <Tooltip
                   formatter={(value, name) => {
@@ -318,7 +318,7 @@ function Dashboard() {
                       return [
                         new Intl.NumberFormat('fr-FR', {
                           style: 'currency',
-                          currency: 'EUR',
+                          currency: 'MAD',
                         }).format(value),
                         'Montant',
                       ];
@@ -344,7 +344,7 @@ function Dashboard() {
                   dataKey="total"
                   stroke={theme.palette.secondary.main}
                   strokeWidth={2}
-                  name="Montant total (€)"
+                  name="Montant total (MAD)"
                   dot={{ r: 4 }}
                   activeDot={{ r: 6 }}
                 />

@@ -42,6 +42,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
+  Restore as RestoreIcon,
 } from '@mui/icons-material';
 
 /**
@@ -53,6 +54,7 @@ function DataGrid({
   onEdit,
   onDelete,
   onView,
+  onReactivate, // Nouvelle prop pour réactiver une ligne
   loading = false,
   pageSize: initialPageSize = 10,
   showActions = true,
@@ -190,6 +192,15 @@ function DataGrid({
     }
   };
 
+  /**
+   * Gère le clic sur le bouton de réactivation.
+   */
+  const handleReactivate = (row) => {
+    if (onReactivate) {
+      onReactivate(row);
+    }
+  };
+
   // Si aucune colonne n'est définie, ne rien afficher
   if (!columns || columns.length === 0) {
     return (
@@ -260,18 +271,18 @@ function DataGrid({
                   )}
                 </TableCell>
               ))}
-              {showActions && (onEdit || onDelete || onView) && (
-                <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+              {showActions && (onEdit || onDelete || onView || onReactivate) && (
+                <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 150 }}>
                   Actions
                 </TableCell>
               )}
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
+              {loading ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + (showActions && (onEdit || onDelete || onView) ? 1 : 0)}
+                  colSpan={columns.length + (showActions && (onEdit || onDelete || onView || onReactivate) ? 1 : 0)}
                   align="center"
                   sx={{ py: 4 }}
                 >
@@ -281,7 +292,7 @@ function DataGrid({
             ) : paginatedRows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + (showActions && (onEdit || onDelete || onView) ? 1 : 0)}
+                  colSpan={columns.length + (showActions && (onEdit || onDelete || onView || onReactivate) ? 1 : 0)}
                   align="center"
                   sx={{ py: 4 }}
                 >
@@ -335,7 +346,18 @@ function DataGrid({
                             </IconButton>
                           </Tooltip>
                         )}
-                        {onDelete && (
+                        {/* Afficher "Réactiver" si la ligne est inactive, sinon "Supprimer" */}
+                        {row.est_actif === false && onReactivate ? (
+                          <Tooltip title="Réactiver">
+                            <IconButton
+                              size="small"
+                              color="success"
+                              onClick={() => handleReactivate(row)}
+                            >
+                              <RestoreIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ) : onDelete ? (
                           <Tooltip title="Supprimer">
                             <IconButton
                               size="small"
@@ -345,7 +367,7 @@ function DataGrid({
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        )}
+                        ) : null}
                       </Box>
                     </TableCell>
                   )}

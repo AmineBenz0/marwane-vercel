@@ -28,7 +28,7 @@ export function BasicStatCardExample() {
             value={125000.50}
             icon={<AccountBalanceIcon />}
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -57,7 +57,7 @@ export function StatCardWithIncreaseExample() {
             value={45000}
             icon={<ShoppingCartIcon />}
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
             variation={{
               value: 12.5,
               type: 'increase',
@@ -85,7 +85,7 @@ export function StatCardWithDecreaseExample() {
             value={32000}
             icon={<TrendingUpIcon />}
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
             variation={{
               value: 8.3,
               type: 'decrease',
@@ -139,7 +139,7 @@ export function DashboardStatCardsExample() {
             value={125000.50}
             icon={<AccountBalanceIcon />}
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
             variation={{
               value: 5.2,
               type: 'increase',
@@ -169,7 +169,7 @@ export function DashboardStatCardsExample() {
             value={45000}
             icon={<ShoppingCartIcon />}
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
             variation={{
               value: 12.5,
               type: 'increase',
@@ -185,7 +185,7 @@ export function DashboardStatCardsExample() {
             value={32000}
             icon={<TrendingUpIcon />}
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
             variation={{
               value: 8.3,
               type: 'decrease',

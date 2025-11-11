@@ -127,7 +127,7 @@ def create_client(
     new_client = Client(
         nom_client=client_data.nom_client.strip(),
         est_actif=client_data.est_actif,
-        id_utilisateur_creation=current_user.id_utilisateur
+        id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )
     
     db.add(new_client)
@@ -194,8 +194,9 @@ def update_client(
         else:
             setattr(client, field, value)
     
-    # Enregistrer l'utilisateur qui a modifié
-    client.id_utilisateur_modification = current_user.id_utilisateur
+    # Enregistrer l'utilisateur qui a modifié (si authentification activée)
+    if current_user:
+        client.id_utilisateur_modification = current_user.id_utilisateur
     
     db.commit()
     db.refresh(client)
@@ -242,9 +243,62 @@ def delete_client(
     
     # Soft delete : mettre est_actif à False
     client.est_actif = False
-    client.id_utilisateur_modification = current_user.id_utilisateur
+    # Enregistrer l'utilisateur qui a modifié (si authentification activée)
+    if current_user:
+        client.id_utilisateur_modification = current_user.id_utilisateur
     
     db.commit()
     
     return None
+
+
+@router.patch("/{id}/reactivate", response_model=ClientRead, status_code=status.HTTP_200_OK)
+def reactivate_client(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """
+    Réactive un client inactif.
+    
+    Effectue l'inverse du soft delete en remettant est_actif à True.
+    Enregistre automatiquement l'ID de l'utilisateur qui a réactivé le client.
+    
+    Args:
+        id: ID du client à réactiver
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance)
+        
+    Returns:
+        Client réactivé (ClientRead)
+        
+    Raises:
+        HTTPException 404: Si le client n'existe pas
+        HTTPException 400: Si le client est déjà actif
+    """
+    client = db.query(Client).filter(Client.id_client == id).first()
+    
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Client avec l'ID {id} introuvable"
+        )
+    
+    # Vérifier si le client est déjà actif
+    if client.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le client avec l'ID {id} est déjà actif"
+        )
+    
+    # Réactiver : mettre est_actif à True
+    client.est_actif = True
+    # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
+    if current_user:
+        client.id_utilisateur_modification = current_user.id_utilisateur
+    
+    db.commit()
+    db.refresh(client)
+    
+    return client
 

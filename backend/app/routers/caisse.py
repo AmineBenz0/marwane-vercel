@@ -53,7 +53,12 @@ def get_mouvements(
     Returns:
         Liste des mouvements de caisse (MouvementCaisseRead)
     """
-    query = db.query(Caisse)
+    # Filtrer pour ne montrer que les mouvements liés aux transactions actives
+    query = db.query(Caisse).join(
+        Transaction, Caisse.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.est_actif == True
+    )
     
     # Filtre par date
     if date_debut:
@@ -99,20 +104,31 @@ def get_solde(
         Solde actuel de la caisse avec la date du dernier mouvement (SoldeCaisseRead)
     """
     # Calculer le solde : somme des entrées - somme des sorties
+    # IMPORTANT : Ne compter que les mouvements liés aux transactions actives
     # Calculer séparément les entrées et sorties
-    entrees = db.query(func.coalesce(func.sum(Caisse.montant), 0)).filter(
-        Caisse.type_mouvement == 'ENTREE'
+    entrees = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
+        Transaction, Caisse.id_transaction == Transaction.id_transaction
+    ).filter(
+        Caisse.type_mouvement == 'ENTREE',
+        Transaction.est_actif == True
     ).scalar() or Decimal('0.00')
     
-    sorties = db.query(func.coalesce(func.sum(Caisse.montant), 0)).filter(
-        Caisse.type_mouvement == 'SORTIE'
+    sorties = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
+        Transaction, Caisse.id_transaction == Transaction.id_transaction
+    ).filter(
+        Caisse.type_mouvement == 'SORTIE',
+        Transaction.est_actif == True
     ).scalar() or Decimal('0.00')
     
     # Calculer le solde
     solde_actuel = Decimal(str(entrees)) - Decimal(str(sorties))
     
-    # Récupérer la date du dernier mouvement
-    derniere_maj = db.query(func.max(Caisse.date_mouvement)).scalar()
+    # Récupérer la date du dernier mouvement (uniquement des transactions actives)
+    derniere_maj = db.query(func.max(Caisse.date_mouvement)).join(
+        Transaction, Caisse.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.est_actif == True
+    ).scalar()
     if not derniere_maj:
         derniere_maj = datetime.now()
     

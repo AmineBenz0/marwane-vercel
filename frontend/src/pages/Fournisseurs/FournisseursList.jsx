@@ -29,15 +29,19 @@ import {
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
 import ModalForm from '../../components/ModalForm/ModalForm';
-import { get, post, put, del } from '../../services/api';
+import { get, post, put, patch, del } from '../../services/api';
 import * as yup from 'yup';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { format } from 'date-fns';
+import useNotification from '../../hooks/useNotification';
 
 /**
  * Composant FournisseursList.
  */
 function FournisseursList() {
+  // Hook pour les notifications
+  const notification = useNotification();
+
   // État pour les fournisseurs
   const [fournisseurs, setFournisseurs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -232,6 +236,25 @@ function FournisseursList() {
   const handleDeleteCancel = () => {
     setDeleteDialogOpen(false);
     setFournisseurToDelete(null);
+  };
+
+  /**
+   * Gère la réactivation d'un fournisseur.
+   */
+  const handleReactivate = async (fournisseur) => {
+    try {
+      // Appeler l'API pour réactiver (PATCH)
+      await patch(`/fournisseurs/${fournisseur.id_fournisseur}/reactivate`, {});
+      
+      // Rafraîchir la liste
+      await fetchFournisseurs();
+      
+      // Notification de succès
+      notification.success('Fournisseur réactivé avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la réactivation:', err);
+      setError(err?.message || 'Une erreur est survenue lors de la réactivation');
+    }
   };
 
   /**
@@ -430,6 +453,7 @@ function FournisseursList() {
         columns={columns}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
+        onReactivate={handleReactivate}
         loading={loading}
         pageSize={10}
         showActions={true}

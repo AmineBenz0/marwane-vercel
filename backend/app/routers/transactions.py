@@ -412,18 +412,65 @@ def update_transaction(
                 detail=f"Fournisseur avec l'ID {transaction_data.id_fournisseur} introuvable"
             )
     
-    # Mettre à jour les champs fournis
-    update_data = transaction_data.model_dump(exclude_unset=True)
+    # Gérer la mise à jour des lignes si fournies
+    lignes_provided = transaction_data.lignes is not None
+    if lignes_provided:
+        # Vérifier que tous les produits existent
+        produit_ids = [ligne.id_produit for ligne in transaction_data.lignes]
+        produits = db.query(Produit).filter(Produit.id_produit.in_(produit_ids)).all()
+        produits_ids_found = {p.id_produit for p in produits}
+        
+        for produit_id in produit_ids:
+            if produit_id not in produits_ids_found:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Produit avec l'ID {produit_id} introuvable"
+                )
+        
+        # Calculer le nouveau montant total à partir des lignes
+        new_montant_total = transaction_data.calculate_montant_total_from_lignes()
+        
+        # Supprimer les anciennes lignes
+        db.query(LigneTransaction).filter(
+            LigneTransaction.id_transaction == id
+        ).delete()
+        
+        # Créer les nouvelles lignes
+        for ligne_data in transaction_data.lignes:
+            new_ligne = LigneTransaction(
+                id_transaction=transaction.id_transaction,
+                id_produit=ligne_data.id_produit,
+                quantite=ligne_data.quantite
+            )
+            db.add(new_ligne)
+        
+        # Mettre à jour le montant total
+        transaction.montant_total = new_montant_total
+    
+    # Mettre à jour les autres champs fournis (exclure lignes et montant_total si lignes fournies)
+    update_data = transaction_data.model_dump(exclude_unset=True, exclude={'lignes'})
+    if lignes_provided:
+        update_data.pop('montant_total', None)  # Ne pas écraser le montant calculé
     
     for field, value in update_data.items():
         setattr(transaction, field, value)
     
-    # Enregistrer l'utilisateur qui a modifié
+    # Enregistrer l'utilisateur qui a modifié (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
     
     db.commit()
     db.refresh(transaction)
+    
+    # Mettre à jour le mouvement de caisse associé si le montant a changé
+    mouvement_caisse = db.query(Caisse).filter(
+        Caisse.id_transaction == transaction.id_transaction
+    ).first()
+    
+    if mouvement_caisse and mouvement_caisse.montant != transaction.montant_total:
+        # Le montant a changé, mettre à jour le mouvement de caisse
+        mouvement_caisse.montant = transaction.montant_total
+        db.commit()
     
     # Charger les lignes
     lignes = db.query(LigneTransaction).filter(
@@ -487,10 +534,82 @@ def delete_transaction(
     
     # Soft delete : mettre est_actif à False
     transaction.est_actif = False
+    # Enregistrer l'utilisateur qui a modifié (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
     
     db.commit()
     
     return None
+
+
+@router.patch("/{id}/reactivate", response_model=TransactionReadWithLines, status_code=status.HTTP_200_OK)
+def reactivate_transaction(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """
+    Réactive une transaction inactive.
+    
+    Effectue l'inverse du soft delete en remettant est_actif à True.
+    Enregistre automatiquement l'ID de l'utilisateur qui a réactivé la transaction.
+    
+    Args:
+        id: ID de la transaction à réactiver
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance)
+        
+    Returns:
+        Transaction réactivée avec ses lignes (TransactionReadWithLines)
+        
+    Raises:
+        HTTPException 404: Si la transaction n'existe pas
+        HTTPException 400: Si la transaction est déjà active
+    """
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == id).first()
+    
+    if not transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transaction avec l'ID {id} introuvable"
+        )
+    
+    # Vérifier si la transaction est déjà active
+    if transaction.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La transaction avec l'ID {id} est déjà active"
+        )
+    
+    # Réactiver : mettre est_actif à True
+    transaction.est_actif = True
+    # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
+    if current_user:
+        transaction.id_utilisateur_modification = current_user.id_utilisateur
+    
+    db.commit()
+    db.refresh(transaction)
+    
+    # Charger les lignes
+    lignes = db.query(LigneTransaction).filter(
+        LigneTransaction.id_transaction == transaction.id_transaction
+    ).all()
+    
+    # Construire la réponse
+    transaction_dict = {
+        "id_transaction": transaction.id_transaction,
+        "date_transaction": transaction.date_transaction,
+        "montant_total": transaction.montant_total,
+        "est_actif": transaction.est_actif,
+        "id_client": transaction.id_client,
+        "id_fournisseur": transaction.id_fournisseur,
+        "date_creation": transaction.date_creation,
+        "date_modification": transaction.date_modification,
+        "id_utilisateur_creation": transaction.id_utilisateur_creation,
+        "id_utilisateur_modification": transaction.id_utilisateur_modification,
+        "lignes_transaction": lignes
+    }
+    
+    return TransactionReadWithLines(**transaction_dict)
 

@@ -1,5 +1,14 @@
 """
-Configuration et fixtures communes pour les tests.
+Configuration et fixtures communes pour les tests backend.
+
+Ce module configure l'environnement de test avec :
+- Une base de données SQLite en mémoire pour l'isolation des tests
+- Un client de test FastAPI pour les requêtes HTTP
+- Des fixtures pour créer des utilisateurs de test
+- Une réinitialisation automatique du rate limiter entre les tests
+
+Toutes les fixtures utilisent une base de données isolée qui est créée
+avant chaque test et supprimée après, garantissant l'isolation complète.
 """
 import os
 import pytest
@@ -42,8 +51,14 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 @pytest.fixture(scope="function")
 def db_session():
     """
-    Crée une session de base de données pour les tests.
-    Les tables sont créées avant chaque test et supprimées après.
+    Fixture pour la session de base de données de test.
+    
+    Crée une session SQLite en mémoire isolée pour chaque test.
+    Les tables sont créées avant chaque test et supprimées après,
+    garantissant une isolation complète entre les tests.
+    
+    Yields:
+        Session: Session SQLAlchemy pour la base de données de test
     """
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
@@ -73,7 +88,17 @@ def reset_rate_limiter():
 @pytest.fixture(scope="function")
 def client(db_session):
     """
-    Crée un client de test FastAPI avec une base de données de test.
+    Fixture pour le client de test FastAPI.
+    
+    Crée un client HTTP de test qui utilise la base de données de test
+    au lieu de la base de données de production. Toutes les dépendances
+    de base de données sont automatiquement remplacées.
+    
+    Args:
+        db_session: Session de base de données de test (injectée automatiquement)
+    
+    Yields:
+        TestClient: Client FastAPI pour effectuer des requêtes HTTP de test
     """
     def override_get_db():
         try:
@@ -90,7 +115,17 @@ def client(db_session):
 @pytest.fixture
 def test_user(db_session):
     """
-    Crée un utilisateur de test dans la base de données.
+    Fixture pour créer un utilisateur de test admin.
+    
+    Crée un utilisateur de test avec le rôle 'admin' dans la base de données.
+    Le mot de passe est 'TestPass123!' et peut être utilisé pour les tests
+    d'authentification.
+    
+    Args:
+        db_session: Session de base de données de test (injectée automatiquement)
+    
+    Returns:
+        Utilisateur: Instance de l'utilisateur de test créé
     """
     # Utiliser bcrypt directement pour éviter le problème de détection de bug passlib
     password = "TestPass123!"

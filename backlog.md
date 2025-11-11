@@ -13,9 +13,10 @@ Voici le backlog qu'on a créé, qu'en penses-tu ? et aurais-tu des suggestions 
 | **Phase 0** : Préparation | ✅ Terminé | 100% | 2-3 jours | Sprint 0.1 (3 tâches) |
 | **Phase 1** : Backend | 🟡 En cours | ~67% | 4-5 semaines | Sprints 1.1 à 1.12 (40+ tâches) |
 | **Phase 2** : Frontend | 🟡 En cours | ~3% | 4-5 semaines | Sprints 2.1 à 2.11 (30+ tâches) |
+| **Phase 2.5** : Profils & Créances | ⚪ Non démarré | 0% | 2-3 jours | Sprints 2.12 à 2.13 (14 tâches) |
 | **Phase 3** : Tests & Déploiement | ⚪ Non démarré | 0% | 3 semaines | Sprints 3.1 à 3.7 (25+ tâches) |
 | **Phase 4** : Formation | ⚪ Non démarré | 0% | 1 semaine | Sprints 4.1 à 4.2 (3 tâches) |
-| **TOTAL PROJET** | 🟡 | ~15% | **3-4 mois** | ~100 tâches |
+| **TOTAL PROJET** | 🟡 | ~15% | **3-4 mois** | ~115 tâches |
 
 **Légende des statuts :**
 - ⚪ Non démarré
@@ -38,9 +39,11 @@ Les tâches suivantes forment le chemin critique du projet. Tout retard sur ces 
 3. **Phase 1.2** (Modèles) → Tous les endpoints CRUD (Sprints 1.5 à 1.10)
 4. **Phase 1.4** (Authentification) → **Phase 2** (Frontend nécessite l'authentification)
 5. **Phase 1** (Backend complet) → **Phase 3.1** (Tests backend)
-6. **Phase 2** (Frontend complet) → **Phase 3.2** (Tests frontend)
-7. **Phase 3.3** (Dockerisation) → Déploiement
-8. **Phase 3.6** (Migration données) → Formation utilisateurs
+6. **Sprint 1.6 (Clients)** + **Sprint 1.9 (Transactions)** → **Phase 2.5** (Profils nécessitent les endpoints existants)
+7. **Phase 2** (Frontend complet) → **Phase 2.5** (Profils réutilisent composants)
+8. **Phase 2.5** (Pages profil + Créances) → **Phase 3.2** (Tests frontend)
+9. **Phase 3.3** (Dockerisation) → Déploiement
+10. **Phase 3.6** (Migration données) → Formation utilisateurs
 
 ### Tâches Parallélisables (optimisation du temps)
 
@@ -56,9 +59,19 @@ Les tâches suivantes forment le chemin critique du projet. Tout retard sur ces 
   - **Gain de temps potentiel** : 2 jours
   - **Pré-requis** : Sprint 2.2 (Composants) terminé
 
+**Sprint 2.12, 2.13 - Phase 2.5 Profils**
+- ✅ Sprint 2.12.1 (Backend Client) + Sprint 2.12.2 (Backend Fournisseur)
+  - **Peuvent être développés en parallèle** (même logique)
+  - **Gain de temps potentiel** : 1 jour
+  - **Pré-requis** : Sprint 1.6 et 1.7 terminés
+- ✅ Sprint 2.12.4 (Frontend Client) + Sprint 2.12.5 (Frontend Fournisseur)
+  - **Frontend parallélisable** (réutilisation composants)
+  - **Gain de temps potentiel** : 1 jour
+
 **Tests Backend et Frontend**
 - ✅ Sprint 3.1 (Tests Backend) peut commencer pendant Sprint 2.8-2.10
 - ✅ Dockerisation (3.3) peut être préparée pendant les tests
+- ✅ Sprint 2.13 (Créances) peut être développé en parallèle avec Phase 3.1
 
 ### Tâches Bloquantes (à surveiller de près)
 
@@ -669,14 +682,20 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 1.9.2 : Endpoint Audit des Transactions
-- [ ] Implémenter `GET /transactions/{id}/audit` (historique des modifications)
-- [ ] Retourner la liste des changements depuis `Transactions_Audit`
+- [x] Implémenter `GET /transactions/{id}/audit` (historique des modifications)
+- [x] Retourner la liste des changements depuis `Transactions_Audit`
 
 **Critères d'acceptation :**
 - ✅ Historique complet des modifications affiché
 - ✅ Informations : qui, quand, quel champ, ancienne/nouvelle valeur
 
 **Estimation** : 2h
+**Statut** : ✅ Terminé
+
+**Implémentation :**
+- ✅ Endpoint `GET /transactions/{id}/audit` créé dans `app/routers/transactions.py` (ligne 103)
+- ✅ Retourne la liste complète des modifications avec informations utilisateur (nom, email)
+- ✅ Utilisé dans le frontend (`TransactionDetail.jsx`) pour afficher l'historique d'audit
 
 ---
 
@@ -1264,6 +1283,296 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 - ✅ Toutes les erreurs API gérées centralement
 - ✅ Messages d'erreur clairs pour l'utilisateur
 - ✅ Pas d'erreurs non gérées dans la console
+
+**Estimation** : 2h
+
+---
+
+## 🎨 Phase 2.5 : Fonctionnalités Avancées Clients/Fournisseurs
+
+**Objectif** : Enrichir l'application avec des pages de profil détaillées et un système de suivi des paiements.
+
+**Durée estimée** : 2-3 jours  
+**Priorité** : 🟡 Haute (MVP+)
+
+**Sprints** : 2.12 à 2.13 (8 tâches)  
+**Points clés** : Pages profil, statistiques, suivi créances/dettes, analytics
+
+---
+
+### Sprint 2.12 : Pages de Profil Client/Fournisseur
+
+#### Tâche 2.12.1 : Backend - Endpoint Profil Client
+- [ ] Créer `GET /clients/{id}/profile` dans `app/routers/clients.py`
+- [ ] Retourner les données enrichies :
+  - Informations client complètes
+  - Statistiques agrégées :
+    - `total_transactions` (nombre)
+    - `montant_total_ventes` (somme)
+    - `montant_moyen_transaction`
+    - `date_premiere_transaction`
+    - `date_derniere_transaction`
+  - Liste des transactions (avec pagination)
+- [ ] Optimiser la requête SQL (jointures, agrégations)
+
+**Critères d'acceptation :**
+- ✅ Endpoint retourne toutes les données nécessaires
+- ✅ Performance : réponse < 200ms
+- ✅ Pagination fonctionnelle
+- ✅ Gestion des clients sans transactions
+
+**Estimation** : 2h
+
+---
+
+#### Tâche 2.12.2 : Backend - Endpoint Profil Fournisseur
+- [ ] Créer `GET /fournisseurs/{id}/profile` dans `app/routers/fournisseurs.py`
+- [ ] Retourner les mêmes données que pour les clients (achats au lieu de ventes)
+- [ ] Réutiliser la logique similaire
+
+**Critères d'acceptation :**
+- ✅ Endpoint fonctionnel avec toutes les statistiques
+- ✅ Performance optimale
+
+**Estimation** : 2h
+
+---
+
+#### Tâche 2.12.3 : Backend - Endpoint Statistiques Mensuelles
+- [ ] Créer `GET /clients/{id}/stats-mensuelles` 
+- [ ] Créer `GET /fournisseurs/{id}/stats-mensuelles`
+- [ ] Retourner les données pour graphique :
+  ```json
+  {
+    "periode": "6_mois", // ou 12_mois
+    "data": [
+      {"mois": "2024-01", "montant": 15000, "nb_transactions": 5},
+      {"mois": "2024-02", "montant": 18000, "nb_transactions": 7},
+      ...
+    ]
+  }
+  ```
+- [ ] Paramètre `periode` : 6 ou 12 mois
+
+**Critères d'acceptation :**
+- ✅ Données correctement agrégées par mois
+- ✅ Gestion des mois sans transactions (0)
+- ✅ Performance optimisée
+
+**Estimation** : 2h
+
+---
+
+#### Tâche 2.12.4 : Frontend - Page Profil Client
+- [ ] Créer `src/pages/Clients/ClientProfile.jsx`
+- [ ] Route : `/clients/:id/profile`
+- [ ] Sections de la page :
+  - **Header** : Nom client, statut, boutons d'action (Éditer, Nouvelle transaction)
+  - **Cartes statistiques** (StatCard) :
+    - Total ventes
+    - Nombre transactions
+    - Montant moyen
+  - **Graphique** : Évolution des ventes (6 derniers mois) avec recharts
+  - **Tableau transactions** : Historique complet (DataGrid)
+  - **Bouton Export** : Exporter l'historique (Excel)
+- [ ] Design cohérent avec Material-UI
+- [ ] Responsive
+
+**Critères d'acceptation :**
+- ✅ Toutes les sections affichées correctement
+- ✅ Graphique interactif et lisible
+- ✅ Navigation depuis la liste clients
+- ✅ Export Excel fonctionnel
+- ✅ Gestion du loading et des erreurs
+
+**Estimation** : 4h
+
+---
+
+#### Tâche 2.12.5 : Frontend - Page Profil Fournisseur
+- [ ] Créer `src/pages/Fournisseurs/FournisseurProfile.jsx`
+- [ ] Route : `/fournisseurs/:id/profile`
+- [ ] Même structure que ClientProfile (adapter labels : "Achats" au lieu de "Ventes")
+- [ ] Réutiliser les composants
+
+**Critères d'acceptation :**
+- ✅ Page fonctionnelle et cohérente
+- ✅ Navigation depuis la liste fournisseurs
+
+**Estimation** : 3h
+
+---
+
+#### Tâche 2.12.6 : Frontend - Navigation et Liens
+- [ ] Ajouter un bouton "Voir profil" dans ClientsList (colonne actions)
+- [ ] Ajouter un bouton "Voir profil" dans FournisseursList
+- [ ] Ajouter les routes dans `App.jsx`
+- [ ] Rendre les noms clients/fournisseurs cliquables (redirection profil)
+
+**Critères d'acceptation :**
+- ✅ Navigation fluide
+- ✅ Boutons visibles et accessibles
+
+**Estimation** : 1h
+
+---
+
+### Sprint 2.13 : Gestion des Créances et Dettes
+
+#### Tâche 2.13.1 : Backend - Migration Statut Paiement
+- [ ] Créer une migration Alembic pour ajouter à la table `Transactions` :
+  - `statut_paiement` VARCHAR(20) DEFAULT 'paye'
+  - Contrainte CHECK : ('paye', 'partiel', 'impaye', 'en_retard')
+  - `montant_paye` DECIMAL(10, 2) DEFAULT 0
+  - `date_echeance` DATE (nullable)
+- [ ] Créer un index sur `statut_paiement`
+- [ ] Appliquer la migration
+
+**Critères d'acceptation :**
+- ✅ Colonnes ajoutées
+- ✅ Contrainte fonctionnelle
+- ✅ Migration réversible
+
+**Estimation** : 1h
+
+---
+
+#### Tâche 2.13.2 : Backend - Mise à Jour Schémas
+- [ ] Mettre à jour `app/schemas/transaction.py` :
+  - Ajouter `statut_paiement` dans TransactionBase/Create/Update
+  - Ajouter `montant_paye` et `date_echeance`
+  - Ajouter validation : `montant_paye <= montant_total`
+- [ ] Ajouter champ calculé `montant_restant` dans TransactionRead :
+  ```python
+  @property
+  def montant_restant(self) -> float:
+      return self.montant_total - self.montant_paye
+  ```
+
+**Critères d'acceptation :**
+- ✅ Schémas mis à jour
+- ✅ Validation fonctionnelle
+
+**Estimation** : 1h
+
+---
+
+#### Tâche 2.13.3 : Backend - Endpoints Créances
+- [ ] Créer `GET /transactions/creances` (transactions impayées clients)
+- [ ] Créer `GET /transactions/dettes` (transactions impayées fournisseurs)
+- [ ] Filtres : statut, date_echeance (passée = en retard)
+- [ ] Retourner statistiques :
+  ```json
+  {
+    "total_creances": 25000,
+    "nb_factures_impayees": 8,
+    "en_retard": 5,
+    "transactions": [...]
+  }
+  ```
+- [ ] Créer `PUT /transactions/{id}/paiement` pour mettre à jour le paiement
+
+**Critères d'acceptation :**
+- ✅ Endpoints fonctionnels
+- ✅ Calcul automatique du statut (en_retard si date_echeance dépassée)
+- ✅ Mise à jour du statut automatique
+
+**Estimation** : 3h
+
+---
+
+#### Tâche 2.13.4 : Backend - Tâche Planifiée Statut Paiement
+- [ ] Créer `app/tasks/payment_checker.py`
+- [ ] Fonction pour vérifier quotidiennement les paiements en retard :
+  ```python
+  def update_overdue_payments():
+      # Mettre à jour statut_paiement = 'en_retard'
+      # si date_echeance < aujourd'hui et statut != 'paye'
+  ```
+- [ ] Documenter comment planifier (cron ou scheduler Python)
+- [ ] Créer un script d'exécution manuelle
+
+**Critères d'acceptation :**
+- ✅ Fonction fonctionnelle
+- ✅ Script testable manuellement
+- ✅ Documentation de planification
+
+**Estimation** : 2h
+
+---
+
+#### Tâche 2.13.5 : Frontend - Mise à Jour Formulaire Transaction
+- [ ] Ajouter dans `TransactionForm.jsx` :
+  - Champ `statut_paiement` (dropdown)
+  - Champ `montant_paye` (nombre, max = montant_total)
+  - Champ `date_echeance` (date picker, optionnel)
+  - Affichage dynamique du `montant_restant`
+- [ ] Validation : montant_paye <= montant_total
+- [ ] Pré-remplir `statut_paiement = 'paye'` et `montant_paye = montant_total` par défaut
+
+**Critères d'acceptation :**
+- ✅ Champs visibles et fonctionnels
+- ✅ Calcul montant_restant automatique
+- ✅ Validation en temps réel
+
+**Estimation** : 2h
+
+---
+
+#### Tâche 2.13.6 : Frontend - Page Créances/Dettes
+- [ ] Créer `src/pages/Payments/Creances.jsx` (créances clients)
+- [ ] Créer `src/pages/Payments/Dettes.jsx` (dettes fournisseurs)
+- [ ] Afficher :
+  - Cartes statistiques (total, nombre, en retard)
+  - Tableau des transactions impayées
+  - Filtres : statut, date
+  - Badge "EN RETARD" si date_echeance dépassée
+  - Action rapide : "Marquer comme payé"
+- [ ] Routes : `/creances` et `/dettes`
+- [ ] Ajouter dans la navigation (Sidebar)
+
+**Critères d'acceptation :**
+- ✅ Pages fonctionnelles
+- ✅ Statistiques correctes
+- ✅ Action "Marquer payé" fonctionne
+- ✅ Alertes visuelles pour retards
+
+**Estimation** : 4h
+
+---
+
+#### Tâche 2.13.7 : Frontend - Badge Statut Paiement
+- [ ] Créer un composant `PaymentStatusBadge.jsx`
+- [ ] Afficher un badge coloré selon le statut :
+  - `paye` → Vert "Payé"
+  - `partiel` → Orange "Partiel"
+  - `impaye` → Gris "Impayé"
+  - `en_retard` → Rouge "EN RETARD"
+- [ ] Utiliser dans :
+  - TransactionsList
+  - TransactionDetail
+  - ClientProfile / FournisseurProfile
+
+**Critères d'acceptation :**
+- ✅ Badge réutilisable
+- ✅ Couleurs cohérentes
+- ✅ Intégré dans toutes les pages
+
+**Estimation** : 1h
+
+---
+
+#### Tâche 2.13.8 : Dashboard - Widget Créances
+- [ ] Ajouter sur le Dashboard (`Dashboard.jsx`) :
+  - StatCard "Créances en cours" (montant total)
+  - StatCard "Factures en retard" (nombre + montant)
+- [ ] Rendre les cartes cliquables (redirection vers `/creances`)
+- [ ] Alerte visuelle si créances en retard
+
+**Critères d'acceptation :**
+- ✅ Widgets affichés
+- ✅ Navigation fonctionnelle
+- ✅ Alertes visuelles
 
 **Estimation** : 2h
 
@@ -1916,6 +2225,17 @@ Ce backlog a été enrichi avec les sections suivantes pour garantir un projet r
   - **Tâche 2.11.1** : Error Boundary React (2h)
   - **Tâche 2.11.2** : Gestion Globale Erreurs API (2h)
 
+#### Phase 2.5 - Profils & Créances (NEW, +14 tâches, +24h)
+- **Sprint 2.12** : Pages de Profil Client/Fournisseur (6 tâches, 14h)
+  - Endpoints backend profil et statistiques (6h)
+  - Pages frontend profil avec graphiques (7h)
+  - Navigation et intégration (1h)
+- **Sprint 2.13** : Gestion Créances/Dettes (8 tâches, 10h)
+  - Migration et schémas statut paiement (2h)
+  - Endpoints créances/dettes (5h)
+  - Pages frontend et widgets dashboard (7h)
+  - Tâche planifiée paiements en retard (2h)
+
 #### Phase 3 - Tests & Déploiement (+8 tâches, +18h)
 - **Tâche 3.1.5** : Tests de Charge avec Locust (4h)
   - 100 utilisateurs simultanés
@@ -1937,10 +2257,11 @@ Ce backlog a été enrichi avec les sections suivantes pour garantir un projet r
 |--------|-------|-------|------------|
 | **Phase 1** | 3-4 semaines | 4-5 semaines | +1 semaine |
 | **Phase 2** | 3-4 semaines | 4-5 semaines | +1 semaine |
+| **Phase 2.5** | - | 2-3 jours | +2-3 jours (NEW) |
 | **Phase 3** | 2 semaines | 3 semaines | +1 semaine |
 | **Total Projet** | 2-3 mois | 3-4 mois | +1 mois |
-| **Nombre Tâches** | ~87 | ~100 | +13 tâches |
-| **Heures Ajoutées** | - | - | +28h |
+| **Nombre Tâches** | ~87 | ~115 | +28 tâches |
+| **Heures Ajoutées** | - | - | +52h |
 
 ### 🎯 Bénéfices des Ajouts
 
@@ -1969,6 +2290,13 @@ Ce backlog a été enrichi avec les sections suivantes pour garantir un projet r
    - Tâches bloquantes surveillées
    - Planning réaliste
 
+6. **💼 Valeur Métier Accrue (Phase 2.5)**
+   - **Pages profil** : Vue 360° clients/fournisseurs
+   - **Analytics** : Décisions éclairées sur relations commerciales
+   - **Gestion créances** : Meilleur suivi trésorerie
+   - **Alertes paiements** : Réduction des impayés
+   - **UX améliorée** : Navigation intuitive et informative
+
 ### ⚠️ Points d'Attention
 
 - **Buffer intégré** : Les nouvelles estimations incluent un buffer de ~20%
@@ -1985,7 +2313,9 @@ Ce backlog a été enrichi avec les sections suivantes pour garantir un projet r
 - ✅ Dockerisation basique
 - ✅ Migration des données
 
-### Version 1.5 - Améliorations Sécurité
+### MVP+ (Version 1.5) - Fonctionnalités Métier Essentielles
+- 👥 **Phase 2.5** : Pages profil clients/fournisseurs
+- 💰 **Phase 2.5** : Gestion des créances et dettes
 - 🔒 Refresh tokens (déjà dans Phase 1)
 - 🔒 Rate limiting (déjà dans Phase 1)
 - 🔒 Audit des connexions (déjà dans Phase 1)
@@ -1997,12 +2327,15 @@ Ce backlog a été enrichi avec les sections suivantes pour garantir un projet r
 - 🔍 Recherche full-text avancée
 - 📱 Notifications en temps réel (WebSocket)
 - 🌐 Mode responsive optimisé
+- 📦 Gestion de stock simplifiée
+- 📄 Module devis et factures
 
-### Version 2.5 - Optimisations
+### Version 2.5 - Optimisations & BI
 - ⚡ Tests de charge (Locust/K6)
 - 🔌 APIs pour intégration externe
 - 💾 Système de backup automatisé avancé
 - 📈 Dashboard BI avancé
+- 🤖 Prédictions et analytics ML
 
 ---
 

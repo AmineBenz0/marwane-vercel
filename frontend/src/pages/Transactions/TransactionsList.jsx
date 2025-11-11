@@ -33,17 +33,22 @@ import {
   PictureAsPdf as PictureAsPdfIcon,
 } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
-import { get, post, put, del } from '../../services/api';
+import TransactionForm from './TransactionForm';
+import { get, post, put, patch, del } from '../../services/api';
 import { format } from 'date-fns';
 import fr from 'date-fns/locale/fr';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportToPDF } from '../../utils/exportToPDF';
+import useNotification from '../../hooks/useNotification';
 
 /**
  * Composant TransactionsList.
  */
 function TransactionsList() {
   const navigate = useNavigate();
+  
+  // Hook pour les notifications
+  const notification = useNotification();
 
   // État pour les transactions
   const [transactions, setTransactions] = useState([]);
@@ -302,13 +307,34 @@ function TransactionsList() {
   };
 
   /**
+   * Gère la réactivation d'une transaction.
+   */
+  const handleReactivate = async (transaction) => {
+    try {
+      // Appeler l'API pour réactiver (PATCH)
+      await patch(`/transactions/${transaction.id_transaction}/reactivate`, {});
+      
+      // Rafraîchir la liste
+      await fetchTransactions();
+      
+      // Notification de succès
+      notification.success('Transaction réactivée avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la réactivation:', err);
+      setError(
+        err?.message || 'Une erreur est survenue lors de la réactivation'
+      );
+    }
+  };
+
+  /**
    * Formate le montant pour l'affichage.
    */
   const formatMontant = (montant) => {
     if (montant === null || montant === undefined) return '-';
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
-      currency: 'EUR',
+      currency: 'MAD',
     }).format(montant);
   };
 
@@ -331,7 +357,7 @@ function TransactionsList() {
           if (value === null || value === undefined) return '-';
           return new Intl.NumberFormat('fr-FR', {
             style: 'currency',
-            currency: 'EUR',
+            currency: 'MAD',
           }).format(value);
         },
         est_actif: (value) => (value ? 'Actif' : 'Inactif'),
@@ -368,7 +394,7 @@ function TransactionsList() {
           if (value === null || value === undefined) return '-';
           return new Intl.NumberFormat('fr-FR', {
             style: 'currency',
-            currency: 'EUR',
+            currency: 'MAD',
           }).format(value);
         },
         est_actif: (value) => (value ? 'Actif' : 'Inactif'),
@@ -615,38 +641,21 @@ function TransactionsList() {
         onView={handleViewDetails}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
+        onReactivate={handleReactivate}
         loading={loading}
         pageSize={10}
         showActions={true}
       />
 
       {/* Modal de création/édition */}
-      {/* TODO: Créer un composant TransactionForm */}
-      {modalOpen && (
-        <Dialog open={modalOpen} onClose={handleCloseModal} maxWidth="md" fullWidth>
-          <DialogTitle>
-            {editingTransaction ? 'Modifier la transaction' : 'Créer une transaction'}
-          </DialogTitle>
-          <DialogContent>
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Le formulaire de transaction sera implémenté dans une tâche ultérieure.
-            </Alert>
-            {formError && (
-              <Alert severity="error" sx={{ mt: 2 }}>
-                {formError}
-              </Alert>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseModal} disabled={formLoading}>
-              Annuler
-            </Button>
-            <Button onClick={handleCloseModal} variant="contained" disabled={formLoading}>
-              Fermer
-            </Button>
-          </DialogActions>
-        </Dialog>
-      )}
+      <TransactionForm
+        open={modalOpen}
+        onClose={handleCloseModal}
+        onSubmit={handleSubmit}
+        initialValues={editingTransaction || {}}
+        loading={formLoading}
+        errorMessage={formError}
+      />
 
       {/* Dialogue de confirmation de suppression */}
       <Dialog

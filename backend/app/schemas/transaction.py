@@ -142,6 +142,7 @@ class TransactionUpdate(BaseModel):
     """
     Schéma pour mettre à jour une transaction.
     Tous les champs sont optionnels pour permettre des mises à jour partielles.
+    Si des lignes sont fournies, le montant_total sera recalculé automatiquement.
     """
     date_transaction: Optional[date] = Field(
         None,
@@ -150,7 +151,7 @@ class TransactionUpdate(BaseModel):
     montant_total: Optional[Decimal] = Field(
         None,
         gt=0,
-        description="Montant total de la transaction (doit être positif)"
+        description="Montant total de la transaction (doit être positif, recalculé si lignes fournies)"
     )
     est_actif: Optional[bool] = Field(
         None,
@@ -163,6 +164,10 @@ class TransactionUpdate(BaseModel):
     id_fournisseur: Optional[int] = Field(
         None,
         description="ID du fournisseur concerné (exclusion mutuelle avec id_client)"
+    )
+    lignes: Optional[list[LigneTransactionBaseWithPrice]] = Field(
+        None,
+        description="Liste des lignes de transaction (optionnel, si fourni, le montant_total sera recalculé)"
     )
     
     @field_validator('montant_total')
@@ -188,6 +193,18 @@ class TransactionUpdate(BaseModel):
             raise ValueError("Une transaction ne peut concerner qu'un client OU un fournisseur, pas les deux")
         
         return self
+    
+    def calculate_montant_total_from_lignes(self) -> Optional[Decimal]:
+        """
+        Calcule le montant total à partir des lignes si elles sont fournies.
+        """
+        if not self.lignes or len(self.lignes) == 0:
+            return None
+        
+        total = Decimal('0')
+        for ligne in self.lignes:
+            total += Decimal(str(ligne.prix_unitaire)) * Decimal(str(ligne.quantite))
+        return total
 
 
 class TransactionRead(TransactionBase):

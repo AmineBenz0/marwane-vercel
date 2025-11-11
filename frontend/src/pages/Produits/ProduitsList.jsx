@@ -29,14 +29,18 @@ import {
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
 import ProduitForm from './ProduitForm';
-import { get, post, put, del } from '../../services/api';
+import { get, post, put, patch, del } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { format } from 'date-fns';
+import useNotification from '../../hooks/useNotification';
 
 /**
  * Composant ProduitsList.
  */
 function ProduitsList() {
+  // Hook pour les notifications
+  const notification = useNotification();
+
   // État pour les produits
   const [produits, setProduits] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -208,6 +212,25 @@ function ProduitsList() {
   };
 
   /**
+   * Gère la réactivation d'un produit.
+   */
+  const handleReactivate = async (produit) => {
+    try {
+      // Appeler l'API pour réactiver (PATCH)
+      await patch(`/produits/${produit.id_produit}/reactivate`, {});
+      
+      // Rafraîchir la liste
+      await fetchProduits();
+      
+      // Notification de succès
+      notification.success('Produit réactivé avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la réactivation:', err);
+      setError(err?.message || 'Une erreur est survenue lors de la réactivation');
+    }
+  };
+
+  /**
    * Gère l'export Excel des produits filtrés.
    */
   const handleExportExcel = () => {
@@ -339,6 +362,7 @@ function ProduitsList() {
         columns={columns}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
+        onReactivate={handleReactivate}
         loading={loading}
         pageSize={10}
         showActions={true}

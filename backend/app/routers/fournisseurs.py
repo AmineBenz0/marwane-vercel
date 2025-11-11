@@ -248,3 +248,52 @@ def delete_fournisseur(
     
     return None
 
+
+@router.patch("/{id}/reactivate", response_model=FournisseurRead, status_code=status.HTTP_200_OK)
+def reactivate_fournisseur(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Réactive un fournisseur inactif.
+    
+    Effectue l'inverse du soft delete en remettant est_actif à True.
+    Enregistre automatiquement l'ID de l'utilisateur qui a réactivé le fournisseur.
+    
+    Args:
+        id: ID du fournisseur à réactiver
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Returns:
+        Fournisseur réactivé (FournisseurRead)
+        
+    Raises:
+        HTTPException 404: Si le fournisseur n'existe pas
+        HTTPException 400: Si le fournisseur est déjà actif
+    """
+    fournisseur = db.query(Fournisseur).filter(Fournisseur.id_fournisseur == id).first()
+    
+    if not fournisseur:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Fournisseur avec l'ID {id} introuvable"
+        )
+    
+    # Vérifier si le fournisseur est déjà actif
+    if fournisseur.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le fournisseur avec l'ID {id} est déjà actif"
+        )
+    
+    # Réactiver : mettre est_actif à True
+    fournisseur.est_actif = True
+    # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
+    fournisseur.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    
+    db.commit()
+    db.refresh(fournisseur)
+    
+    return fournisseur

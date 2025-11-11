@@ -71,7 +71,7 @@ const formatDate = (date) => {
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
-    currency: 'EUR',
+    currency: 'MAD',
   }).format(value);
 };
 
@@ -398,7 +398,7 @@ function Caisse() {
             icon={<AccountBalanceIcon />}
             color="primary"
             valueFormat="currency"
-            currency="EUR"
+            currency="MAD"
           />
         </Grid>
         {derniereMaj && (
@@ -512,7 +512,7 @@ function Caisse() {
                     height={80}
                   />
                   <YAxis
-                    label={{ value: 'Solde (€)', angle: -90, position: 'insideLeft' }}
+                    label={{ value: 'Solde (MAD)', angle: -90, position: 'insideLeft' }}
                     tickFormatter={(value) => formatCurrency(value)}
                   />
                   <Tooltip

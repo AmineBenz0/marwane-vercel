@@ -86,7 +86,7 @@ export function DataGridWithFormattingExample() {
       align: 'right',
       format: (value) => new Intl.NumberFormat('fr-FR', {
         style: 'currency',
-        currency: 'EUR',
+        currency: 'MAD',
       }).format(value),
     },
     {

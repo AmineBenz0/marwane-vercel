@@ -29,7 +29,7 @@ import {
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
 import ModalForm from '../../components/ModalForm/ModalForm';
-import { get, post, put, del } from '../../services/api';
+import { get, post, put, patch, del } from '../../services/api';
 import * as yup from 'yup';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { format } from 'date-fns';
@@ -249,6 +249,25 @@ function ClientsList() {
   };
 
   /**
+   * Gère la réactivation d'un client.
+   */
+  const handleReactivate = async (client) => {
+    try {
+      // Appeler l'API pour réactiver (PATCH)
+      await patch(`/clients/${client.id_client}/reactivate`, {});
+      
+      // Rafraîchir la liste
+      await fetchClients();
+      
+      // Notification de succès
+      notification.success('Client réactivé avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la réactivation:', err);
+      setError(err?.message || 'Une erreur est survenue lors de la réactivation');
+    }
+  };
+
+  /**
    * Gère l'export Excel des clients filtrés.
    */
   const handleExportExcel = () => {
@@ -444,6 +463,7 @@ function ClientsList() {
         columns={columns}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
+        onReactivate={handleReactivate}
         loading={loading}
         pageSize={10}
         showActions={true}

@@ -243,3 +243,49 @@ def delete_produit(
     
     return None
 
+
+@router.patch("/{id}/reactivate", response_model=ProduitRead, status_code=status.HTTP_200_OK)
+def reactivate_produit(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Réactive un produit inactif.
+    
+    Effectue l'inverse du soft delete en remettant est_actif à True.
+    
+    Args:
+        id: ID du produit à réactiver
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Returns:
+        Produit réactivé (ProduitRead)
+        
+    Raises:
+        HTTPException 404: Si le produit n'existe pas
+        HTTPException 400: Si le produit est déjà actif
+    """
+    produit = db.query(Produit).filter(Produit.id_produit == id).first()
+    
+    if not produit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produit avec l'ID {id} introuvable"
+        )
+    
+    # Vérifier si le produit est déjà actif
+    if produit.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le produit avec l'ID {id} est déjà actif"
+        )
+    
+    # Réactiver : mettre est_actif à True
+    produit.est_actif = True
+    
+    db.commit()
+    db.refresh(produit)
+    
+    return produit

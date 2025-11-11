@@ -184,7 +184,7 @@ function TransactionDetail() {
     if (montant === null || montant === undefined) return '-';
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
-      currency: 'EUR',
+      currency: 'MAD',
     }).format(montant);
   };
 

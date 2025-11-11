@@ -17,7 +17,7 @@
  *   - {string} label - Label optionnel pour la variation (ex: "vs mois dernier")
  * @param {string} color - Couleur du thème pour la carte (défaut: 'primary')
  * @param {string} valueFormat - Format de la valeur : 'number', 'currency', 'percentage' (défaut: 'number')
- * @param {string} currency - Code de la devise pour le format 'currency' (défaut: 'EUR')
+ * @param {string} currency - Code de la devise pour le format 'currency' (défaut: 'MAD')
  */
 
 import React from 'react';
@@ -38,7 +38,7 @@ import {
 /**
  * Formate une valeur selon le type spécifié.
  */
-const formatValue = (value, format, currency = 'EUR') => {
+const formatValue = (value, format, currency = 'MAD') => {
   if (value === null || value === undefined) return '-';
 
   switch (format) {
@@ -65,7 +65,7 @@ function StatCard({
   variation = null,
   color = 'primary',
   valueFormat = 'number',
-  currency = 'EUR',
+  currency = 'MAD',
 }) {
   const theme = useTheme();
 

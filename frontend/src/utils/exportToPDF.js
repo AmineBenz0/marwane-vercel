@@ -242,7 +242,7 @@ export const exportCaisseReport = (mouvements, solde, dateDebut, dateFin) => {
     doc.setFont('helvetica', 'normal');
     doc.text(`Solde actuel : ${new Intl.NumberFormat('fr-FR', {
       style: 'currency',
-      currency: 'EUR',
+      currency: 'MAD',
     }).format(solde)}`, margin, currentY);
     currentY += 8;
 
@@ -308,7 +308,7 @@ export const exportCaisseReport = (mouvements, solde, dateDebut, dateFin) => {
         const typeStr = mouvement.type_mouvement;
         const montantStr = new Intl.NumberFormat('fr-FR', {
           style: 'currency',
-          currency: 'EUR',
+          currency: 'MAD',
         }).format(parseFloat(mouvement.montant || 0));
         const transactionId = `#${mouvement.id_transaction}`;
 
