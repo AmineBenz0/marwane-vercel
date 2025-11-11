@@ -1,11 +1,16 @@
 """
 Configuration et fixtures communes pour les tests.
 """
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+# Configurer l'environnement de test AVANT d'importer app.database
+# Cela évite que app.database essaie de se connecter à PostgreSQL
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app.database import Base, get_db
 from app.main import app
@@ -49,6 +54,22 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(scope="function", autouse=True)
+def reset_rate_limiter():
+    """
+    Réinitialise le rate limiter avant chaque test pour isoler les tests.
+    """
+    from limits.storage import MemoryStorage
+    # Réinitialiser le storage du limiter attaché à l'app avant chaque test
+    if hasattr(app.state, 'limiter'):
+        # Créer un nouveau storage vide pour chaque test
+        app.state.limiter._storage = MemoryStorage()
+    yield
+    # Nettoyer après le test aussi
+    if hasattr(app.state, 'limiter'):
+        app.state.limiter._storage = MemoryStorage()
+
+
 @pytest.fixture(scope="function")
 def client(db_session):
     """
@@ -61,20 +82,9 @@ def client(db_session):
             pass
     
     app.dependency_overrides[get_db] = override_get_db
-    
-    # Réinitialiser le rate limiter pour chaque test en réinitialisant le storage
-    from limits.storage import MemoryStorage
-    # Réinitialiser le storage du limiter attaché à l'app
-    if hasattr(app.state, 'limiter'):
-        app.state.limiter._storage = MemoryStorage()
-    
     test_client = TestClient(app)
     yield test_client
     app.dependency_overrides.clear()
-    
-    # Nettoyer le storage après le test
-    if hasattr(app.state, 'limiter'):
-        app.state.limiter._storage = MemoryStorage()
 
 
 @pytest.fixture
@@ -92,7 +102,8 @@ def test_user(db_session):
         nom_utilisateur="Test User",
         email="test@example.com",
         mot_de_passe_hash=password_hash,
-        role="admin"
+        role="admin",
+        est_actif=True
     )
     db_session.add(user)
     db_session.commit()
@@ -115,10 +126,26 @@ def test_user_comptable(db_session):
         nom_utilisateur="Comptable User",
         email="comptable@example.com",
         mot_de_passe_hash=password_hash,
-        role="comptable"
+        role="comptable",
+        est_actif=True
     )
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
     return user
+
+
+@pytest.fixture
+def admin_token(test_user):
+    """
+    Crée un token d'accès pour l'utilisateur admin de test sans passer par le login.
+    Évite les problèmes de rate limiting dans les tests.
+    """
+    from app.utils.security import create_access_token
+    token_data = {
+        "sub": str(test_user.id_utilisateur),
+        "email": test_user.email,
+        "role": test_user.role
+    }
+    return create_access_token(token_data)
 

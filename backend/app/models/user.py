@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Utilisateurs.
 """
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -17,6 +17,7 @@ class Utilisateur(Base):
         email: Email de l'utilisateur (UNIQUE, NOT NULL)
         mot_de_passe_hash: Hash du mot de passe (NOT NULL)
         role: Rôle de l'utilisateur (admin, comptable, etc.)
+        est_actif: Indique si l'utilisateur est actif (soft delete, DEFAULT true)
         date_creation: Date de création de l'utilisateur
         date_modification: Date de dernière modification
     """
@@ -27,6 +28,7 @@ class Utilisateur(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     mot_de_passe_hash = Column(String(255), nullable=False)
     role = Column(String(50), nullable=True)
+    est_actif = Column(Boolean, default=True, nullable=False)
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     date_modification = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     

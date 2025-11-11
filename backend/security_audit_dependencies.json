@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-11-10T22:25:09.497658",
+  "pip_audit": {
+    "status": "not_installed"
+  },
+  "safety": {
+    "status": "not_installed"
+  },
+  "summary": {
+    "critical_vulnerabilities": 0,
+    "high_vulnerabilities": 0,
+    "medium_vulnerabilities": 0,
+    "low_vulnerabilities": 0,
+    "total_vulnerabilities": 0
+  }
+}

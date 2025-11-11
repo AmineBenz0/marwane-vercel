@@ -6,9 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
+from app.logging.logging_config import setup_logging
 from app.database import engine, Base
-from app.routers import auth
+from app.routers import auth, users, clients, fournisseurs, produits, transactions, caisse
 from app.utils.rate_limit import limiter
+from app.middleware.logging_middleware import LoggingMiddleware
 
 # Création de l'application FastAPI
 app = FastAPI(
@@ -33,23 +35,46 @@ async def rate_limit_handler(request, exc):
         content={"detail": f"Rate limit exceeded: {exc.detail}"}
     )
 
-# Configuration CORS
+# Configuration CORS (Cross-Origin Resource Sharing)
+# Permet au frontend de faire des requêtes vers l'API depuis différents ports
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins_list,  # Origines autorisées (localhost:3000, localhost:5173, etc.)
+    allow_credentials=True,  # Autorise l'envoi de cookies et headers d'authentification
+    allow_methods=["*"],  # Autorise toutes les méthodes HTTP (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Autorise tous les headers (Content-Type, Authorization, etc.)
 )
+
+# Middleware de logging structuré (après CORS pour capturer toutes les requêtes)
+app.add_middleware(LoggingMiddleware)
 
 
 @app.on_event("startup")
 async def startup_event():
     """Événement déclenché au démarrage de l'application."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Configurer le système de logging
+    setup_logging(
+        log_dir="logs",
+        max_bytes=100 * 1024 * 1024,  # 100MB
+        backup_count=30,  # Garder 30 jours de logs
+        log_level="INFO" if not settings.DEBUG else "DEBUG"
+    )
+    
     # Créer les tables si elles n'existent pas (dev uniquement)
     # En production, utiliser Alembic pour les migrations
     if settings.ENVIRONMENT == "development":
-        Base.metadata.create_all(bind=engine)
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables created/verified successfully")
+        except Exception as e:
+            logger.warning(
+                f"Failed to connect to database during startup: {e}. "
+                "The application will start, but database operations will fail until the database is available. "
+                "Make sure PostgreSQL is running (e.g., 'docker-compose up -d postgres')."
+            )
 
 
 @app.get("/")
@@ -79,4 +104,10 @@ async def health_check():
 
 # Enregistrement des routers
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+app.include_router(users.router, prefix=settings.API_V1_PREFIX)
+app.include_router(clients.router, prefix=settings.API_V1_PREFIX)
+app.include_router(fournisseurs.router, prefix=settings.API_V1_PREFIX)
+app.include_router(produits.router, prefix=settings.API_V1_PREFIX)
+app.include_router(transactions.router, prefix=settings.API_V1_PREFIX)
+app.include_router(caisse.router, prefix=settings.API_V1_PREFIX)
 

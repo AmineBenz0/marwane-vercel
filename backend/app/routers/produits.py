@@ -1,0 +1,245 @@
+"""
+Router FastAPI pour la gestion des produits.
+Gère les endpoints CRUD pour les produits.
+"""
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models.produit import Produit
+from app.models.user import Utilisateur
+from app.schemas.produit import ProduitCreate, ProduitUpdate, ProduitRead
+from app.utils.dependencies import get_current_active_user
+from app.config import settings
+
+router = APIRouter(prefix="/produits", tags=["Produits"])
+
+
+@router.get("", response_model=List[ProduitRead], status_code=status.HTTP_200_OK)
+def get_produits(
+    skip: int = 0,
+    limit: int = 100,
+    est_actif: Optional[bool] = None,
+    recherche: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Récupère la liste des produits avec filtres optionnels.
+    
+    Permet de filtrer par statut actif/inactif et de rechercher par nom.
+    
+    Args:
+        skip: Nombre de produits à sauter (pour la pagination)
+        limit: Nombre maximum de produits à retourner
+        est_actif: Filtre optionnel pour les produits actifs/inactifs (None = tous)
+        recherche: Terme de recherche optionnel pour filtrer par nom (recherche partielle, insensible à la casse)
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Returns:
+        Liste des produits (ProduitRead)
+    """
+    query = db.query(Produit)
+    
+    # Filtre par est_actif si fourni
+    if est_actif is not None:
+        query = query.filter(Produit.est_actif == est_actif)
+    
+    # Filtre par recherche (nom_produit) si fourni
+    if recherche:
+        recherche_clean = recherche.strip()
+        if recherche_clean:
+            query = query.filter(
+                Produit.nom_produit.ilike(f"%{recherche_clean}%")
+            )
+    
+    # Pagination
+    produits = query.offset(skip).limit(limit).all()
+    
+    return produits
+
+
+@router.get("/{id}", response_model=ProduitRead, status_code=status.HTTP_200_OK)
+def get_produit(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Récupère les détails d'un produit par son ID.
+    
+    Args:
+        id: ID du produit à récupérer
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Returns:
+        Détails du produit (ProduitRead)
+        
+    Raises:
+        HTTPException 404: Si le produit n'existe pas
+    """
+    produit = db.query(Produit).filter(Produit.id_produit == id).first()
+    
+    if not produit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produit avec l'ID {id} introuvable"
+        )
+    
+    return produit
+
+
+@router.post("", response_model=ProduitRead, status_code=status.HTTP_201_CREATED)
+def create_produit(
+    produit_data: ProduitCreate,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Crée un nouveau produit.
+    
+    Valide l'unicité du nom_produit avant la création.
+    
+    Args:
+        produit_data: Données du nouveau produit (ProduitCreate)
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Returns:
+        Produit créé (ProduitRead)
+        
+    Raises:
+        HTTPException 400: Si un produit avec le même nom existe déjà
+    """
+    # Vérifier si un produit avec le même nom existe déjà (actif ou inactif)
+    existing_produit = db.query(Produit).filter(
+        Produit.nom_produit == produit_data.nom_produit.strip()
+    ).first()
+    
+    if existing_produit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Un produit avec le nom '{produit_data.nom_produit}' existe déjà"
+        )
+    
+    # Créer le nouveau produit
+    new_produit = Produit(
+        nom_produit=produit_data.nom_produit.strip(),
+        est_actif=produit_data.est_actif
+    )
+    
+    db.add(new_produit)
+    db.commit()
+    db.refresh(new_produit)
+    
+    return new_produit
+
+
+@router.put("/{id}", response_model=ProduitRead, status_code=status.HTTP_200_OK)
+def update_produit(
+    id: int,
+    produit_data: ProduitUpdate,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Met à jour un produit existant.
+    
+    Permet une mise à jour partielle (seuls les champs fournis seront modifiés).
+    Valide l'unicité du nom_produit si celui-ci est modifié.
+    
+    Args:
+        id: ID du produit à modifier
+        produit_data: Données à mettre à jour (ProduitUpdate)
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Returns:
+        Produit mis à jour (ProduitRead)
+        
+    Raises:
+        HTTPException 404: Si le produit n'existe pas
+        HTTPException 400: Si un autre produit avec le même nom existe déjà
+    """
+    produit = db.query(Produit).filter(Produit.id_produit == id).first()
+    
+    if not produit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produit avec l'ID {id} introuvable"
+        )
+    
+    # Vérifier si le nom existe déjà pour un autre produit
+    if produit_data.nom_produit is not None:
+        nom_clean = produit_data.nom_produit.strip()
+        existing_produit = db.query(Produit).filter(
+            Produit.nom_produit == nom_clean,
+            Produit.id_produit != id
+        ).first()
+        
+        if existing_produit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Un produit avec le nom '{nom_clean}' existe déjà"
+            )
+    
+    # Mettre à jour les champs fournis
+    update_data = produit_data.model_dump(exclude_unset=True)
+    
+    for field, value in update_data.items():
+        if field == "nom_produit" and value is not None:
+            setattr(produit, field, value.strip())
+        else:
+            setattr(produit, field, value)
+    
+    db.commit()
+    db.refresh(produit)
+    
+    return produit
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_produit(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Supprime un produit (soft delete).
+    
+    Effectue un soft delete en mettant est_actif à False.
+    Le produit ne sera plus visible dans les listes par défaut mais restera en base de données.
+    
+    Args:
+        id: ID du produit à supprimer
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Raises:
+        HTTPException 404: Si le produit n'existe pas
+        HTTPException 400: Si le produit est déjà inactif
+    """
+    produit = db.query(Produit).filter(Produit.id_produit == id).first()
+    
+    if not produit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produit avec l'ID {id} introuvable"
+        )
+    
+    # Vérifier si le produit est déjà inactif
+    if not produit.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le produit avec l'ID {id} est déjà inactif"
+        )
+    
+    # Soft delete : mettre est_actif à False
+    produit.est_actif = False
+    
+    db.commit()
+    
+    return None
+

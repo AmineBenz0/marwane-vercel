@@ -15,4 +15,7 @@ pytest==7.4.3
 pytest-cov==4.1.0
 pytest-asyncio==0.21.1
 httpx<0.28
+locust==2.17.0
+# Outils d'audit de sécurité (optionnels, pour les tests OWASP)
+# pip install pip-audit safety
 

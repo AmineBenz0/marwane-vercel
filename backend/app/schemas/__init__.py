@@ -13,6 +13,7 @@ from app.schemas.transaction import (
     LigneTransactionBase,
     LigneTransactionCreate,
     LigneTransactionRead,
+    TransactionAuditRead,
 )
 from app.schemas.caisse import (
     MouvementCaisseBase,
@@ -44,6 +45,7 @@ __all__ = [
     "LigneTransactionBase",
     "LigneTransactionCreate",
     "LigneTransactionRead",
+    "TransactionAuditRead",
     "MouvementCaisseBase",
     "MouvementCaisseCreate",
     "MouvementCaisseRead",

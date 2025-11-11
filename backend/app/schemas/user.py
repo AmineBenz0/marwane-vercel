@@ -128,10 +128,11 @@ class UserUpdate(BaseModel):
 class UserRead(UserBase):
     """
     Schéma pour lire un utilisateur.
-    Inclut les champs générés automatiquement (id, dates).
+    Inclut les champs générés automatiquement (id, dates, est_actif).
     Ne contient jamais le mot de passe (même hashé).
     """
     id_utilisateur: int = Field(..., description="Identifiant unique de l'utilisateur")
+    est_actif: bool = Field(True, description="Indique si l'utilisateur est actif")
     date_creation: datetime = Field(..., description="Date de création de l'utilisateur")
     date_modification: datetime = Field(..., description="Date de dernière modification")
 

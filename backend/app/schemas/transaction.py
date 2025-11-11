@@ -1,6 +1,7 @@
 """
 Schémas Pydantic pour la validation des données transactions.
 """
+from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional
 from datetime import date, datetime
@@ -62,6 +63,79 @@ class TransactionCreate(TransactionBase):
             raise ValueError("Une transaction doit concerner soit un client, soit un fournisseur")
         
         return self
+
+
+class TransactionCreateWithLines(BaseModel):
+    """
+    Schéma pour créer une transaction avec ou sans lignes.
+    Si des lignes sont fournies, le montant_total est calculé automatiquement.
+    Sinon, montant_total doit être fourni explicitement.
+    """
+    date_transaction: date = Field(
+        ...,
+        description="Date de la transaction"
+    )
+    montant_total: Optional[Decimal] = Field(
+        None,
+        gt=0,
+        description="Montant total de la transaction (requis si lignes non fournies)"
+    )
+    est_actif: bool = Field(
+        True,
+        description="Indique si la transaction est active (pour l'annulation)"
+    )
+    id_client: Optional[int] = Field(
+        None,
+        description="ID du client concerné (exclusion mutuelle avec id_fournisseur)"
+    )
+    id_fournisseur: Optional[int] = Field(
+        None,
+        description="ID du fournisseur concerné (exclusion mutuelle avec id_client)"
+    )
+    lignes: Optional[list[LigneTransactionBaseWithPrice]] = Field(
+        None,
+        description="Liste des lignes de transaction (optionnel, mais requis pour calcul automatique du montant)"
+    )
+    
+    @model_validator(mode='after')
+    def validate_client_ou_fournisseur(self):
+        """
+        Valide l'exclusion mutuelle : une transaction concerne SOIT un client, SOIT un fournisseur (pas les deux).
+        """
+        id_client = self.id_client
+        id_fournisseur = self.id_fournisseur
+        
+        if id_client is not None and id_fournisseur is not None:
+            raise ValueError("Une transaction ne peut concerner qu'un client OU un fournisseur, pas les deux")
+        
+        if id_client is None and id_fournisseur is None:
+            raise ValueError("Une transaction doit concerner soit un client, soit un fournisseur")
+        
+        return self
+    
+    @model_validator(mode='after')
+    def validate_montant_or_lignes(self):
+        """
+        Valide que soit montant_total est fourni, soit lignes est fourni (pour calcul automatique).
+        """
+        if self.lignes is None or len(self.lignes) == 0:
+            if self.montant_total is None:
+                raise ValueError("Soit montant_total doit être fourni, soit lignes doit être fourni pour calculer le montant")
+        return self
+    
+    def calculate_montant_total(self) -> Decimal:
+        """
+        Calcule le montant total à partir des lignes.
+        """
+        if not self.lignes or len(self.lignes) == 0:
+            if self.montant_total is None:
+                raise ValueError("Impossible de calculer le montant total : aucune ligne fournie")
+            return self.montant_total
+        
+        total = Decimal('0')
+        for ligne in self.lignes:
+            total += Decimal(str(ligne.prix_unitaire)) * Decimal(str(ligne.quantite))
+        return total
 
 
 class TransactionUpdate(BaseModel):
@@ -130,6 +204,16 @@ class TransactionRead(TransactionBase):
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 
 
+class TransactionReadWithLines(TransactionRead):
+    """
+    Schéma pour lire une transaction avec ses lignes.
+    """
+    lignes_transaction: list[LigneTransactionRead] = Field(
+        default_factory=list,
+        description="Listes des lignes de transaction"
+    )
+
+
 # ============================================================================
 # Schémas pour les lignes de transaction
 # ============================================================================
@@ -147,6 +231,18 @@ class LigneTransactionBase(BaseModel):
         ...,
         gt=0,
         description="Quantité du produit (doit être positive)"
+    )
+
+
+class LigneTransactionBaseWithPrice(LigneTransactionBase):
+    """
+    Schéma de base pour une ligne de transaction avec prix unitaire.
+    Utilisé pour le calcul automatique du montant total.
+    """
+    prix_unitaire: Decimal = Field(
+        ...,
+        gt=0,
+        description="Prix unitaire du produit (doit être positif)"
     )
 
 
@@ -173,3 +269,24 @@ class LigneTransactionRead(LigneTransactionBase):
 
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 
+
+# ============================================================================
+# Schémas pour l'audit des transactions
+# ============================================================================
+
+class TransactionAuditRead(BaseModel):
+    """
+    Schéma pour lire un enregistrement d'audit de transaction.
+    Contient toutes les informations sur une modification : qui, quand, quel champ, ancienne/nouvelle valeur.
+    """
+    id_audit: int = Field(..., description="Identifiant unique de l'audit")
+    id_transaction: int = Field(..., description="ID de la transaction modifiée")
+    id_utilisateur: int = Field(..., description="ID de l'utilisateur responsable de la modification")
+    nom_utilisateur: Optional[str] = Field(None, description="Nom de l'utilisateur qui a effectué la modification")
+    email_utilisateur: Optional[str] = Field(None, description="Email de l'utilisateur qui a effectué la modification")
+    date_changement: datetime = Field(..., description="Date et heure du changement")
+    champ_modifie: Optional[str] = Field(None, description="Nom du champ modifié")
+    ancienne_valeur: Optional[str] = Field(None, description="Valeur avant modification")
+    nouvelle_valeur: Optional[str] = Field(None, description="Valeur après modification")
+
+    model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy

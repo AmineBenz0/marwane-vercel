@@ -2,6 +2,7 @@
 Dépendances FastAPI pour l'authentification et l'autorisation.
 Gère l'extraction et la validation des tokens JWT, ainsi que la vérification des rôles.
 """
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -82,37 +83,57 @@ def get_current_user(
         raise credentials_exception
 
 
-def get_current_active_user(
-    current_user: Utilisateur = Depends(get_current_user)
+def _get_current_active_user_with_auth(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
 ) -> Utilisateur:
+    """
+    Implémentation avec authentification activée.
+    """
+    current_user = get_current_user(token=token, db=db)
+    if not current_user.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Utilisateur inactif"
+        )
+    return current_user
+
+
+def _get_current_active_user_without_auth() -> None:
+    """
+    Implémentation sans authentification (retourne None).
+    """
+    return None
+
+
+def get_current_active_user(
+    current_user: Optional[Utilisateur] = Depends(
+        _get_current_active_user_with_auth if settings.ENABLE_AUTH 
+        else _get_current_active_user_without_auth
+    )
+) -> Optional[Utilisateur]:
     """
     Dépendance FastAPI pour obtenir l'utilisateur actuel actif.
     
-    Vérifie que l'utilisateur existe (implicitement actif).
-    Cette fonction peut être étendue pour vérifier un champ "est_actif" si ajouté au modèle.
+    Si ENABLE_AUTH est False, retourne None (pas d'authentification requise).
+    Sinon, vérifie que l'utilisateur existe et est actif (est_actif = True).
     
     Args:
-        current_user: Utilisateur obtenu via get_current_user
+        current_user: Utilisateur obtenu via la dépendance conditionnelle
         
     Returns:
-        Utilisateur: L'utilisateur actif
+        Utilisateur | None: L'utilisateur actif ou None si auth désactivée
         
     Raises:
-        HTTPException 400: Si l'utilisateur n'est pas actif
+        HTTPException 400: Si l'utilisateur n'est pas actif (uniquement si auth activée)
+        HTTPException 401: Si l'authentification est requise mais non fournie (uniquement si auth activée)
         
     Example:
         @router.get("/protected")
-        def protected_route(user: Utilisateur = Depends(get_current_active_user)):
-            return {"user_id": user.id_utilisateur}
+        def protected_route(user: Utilisateur | None = Depends(get_current_active_user)):
+            # user peut être None si auth désactivée
+            return {"user_id": user.id_utilisateur if user else None}
     """
-    # Pour l'instant, on considère qu'un utilisateur qui existe est actif
-    # Si un champ "est_actif" est ajouté au modèle, décommenter le code suivant:
-    # if not current_user.est_actif:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail="Utilisateur inactif"
-    #     )
-    
     return current_user
 
 

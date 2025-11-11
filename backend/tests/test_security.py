@@ -86,7 +86,7 @@ class TestAccessToken:
         token = create_access_token(data)
         decoded = decode_token(token)
         
-        assert decoded["sub"] == 1
+        assert decoded["sub"] == "1"  # JWT standard : sub est une string
         assert decoded["email"] == "user@example.com"
         assert decoded["role"] == "admin"
         assert decoded["type"] == "access"
@@ -149,7 +149,7 @@ class TestRefreshToken:
         token = create_refresh_token(data)
         decoded = decode_token(token)
         
-        assert decoded["sub"] == 1
+        assert decoded["sub"] == "1"  # JWT standard : sub est une string
         assert decoded["email"] == "user@example.com"
         assert decoded["type"] == "refresh"
     
@@ -186,7 +186,7 @@ class TestDecodeToken:
         token = create_access_token(data)
         decoded = decode_token(token)
         
-        assert decoded["sub"] == 1
+        assert decoded["sub"] == "1"  # JWT standard : sub est une string
         assert decoded["email"] == "user@example.com"
         assert decoded["role"] == "admin"
         assert decoded["type"] == "access"
@@ -197,7 +197,7 @@ class TestDecodeToken:
         token = create_refresh_token(data)
         decoded = decode_token(token)
         
-        assert decoded["sub"] == 1
+        assert decoded["sub"] == "1"  # JWT standard : sub est une string
         assert decoded["email"] == "user@example.com"
         assert decoded["type"] == "refresh"
     
@@ -267,11 +267,11 @@ class TestTokenIntegration:
         refresh_decoded = decode_token(refresh_token)
         
         # 5. Vérification des données
-        assert access_decoded["sub"] == 1
+        assert access_decoded["sub"] == "1"  # JWT standard : sub est une string
         assert access_decoded["email"] == "user@example.com"
         assert access_decoded["type"] == "access"
         
-        assert refresh_decoded["sub"] == 1
+        assert refresh_decoded["sub"] == "1"  # JWT standard : sub est une string
         assert refresh_decoded["email"] == "user@example.com"
         assert refresh_decoded["type"] == "refresh"
     

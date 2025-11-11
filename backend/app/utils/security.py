@@ -26,7 +26,16 @@ def hash_password(password: str) -> str:
         >>> verify_password("MonMotDePasse123!", hashed)
         True
     """
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except ValueError as e:
+        # Fallback vers bcrypt direct si passlib échoue (problème de détection de version)
+        if "password cannot be longer than 72 bytes" in str(e):
+            import bcrypt
+            password_bytes = password.encode('utf-8')
+            salt = bcrypt.gensalt()
+            return bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+        raise
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

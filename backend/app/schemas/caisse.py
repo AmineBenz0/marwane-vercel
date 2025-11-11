@@ -58,3 +58,24 @@ class MouvementCaisseRead(MouvementCaisseBase):
 
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 
+
+class SoldeCaisseRead(BaseModel):
+    """
+    Schéma pour le solde actuel de la caisse.
+    """
+    solde_actuel: Decimal = Field(..., description="Solde actuel de la caisse (entrées - sorties)")
+    derniere_maj: datetime = Field(..., description="Date et heure du dernier mouvement")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HistoriqueSoldeRead(BaseModel):
+    """
+    Schéma pour un enregistrement d'historique du solde de la caisse.
+    """
+    id_historique: int = Field(..., description="Identifiant unique de l'historique")
+    date_snapshot: datetime = Field(..., description="Date et heure du snapshot")
+    solde: Decimal = Field(..., description="Solde de la caisse au moment du snapshot")
+    id_mouvement: int | None = Field(None, description="ID du mouvement associé (si disponible)")
+
+    model_config = ConfigDict(from_attributes=True)

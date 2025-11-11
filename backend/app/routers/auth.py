@@ -9,7 +9,7 @@ from app.models.user import Utilisateur
 from app.models.audit import AuditConnexion
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshTokenRequest, RefreshTokenResponse
 from app.utils.security import verify_password, create_access_token, create_refresh_token, decode_token
-from app.utils.rate_limit import limiter
+from app.utils.rate_limit import conditional_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -44,7 +44,7 @@ def get_client_ip(request: Request) -> str:
 
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-@limiter.limit("5/minute")
+@conditional_rate_limit("5/minute")  # TODO: Réactiver en production via ENABLE_RATE_LIMITING=True
 async def login(
     login_data: LoginRequest,
     request: Request,
@@ -91,6 +91,25 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Vérifier si l'utilisateur est actif
+    if not user.est_actif:
+        # Enregistrer la tentative échouée dans Audit_Connexions
+        audit_connexion = AuditConnexion(
+            email_utilisateur=login_data.email,
+            succes=False,
+            adresse_ip=client_ip,
+            user_agent=user_agent
+        )
+        db.add(audit_connexion)
+        db.commit()
+        
+        # Lever une exception 403
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Compte utilisateur désactivé",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
