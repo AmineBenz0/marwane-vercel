@@ -3,7 +3,10 @@ Tests pour les endpoints CRUD des clients.
 """
 import pytest
 from fastapi import status
+from datetime import date, timedelta
+from decimal import Decimal
 from app.models.client import Client
+from app.models.transaction import Transaction
 from app.models.user import Utilisateur
 from app.utils.security import hash_password
 import bcrypt
@@ -571,4 +574,369 @@ class TestClientsEndpoints:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert len(data) == 5
+
+    def test_get_client_profile_success(self, client, test_user, db_session, admin_token):
+        """Test de récupération du profil d'un client avec transactions."""
+        token = admin_token
+        
+        # Créer un client
+        test_client = Client(
+            nom_client="Client avec Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_client)
+        db_session.commit()
+        db_session.refresh(test_client)
+        
+        # Créer plusieurs transactions pour ce client
+        today = date.today()
+        transactions = [
+            Transaction(
+                date_transaction=today - timedelta(days=i),
+                montant_total=Decimal(f"{100 + i * 10}.00"),
+                est_actif=True,
+                id_client=test_client.id_client,
+                id_utilisateur_creation=test_user.id_utilisateur
+            )
+            for i in range(5)
+        ]
+        db_session.add_all(transactions)
+        db_session.commit()
+        
+        # Récupérer le profil du client
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        # Vérifier la structure de la réponse
+        assert "client" in data
+        assert "statistiques" in data
+        assert "transactions" in data
+        
+        # Vérifier les informations du client
+        assert data["client"]["id_client"] == test_client.id_client
+        assert data["client"]["nom_client"] == "Client avec Transactions"
+        
+        # Vérifier les statistiques
+        stats = data["statistiques"]
+        assert stats["total_transactions"] == 5
+        assert Decimal(str(stats["montant_total_ventes"])) == Decimal("600.00")  # 100+110+120+130+140
+        assert stats["montant_moyen_transaction"] is not None
+        assert Decimal(str(stats["montant_moyen_transaction"])) == Decimal("120.00")
+        assert stats["date_premiere_transaction"] is not None
+        assert stats["date_derniere_transaction"] is not None
+        
+        # Vérifier les transactions (paginées, triées par date décroissante)
+        assert len(data["transactions"]) == 5
+        # Vérifier que les transactions sont triées par date décroissante
+        transaction_dates = [t["date_transaction"] for t in data["transactions"]]
+        assert transaction_dates == sorted(transaction_dates, reverse=True)
+    
+    def test_get_client_profile_without_transactions(self, client, test_user, db_session, admin_token):
+        """Test de récupération du profil d'un client sans transactions."""
+        token = admin_token
+        
+        # Créer un client sans transactions
+        test_client = Client(
+            nom_client="Client sans Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_client)
+        db_session.commit()
+        db_session.refresh(test_client)
+        
+        # Récupérer le profil du client
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        # Vérifier les statistiques pour un client sans transactions
+        stats = data["statistiques"]
+        assert stats["total_transactions"] == 0
+        assert Decimal(str(stats["montant_total_ventes"])) == Decimal("0")
+        assert stats["montant_moyen_transaction"] is None
+        assert stats["date_premiere_transaction"] is None
+        assert stats["date_derniere_transaction"] is None
+        
+        # Vérifier que la liste des transactions est vide
+        assert len(data["transactions"]) == 0
+    
+    def test_get_client_profile_not_found(self, client, admin_token):
+        """Test de récupération du profil d'un client inexistant."""
+        token = admin_token
+        
+        # Essayer de récupérer le profil d'un client inexistant
+        response = client.get(
+            "/api/v1/clients/99999/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "introuvable" in response.json()["detail"].lower()
+    
+    def test_get_client_profile_pagination(self, client, test_user, db_session, admin_token):
+        """Test de la pagination des transactions dans le profil client."""
+        token = admin_token
+        
+        # Créer un client
+        test_client = Client(
+            nom_client="Client avec Beaucoup de Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_client)
+        db_session.commit()
+        db_session.refresh(test_client)
+        
+        # Créer 10 transactions
+        today = date.today()
+        transactions = [
+            Transaction(
+                date_transaction=today - timedelta(days=i),
+                montant_total=Decimal("100.00"),
+                est_actif=True,
+                id_client=test_client.id_client,
+                id_utilisateur_creation=test_user.id_utilisateur
+            )
+            for i in range(10)
+        ]
+        db_session.add_all(transactions)
+        db_session.commit()
+        
+        # Récupérer la première page (5 transactions)
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/profile?skip=0&limit=5",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["transactions"]) == 5
+        assert data["statistiques"]["total_transactions"] == 10  # Toutes les transactions comptées
+        
+        # Récupérer la deuxième page
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/profile?skip=5&limit=5",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["transactions"]) == 5
+        
+        # Récupérer la troisième page (devrait être vide)
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/profile?skip=10&limit=5",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["transactions"]) == 0
+    
+    def test_get_client_profile_only_active_transactions(self, client, test_user, db_session, admin_token):
+        """Test que seules les transactions actives sont comptées dans les statistiques."""
+        token = admin_token
+        
+        # Créer un client
+        test_client = Client(
+            nom_client="Client avec Transactions Actives/Inactives",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_client)
+        db_session.commit()
+        db_session.refresh(test_client)
+        
+        today = date.today()
+        
+        # Créer 3 transactions actives
+        active_transactions = [
+            Transaction(
+                date_transaction=today - timedelta(days=i),
+                montant_total=Decimal("100.00"),
+                est_actif=True,
+                id_client=test_client.id_client,
+                id_utilisateur_creation=test_user.id_utilisateur
+            )
+            for i in range(3)
+        ]
+        
+        # Créer 2 transactions inactives
+        inactive_transactions = [
+            Transaction(
+                date_transaction=today - timedelta(days=i),
+                montant_total=Decimal("200.00"),
+                est_actif=False,
+                id_client=test_client.id_client,
+                id_utilisateur_creation=test_user.id_utilisateur
+            )
+            for i in range(3, 5)
+        ]
+        
+        db_session.add_all(active_transactions + inactive_transactions)
+        db_session.commit()
+        
+        # Récupérer le profil du client
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        # Vérifier que seules les transactions actives sont comptées
+        stats = data["statistiques"]
+        assert stats["total_transactions"] == 3  # Seulement les 3 actives
+        assert Decimal(str(stats["montant_total_ventes"])) == Decimal("300.00")  # 3 * 100
+        assert len(data["transactions"]) == 3  # Seulement les 3 actives dans la liste
+        
+        # Vérifier qu'aucune transaction inactive n'est dans la liste
+        for transaction in data["transactions"]:
+            assert transaction["est_actif"] is True
+    
+    def test_get_client_profile_requires_auth(self, client):
+        """Test que GET /clients/{id}/profile nécessite une authentification."""
+        from app.config import settings
+        response = client.get("/api/v1/clients/1/profile")
+        # Si l'authentification est activée, on devrait avoir 401, sinon 404 (client inexistant)
+        if settings.ENABLE_AUTH:
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        else:
+            # Si l'auth est désactivée, on obtient 404 car le client n'existe pas
+            assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_get_client_stats_mensuelles_success(self, client, test_user, db_session, admin_token):
+        """Test de récupération des statistiques mensuelles d'un client."""
+        token = admin_token
+        
+        # Créer un client
+        test_client = Client(
+            nom_client="Client Stats Test",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_client)
+        db_session.commit()
+        db_session.refresh(test_client)
+        
+        # Créer des transactions sur plusieurs mois
+        today = date.today()
+        from dateutil.relativedelta import relativedelta
+        
+        # Transaction il y a 2 mois
+        transaction1 = Transaction(
+            date_transaction=today.replace(day=1) - relativedelta(months=2),
+            montant_total=Decimal("1000.00"),
+            est_actif=True,
+            id_client=test_client.id_client
+        )
+        # Transaction il y a 1 mois
+        transaction2 = Transaction(
+            date_transaction=today.replace(day=1) - relativedelta(months=1),
+            montant_total=Decimal("2000.00"),
+            est_actif=True,
+            id_client=test_client.id_client
+        )
+        # Transaction ce mois
+        transaction3 = Transaction(
+            date_transaction=today.replace(day=1),
+            montant_total=Decimal("3000.00"),
+            est_actif=True,
+            id_client=test_client.id_client
+        )
+        
+        db_session.add_all([transaction1, transaction2, transaction3])
+        db_session.commit()
+        
+        # Tester avec période de 6 mois
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/stats-mensuelles?periode=6",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["periode"] == "6_mois"
+        assert len(data["data"]) == 6  # 6 mois de données
+        
+        # Vérifier que les mois sont présents (même ceux sans transactions)
+        mois_keys = [item["mois"] for item in data["data"]]
+        assert len(set(mois_keys)) == len(mois_keys)  # Pas de doublons
+        
+        # Vérifier que les transactions sont comptabilisées
+        montants = {item["mois"]: Decimal(str(item["montant"])) for item in data["data"]}
+        assert sum(montants.values()) == Decimal("6000.00")
+        
+        # Tester avec période de 12 mois
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/stats-mensuelles?periode=12",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["periode"] == "12_mois"
+        assert len(data["data"]) == 12  # 12 mois de données
+
+    def test_get_client_stats_mensuelles_not_found(self, client, admin_token):
+        """Test que GET /clients/{id}/stats-mensuelles retourne 404 si le client n'existe pas."""
+        token = admin_token
+        response = client.get(
+            "/api/v1/clients/99999/stats-mensuelles",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_get_client_stats_mensuelles_invalid_periode(self, client, test_user, db_session, admin_token):
+        """Test que GET /clients/{id}/stats-mensuelles valide la période."""
+        token = admin_token
+        
+        # Créer un client
+        test_client = Client(
+            nom_client="Client Test",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_client)
+        db_session.commit()
+        db_session.refresh(test_client)
+        
+        # Tester avec une période invalide (FastAPI valide automatiquement et retourne 422)
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/stats-mensuelles?periode=3",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_get_client_stats_mensuelles_no_transactions(self, client, test_user, db_session, admin_token):
+        """Test des statistiques mensuelles pour un client sans transactions."""
+        token = admin_token
+        
+        # Créer un client sans transactions
+        test_client = Client(
+            nom_client="Client Sans Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_client)
+        db_session.commit()
+        db_session.refresh(test_client)
+        
+        # Tester les statistiques
+        response = client.get(
+            f"/api/v1/clients/{test_client.id_client}/stats-mensuelles?periode=6",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["periode"] == "6_mois"
+        assert len(data["data"]) == 6
+        
+        # Tous les montants et nb_transactions doivent être à 0
+        for item in data["data"]:
+            assert Decimal(str(item["montant"])) == Decimal('0')
+            assert item["nb_transactions"] == 0
 

@@ -1,0 +1,627 @@
+/**
+ * Page Profil Client.
+ * 
+ * Affiche le profil complet d'un client avec :
+ * - Header : Nom client, statut, boutons d'action (Éditer, Nouvelle transaction)
+ * - Cartes statistiques (StatCard) : Total ventes, Nombre transactions, Montant moyen
+ * - Graphique : Évolution des ventes (6 derniers mois) avec recharts
+ * - Tableau transactions : Historique complet (DataGrid)
+ * - Bouton Export : Exporter l'historique (Excel)
+ * 
+ * Route : /clients/:id/profile
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Box,
+  Typography,
+  Button,
+  Chip,
+  Grid,
+  Card,
+  CardContent,
+  CircularProgress,
+  Alert,
+  useTheme,
+  Divider,
+} from '@mui/material';
+import {
+  ArrowBack as ArrowBackIcon,
+  Edit as EditIcon,
+  Add as AddIcon,
+  FileDownload as FileDownloadIcon,
+  AttachMoney as AttachMoneyIcon,
+  Receipt as ReceiptIcon,
+  TrendingUp as TrendingUpIcon,
+} from '@mui/icons-material';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+import { format, subMonths, startOfMonth } from 'date-fns';
+import fr from 'date-fns/locale/fr';
+import StatCard from '../../components/StatCard/StatCard';
+import DataGrid from '../../components/DataGrid/DataGrid';
+import ModalForm from '../../components/ModalForm/ModalForm';
+import TransactionForm from '../Transactions/TransactionForm';
+import { get, put, post } from '../../services/api';
+import { exportToExcelAdvanced } from '../../utils/exportToExcel';
+import useNotification from '../../hooks/useNotification';
+import { formatMontant, formatMontantComplet } from '../../utils/formatNumber';
+import { formatMontantForAxis, formatMontantForTooltip } from '../../utils/formatNumberForChart';
+import * as yup from 'yup';
+
+/**
+ * Formate une date pour l'affichage.
+ */
+const formatDate = (dateValue) => {
+  if (!dateValue) return '-';
+  try {
+    return format(new Date(dateValue), 'dd/MM/yyyy', { locale: fr });
+  } catch {
+    return dateValue;
+  }
+};
+
+/**
+ * Formate un mois pour l'affichage dans le graphique.
+ */
+const formatMonth = (monthStr) => {
+  try {
+    const [year, month] = monthStr.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+    return format(date, 'MMM yyyy', { locale: fr });
+  } catch {
+    return monthStr;
+  }
+};
+
+/**
+ * Composant ClientProfile.
+ */
+function ClientProfile() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const notification = useNotification();
+
+  // États pour les données
+  const [client, setClient] = useState(null);
+  const [statistiques, setStatistiques] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [statsMensuelles, setStatsMensuelles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // État pour la modal d'édition
+  const [modalOpen, setModalOpen] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
+
+  // État pour la modal de nouvelle transaction
+  const [transactionModalOpen, setTransactionModalOpen] = useState(false);
+  const [transactionFormLoading, setTransactionFormLoading] = useState(false);
+  const [transactionFormError, setTransactionFormError] = useState(null);
+
+  /**
+   * Charge le profil du client.
+   */
+  const fetchClientProfile = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Charger le profil avec les statistiques et transactions
+      const profileData = await get(`/clients/${id}/profile`, {
+        params: {
+          limit: 1000, // Limite élevée pour récupérer toutes les transactions
+        },
+      });
+
+      setClient(profileData.client);
+      setStatistiques(profileData.statistiques);
+      setTransactions(profileData.transactions || []);
+
+      // Charger les statistiques mensuelles pour le graphique (6 derniers mois)
+      const statsMensuellesData = await get(`/clients/${id}/stats-mensuelles`, {
+        params: {
+          periode: 6,
+        },
+      });
+
+      setStatsMensuelles(statsMensuellesData.data || []);
+    } catch (err) {
+      console.error('Erreur lors du chargement du profil client:', err);
+      const errorMessage = err?.message || 'Une erreur est survenue lors du chargement du profil client';
+      setError(errorMessage);
+      notification.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Charge les données au montage et lorsque l'ID change.
+   */
+  useEffect(() => {
+    if (id) {
+      fetchClientProfile();
+    }
+  }, [id]);
+
+  /**
+   * Prépare les données pour le graphique.
+   */
+  const chartData = useMemo(() => {
+    if (!statsMensuelles || statsMensuelles.length === 0) {
+      return [];
+    }
+
+    return statsMensuelles.map((item) => ({
+      mois: formatMonth(item.mois),
+      moisKey: item.mois,
+      montant: parseFloat(item.montant || 0),
+      nb_transactions: item.nb_transactions || 0,
+    }));
+  }, [statsMensuelles]);
+
+  /**
+   * Configuration des colonnes pour le DataGrid des transactions.
+   */
+  const transactionColumns = [
+    {
+      id: 'id_transaction',
+      label: 'ID',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+    },
+    {
+      id: 'date_transaction',
+      label: 'Date',
+      sortable: true,
+      filterable: false,
+      format: (value) => formatDate(value),
+    },
+    {
+      id: 'montant_total',
+      label: 'Montant',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+      format: (value) => formatMontant(value, { useCompactNotation: false }),
+    },
+    {
+      id: 'est_actif',
+      label: 'Statut',
+      sortable: true,
+      filterable: false,
+      format: (value) => (
+        <Chip
+          label={value ? 'Actif' : 'Inactif'}
+          color={value ? 'success' : 'default'}
+          size="small"
+        />
+      ),
+    },
+  ];
+
+  /**
+   * Gère l'export Excel des transactions.
+   */
+  const handleExportExcel = () => {
+    try {
+      if (!transactions || transactions.length === 0) {
+        notification.warning('Aucune transaction à exporter');
+        return;
+      }
+
+      const customFormatters = {
+        date_transaction: (value) => {
+          if (!value) return '-';
+          try {
+            return formatDate(value);
+          } catch {
+            return value;
+          }
+        },
+        montant_total: (value) => {
+          if (value === null || value === undefined) return '-';
+          return parseFloat(value).toFixed(2);
+        },
+        est_actif: (value) => (value ? 'Actif' : 'Inactif'),
+      };
+
+      exportToExcelAdvanced(
+        transactions,
+        transactionColumns,
+        `transactions_client_${client?.nom_client?.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
+        'Transactions',
+        customFormatters
+      );
+
+      notification.success('Export Excel réussi');
+    } catch (error) {
+      console.error('Erreur lors de l\'export Excel:', error);
+      notification.error('Une erreur est survenue lors de l\'export Excel');
+    }
+  };
+
+  /**
+   * Schéma de validation Yup pour le formulaire client.
+   */
+  const clientValidationSchema = yup.object().shape({
+    nom_client: yup
+      .string()
+      .required('Le nom du client est requis')
+      .min(1, 'Le nom doit contenir au moins 1 caractère')
+      .max(255, 'Le nom ne peut pas dépasser 255 caractères')
+      .trim(),
+    est_actif: yup.boolean().required('Le statut est requis'),
+  });
+
+  /**
+   * Configuration des champs du formulaire.
+   */
+  const clientFields = [
+    {
+      name: 'nom_client',
+      label: 'Nom du client',
+      type: 'text',
+      placeholder: 'Entrez le nom du client',
+      required: true,
+    },
+    {
+      name: 'est_actif',
+      label: 'Actif',
+      type: 'switch',
+    },
+  ];
+
+  /**
+   * Gère l'ouverture de la modal d'édition.
+   */
+  const handleEdit = () => {
+    setFormError(null);
+    setModalOpen(true);
+  };
+
+  /**
+   * Gère la soumission du formulaire d'édition.
+   */
+  const handleSubmit = async (data) => {
+    setFormLoading(true);
+    setFormError(null);
+
+    try {
+      // Mode édition : PUT
+      await put(`/clients/${client.id_client}`, data);
+
+      // Fermer la modal et rafraîchir les données
+      setModalOpen(false);
+      await fetchClientProfile();
+      
+      // Afficher une notification de succès
+      notification.success('Client modifié avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la soumission:', err);
+      const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
+      setFormError(errorMessage);
+      notification.error(errorMessage);
+      throw err; // Re-throw pour que ModalForm puisse gérer les erreurs de validation
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
+   * Gère la fermeture de la modal.
+   */
+  const handleCloseModal = () => {
+    if (!formLoading) {
+      setModalOpen(false);
+      setFormError(null);
+    }
+  };
+
+  /**
+   * Gère l'ouverture de la modal de nouvelle transaction.
+   */
+  const handleNewTransaction = () => {
+    setTransactionFormError(null);
+    setTransactionModalOpen(true);
+  };
+
+  /**
+   * Gère la soumission de la nouvelle transaction.
+   */
+  const handleTransactionSubmit = async (data) => {
+    setTransactionFormLoading(true);
+    setTransactionFormError(null);
+
+    try {
+      // Mode création : POST
+      await post('/transactions', data);
+
+      // Fermer la modal et rafraîchir les données du profil
+      setTransactionModalOpen(false);
+      await fetchClientProfile();
+      
+      // Afficher une notification de succès
+      notification.success('Transaction créée avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la soumission:', err);
+      const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
+      setTransactionFormError(errorMessage);
+      notification.error(errorMessage);
+      throw err; // Re-throw pour que le formulaire puisse gérer les erreurs de validation
+    } finally {
+      setTransactionFormLoading(false);
+    }
+  };
+
+  /**
+   * Gère la fermeture de la modal de nouvelle transaction.
+   */
+  const handleCloseTransactionModal = () => {
+    if (!transactionFormLoading) {
+      setTransactionModalOpen(false);
+      setTransactionFormError(null);
+    }
+  };
+
+  /**
+   * Gère la navigation vers les détails d'une transaction.
+   */
+  const handleViewTransaction = (transaction) => {
+    navigate(`/transactions/${transaction.id_transaction}`);
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/clients')}>
+          Retour à la liste
+        </Button>
+      </Box>
+    );
+  }
+
+  if (!client) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Client introuvable
+        </Alert>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/clients')}>
+          Retour à la liste
+        </Button>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/clients')}
+          variant="outlined"
+        >
+          Retour
+        </Button>
+        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="h4" component="h1">
+            {client.nom_client}
+          </Typography>
+          <Chip
+            label={client.est_actif ? 'Actif' : 'Inactif'}
+            color={client.est_actif ? 'success' : 'default'}
+            size="medium"
+          />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<EditIcon />}
+            onClick={handleEdit}
+          >
+            Éditer
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleNewTransaction}
+          >
+            Nouvelle transaction
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Cartes statistiques */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={4}>
+          <StatCard
+            title="Total ventes"
+            value={statistiques?.montant_total_ventes || 0}
+            icon={<AttachMoneyIcon />}
+            valueFormat="currency"
+            currency="MAD"
+            color="primary"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <StatCard
+            title="Nombre transactions"
+            value={statistiques?.total_transactions || 0}
+            icon={<ReceiptIcon />}
+            valueFormat="number"
+            color="info"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={4}>
+          <StatCard
+            title="Montant moyen"
+            value={statistiques?.montant_moyen_transaction || 0}
+            icon={<TrendingUpIcon />}
+            valueFormat="currency"
+            currency="MAD"
+            color="success"
+          />
+        </Grid>
+      </Grid>
+
+      {/* Graphique d'évolution des ventes */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" component="h2" gutterBottom>
+            Évolution des ventes (6 derniers mois)
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+          {chartData.length > 0 ? (
+            <Box sx={{ width: '100%', height: 400, mt: 3 }}>
+              <ResponsiveContainer>
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="mois"
+                    tick={{ fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis
+                    label={{ value: 'Montant (MAD)', angle: -90, position: 'insideLeft' }}
+                    tickFormatter={(value) => formatMontantForAxis(value)}
+                    width={80}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <Tooltip
+                    formatter={(value) => formatMontantForTooltip(value)}
+                    labelFormatter={(label) => `Mois: ${label}`}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="montant"
+                    stroke={theme.palette.primary.main}
+                    strokeWidth={2}
+                    name="Montant total (MAD)"
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+              <Typography variant="body2" color="text.secondary">
+                Aucune donnée disponible pour le graphique
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tableau des transactions */}
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" component="h2">
+              Historique des transactions
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportExcel}
+              disabled={!transactions || transactions.length === 0}
+            >
+              Exporter (Excel)
+            </Button>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          {transactions && transactions.length > 0 ? (
+            <DataGrid
+              rows={transactions}
+              columns={transactionColumns}
+              onView={handleViewTransaction}
+              loading={false}
+              pageSize={10}
+              showActions={true}
+            />
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              Aucune transaction disponible
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal de modification */}
+      <ModalForm
+        open={modalOpen}
+        onClose={handleCloseModal}
+        onSubmit={handleSubmit}
+        initialValues={
+          client
+            ? {
+                nom_client: client.nom_client,
+                est_actif: client.est_actif,
+              }
+            : {
+                nom_client: '',
+                est_actif: true,
+              }
+        }
+        validationSchema={clientValidationSchema}
+        fields={clientFields}
+        title="Modifier le client"
+        submitLabel="Modifier"
+        loading={formLoading}
+        errorMessage={formError}
+      />
+
+      {/* Modal de nouvelle transaction */}
+      <TransactionForm
+        open={transactionModalOpen}
+        onClose={handleCloseTransactionModal}
+        onSubmit={handleTransactionSubmit}
+        initialValues={{}}
+        loading={transactionFormLoading}
+        errorMessage={transactionFormError}
+        prefillClientId={parseInt(id)}
+        prefillFournisseurId={null}
+      />
+    </Box>
+  );
+}
+
+export default ClientProfile;
+

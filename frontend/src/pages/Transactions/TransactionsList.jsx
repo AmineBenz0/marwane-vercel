@@ -40,6 +40,7 @@ import fr from 'date-fns/locale/fr';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportToPDF } from '../../utils/exportToPDF';
 import useNotification from '../../hooks/useNotification';
+import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
 
 /**
  * Composant TransactionsList.
@@ -328,14 +329,10 @@ function TransactionsList() {
   };
 
   /**
-   * Formate le montant pour l'affichage.
+   * Formate le montant pour l'affichage (wrapper de l'utilitaire).
    */
-  const formatMontant = (montant) => {
-    if (montant === null || montant === undefined) return '-';
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'MAD',
-    }).format(montant);
+  const formatMontant = (montant, options = {}) => {
+    return formatMontantUtil(montant, { useCompactNotation: false, ...options });
   };
 
   /**

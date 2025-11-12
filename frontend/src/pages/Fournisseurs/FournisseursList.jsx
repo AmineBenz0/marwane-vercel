@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -25,6 +26,7 @@ import {
   MenuItem,
   TextField,
   Chip,
+  Link,
 } from '@mui/material';
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
@@ -41,6 +43,7 @@ import useNotification from '../../hooks/useNotification';
 function FournisseursList() {
   // Hook pour les notifications
   const notification = useNotification();
+  const navigate = useNavigate();
 
   // État pour les fournisseurs
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -258,6 +261,13 @@ function FournisseursList() {
   };
 
   /**
+   * Gère la navigation vers le profil d'un fournisseur.
+   */
+  const handleViewProfile = (fournisseur) => {
+    navigate(`/fournisseurs/${fournisseur.id_fournisseur}/profile`);
+  };
+
+  /**
    * Gère l'export Excel des fournisseurs filtrés.
    */
   const handleExportExcel = () => {
@@ -325,6 +335,22 @@ function FournisseursList() {
       label: 'Nom du fournisseur',
       sortable: true,
       filterable: false, // Désactivé car nous avons un filtre dédié au-dessus
+      format: (value, row) => (
+        <Link
+          component="button"
+          variant="body2"
+          onClick={() => handleViewProfile(row)}
+          sx={{
+            cursor: 'pointer',
+            textDecoration: 'none',
+            '&:hover': {
+              textDecoration: 'underline',
+            },
+          }}
+        >
+          {value}
+        </Link>
+      ),
     },
     {
       id: 'est_actif',
@@ -451,6 +477,7 @@ function FournisseursList() {
       <DataGrid
         rows={fournisseurs}
         columns={columns}
+        onView={handleViewProfile}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         onReactivate={handleReactivate}

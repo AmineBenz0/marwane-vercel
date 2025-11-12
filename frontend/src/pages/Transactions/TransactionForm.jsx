@@ -136,6 +136,8 @@ function TransactionForm({
   initialValues = {},
   loading = false,
   errorMessage = null,
+  prefillClientId = null,
+  prefillFournisseurId = null,
 }) {
   // État pour les données de référence
   const [clients, setClients] = useState([]);
@@ -228,18 +230,21 @@ function TransactionForm({
           })) || [{ id_produit: '', quantite: undefined, prix_unitaire: undefined }],
         });
       } else {
-        // Mode création : valeurs par défaut
+        // Mode création : valeurs par défaut ou pré-remplies
+        const hasPrefillClient = prefillClientId !== null && prefillClientId !== undefined;
+        const hasPrefillFournisseur = prefillFournisseurId !== null && prefillFournisseurId !== undefined;
+        
         reset({
           date_transaction: new Date().toISOString().split('T')[0],
-          type_entite: 'client',
-          id_client: null,
-          id_fournisseur: null,
+          type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : 'client',
+          id_client: hasPrefillClient ? prefillClientId : null,
+          id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : null,
           lignes: [{ id_produit: '', quantite: undefined, prix_unitaire: undefined }],
         });
       }
       clearErrors();
     }
-  }, [open, initialValues, reset, clearErrors]);
+  }, [open, initialValues, reset, clearErrors, prefillClientId, prefillFournisseurId]);
 
   // Nettoyer les erreurs serveur lorsque la modal se ferme
   useEffect(() => {
@@ -536,13 +541,13 @@ function TransactionForm({
                         value="client"
                         control={<Radio />}
                         label="Client"
-                        disabled={loading}
+                        disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                       />
                       <FormControlLabel
                         value="fournisseur"
                         control={<Radio />}
                         label="Fournisseur"
-                        disabled={loading}
+                        disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
                       />
                     </RadioGroup>
                   )}
@@ -562,7 +567,7 @@ function TransactionForm({
                       fullWidth
                       margin="normal"
                       error={!!error}
-                      disabled={loading}
+                      disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
                     >
                       <InputLabel required>Client</InputLabel>
                       <Select
@@ -595,7 +600,7 @@ function TransactionForm({
                       fullWidth
                       margin="normal"
                       error={!!error}
-                      disabled={loading}
+                      disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                     >
                       <InputLabel required>Fournisseur</InputLabel>
                       <Select

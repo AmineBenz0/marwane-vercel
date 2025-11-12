@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -25,6 +26,7 @@ import {
   MenuItem,
   TextField,
   Chip,
+  Link,
 } from '@mui/material';
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
@@ -41,6 +43,7 @@ import useNotification from '../../hooks/useNotification';
 function ClientsList() {
   // Hook pour les notifications
   const notification = useNotification();
+  const navigate = useNavigate();
 
   // État pour les clients
   const [clients, setClients] = useState([]);
@@ -268,6 +271,13 @@ function ClientsList() {
   };
 
   /**
+   * Gère la navigation vers le profil d'un client.
+   */
+  const handleViewProfile = (client) => {
+    navigate(`/clients/${client.id_client}/profile`);
+  };
+
+  /**
    * Gère l'export Excel des clients filtrés.
    */
   const handleExportExcel = () => {
@@ -335,6 +345,22 @@ function ClientsList() {
       label: 'Nom du client',
       sortable: true,
       filterable: false, // Désactivé car nous avons un filtre dédié au-dessus
+      format: (value, row) => (
+        <Link
+          component="button"
+          variant="body2"
+          onClick={() => handleViewProfile(row)}
+          sx={{
+            cursor: 'pointer',
+            textDecoration: 'none',
+            '&:hover': {
+              textDecoration: 'underline',
+            },
+          }}
+        >
+          {value}
+        </Link>
+      ),
     },
     {
       id: 'est_actif',
@@ -461,6 +487,7 @@ function ClientsList() {
       <DataGrid
         rows={clients}
         columns={columns}
+        onView={handleViewProfile}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         onReactivate={handleReactivate}

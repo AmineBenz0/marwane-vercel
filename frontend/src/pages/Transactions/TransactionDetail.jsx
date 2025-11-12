@@ -42,6 +42,7 @@ import {
 import { get } from '../../services/api';
 import { format } from 'date-fns';
 import fr from 'date-fns/locale/fr';
+import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
 
 /**
  * Composant TransactionDetail.
@@ -178,14 +179,10 @@ function TransactionDetail() {
   }, [auditDialogOpen]);
 
   /**
-   * Formate le montant pour l'affichage.
+   * Formate le montant pour l'affichage (wrapper de l'utilitaire).
    */
-  const formatMontant = (montant) => {
-    if (montant === null || montant === undefined) return '-';
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'MAD',
-    }).format(montant);
+  const formatMontant = (montant, options = {}) => {
+    return formatMontantUtil(montant, { useCompactNotation: false, ...options });
   };
 
   /**

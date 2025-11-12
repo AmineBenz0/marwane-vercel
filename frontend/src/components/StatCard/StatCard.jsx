@@ -28,30 +28,59 @@ import {
   Typography,
   Avatar,
   useTheme,
+  Tooltip,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Remove as RemoveIcon,
 } from '@mui/icons-material';
+import { 
+  formatMontant, 
+  formatSimpleNumber, 
+  formatPercentage,
+  formatMontantComplet,
+  formatNumberComplet,
+  needsCompactNotation,
+  getRecommendedFontSize,
+} from '../../utils/formatNumber';
 
 /**
  * Formate une valeur selon le type spécifié.
  */
-const formatValue = (value, format, currency = 'MAD') => {
+const formatValue = (value, format, currency = 'MAD', useCompact = true) => {
   if (value === null || value === undefined) return '-';
 
   switch (format) {
     case 'currency':
-      return new Intl.NumberFormat('fr-FR', {
-        style: 'currency',
-        currency: currency,
-      }).format(value);
+      return formatMontant(value, { 
+        currency, 
+        useCompactNotation: useCompact,
+      });
     case 'percentage':
-      return `${value}%`;
+      return formatPercentage(value);
     case 'number':
     default:
-      return new Intl.NumberFormat('fr-FR').format(value);
+      return formatSimpleNumber(value, {
+        useCompactNotation: useCompact,
+      });
+  }
+};
+
+/**
+ * Obtient la valeur complète pour le tooltip.
+ */
+const getFullValue = (value, format, currency = 'MAD') => {
+  if (value === null || value === undefined) return '-';
+
+  switch (format) {
+    case 'currency':
+      return formatMontantComplet(value, currency);
+    case 'percentage':
+      return formatPercentage(value, 2);
+    case 'number':
+    default:
+      return formatNumberComplet(value);
   }
 };
 
@@ -66,8 +95,15 @@ function StatCard({
   color = 'primary',
   valueFormat = 'number',
   currency = 'MAD',
+  useCompactNotation = true,
 }) {
   const theme = useTheme();
+  
+  // Formater la valeur avec notation compacte si nécessaire
+  const formattedValue = formatValue(value, valueFormat, currency, useCompactNotation);
+  const fullValue = getFullValue(value, valueFormat, currency);
+  const showTooltip = needsCompactNotation(value) && useCompactNotation;
+  const fontSize = getRecommendedFontSize(formattedValue);
 
   // Couleurs selon le type de variation
   const getVariationColor = (type) => {
@@ -146,17 +182,25 @@ function StatCard({
         </Box>
 
         {/* Valeur principale */}
-        <Typography
-          variant="h4"
-          component="div"
-          sx={{
-            fontWeight: 700,
-            mb: variation ? 1 : 0,
-            color: theme.palette.text.primary,
-          }}
+        <Tooltip 
+          title={showTooltip ? fullValue : ''} 
+          arrow
+          placement="top"
         >
-          {formatValue(value, valueFormat, currency)}
-        </Typography>
+          <Typography
+            variant={fontSize}
+            component="div"
+            sx={{
+              fontWeight: 700,
+              mb: variation ? 1 : 0,
+              color: theme.palette.text.primary,
+              cursor: showTooltip ? 'help' : 'default',
+              wordBreak: 'break-word',
+            }}
+          >
+            {formattedValue}
+          </Typography>
+        </Tooltip>
 
         {/* Variation (optionnel) */}
         {variation && (
@@ -184,8 +228,9 @@ function StatCard({
                 }}
               >
                 {variation.value > 0 ? '+' : ''}
-                {formatValue(variation.value, 'number')}
-                {variation.valueFormat === 'percentage' ? '%' : ''}
+                {variation.valueFormat === 'percentage' 
+                  ? formatPercentage(variation.value) 
+                  : formatSimpleNumber(variation.value, { useCompactNotation: false })}
               </Typography>
             </Box>
             {variation.label && (

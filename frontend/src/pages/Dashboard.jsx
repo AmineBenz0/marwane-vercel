@@ -39,6 +39,8 @@ import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import fr from 'date-fns/locale/fr';
 import StatCard from '../components/StatCard/StatCard';
 import { get } from '../services/api';
+import { formatMontantComplet } from '../utils/formatNumber';
+import { formatNumberForAxis, formatMontantForTooltip } from '../utils/formatNumberForChart';
 
 /**
  * Formate une date pour l'affichage dans le graphique.
@@ -303,11 +305,16 @@ function Dashboard() {
                 <YAxis
                   yAxisId="left"
                   label={{ value: 'Nombre', angle: -90, position: 'insideLeft' }}
+                  width={60}
+                  tick={{ fontSize: 12 }}
                 />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
                   label={{ value: 'Montant (MAD)', angle: 90, position: 'insideRight' }}
+                  tickFormatter={(value) => formatNumberForAxis(value)}
+                  width={80}
+                  tick={{ fontSize: 12 }}
                 />
                 <Tooltip
                   formatter={(value, name) => {
@@ -316,10 +323,7 @@ function Dashboard() {
                     }
                     if (name === 'total') {
                       return [
-                        new Intl.NumberFormat('fr-FR', {
-                          style: 'currency',
-                          currency: 'MAD',
-                        }).format(value),
+                        formatMontantForTooltip(value),
                         'Montant',
                       ];
                     }

@@ -1,9 +1,14 @@
 """
 Schémas Pydantic pour la validation des données fournisseurs.
 """
+from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional
-from datetime import datetime
+from typing import Optional, List, TYPE_CHECKING
+from datetime import datetime, date
+from decimal import Decimal
+
+if TYPE_CHECKING:
+    from app.schemas.transaction import TransactionRead
 
 
 class FournisseurBase(BaseModel):
@@ -76,3 +81,76 @@ class FournisseurRead(FournisseurBase):
 
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 
+
+class FournisseurProfileStats(BaseModel):
+    """
+    Schéma pour les statistiques agrégées d'un fournisseur.
+    """
+    total_transactions: int = Field(
+        0,
+        description="Nombre total de transactions du fournisseur"
+    )
+    montant_total_achats: Decimal = Field(
+        Decimal('0'),
+        description="Somme totale des montants des transactions (achats)"
+    )
+    montant_moyen_transaction: Optional[Decimal] = Field(
+        None,
+        description="Montant moyen par transaction (None si aucune transaction)"
+    )
+    date_premiere_transaction: Optional[date] = Field(
+        None,
+        description="Date de la première transaction (None si aucune transaction)"
+    )
+    date_derniere_transaction: Optional[date] = Field(
+        None,
+        description="Date de la dernière transaction (None si aucune transaction)"
+    )
+
+
+class FournisseurProfile(BaseModel):
+    """
+    Schéma pour le profil complet d'un fournisseur.
+    Inclut les informations du fournisseur, ses statistiques et sa liste de transactions paginée.
+    """
+    fournisseur: FournisseurRead = Field(..., description="Informations du fournisseur")
+    statistiques: FournisseurProfileStats = Field(..., description="Statistiques agrégées du fournisseur")
+    transactions: List["TransactionRead"] = Field(
+        default_factory=list,
+        description="Liste paginée des transactions du fournisseur"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Résoudre la référence forward après l'import de TransactionRead
+def _rebuild_fournisseur_profile():
+    """Rebuild FournisseurProfile après l'import de TransactionRead pour résoudre les références forward."""
+    from app.schemas.transaction import TransactionRead
+    FournisseurProfile.model_rebuild()
+
+
+# Appeler automatiquement lors de l'import du module
+try:
+    _rebuild_fournisseur_profile()
+except ImportError:
+    # Si TransactionRead n'est pas encore disponible, on laisse passer
+    # Il sera reconstruit lors de l'import dans __init__.py
+    pass
+
+
+class FournisseurStatsMensuellesItem(BaseModel):
+    """
+    Schéma pour un élément de statistiques mensuelles d'un fournisseur.
+    """
+    mois: str = Field(..., description="Mois au format YYYY-MM (ex: 2024-01)")
+    montant: Decimal = Field(..., description="Montant total des transactions du mois")
+    nb_transactions: int = Field(..., description="Nombre de transactions du mois")
+
+
+class FournisseurStatsMensuelles(BaseModel):
+    """
+    Schéma pour les statistiques mensuelles d'un fournisseur.
+    """
+    periode: str = Field(..., description="Période sélectionnée (6_mois ou 12_mois)")
+    data: List[FournisseurStatsMensuellesItem] = Field(..., description="Liste des statistiques par mois")

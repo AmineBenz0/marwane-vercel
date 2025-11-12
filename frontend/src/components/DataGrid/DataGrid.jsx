@@ -316,7 +316,16 @@ function DataGrid({
                     }
 
                     return (
-                      <TableCell key={column.id} align={column.align || 'left'}>
+                      <TableCell 
+                        key={column.id} 
+                        align={column.align || 'left'}
+                        sx={{
+                          maxWidth: column.maxWidth || 'auto',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {displayValue}
                       </TableCell>
                     );

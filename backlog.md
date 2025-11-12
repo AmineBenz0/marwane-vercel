@@ -1303,8 +1303,8 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ### Sprint 2.12 : Pages de Profil Client/Fournisseur
 
 #### Tâche 2.12.1 : Backend - Endpoint Profil Client
-- [ ] Créer `GET /clients/{id}/profile` dans `app/routers/clients.py`
-- [ ] Retourner les données enrichies :
+- [x] Créer `GET /clients/{id}/profile` dans `app/routers/clients.py`
+- [x] Retourner les données enrichies :
   - Informations client complètes
   - Statistiques agrégées :
     - `total_transactions` (nombre)
@@ -1313,11 +1313,11 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
     - `date_premiere_transaction`
     - `date_derniere_transaction`
   - Liste des transactions (avec pagination)
-- [ ] Optimiser la requête SQL (jointures, agrégations)
+- [x] Optimiser la requête SQL (jointures, agrégations)
 
 **Critères d'acceptation :**
 - ✅ Endpoint retourne toutes les données nécessaires
-- ✅ Performance : réponse < 200ms
+- ✅ Performance : réponse < 200ms (requêtes SQL optimisées avec agrégations)
 - ✅ Pagination fonctionnelle
 - ✅ Gestion des clients sans transactions
 
@@ -1326,9 +1326,9 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 2.12.2 : Backend - Endpoint Profil Fournisseur
-- [ ] Créer `GET /fournisseurs/{id}/profile` dans `app/routers/fournisseurs.py`
-- [ ] Retourner les mêmes données que pour les clients (achats au lieu de ventes)
-- [ ] Réutiliser la logique similaire
+- [x] Créer `GET /fournisseurs/{id}/profile` dans `app/routers/fournisseurs.py`
+- [x] Retourner les mêmes données que pour les clients (achats au lieu de ventes)
+- [x] Réutiliser la logique similaire
 
 **Critères d'acceptation :**
 - ✅ Endpoint fonctionnel avec toutes les statistiques
@@ -1339,9 +1339,9 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 ---
 
 #### Tâche 2.12.3 : Backend - Endpoint Statistiques Mensuelles
-- [ ] Créer `GET /clients/{id}/stats-mensuelles` 
-- [ ] Créer `GET /fournisseurs/{id}/stats-mensuelles`
-- [ ] Retourner les données pour graphique :
+- [x] Créer `GET /clients/{id}/stats-mensuelles` 
+- [x] Créer `GET /fournisseurs/{id}/stats-mensuelles`
+- [x] Retourner les données pour graphique :
   ```json
   {
     "periode": "6_mois", // ou 12_mois
@@ -1352,7 +1352,7 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
     ]
   }
   ```
-- [ ] Paramètre `periode` : 6 ou 12 mois
+- [x] Paramètre `periode` : 6 ou 12 mois
 
 **Critères d'acceptation :**
 - ✅ Données correctement agrégées par mois
@@ -1360,13 +1360,14 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 - ✅ Performance optimisée
 
 **Estimation** : 2h
+**Statut** : ✅ Terminé
 
 ---
 
 #### Tâche 2.12.4 : Frontend - Page Profil Client
-- [ ] Créer `src/pages/Clients/ClientProfile.jsx`
-- [ ] Route : `/clients/:id/profile`
-- [ ] Sections de la page :
+- [x] Créer `src/pages/Clients/ClientProfile.jsx`
+- [x] Route : `/clients/:id/profile`
+- [x] Sections de la page :
   - **Header** : Nom client, statut, boutons d'action (Éditer, Nouvelle transaction)
   - **Cartes statistiques** (StatCard) :
     - Total ventes
@@ -1375,8 +1376,8 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
   - **Graphique** : Évolution des ventes (6 derniers mois) avec recharts
   - **Tableau transactions** : Historique complet (DataGrid)
   - **Bouton Export** : Exporter l'historique (Excel)
-- [ ] Design cohérent avec Material-UI
-- [ ] Responsive
+- [x] Design cohérent avec Material-UI
+- [x] Responsive
 
 **Critères d'acceptation :**
 - ✅ Toutes les sections affichées correctement
@@ -1386,28 +1387,30 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 - ✅ Gestion du loading et des erreurs
 
 **Estimation** : 4h
+**Statut** : ✅ Terminé
 
 ---
 
 #### Tâche 2.12.5 : Frontend - Page Profil Fournisseur
-- [ ] Créer `src/pages/Fournisseurs/FournisseurProfile.jsx`
-- [ ] Route : `/fournisseurs/:id/profile`
-- [ ] Même structure que ClientProfile (adapter labels : "Achats" au lieu de "Ventes")
-- [ ] Réutiliser les composants
+- [x] Créer `src/pages/Fournisseurs/FournisseurProfile.jsx`
+- [x] Route : `/fournisseurs/:id/profile`
+- [x] Même structure que ClientProfile (adapter labels : "Achats" au lieu de "Ventes")
+- [x] Réutiliser les composants
 
 **Critères d'acceptation :**
 - ✅ Page fonctionnelle et cohérente
-- ✅ Navigation depuis la liste fournisseurs
+- ⚠️ Navigation depuis la liste fournisseurs (à faire dans tâche 2.12.6)
 
 **Estimation** : 3h
+**Statut** : ✅ Terminé
 
 ---
 
 #### Tâche 2.12.6 : Frontend - Navigation et Liens
-- [ ] Ajouter un bouton "Voir profil" dans ClientsList (colonne actions)
-- [ ] Ajouter un bouton "Voir profil" dans FournisseursList
-- [ ] Ajouter les routes dans `App.jsx`
-- [ ] Rendre les noms clients/fournisseurs cliquables (redirection profil)
+- [x] Ajouter un bouton "Voir profil" dans ClientsList (colonne actions)
+- [x] Ajouter un bouton "Voir profil" dans FournisseursList
+- [x] Ajouter les routes dans `App.jsx`
+- [x] Rendre les noms clients/fournisseurs cliquables (redirection profil)
 
 **Critères d'acceptation :**
 - ✅ Navigation fluide

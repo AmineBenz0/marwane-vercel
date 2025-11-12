@@ -7,7 +7,9 @@
  * - /transactions : Transactions (protégée)
  * - /transactions/:id : Détails d'une transaction (protégée)
  * - /clients : Clients (protégée)
+ * - /clients/:id/profile : Profil client (protégée)
  * - /fournisseurs : Fournisseurs (protégée)
+ * - /fournisseurs/:id/profile : Profil fournisseur (protégée)
  * - /produits : Produits (protégée)
  * - /caisse : Caisse (protégée)
  * - /audit : Audit (protégée, admin uniquement)
@@ -28,7 +30,9 @@ import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import TransactionDetail from './pages/Transactions/TransactionDetail';
 import Clients from './pages/Clients';
+import ClientProfile from './pages/Clients/ClientProfile';
 import Fournisseurs from './pages/Fournisseurs';
+import FournisseurProfile from './pages/Fournisseurs/FournisseurProfile';
 import Produits from './pages/Produits';
 import Caisse from './pages/Caisse';
 import Audit from './pages/Audit';
@@ -84,11 +88,31 @@ function App() {
           }
         />
         <Route
+          path="/clients/:id/profile"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ClientProfile />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/fournisseurs"
           element={
             <ProtectedRoute>
               <AppLayout>
                 <Fournisseurs />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/fournisseurs/:id/profile"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <FournisseurProfile />
               </AppLayout>
             </ProtectedRoute>
           }

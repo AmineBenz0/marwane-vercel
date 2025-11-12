@@ -3,7 +3,10 @@ Tests pour les endpoints CRUD des fournisseurs.
 """
 import pytest
 from fastapi import status
+from datetime import date, timedelta
+from decimal import Decimal
 from app.models.fournisseur import Fournisseur
+from app.models.transaction import Transaction
 from app.models.user import Utilisateur
 from app.utils.security import hash_password
 import bcrypt
@@ -451,4 +454,288 @@ class TestFournisseursEndpoints:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert len(data) == 5
+    
+    def test_get_fournisseur_profile_success(self, client, test_user, db_session, admin_token):
+        """Test de récupération du profil d'un fournisseur avec transactions."""
+        token = admin_token
+        
+        # Créer un fournisseur
+        test_fournisseur = Fournisseur(
+            nom_fournisseur="Fournisseur avec Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_fournisseur)
+        db_session.commit()
+        db_session.refresh(test_fournisseur)
+        
+        # Créer plusieurs transactions pour ce fournisseur
+        today = date.today()
+        transactions = [
+            Transaction(
+                date_transaction=today - timedelta(days=i),
+                montant_total=Decimal(f"{100 + i * 10}.00"),
+                est_actif=True,
+                id_fournisseur=test_fournisseur.id_fournisseur,
+                id_utilisateur_creation=test_user.id_utilisateur
+            )
+            for i in range(5)
+        ]
+        db_session.add_all(transactions)
+        db_session.commit()
+        
+        # Récupérer le profil du fournisseur
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        # Vérifier la structure de la réponse
+        assert "fournisseur" in data
+        assert "statistiques" in data
+        assert "transactions" in data
+        
+        # Vérifier les informations du fournisseur
+        assert data["fournisseur"]["id_fournisseur"] == test_fournisseur.id_fournisseur
+        assert data["fournisseur"]["nom_fournisseur"] == "Fournisseur avec Transactions"
+        
+        # Vérifier les statistiques
+        stats = data["statistiques"]
+        assert stats["total_transactions"] == 5
+        assert Decimal(str(stats["montant_total_achats"])) == Decimal("600.00")  # 100+110+120+130+140
+        assert stats["montant_moyen_transaction"] is not None
+        assert Decimal(str(stats["montant_moyen_transaction"])) == Decimal("120.00")
+        assert stats["date_premiere_transaction"] is not None
+        assert stats["date_derniere_transaction"] is not None
+        
+        # Vérifier les transactions (paginées, triées par date décroissante)
+        assert len(data["transactions"]) == 5
+        # Vérifier que les transactions sont triées par date décroissante
+        transaction_dates = [t["date_transaction"] for t in data["transactions"]]
+        assert transaction_dates == sorted(transaction_dates, reverse=True)
+    
+    def test_get_fournisseur_profile_without_transactions(self, client, test_user, db_session, admin_token):
+        """Test de récupération du profil d'un fournisseur sans transactions."""
+        token = admin_token
+        
+        # Créer un fournisseur sans transactions
+        test_fournisseur = Fournisseur(
+            nom_fournisseur="Fournisseur sans Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_fournisseur)
+        db_session.commit()
+        db_session.refresh(test_fournisseur)
+        
+        # Récupérer le profil du fournisseur
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        
+        # Vérifier les statistiques pour un fournisseur sans transactions
+        stats = data["statistiques"]
+        assert stats["total_transactions"] == 0
+        assert Decimal(str(stats["montant_total_achats"])) == Decimal("0")
+        assert stats["montant_moyen_transaction"] is None
+        assert stats["date_premiere_transaction"] is None
+        assert stats["date_derniere_transaction"] is None
+        
+        # Vérifier que la liste des transactions est vide
+        assert len(data["transactions"]) == 0
+    
+    def test_get_fournisseur_profile_not_found(self, client, admin_token):
+        """Test de récupération du profil d'un fournisseur inexistant."""
+        token = admin_token
+        
+        # Essayer de récupérer le profil d'un fournisseur inexistant
+        response = client.get(
+            "/api/v1/fournisseurs/99999/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "introuvable" in response.json()["detail"].lower()
+    
+    def test_get_fournisseur_profile_pagination(self, client, test_user, db_session, admin_token):
+        """Test de la pagination des transactions dans le profil fournisseur."""
+        token = admin_token
+        
+        # Créer un fournisseur
+        test_fournisseur = Fournisseur(
+            nom_fournisseur="Fournisseur avec Beaucoup de Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_fournisseur)
+        db_session.commit()
+        db_session.refresh(test_fournisseur)
+        
+        # Créer 25 transactions pour ce fournisseur
+        today = date.today()
+        transactions = [
+            Transaction(
+                date_transaction=today - timedelta(days=i),
+                montant_total=Decimal("100.00"),
+                est_actif=True,
+                id_fournisseur=test_fournisseur.id_fournisseur,
+                id_utilisateur_creation=test_user.id_utilisateur
+            )
+            for i in range(25)
+        ]
+        db_session.add_all(transactions)
+        db_session.commit()
+        
+        # Récupérer la première page (limite par défaut: 20)
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/profile",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["transactions"]) == 20
+        assert data["statistiques"]["total_transactions"] == 25  # Total inclut toutes les transactions
+        
+        # Récupérer la deuxième page
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/profile?skip=20&limit=10",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["transactions"]) == 5  # Il reste 5 transactions
+
+    def test_get_fournisseur_stats_mensuelles_success(self, client, test_user, db_session, admin_token):
+        """Test de récupération des statistiques mensuelles d'un fournisseur."""
+        token = admin_token
+        
+        # Créer un fournisseur
+        test_fournisseur = Fournisseur(
+            nom_fournisseur="Fournisseur Stats Test",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_fournisseur)
+        db_session.commit()
+        db_session.refresh(test_fournisseur)
+        
+        # Créer des transactions sur plusieurs mois
+        today = date.today()
+        from dateutil.relativedelta import relativedelta
+        
+        # Transaction il y a 2 mois
+        transaction1 = Transaction(
+            date_transaction=today.replace(day=1) - relativedelta(months=2),
+            montant_total=Decimal("1500.00"),
+            est_actif=True,
+            id_fournisseur=test_fournisseur.id_fournisseur
+        )
+        # Transaction il y a 1 mois
+        transaction2 = Transaction(
+            date_transaction=today.replace(day=1) - relativedelta(months=1),
+            montant_total=Decimal("2500.00"),
+            est_actif=True,
+            id_fournisseur=test_fournisseur.id_fournisseur
+        )
+        # Transaction ce mois
+        transaction3 = Transaction(
+            date_transaction=today.replace(day=1),
+            montant_total=Decimal("3500.00"),
+            est_actif=True,
+            id_fournisseur=test_fournisseur.id_fournisseur
+        )
+        
+        db_session.add_all([transaction1, transaction2, transaction3])
+        db_session.commit()
+        
+        # Tester avec période de 6 mois
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/stats-mensuelles?periode=6",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["periode"] == "6_mois"
+        assert len(data["data"]) == 6  # 6 mois de données
+        
+        # Vérifier que les mois sont présents (même ceux sans transactions)
+        mois_keys = [item["mois"] for item in data["data"]]
+        assert len(set(mois_keys)) == len(mois_keys)  # Pas de doublons
+        
+        # Vérifier que les transactions sont comptabilisées
+        montants = {item["mois"]: Decimal(str(item["montant"])) for item in data["data"]}
+        assert sum(montants.values()) == Decimal("7500.00")
+        
+        # Tester avec période de 12 mois
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/stats-mensuelles?periode=12",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["periode"] == "12_mois"
+        assert len(data["data"]) == 12  # 12 mois de données
+
+    def test_get_fournisseur_stats_mensuelles_not_found(self, client, admin_token):
+        """Test que GET /fournisseurs/{id}/stats-mensuelles retourne 404 si le fournisseur n'existe pas."""
+        token = admin_token
+        response = client.get(
+            "/api/v1/fournisseurs/99999/stats-mensuelles",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_get_fournisseur_stats_mensuelles_invalid_periode(self, client, test_user, db_session, admin_token):
+        """Test que GET /fournisseurs/{id}/stats-mensuelles valide la période."""
+        token = admin_token
+        
+        # Créer un fournisseur
+        test_fournisseur = Fournisseur(
+            nom_fournisseur="Fournisseur Test",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_fournisseur)
+        db_session.commit()
+        db_session.refresh(test_fournisseur)
+        
+        # Tester avec une période invalide (FastAPI valide automatiquement et retourne 422)
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/stats-mensuelles?periode=3",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_get_fournisseur_stats_mensuelles_no_transactions(self, client, test_user, db_session, admin_token):
+        """Test des statistiques mensuelles pour un fournisseur sans transactions."""
+        token = admin_token
+        
+        # Créer un fournisseur sans transactions
+        test_fournisseur = Fournisseur(
+            nom_fournisseur="Fournisseur Sans Transactions",
+            est_actif=True,
+            id_utilisateur_creation=test_user.id_utilisateur
+        )
+        db_session.add(test_fournisseur)
+        db_session.commit()
+        db_session.refresh(test_fournisseur)
+        
+        # Tester les statistiques
+        response = client.get(
+            f"/api/v1/fournisseurs/{test_fournisseur.id_fournisseur}/stats-mensuelles?periode=6",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["periode"] == "6_mois"
+        assert len(data["data"]) == 6
+        
+        # Tous les montants et nb_transactions doivent être à 0
+        for item in data["data"]:
+            assert Decimal(str(item["montant"])) == Decimal('0')
+            assert item["nb_transactions"] == 0
 

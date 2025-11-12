@@ -53,6 +53,8 @@ import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportCaisseReport } from '../../utils/exportToPDF';
 import useNotification from '../../hooks/useNotification';
+import { formatMontant, formatMontantComplet } from '../../utils/formatNumber';
+import { formatMontantForAxis, formatMontantForTooltip } from '../../utils/formatNumberForChart';
 
 /**
  * Formate une date pour l'affichage dans le graphique.
@@ -69,10 +71,14 @@ const formatDate = (date) => {
  * Formate un montant en devise.
  */
 const formatCurrency = (value) => {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'MAD',
-  }).format(value);
+  return formatMontant(value, { useCompactNotation: false });
+};
+
+/**
+ * Formate un montant pour l'axe Y du graphique (notation compacte sans symbole de devise).
+ */
+const formatAxisValue = (value) => {
+  return formatMontantForAxis(value);
 };
 
 /**
@@ -513,10 +519,12 @@ function Caisse() {
                   />
                   <YAxis
                     label={{ value: 'Solde (MAD)', angle: -90, position: 'insideLeft' }}
-                    tickFormatter={(value) => formatCurrency(value)}
+                    tickFormatter={(value) => formatAxisValue(value)}
+                    width={80}
+                    tick={{ fontSize: 12 }}
                   />
                   <Tooltip
-                    formatter={(value) => formatCurrency(value)}
+                    formatter={(value) => formatMontantForTooltip(value)}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
                   <Legend />
