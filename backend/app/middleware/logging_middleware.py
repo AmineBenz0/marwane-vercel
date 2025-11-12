@@ -9,7 +9,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from app.logging.logging_config import get_logger
+from app.config.logging_config import get_logger
 from app.config import settings
 
 logger = get_logger(__name__)

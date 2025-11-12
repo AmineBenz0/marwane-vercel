@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
     
     # Development Flags - Désactivation temporaire pour faciliter le développement
-    # TODO: Réactiver en production (mettre à False)
+    # IMPORTANT: En production, mettre ENABLE_AUTH=True et ENABLE_RATE_LIMITING=True
     ENABLE_AUTH: bool = False  # Désactive l'authentification si False
     ENABLE_RATE_LIMITING: bool = False  # Désactive le rate limiting si False
     

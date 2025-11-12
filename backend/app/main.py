@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
-from app.logging.logging_config import setup_logging
+from app.config.logging_config import setup_logging
 from app.database import engine, Base
 from app.routers import auth, users, clients, fournisseurs, produits, transactions, caisse
 from app.utils.rate_limit import limiter
