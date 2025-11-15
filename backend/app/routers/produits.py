@@ -127,7 +127,9 @@ def create_produit(
     # Créer le nouveau produit
     new_produit = Produit(
         nom_produit=produit_data.nom_produit.strip(),
-        est_actif=produit_data.est_actif
+        est_actif=produit_data.est_actif,
+        pour_clients=produit_data.pour_clients,
+        pour_fournisseurs=produit_data.pour_fournisseurs
     )
     
     db.add(new_produit)
@@ -187,6 +189,19 @@ def update_produit(
     
     # Mettre à jour les champs fournis
     update_data = produit_data.model_dump(exclude_unset=True)
+    
+    # Before applying updates, check that at least one type flag will remain True
+    # (only relevant if either pour_clients or pour_fournisseurs is being updated)
+    if 'pour_clients' in update_data or 'pour_fournisseurs' in update_data:
+        # Determine final values after update
+        final_pour_clients = update_data.get('pour_clients', produit.pour_clients)
+        final_pour_fournisseurs = update_data.get('pour_fournisseurs', produit.pour_fournisseurs)
+        
+        if not final_pour_clients and not final_pour_fournisseurs:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Un produit doit être utilisable au moins pour les clients OU les fournisseurs"
+            )
     
     for field, value in update_data.items():
         if field == "nom_produit" and value is not None:
@@ -289,3 +304,73 @@ def reactivate_produit(
     db.refresh(produit)
     
     return produit
+
+
+@router.get("/par-type/{type_transaction}", response_model=List[ProduitRead], status_code=status.HTTP_200_OK)
+def get_produits_par_type(
+    type_transaction: str,
+    skip: int = 0,
+    limit: int = 100,
+    est_actif: Optional[bool] = True,
+    recherche: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """
+    Récupère la liste des produits filtrés par type de transaction.
+    
+    Cette fonction est utile pour afficher uniquement les produits pertinents
+    lors de la création/modification d'une transaction.
+    
+    Args:
+        type_transaction: Type de transaction ('client' ou 'fournisseur')
+        skip: Nombre de produits à sauter (pagination)
+        limit: Nombre maximum de produits à retourner
+        est_actif: Filtre pour les produits actifs uniquement (None = tous)
+        recherche: Terme de recherche optionnel pour filtrer par nom (recherche partielle, insensible à la casse)
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance, None si auth désactivée)
+        
+    Returns:
+        Liste des produits filtrés (ProduitRead)
+        
+    Raises:
+        HTTPException 400: Si type_transaction n'est pas 'client' ou 'fournisseur'
+    
+    Examples:
+        GET /produits/par-type/client -> Retourne les produits pour les clients
+        GET /produits/par-type/fournisseur -> Retourne les produits pour les fournisseurs
+        GET /produits/par-type/client?est_actif=true -> Retourne les produits actifs pour les clients
+    """
+    # Valider le type de transaction
+    type_transaction_lower = type_transaction.lower()
+    if type_transaction_lower not in ['client', 'fournisseur']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="type_transaction doit être 'client' ou 'fournisseur'"
+        )
+    
+    query = db.query(Produit)
+    
+    # Filter by transaction type
+    if type_transaction_lower == 'client':
+        query = query.filter(Produit.pour_clients == True)
+    else:  # fournisseur
+        query = query.filter(Produit.pour_fournisseurs == True)
+    
+    # Filter by active status
+    if est_actif is not None:
+        query = query.filter(Produit.est_actif == est_actif)
+    
+    # Filtre par recherche (nom_produit) si fourni
+    if recherche:
+        recherche_clean = recherche.strip()
+        if recherche_clean:
+            query = query.filter(
+                Produit.nom_produit.ilike(f"%{recherche_clean}%")
+            )
+    
+    # Pagination et tri par nom
+    produits = query.order_by(Produit.nom_produit).offset(skip).limit(limit).all()
+    
+    return produits

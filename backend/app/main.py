@@ -1,6 +1,7 @@
 """
 Point d'entrée principal de l'application FastAPI.
 """
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -52,7 +53,6 @@ app.add_middleware(LoggingMiddleware)
 @app.on_event("startup")
 async def startup_event():
     """Événement déclenché au démarrage de l'application."""
-    import logging
     logger = logging.getLogger(__name__)
     
     # Configurer le système de logging
@@ -62,6 +62,9 @@ async def startup_event():
         backup_count=30,  # Garder 30 jours de logs
         log_level="INFO" if not settings.DEBUG else "DEBUG"
     )
+    
+    # Afficher la configuration CORS
+    logger.info(f"CORS configured with origins: {settings.cors_origins_list}")
     
     # Créer les tables si elles n'existent pas (dev uniquement)
     # En production, utiliser Alembic pour les migrations

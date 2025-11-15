@@ -72,16 +72,22 @@ function AppLayout({ children }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [anchorEl, setAnchorEl] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const effectiveDrawerWidth = !isMobile && sidebarOpen ? drawerWidth : 0;
 
   /**
    * Gère l'ouverture/fermeture du drawer sur mobile.
    */
   const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
+    if (isMobile) {
+      setMobileOpen(!mobileOpen);
+    } else {
+      setSidebarOpen(!sidebarOpen);
+    }
   };
 
   /**
@@ -188,9 +194,12 @@ function AppLayout({ children }) {
       <AppBar
         position="fixed"
         sx={{
-          width: { md: `calc(100% - ${drawerWidth}px)` },
-          ml: { md: `${drawerWidth}px` },
+          width: { md: `calc(100% - ${effectiveDrawerWidth}px)` },
+          ml: { md: `${effectiveDrawerWidth}px` },
           zIndex: theme.zIndex.drawer + 1,
+          transition: theme.transitions.create(['width', 'margin'], {
+            duration: theme.transitions.duration.shorter,
+          }),
         }}
       >
         <Toolbar>
@@ -199,7 +208,7 @@ function AppLayout({ children }) {
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { md: 'none' } }}
+            sx={{ mr: 2 }}
           >
             <MenuIcon />
           </IconButton>
@@ -260,7 +269,13 @@ function AppLayout({ children }) {
       {/* Drawer (Sidebar) */}
       <Box
         component="nav"
-        sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+        sx={{
+          width: { md: sidebarOpen ? `${drawerWidth}px` : 0 },
+          flexShrink: { md: 0 },
+          transition: theme.transitions.create('width', {
+            duration: theme.transitions.duration.shorter,
+          }),
+        }}
         aria-label="navigation menu"
       >
         {/* Drawer mobile (temporaire) */}
@@ -283,7 +298,7 @@ function AppLayout({ children }) {
         </Drawer>
         {/* Drawer desktop (permanent) */}
         <Drawer
-          variant="permanent"
+          variant="persistent"
           sx={{
             display: { xs: 'none', md: 'block' },
             '& .MuiDrawer-paper': {
@@ -291,7 +306,7 @@ function AppLayout({ children }) {
               width: drawerWidth,
             },
           }}
-          open
+          open={sidebarOpen}
         >
           {drawer}
         </Drawer>
@@ -303,9 +318,12 @@ function AppLayout({ children }) {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { md: `calc(100% - ${drawerWidth}px)` },
+          width: { md: `calc(100% - ${effectiveDrawerWidth}px)` },
           minHeight: '100vh',
           backgroundColor: theme.palette.background.default,
+          transition: theme.transitions.create('width', {
+            duration: theme.transitions.duration.shorter,
+          }),
         }}
       >
         <Toolbar /> {/* Espace pour l'AppBar fixe */}

@@ -18,7 +18,7 @@
  * @param {boolean} showActions - Afficher ou non la colonne d'actions (défaut: true)
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -58,6 +58,7 @@ function DataGrid({
   loading = false,
   pageSize: initialPageSize = 10,
   showActions = true,
+  onDisplayedRowsChange,
 }) {
   // État pour la pagination
   const [page, setPage] = useState(0);
@@ -149,6 +150,15 @@ function DataGrid({
     const startIndex = page * rowsPerPage;
     return sortedRows.slice(startIndex, startIndex + rowsPerPage);
   }, [sortedRows, page, rowsPerPage]);
+
+  /**
+   * Informe le parent des lignes actuellement affichées (après filtres/tri/pagination).
+   */
+  useEffect(() => {
+    if (typeof onDisplayedRowsChange === 'function') {
+      onDisplayedRowsChange(paginatedRows);
+    }
+  }, [paginatedRows, onDisplayedRowsChange]);
 
   /**
    * Gère le changement de page.

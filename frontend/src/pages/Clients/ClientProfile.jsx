@@ -97,6 +97,7 @@ function ClientProfile() {
   const [statistiques, setStatistiques] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [statsMensuelles, setStatsMensuelles] = useState([]);
+  const [produits, setProduits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -109,6 +110,31 @@ function ClientProfile() {
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [transactionFormLoading, setTransactionFormLoading] = useState(false);
   const [transactionFormError, setTransactionFormError] = useState(null);
+
+  /**
+   * Crée une map de lookup pour les produits.
+   */
+  const produitsMap = useMemo(() => {
+    const map = new Map();
+    produits.forEach((produit) => {
+      map.set(produit.id_produit, produit.nom_produit);
+    });
+    return map;
+  }, [produits]);
+
+  /**
+   * Charge les produits.
+   */
+  const fetchProduits = async () => {
+    try {
+      const produitsData = await get('/produits', {
+        params: { limit: 1000, est_actif: true },
+      });
+      setProduits(produitsData || []);
+    } catch (err) {
+      console.error('Erreur lors du chargement des produits:', err);
+    }
+  };
 
   /**
    * Charge le profil du client.
@@ -152,6 +178,7 @@ function ClientProfile() {
    */
   useEffect(() => {
     if (id) {
+      fetchProduits();
       fetchClientProfile();
     }
   }, [id]);
@@ -174,6 +201,7 @@ function ClientProfile() {
 
   /**
    * Configuration des colonnes pour le DataGrid des transactions.
+   * Mêmes colonnes que la liste principale des transactions.
    */
   const transactionColumns = [
     {
@@ -191,12 +219,50 @@ function ClientProfile() {
       format: (value) => formatDate(value),
     },
     {
-      id: 'montant_total',
-      label: 'Montant',
+      id: 'produit',
+      label: 'Produit',
+      sortable: false,
+      filterable: false,
+      format: (value, row) => {
+        // Utiliser la map de produits pour afficher le nom
+        return produitsMap.get(row.id_produit) || `Produit #${row.id_produit || '-'}`;
+      },
+    },
+    {
+      id: 'prix_unitaire',
+      label: 'Prix unitaire',
       sortable: true,
       filterable: false,
       align: 'right',
-      format: (value) => formatMontant(value, { useCompactNotation: false }),
+      format: (value) => {
+        if (value === null || value === undefined) return '-';
+        return formatMontant(value, { useCompactNotation: false });
+      },
+    },
+    {
+      id: 'quantite',
+      label: 'Quantité',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+    },
+    {
+      id: 'montant_total',
+      label: 'Montant total',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+      format: (value) => {
+        return (
+          <Typography
+            variant="body2"
+            fontWeight="bold"
+            sx={{ color: 'success.main' }}
+          >
+            {formatMontant(value, { useCompactNotation: false })}
+          </Typography>
+        );
+      },
     },
     {
       id: 'est_actif',
@@ -231,6 +297,13 @@ function ClientProfile() {
           } catch {
             return value;
           }
+        },
+        produit: (value, row) => {
+          return produitsMap.get(row.id_produit) || `Produit #${row.id_produit || '-'}`;
+        },
+        prix_unitaire: (value) => {
+          if (value === null || value === undefined) return '-';
+          return parseFloat(value).toFixed(2);
         },
         montant_total: (value) => {
           if (value === null || value === undefined) return '-';

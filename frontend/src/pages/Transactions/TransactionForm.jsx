@@ -1,12 +1,15 @@
 /**
  * Composant TransactionForm.
  * 
- * Formulaire complexe pour créer et éditer des transactions avec :
+ * Formulaire pour créer et éditer des transactions avec :
  * - Date transaction
  * - Sélection Client OU Fournisseur (radio buttons)
  * - Liste de lignes dynamique (produit + quantité + prix unitaire)
  * - Calcul automatique du montant total
  * - Validation complète
+ * 
+ * En mode création : crée N transactions indépendantes (une par ligne) via /batch
+ * En mode édition : édite UNE transaction existante
  * 
  * @param {boolean} open - Contrôle l'ouverture/fermeture de la modal
  * @param {Function} onClose - Callback appelé lors de la fermeture de la modal
@@ -50,7 +53,7 @@ import {
   InputLabel,
 } from '@mui/material';
 import { Close as CloseIcon, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { get } from '../../services/api';
+import { get, getProduitsParType } from '../../services/api';
 
 /**
  * Schéma de validation Yup pour une ligne de transaction.
@@ -67,11 +70,9 @@ const ligneValidationSchema = yup.object().shape({
     .positive('La quantité doit être supérieure à 0')
     .integer('La quantité doit être un nombre entier')
     .transform((value, originalValue) => {
-      // Si la valeur est vide ou null, retourner undefined pour déclencher l'erreur required
       if (originalValue === '' || originalValue === null || originalValue === undefined) {
         return undefined;
       }
-      // Convertir en nombre
       const num = Number(originalValue);
       return isNaN(num) ? undefined : num;
     }),
@@ -81,11 +82,9 @@ const ligneValidationSchema = yup.object().shape({
     .required('Le prix unitaire est requis')
     .positive('Le prix unitaire doit être supérieur à 0')
     .transform((value, originalValue) => {
-      // Si la valeur est vide ou null, retourner undefined pour déclencher l'erreur required
       if (originalValue === '' || originalValue === null || originalValue === undefined) {
         return undefined;
       }
-      // Convertir en nombre
       const num = Number(originalValue);
       return isNaN(num) ? undefined : num;
     }),
@@ -158,11 +157,11 @@ function TransactionForm({
   } = useForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
-      date_transaction: new Date().toISOString().split('T')[0], // Date du jour par défaut
+      date_transaction: new Date().toISOString().split('T')[0],
       type_entite: 'client',
       id_client: null,
       id_fournisseur: null,
-      lignes: [{ id_produit: '', quantite: undefined, prix_unitaire: undefined }], // undefined pour déclencher la validation required
+      lignes: [{ id_produit: '', quantite: undefined, prix_unitaire: undefined }],
     },
     mode: 'onChange',
   });
@@ -174,13 +173,13 @@ function TransactionForm({
   /**
    * Charge les données de référence (clients, fournisseurs, produits).
    */
-  const fetchReferenceData = async () => {
+  const fetchReferenceData = async (typeEntite = 'client') => {
     setLoadingData(true);
     try {
       const [clientsData, fournisseursData, produitsData] = await Promise.all([
         get('/clients', { params: { est_actif: true, limit: 1000 } }),
         get('/fournisseurs', { params: { est_actif: true, limit: 1000 } }),
-        get('/produits', { params: { est_actif: true, limit: 1000 } }),
+        getProduitsParType(typeEntite, { est_actif: true, limit: 1000 }),
       ]);
 
       setClients(clientsData || []);
@@ -196,9 +195,9 @@ function TransactionForm({
   // Charger les données de référence au montage et à l'ouverture de la modal
   useEffect(() => {
     if (open) {
-      fetchReferenceData();
+      fetchReferenceData(watchedTypeEntite || 'client');
     }
-  }, [open]);
+  }, [open, watchedTypeEntite]);
 
   // Réinitialiser le formulaire lorsque initialValues change (pour l'édition)
   useEffect(() => {
@@ -206,15 +205,8 @@ function TransactionForm({
       const isEditing = initialValues && initialValues.id_transaction;
       
       if (isEditing) {
-        // Mode édition : pré-remplir avec les valeurs initiales
+        // Mode édition : pré-remplir avec UNE ligne (la transaction à éditer)
         const typeEntite = initialValues.id_client ? 'client' : 'fournisseur';
-        
-        // Calculer le prix unitaire approximatif pour chaque ligne
-        // Prix unitaire = montant_total / somme des quantités (approximation)
-        const totalQuantite = initialValues.lignes_transaction?.reduce((sum, ligne) => sum + ligne.quantite, 0) || 1;
-        const prixUnitaireApprox = initialValues.montant_total && totalQuantite > 0
-          ? parseFloat(initialValues.montant_total) / totalQuantite
-          : undefined;
         
         reset({
           date_transaction: initialValues.date_transaction
@@ -223,11 +215,11 @@ function TransactionForm({
           type_entite: typeEntite,
           id_client: initialValues.id_client || null,
           id_fournisseur: initialValues.id_fournisseur || null,
-          lignes: initialValues.lignes_transaction?.map((ligne) => ({
-            id_produit: ligne.id_produit,
-            quantite: ligne.quantite,
-            prix_unitaire: prixUnitaireApprox, // Prix unitaire approximatif pour permettre l'édition
-          })) || [{ id_produit: '', quantite: undefined, prix_unitaire: undefined }],
+          lignes: [{
+            id_produit: initialValues.id_produit || '',
+            quantite: initialValues.quantite || undefined,
+            prix_unitaire: initialValues.prix_unitaire || undefined,
+          }],
         });
       } else {
         // Mode création : valeurs par défaut ou pré-remplies
@@ -274,69 +266,38 @@ function TransactionForm({
     try {
       const isEditing = initialValues && initialValues.id_transaction;
       
-      // Préparer les données pour l'API
-      let transactionData;
-      
       if (isEditing) {
-        // Mode édition : on envoie les lignes pour permettre leur modification
-        // La date est déjà au format YYYY-MM-DD depuis le champ input[type="date"]
-        const formattedDate = data.date_transaction;
-        
-        // Préparer les lignes avec validation
-        const lignes = data.lignes.map((ligne) => {
-          const prixUnitaire = parseFloat(ligne.prix_unitaire);
-          if (isNaN(prixUnitaire) || prixUnitaire <= 0) {
-            throw new Error('Le prix unitaire doit être un nombre supérieur à 0');
-          }
-          
-          return {
-            id_produit: parseInt(ligne.id_produit),
-            quantite: parseInt(ligne.quantite),
-            prix_unitaire: prixUnitaire,
-          };
-        });
-        
-        transactionData = {
-          date_transaction: formattedDate,
+        // Mode édition : on édite UNE seule transaction
+        const transactionData = {
+          date_transaction: data.date_transaction,
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
+          id_produit: parseInt(data.lignes[0].id_produit),
+          quantite: parseInt(data.lignes[0].quantite),
+          prix_unitaire: parseFloat(data.lignes[0].prix_unitaire),
           est_actif: initialValues.est_actif !== undefined ? initialValues.est_actif : true,
-          lignes: lignes, // Envoyer les lignes pour permettre leur modification
         };
-      } else {
-        // Mode création : on envoie les lignes pour calculer le montant total
-        // La date est déjà au format YYYY-MM-DD depuis le champ input[type="date"]
-        const formattedDate = data.date_transaction;
         
-        transactionData = {
-          date_transaction: formattedDate,
+        await onSubmit(transactionData);
+      } else {
+        // Mode création : on crée N transactions via l'endpoint batch
+        const transactionsData = data.lignes.map((ligne) => ({
+          date_transaction: data.date_transaction,
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
-          lignes: data.lignes.map((ligne) => {
-            // Valider et convertir le prix_unitaire
-            const prixUnitaire = parseFloat(ligne.prix_unitaire);
-            if (isNaN(prixUnitaire) || prixUnitaire <= 0) {
-              throw new Error('Le prix unitaire doit être un nombre supérieur à 0');
-            }
-            
-            return {
-              id_produit: parseInt(ligne.id_produit),
-              quantite: parseInt(ligne.quantite),
-              prix_unitaire: prixUnitaire,
-            };
-          }),
+          id_produit: parseInt(ligne.id_produit),
+          quantite: parseInt(ligne.quantite),
+          prix_unitaire: parseFloat(ligne.prix_unitaire),
           est_actif: true,
-        };
+        }));
+        
+        // Appeler le callback onSubmit avec le tableau de transactions
+        await onSubmit({ batch: true, transactions: transactionsData });
       }
-
-      // Appeler le callback onSubmit avec les données formatées
-      await onSubmit(transactionData);
       
       // Si la soumission réussit, réinitialiser le formulaire
       reset();
     } catch (error) {
-      // NE PAS réinitialiser le formulaire en cas d'erreur pour préserver les données saisies
-      
       // Gérer les erreurs de validation serveur
       if (error?.data?.detail) {
         const detail = error.data.detail;
@@ -344,27 +305,18 @@ function TransactionForm({
         if (Array.isArray(detail)) {
           detail.forEach((err) => {
             if (err.loc && err.loc.length > 1) {
-              const fieldPath = err.loc.slice(1); // Ignorer 'body'
+              const fieldPath = err.loc.slice(1);
               
-              // Gérer les erreurs dans les lignes (ex: lignes[0].prix_unitaire, lignes[0].quantite)
+              // Gérer les erreurs dans les lignes
               if (fieldPath[0] === 'lignes' && fieldPath.length === 3) {
                 const ligneIndex = parseInt(fieldPath[1]);
                 const fieldName = fieldPath[2];
                 
-                // Messages user-friendly pour chaque champ
-                let userFriendlyMessage = err.msg;
-                if (fieldName === 'prix_unitaire' && err.msg.includes('NaN')) {
-                  userFriendlyMessage = 'Le prix unitaire est requis et doit être un nombre supérieur à 0';
-                } else if (fieldName === 'quantite' && err.msg.includes('NaN')) {
-                  userFriendlyMessage = 'La quantité est requise et doit être un nombre entier supérieur à 0';
-                }
-                
                 setError(`lignes.${ligneIndex}.${fieldName}`, {
                   type: 'server',
-                  message: userFriendlyMessage,
+                  message: err.msg,
                 });
               } else {
-                // Erreur sur un champ simple
                 const fieldName = fieldPath[fieldPath.length - 1];
                 setError(fieldName, {
                   type: 'server',
@@ -374,33 +326,15 @@ function TransactionForm({
             }
           });
         } else if (typeof detail === 'string') {
-          // Message user-friendly pour les erreurs de date
-          let userFriendlyMessage = detail;
-          if (detail.includes('Datetimes provided to dates should have zero time')) {
-            userFriendlyMessage = 'La date de transaction est invalide. Veuillez sélectionner une date valide.';
-          }
-          
           setError('root', {
             type: 'server',
-            message: userFriendlyMessage,
+            message: detail,
           });
         }
       } else if (error?.message) {
-        // Message user-friendly pour les erreurs de validation côté client
-        let userFriendlyMessage = error.message;
-        
-        // Messages spécifiques pour différents types d'erreurs
-        if (error.message.includes('prix unitaire')) {
-          userFriendlyMessage = 'Le prix unitaire doit être un nombre supérieur à 0';
-        } else if (error.message.includes('Impossible de contacter le serveur')) {
-          // Pour les erreurs réseau, le message est déjà affiché en notification toast
-          // On l'affiche aussi dans le formulaire pour plus de clarté
-          userFriendlyMessage = error.message;
-        }
-        
         setError('root', {
           type: 'server',
-          message: userFriendlyMessage,
+          message: error.message,
         });
       }
       
@@ -444,11 +378,24 @@ function TransactionForm({
   /**
    * Gère le changement du type d'entité (client/fournisseur).
    */
-  const handleTypeEntiteChange = (newType) => {
+  const handleTypeEntiteChange = async (newType) => {
     setValue('type_entite', newType, { shouldDirty: true });
-    // Réinitialiser les sélections
     setValue('id_client', null, { shouldDirty: true });
     setValue('id_fournisseur', null, { shouldDirty: true });
+
+    // Recharger les produits pour le type sélectionné
+    setLoadingData(true);
+    try {
+      const produitsData = await getProduitsParType(newType, {
+        est_actif: true,
+        limit: 1000,
+      });
+      setProduits(produitsData || []);
+    } catch (err) {
+      console.error('Erreur lors du chargement des produits:', err);
+    } finally {
+      setLoadingData(false);
+    }
   };
 
   const montantTotal = calculateTotal();
@@ -637,15 +584,17 @@ function TransactionForm({
                   }}
                 >
                   <Typography variant="h6">Lignes de transaction</Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddLine}
-                    disabled={loading}
-                  >
-                    Ajouter une ligne
-                  </Button>
+                  {!isEditing && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={handleAddLine}
+                      disabled={loading}
+                    >
+                      Ajouter une ligne
+                    </Button>
+                  )}
                 </Box>
 
                 {errors.lignes && (
@@ -662,9 +611,11 @@ function TransactionForm({
                         <TableCell align="right">Quantité</TableCell>
                         <TableCell align="right">Prix unitaire</TableCell>
                         <TableCell align="right">Total</TableCell>
-                        <TableCell align="center" width={80}>
-                          Actions
-                        </TableCell>
+                        {!isEditing && (
+                          <TableCell align="center" width={80}>
+                            Actions
+                          </TableCell>
+                        )}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -716,66 +667,48 @@ function TransactionForm({
                               <Controller
                                 name={`lignes.${index}.quantite`}
                                 control={control}
-                                render={({ field, fieldState: { error } }) => {
-                                  // Message d'erreur user-friendly
-                                  let errorMessage = error?.message;
-                                  if (errorMessage && errorMessage.includes('NaN')) {
-                                    errorMessage = 'La quantité est requise et doit être un nombre entier supérieur à 0';
-                                  }
-                                  
-                                  return (
-                                    <TextField
-                                      {...field}
-                                      type="number"
-                                      size="small"
-                                      inputProps={{ min: 1, step: 1 }}
-                                      value={field.value ?? ''} // Afficher une chaîne vide si undefined
-                                      error={!!error}
-                                      helperText={errorMessage || ''}
-                                      disabled={loading}
-                                      sx={{ width: 100 }}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        // Convertir la valeur vide en undefined pour déclencher la validation
-                                        field.onChange(value === '' ? undefined : value);
-                                      }}
-                                      onBlur={field.onBlur}
-                                    />
-                                  );
-                                }}
+                                render={({ field, fieldState: { error } }) => (
+                                  <TextField
+                                    {...field}
+                                    type="number"
+                                    size="small"
+                                    inputProps={{ min: 1, step: 1 }}
+                                    value={field.value ?? ''}
+                                    error={!!error}
+                                    helperText={error?.message || ''}
+                                    disabled={loading}
+                                    sx={{ width: 100 }}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      field.onChange(value === '' ? undefined : value);
+                                    }}
+                                    onBlur={field.onBlur}
+                                  />
+                                )}
                               />
                             </TableCell>
                             <TableCell align="right">
                               <Controller
                                 name={`lignes.${index}.prix_unitaire`}
                                 control={control}
-                                render={({ field, fieldState: { error } }) => {
-                                  // Message d'erreur user-friendly
-                                  let errorMessage = error?.message;
-                                  if (errorMessage && errorMessage.includes('NaN')) {
-                                    errorMessage = 'Le prix unitaire est requis et doit être un nombre supérieur à 0';
-                                  }
-                                  
-                                  return (
-                                    <TextField
-                                      {...field}
-                                      type="number"
-                                      size="small"
-                                      inputProps={{ min: 0, step: 0.01 }}
-                                      value={field.value ?? ''} // Afficher une chaîne vide si undefined
-                                      error={!!error}
-                                      helperText={errorMessage || ''}
-                                      disabled={loading}
-                                      sx={{ width: 120 }}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        // Convertir la valeur vide en undefined pour déclencher la validation
-                                        field.onChange(value === '' ? undefined : value);
-                                      }}
-                                      onBlur={field.onBlur}
-                                    />
-                                  );
-                                }}
+                                render={({ field, fieldState: { error } }) => (
+                                  <TextField
+                                    {...field}
+                                    type="number"
+                                    size="small"
+                                    inputProps={{ min: 0, step: 0.01 }}
+                                    value={field.value ?? ''}
+                                    error={!!error}
+                                    helperText={error?.message || ''}
+                                    disabled={loading}
+                                    sx={{ width: 120 }}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      field.onChange(value === '' ? undefined : value);
+                                    }}
+                                    onBlur={field.onBlur}
+                                  />
+                                )}
                               />
                             </TableCell>
                             <TableCell align="right">
@@ -783,16 +716,18 @@ function TransactionForm({
                                 {ligneTotal.toFixed(2)} MAD
                               </Typography>
                             </TableCell>
-                            <TableCell align="center">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleRemoveLine(index)}
-                                disabled={loading || watchedLignes.length <= 1}
-                                color="error"
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </TableCell>
+                            {!isEditing && (
+                              <TableCell align="center">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleRemoveLine(index)}
+                                  disabled={loading || watchedLignes.length <= 1}
+                                  color="error"
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })}
@@ -816,6 +751,12 @@ function TransactionForm({
                     {montantTotal.toFixed(2)} MAD
                   </Typography>
                 </Box>
+                
+                {!isEditing && watchedLignes.length > 1 && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    {watchedLignes.length} transactions indépendantes seront créées (une par ligne)
+                  </Alert>
+                )}
               </Box>
             </Box>
           )}
@@ -844,4 +785,3 @@ function TransactionForm({
 }
 
 export default TransactionForm;
-

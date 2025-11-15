@@ -8,7 +8,7 @@
  * - Pagination
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -20,17 +20,13 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  TextField,
   Chip,
   Link,
 } from '@mui/material';
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
 import ModalForm from '../../components/ModalForm/ModalForm';
+import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post, put, patch, del } from '../../services/api';
 import * as yup from 'yup';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -61,9 +57,52 @@ function ClientsList() {
   const [clientToDelete, setClientToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // État pour les filtres
-  const [filterNom, setFilterNom] = useState('');
-  const [filterEstActif, setFilterEstActif] = useState('');
+  // État pour les filtres (objet unique)
+  const [filters, setFilters] = useState({
+    nom: '',
+    estActif: '',
+  });
+
+  /**
+   * Gestion des filtres.
+   */
+  const handleFilterChange = (filterId, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [filterId]: value,
+    }));
+  };
+
+  const handleClearAllFilters = () => {
+    setFilters({
+      nom: '',
+      estActif: '',
+    });
+  };
+
+  /**
+   * Définitions des filtres pour SmartFilterPanel.
+   */
+  const filterDefinitions = useMemo(() => [
+    {
+      id: 'nom',
+      label: 'Rechercher par nom',
+      type: 'search',
+      placeholder: 'Nom du client...',
+      alwaysInline: true, // Toujours visible
+    },
+    {
+      id: 'estActif',
+      label: 'Statut',
+      type: 'select',
+      alwaysInline: true, // Toujours visible
+      options: [
+        { value: 'true', label: 'Actifs' },
+        { value: 'false', label: 'Inactifs' },
+      ],
+      formatChipValue: (value) => (value === 'true' ? 'Actifs' : 'Inactifs'),
+    },
+  ], []);
 
   /**
    * Charge la liste des clients depuis l'API.
@@ -75,11 +114,11 @@ function ClientsList() {
     try {
       // Construire les paramètres de requête
       const params = {};
-      if (filterNom.trim()) {
-        params.recherche = filterNom.trim();
+      if (filters.nom.trim()) {
+        params.recherche = filters.nom.trim();
       }
-      if (filterEstActif !== '') {
-        params.est_actif = filterEstActif === 'true';
+      if (filters.estActif !== '') {
+        params.est_actif = filters.estActif === 'true';
       }
 
       // Récupérer tous les clients (on peut augmenter la limite si nécessaire)
@@ -104,7 +143,7 @@ function ClientsList() {
   // Charger les clients au montage et lorsque les filtres changent
   useEffect(() => {
     fetchClients();
-  }, [filterNom, filterEstActif]);
+  }, [filters]);
 
   /**
    * Schéma de validation Yup pour le formulaire client.
@@ -451,37 +490,17 @@ function ClientsList() {
         </Alert>
       )}
 
-      {/* Filtres */}
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 2,
-          mb: 3,
-          flexWrap: 'wrap',
-        }}
-      >
-        <TextField
-          label="Rechercher par nom"
-          variant="outlined"
-          size="small"
-          value={filterNom}
-          onChange={(e) => setFilterNom(e.target.value)}
-          sx={{ minWidth: 250 }}
-          placeholder="Nom du client..."
-        />
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>Statut</InputLabel>
-          <Select
-            value={filterEstActif}
-            label="Statut"
-            onChange={(e) => setFilterEstActif(e.target.value)}
-          >
-            <MenuItem value="">Tous</MenuItem>
-            <MenuItem value="true">Actifs</MenuItem>
-            <MenuItem value="false">Inactifs</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
+      {/* Filtres avec SmartFilterPanel */}
+      <SmartFilterPanel
+        pageKey="clients"
+        filterDefinitions={filterDefinitions}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        onClearAll={handleClearAllFilters}
+        maxInlineFilters={2}
+        resultCount={clients.length}
+        totalCount={clients.length}
+      />
 
       {/* DataGrid */}
       <DataGrid

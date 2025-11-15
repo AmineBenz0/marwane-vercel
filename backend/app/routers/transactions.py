@@ -11,7 +11,6 @@ from decimal import Decimal
 
 from app.database import get_db
 from app.models.transaction import Transaction
-from app.models.ligne_transaction import LigneTransaction
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
@@ -20,17 +19,162 @@ from app.models.audit import TransactionAudit
 from app.models.caisse import Caisse
 from app.schemas.transaction import (
     TransactionCreate,
-    TransactionCreateWithLines,
     TransactionUpdate,
     TransactionRead,
-    TransactionReadWithLines,
-    LigneTransactionCreate,
-    LigneTransactionRead,
     TransactionAuditRead
 )
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
+
+
+@router.post("/batch", response_model=List[TransactionRead], status_code=status.HTTP_201_CREATED)
+def create_transactions_batch(
+    transactions_data: List[TransactionCreate],
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """
+    Crée plusieurs transactions de manière atomique.
+    
+    Toutes les transactions sont créées en une seule transaction DB.
+    Si une transaction échoue, aucune n'est créée (rollback automatique).
+    Utile pour créer plusieurs lignes de produits pour le même client/fournisseur.
+    
+    Args:
+        transactions_data: Liste des transactions à créer (List[TransactionCreate])
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance)
+        
+    Returns:
+        Liste des transactions créées (List[TransactionRead])
+        
+    Raises:
+        HTTPException 400: Si un client, fournisseur ou produit n'existe pas
+        HTTPException 400: Si une validation échoue
+    """
+    if not transactions_data or len(transactions_data) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Au moins une transaction doit être fournie"
+        )
+    
+    try:
+        created_transactions = []
+        
+        # Collecter tous les IDs pour validation en batch
+        client_ids = set()
+        fournisseur_ids = set()
+        produit_ids = set()
+        
+        for tx_data in transactions_data:
+            if tx_data.id_client is not None:
+                client_ids.add(tx_data.id_client)
+            if tx_data.id_fournisseur is not None:
+                fournisseur_ids.add(tx_data.id_fournisseur)
+            produit_ids.add(tx_data.id_produit)
+        
+        # Valider que tous les clients existent
+        if client_ids:
+            clients = db.query(Client).filter(Client.id_client.in_(client_ids)).all()
+            clients_dict = {c.id_client: c for c in clients}
+            for client_id in client_ids:
+                if client_id not in clients_dict:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Client avec l'ID {client_id} introuvable"
+                    )
+        
+        # Valider que tous les fournisseurs existent
+        if fournisseur_ids:
+            fournisseurs = db.query(Fournisseur).filter(
+                Fournisseur.id_fournisseur.in_(fournisseur_ids)
+            ).all()
+            fournisseurs_dict = {f.id_fournisseur: f for f in fournisseurs}
+            for fournisseur_id in fournisseur_ids:
+                if fournisseur_id not in fournisseurs_dict:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Fournisseur avec l'ID {fournisseur_id} introuvable"
+                    )
+        
+        # Valider que tous les produits existent
+        produits = db.query(Produit).filter(Produit.id_produit.in_(produit_ids)).all()
+        produits_dict = {p.id_produit: p for p in produits}
+        for produit_id in produit_ids:
+            if produit_id not in produits_dict:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Produit avec l'ID {produit_id} introuvable"
+                )
+        
+        # Créer toutes les transactions
+        for tx_data in transactions_data:
+            produit = produits_dict[tx_data.id_produit]
+            
+            # Valider que le produit correspond au type de transaction
+            if tx_data.id_client is not None and not produit.pour_clients:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients"
+                )
+            
+            if tx_data.id_fournisseur is not None and not produit.pour_fournisseurs:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
+                )
+            
+            # Calculer le montant_total si non fourni
+            montant_total = tx_data.montant_total
+            if montant_total is None:
+                montant_total = Decimal(str(tx_data.quantite)) * tx_data.prix_unitaire
+            
+            # Créer la transaction
+            new_transaction = Transaction(
+                date_transaction=tx_data.date_transaction,
+                id_produit=tx_data.id_produit,
+                quantite=tx_data.quantite,
+                prix_unitaire=tx_data.prix_unitaire,
+                montant_total=montant_total,
+                est_actif=tx_data.est_actif,
+                id_client=tx_data.id_client,
+                id_fournisseur=tx_data.id_fournisseur,
+                id_utilisateur_creation=current_user.id_utilisateur if current_user else None
+            )
+            
+            db.add(new_transaction)
+            db.flush()  # Pour obtenir l'ID
+            
+            # Créer le mouvement de caisse
+            type_mouvement = 'ENTREE' if new_transaction.id_client is not None else 'SORTIE'
+            new_mouvement = Caisse(
+                montant=montant_total,
+                type_mouvement=type_mouvement,
+                id_transaction=new_transaction.id_transaction
+            )
+            db.add(new_mouvement)
+            
+            created_transactions.append(new_transaction)
+        
+        # Commit atomique : tout ou rien
+        db.commit()
+        
+        # Refresh toutes les transactions
+        for tx in created_transactions:
+            db.refresh(tx)
+        
+        return created_transactions
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de la création des transactions: {str(e)}"
+        )
 
 
 @router.get("", response_model=List[TransactionRead], status_code=status.HTTP_200_OK)
@@ -41,6 +185,7 @@ def get_transactions(
     date_fin: Optional[date] = None,
     id_client: Optional[int] = None,
     id_fournisseur: Optional[int] = None,
+    id_produit: Optional[int] = None,
     montant_min: Optional[Decimal] = None,
     montant_max: Optional[Decimal] = None,
     est_actif: Optional[bool] = None,
@@ -50,7 +195,7 @@ def get_transactions(
     """
     Récupère la liste des transactions avec filtres optionnels.
     
-    Permet de filtrer par date, client, fournisseur, montant et statut actif.
+    Permet de filtrer par date, client, fournisseur, produit, montant et statut actif.
     
     Args:
         skip: Nombre de transactions à sauter (pour la pagination)
@@ -59,6 +204,7 @@ def get_transactions(
         date_fin: Date de fin pour filtrer les transactions (inclusive)
         id_client: ID du client pour filtrer les transactions
         id_fournisseur: ID du fournisseur pour filtrer les transactions
+        id_produit: ID du produit pour filtrer les transactions
         montant_min: Montant minimum pour filtrer les transactions
         montant_max: Montant maximum pour filtrer les transactions
         est_actif: Filtre optionnel pour les transactions actives/inactives (None = tous)
@@ -83,6 +229,10 @@ def get_transactions(
     # Filtre par fournisseur
     if id_fournisseur is not None:
         query = query.filter(Transaction.id_fournisseur == id_fournisseur)
+    
+    # Filtre par produit
+    if id_produit is not None:
+        query = query.filter(Transaction.id_produit == id_produit)
     
     # Filtre par montant
     if montant_min is not None:
@@ -166,14 +316,14 @@ def get_transaction_audit(
     return audit_list
 
 
-@router.get("/{id}", response_model=TransactionReadWithLines, status_code=status.HTTP_200_OK)
+@router.get("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def get_transaction(
     id: int,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Récupère les détails d'une transaction par son ID avec ses lignes.
+    Récupère les détails d'une transaction par son ID.
     
     Args:
         id: ID de la transaction à récupérer
@@ -181,7 +331,7 @@ def get_transaction(
         current_user: Utilisateur actuel authentifié (via dépendance)
         
     Returns:
-        Détails de la transaction avec ses lignes (TransactionReadWithLines)
+        Détails de la transaction (TransactionRead)
         
     Raises:
         HTTPException 404: Si la transaction n'existe pas
@@ -194,53 +344,32 @@ def get_transaction(
             detail=f"Transaction avec l'ID {id} introuvable"
         )
     
-    # Charger les lignes de transaction
-    lignes = db.query(LigneTransaction).filter(
-        LigneTransaction.id_transaction == id
-    ).all()
-    
-    # Construire la réponse avec les lignes
-    transaction_dict = {
-        "id_transaction": transaction.id_transaction,
-        "date_transaction": transaction.date_transaction,
-        "montant_total": transaction.montant_total,
-        "est_actif": transaction.est_actif,
-        "id_client": transaction.id_client,
-        "id_fournisseur": transaction.id_fournisseur,
-        "date_creation": transaction.date_creation,
-        "date_modification": transaction.date_modification,
-        "id_utilisateur_creation": transaction.id_utilisateur_creation,
-        "id_utilisateur_modification": transaction.id_utilisateur_modification,
-        "lignes_transaction": lignes
-    }
-    
-    return TransactionReadWithLines(**transaction_dict)
+    return transaction
 
 
-@router.post("", response_model=TransactionReadWithLines, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
 def create_transaction(
-    transaction_data: TransactionCreateWithLines,
+    transaction_data: TransactionCreate,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Crée une nouvelle transaction avec ou sans lignes.
+    Crée une nouvelle transaction.
     
-    Si des lignes sont fournies, le montant_total est calculé automatiquement à partir des lignes.
-    Sinon, le montant_total doit être fourni explicitement.
+    Le montant_total est calculé automatiquement si non fourni (quantite × prix_unitaire).
     Enregistre automatiquement l'ID de l'utilisateur qui a créé la transaction.
+    Crée automatiquement un mouvement de caisse associé.
     
     Args:
-        transaction_data: Données de la nouvelle transaction (TransactionCreate ou TransactionCreateWithLines)
+        transaction_data: Données de la nouvelle transaction (TransactionCreate)
         db: Session de base de données
         current_user: Utilisateur actuel authentifié (via dépendance)
         
     Returns:
-        Transaction créée avec ses lignes (TransactionReadWithLines)
+        Transaction créée (TransactionRead)
         
     Raises:
-        HTTPException 400: Si le client ou le fournisseur n'existe pas
-        HTTPException 400: Si un produit n'existe pas
+        HTTPException 400: Si le client, le fournisseur ou le produit n'existe pas
     """
     # Vérifier que le client existe si fourni
     if transaction_data.id_client is not None:
@@ -262,36 +391,38 @@ def create_transaction(
                 detail=f"Fournisseur avec l'ID {transaction_data.id_fournisseur} introuvable"
             )
     
-    # Déterminer le montant total et les lignes
-    if transaction_data.lignes and len(transaction_data.lignes) > 0:
-        # Vérifier que tous les produits existent
-        produit_ids = [ligne.id_produit for ligne in transaction_data.lignes]
-        produits = db.query(Produit).filter(Produit.id_produit.in_(produit_ids)).all()
-        produits_ids_found = {p.id_produit for p in produits}
-        
-        for produit_id in produit_ids:
-            if produit_id not in produits_ids_found:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Produit avec l'ID {produit_id} introuvable"
-                )
-        
-        # Calculer le montant total à partir des lignes
-        montant_total = transaction_data.calculate_montant_total()
-        lignes_to_create = transaction_data.lignes
-    else:
-        # Pas de lignes : utiliser montant_total fourni explicitement
-        if transaction_data.montant_total is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="montant_total doit être fourni si aucune ligne n'est fournie"
-            )
-        montant_total = transaction_data.montant_total
-        lignes_to_create = []
+    # Vérifier que le produit existe
+    produit = db.query(Produit).filter(Produit.id_produit == transaction_data.id_produit).first()
+    if not produit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Produit avec l'ID {transaction_data.id_produit} introuvable"
+        )
+    
+    # Valider que le produit correspond au type de transaction
+    if transaction_data.id_client is not None and not produit.pour_clients:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients"
+        )
+    
+    if transaction_data.id_fournisseur is not None and not produit.pour_fournisseurs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
+        )
+    
+    # Calculer le montant_total si non fourni
+    montant_total = transaction_data.montant_total
+    if montant_total is None:
+        montant_total = Decimal(str(transaction_data.quantite)) * transaction_data.prix_unitaire
     
     # Créer la transaction
     new_transaction = Transaction(
         date_transaction=transaction_data.date_transaction,
+        id_produit=transaction_data.id_produit,
+        quantite=transaction_data.quantite,
+        prix_unitaire=transaction_data.prix_unitaire,
         montant_total=montant_total,
         est_actif=transaction_data.est_actif,
         id_client=transaction_data.id_client,
@@ -301,15 +432,6 @@ def create_transaction(
     
     db.add(new_transaction)
     db.flush()  # Pour obtenir l'ID de la transaction
-    
-    # Créer les lignes de transaction si fournies
-    for ligne_data in lignes_to_create:
-        new_ligne = LigneTransaction(
-            id_transaction=new_transaction.id_transaction,
-            id_produit=ligne_data.id_produit,
-            quantite=ligne_data.quantite
-        )
-        db.add(new_ligne)
     
     # Créer automatiquement un mouvement de caisse pour cette transaction
     # Si c'est une transaction client : ENTRÉE (argent qui entre)
@@ -335,30 +457,10 @@ def create_transaction(
     db.commit()
     db.refresh(new_transaction)
     
-    # Charger les lignes créées
-    lignes = db.query(LigneTransaction).filter(
-        LigneTransaction.id_transaction == new_transaction.id_transaction
-    ).all()
-    
-    # Construire la réponse
-    transaction_dict = {
-        "id_transaction": new_transaction.id_transaction,
-        "date_transaction": new_transaction.date_transaction,
-        "montant_total": new_transaction.montant_total,
-        "est_actif": new_transaction.est_actif,
-        "id_client": new_transaction.id_client,
-        "id_fournisseur": new_transaction.id_fournisseur,
-        "date_creation": new_transaction.date_creation,
-        "date_modification": new_transaction.date_modification,
-        "id_utilisateur_creation": new_transaction.id_utilisateur_creation,
-        "id_utilisateur_modification": new_transaction.id_utilisateur_modification,
-        "lignes_transaction": lignes
-    }
-    
-    return TransactionReadWithLines(**transaction_dict)
+    return new_transaction
 
 
-@router.put("/{id}", response_model=TransactionReadWithLines, status_code=status.HTTP_200_OK)
+@router.put("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def update_transaction(
     id: int,
     transaction_data: TransactionUpdate,
@@ -370,6 +472,7 @@ def update_transaction(
     
     Permet une mise à jour partielle (seuls les champs fournis seront modifiés).
     Enregistre automatiquement l'ID de l'utilisateur qui a modifié la transaction.
+    Recalcule le montant_total si quantite ou prix_unitaire changent.
     
     Args:
         id: ID de la transaction à modifier
@@ -378,11 +481,11 @@ def update_transaction(
         current_user: Utilisateur actuel authentifié (via dépendance)
         
     Returns:
-        Transaction mise à jour avec ses lignes (TransactionReadWithLines)
+        Transaction mise à jour (TransactionRead)
         
     Raises:
         HTTPException 404: Si la transaction n'existe pas
-        HTTPException 400: Si le client ou le fournisseur n'existe pas
+        HTTPException 400: Si le client, le fournisseur ou le produit n'existe pas
     """
     transaction = db.query(Transaction).filter(Transaction.id_transaction == id).first()
     
@@ -412,48 +515,40 @@ def update_transaction(
                 detail=f"Fournisseur avec l'ID {transaction_data.id_fournisseur} introuvable"
             )
     
-    # Gérer la mise à jour des lignes si fournies
-    lignes_provided = transaction_data.lignes is not None
-    if lignes_provided:
-        # Vérifier que tous les produits existent
-        produit_ids = [ligne.id_produit for ligne in transaction_data.lignes]
-        produits = db.query(Produit).filter(Produit.id_produit.in_(produit_ids)).all()
-        produits_ids_found = {p.id_produit for p in produits}
-        
-        for produit_id in produit_ids:
-            if produit_id not in produits_ids_found:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Produit avec l'ID {produit_id} introuvable"
-                )
-        
-        # Calculer le nouveau montant total à partir des lignes
-        new_montant_total = transaction_data.calculate_montant_total_from_lignes()
-        
-        # Supprimer les anciennes lignes
-        db.query(LigneTransaction).filter(
-            LigneTransaction.id_transaction == id
-        ).delete()
-        
-        # Créer les nouvelles lignes
-        for ligne_data in transaction_data.lignes:
-            new_ligne = LigneTransaction(
-                id_transaction=transaction.id_transaction,
-                id_produit=ligne_data.id_produit,
-                quantite=ligne_data.quantite
+    # Vérifier que le produit existe si fourni dans la mise à jour
+    if transaction_data.id_produit is not None:
+        produit = db.query(Produit).filter(Produit.id_produit == transaction_data.id_produit).first()
+        if not produit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Produit avec l'ID {transaction_data.id_produit} introuvable"
             )
-            db.add(new_ligne)
         
-        # Mettre à jour le montant total
-        transaction.montant_total = new_montant_total
+        # Valider que le produit correspond au type de transaction
+        final_id_client = transaction_data.id_client if transaction_data.id_client is not None else transaction.id_client
+        final_id_fournisseur = transaction_data.id_fournisseur if transaction_data.id_fournisseur is not None else transaction.id_fournisseur
+        
+        if final_id_client is not None and not produit.pour_clients:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients"
+            )
+        
+        if final_id_fournisseur is not None and not produit.pour_fournisseurs:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
+            )
     
-    # Mettre à jour les autres champs fournis (exclure lignes et montant_total si lignes fournies)
-    update_data = transaction_data.model_dump(exclude_unset=True, exclude={'lignes'})
-    if lignes_provided:
-        update_data.pop('montant_total', None)  # Ne pas écraser le montant calculé
+    # Mettre à jour les champs fournis
+    update_data = transaction_data.model_dump(exclude_unset=True)
     
     for field, value in update_data.items():
         setattr(transaction, field, value)
+    
+    # Recalculer le montant_total si quantite ou prix_unitaire ont changé
+    if transaction_data.quantite is not None or transaction_data.prix_unitaire is not None:
+        transaction.montant_total = Decimal(str(transaction.quantite)) * transaction.prix_unitaire
     
     # Enregistrer l'utilisateur qui a modifié (si authentification activée)
     if current_user:
@@ -472,27 +567,7 @@ def update_transaction(
         mouvement_caisse.montant = transaction.montant_total
         db.commit()
     
-    # Charger les lignes
-    lignes = db.query(LigneTransaction).filter(
-        LigneTransaction.id_transaction == transaction.id_transaction
-    ).all()
-    
-    # Construire la réponse
-    transaction_dict = {
-        "id_transaction": transaction.id_transaction,
-        "date_transaction": transaction.date_transaction,
-        "montant_total": transaction.montant_total,
-        "est_actif": transaction.est_actif,
-        "id_client": transaction.id_client,
-        "id_fournisseur": transaction.id_fournisseur,
-        "date_creation": transaction.date_creation,
-        "date_modification": transaction.date_modification,
-        "id_utilisateur_creation": transaction.id_utilisateur_creation,
-        "id_utilisateur_modification": transaction.id_utilisateur_modification,
-        "lignes_transaction": lignes
-    }
-    
-    return TransactionReadWithLines(**transaction_dict)
+    return transaction
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -543,7 +618,7 @@ def delete_transaction(
     return None
 
 
-@router.patch("/{id}/reactivate", response_model=TransactionReadWithLines, status_code=status.HTTP_200_OK)
+@router.patch("/{id}/reactivate", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def reactivate_transaction(
     id: int,
     db: Session = Depends(get_db),
@@ -561,7 +636,7 @@ def reactivate_transaction(
         current_user: Utilisateur actuel authentifié (via dépendance)
         
     Returns:
-        Transaction réactivée avec ses lignes (TransactionReadWithLines)
+        Transaction réactivée (TransactionRead)
         
     Raises:
         HTTPException 404: Si la transaction n'existe pas
@@ -591,25 +666,4 @@ def reactivate_transaction(
     db.commit()
     db.refresh(transaction)
     
-    # Charger les lignes
-    lignes = db.query(LigneTransaction).filter(
-        LigneTransaction.id_transaction == transaction.id_transaction
-    ).all()
-    
-    # Construire la réponse
-    transaction_dict = {
-        "id_transaction": transaction.id_transaction,
-        "date_transaction": transaction.date_transaction,
-        "montant_total": transaction.montant_total,
-        "est_actif": transaction.est_actif,
-        "id_client": transaction.id_client,
-        "id_fournisseur": transaction.id_fournisseur,
-        "date_creation": transaction.date_creation,
-        "date_modification": transaction.date_modification,
-        "id_utilisateur_creation": transaction.id_utilisateur_creation,
-        "id_utilisateur_modification": transaction.id_utilisateur_modification,
-        "lignes_transaction": lignes
-    }
-    
-    return TransactionReadWithLines(**transaction_dict)
-
+    return transaction

@@ -8,7 +8,6 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -37,7 +36,6 @@ import {
  * @param {Function} onReset - Fonction pour réinitialiser l'erreur (optionnel)
  */
 function ErrorPage({ error, errorInfo, onReset }) {
-  const navigate = useNavigate();
   const [showDetails, setShowDetails] = useState(false);
   const [reportSent, setReportSent] = useState(false);
 
@@ -50,13 +48,17 @@ function ErrorPage({ error, errorInfo, onReset }) {
 
   /**
    * Redirige vers la page d'accueil (dashboard ou login selon l'état d'authentification).
+   * 
+   * Note: Ce composant est utilisé par un ErrorBoundary situé en dehors du Router.
+   * On utilise donc window.location au lieu de useNavigate pour éviter les erreurs
+   * "useNavigate() may be used only in the context of a <Router>".
    */
   const handleGoHome = () => {
     const token = localStorage.getItem('access_token');
     if (token) {
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     } else {
-      navigate('/login');
+      window.location.href = '/login';
     }
   };
 

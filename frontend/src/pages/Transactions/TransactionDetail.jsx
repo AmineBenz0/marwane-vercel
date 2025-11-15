@@ -2,8 +2,7 @@
  * Page Détail Transaction.
  * 
  * Affiche les détails complets d'une transaction :
- * - Informations transaction (date, montant, client/fournisseur, statut)
- * - Liste des lignes (produit, quantité)
+ * - Informations transaction (date, montant, client/fournisseur, produit, quantité, prix unitaire, statut)
  * - Historique d'audit (qui a modifié quoi et quand)
  * - Bouton pour voir l'audit complet
  */
@@ -18,12 +17,6 @@ import {
   Alert,
   CircularProgress,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Card,
   CardContent,
   Grid,
@@ -37,12 +30,11 @@ import {
 import {
   ArrowBack as ArrowBackIcon,
   History as HistoryIcon,
-  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { format } from 'date-fns';
 import fr from 'date-fns/locale/fr';
-import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
+import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 
 /**
  * Composant TransactionDetail.
@@ -223,10 +215,11 @@ function TransactionDetail() {
   };
 
   /**
-   * Obtient le nom du produit pour une ligne.
+   * Obtient le nom du produit pour la transaction.
    */
-  const getProduitName = (idProduit) => {
-    return produitsMap.get(idProduit) || `Produit #${idProduit}`;
+  const getProduitName = () => {
+    if (!transaction || !transaction.id_produit) return '-';
+    return produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit}`;
   };
 
   /**
@@ -311,14 +304,6 @@ function TransactionDetail() {
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Montant total
-                  </Typography>
-                  <Typography variant="h6" color="primary">
-                    {formatMontant(transaction.montant_total)}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
                     Client / Fournisseur
                   </Typography>
                   <Typography variant="body1">{getClientOuFournisseur()}</Typography>
@@ -389,37 +374,55 @@ function TransactionDetail() {
         </Grid>
       </Grid>
 
-      {/* Liste des lignes de transaction */}
+      {/* Détails de la transaction */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            Lignes de Transaction
+            Détails de la Transaction
           </Typography>
           <Divider sx={{ mb: 2 }} />
-          {transaction.lignes_transaction && transaction.lignes_transaction.length > 0 ? (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Produit</TableCell>
-                    <TableCell align="right">Quantité</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {transaction.lignes_transaction.map((ligne) => (
-                    <TableRow key={ligne.id_ligne_transaction}>
-                      <TableCell>{getProduitName(ligne.id_produit)}</TableCell>
-                      <TableCell align="right">{ligne.quantite}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Aucune ligne de transaction
-            </Typography>
-          )}
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Produit
+                </Typography>
+                <Typography variant="body1" fontWeight="medium">
+                  {getProduitName()}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Quantité
+                </Typography>
+                <Typography variant="body1" fontWeight="medium">
+                  {transaction.quantite || '-'}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Prix unitaire
+                </Typography>
+                <Typography variant="body1" fontWeight="medium">
+                  {transaction.prix_unitaire ? formatMontant(transaction.prix_unitaire) : '-'}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Montant total
+                </Typography>
+                <Typography variant="h6" color="primary" fontWeight="bold">
+                  {formatMontant(transaction.montant_total)}
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
         </CardContent>
       </Card>
 
@@ -556,4 +559,3 @@ function TransactionDetail() {
 }
 
 export default TransactionDetail;
-

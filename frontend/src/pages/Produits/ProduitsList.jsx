@@ -8,7 +8,7 @@
  * - Pagination
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -19,16 +19,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  TextField,
   Chip,
 } from '@mui/material';
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
 import ProduitForm from './ProduitForm';
+import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post, put, patch, del } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { format } from 'date-fns';
@@ -57,9 +53,52 @@ function ProduitsList() {
   const [produitToDelete, setProduitToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // État pour les filtres
-  const [filterNom, setFilterNom] = useState('');
-  const [filterEstActif, setFilterEstActif] = useState('');
+  // État pour les filtres (objet unique)
+  const [filters, setFilters] = useState({
+    nom: '',
+    estActif: '',
+  });
+
+  /**
+   * Gestion des filtres.
+   */
+  const handleFilterChange = (filterId, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [filterId]: value,
+    }));
+  };
+
+  const handleClearAllFilters = () => {
+    setFilters({
+      nom: '',
+      estActif: '',
+    });
+  };
+
+  /**
+   * Définitions des filtres pour SmartFilterPanel.
+   */
+  const filterDefinitions = useMemo(() => [
+    {
+      id: 'nom',
+      label: 'Rechercher par nom',
+      type: 'search',
+      placeholder: 'Nom du produit...',
+      alwaysInline: true, // Toujours visible
+    },
+    {
+      id: 'estActif',
+      label: 'Statut',
+      type: 'select',
+      alwaysInline: true, // Toujours visible
+      options: [
+        { value: 'true', label: 'Actifs' },
+        { value: 'false', label: 'Inactifs' },
+      ],
+      formatChipValue: (value) => (value === 'true' ? 'Actifs' : 'Inactifs'),
+    },
+  ], []);
 
   /**
    * Charge la liste des produits depuis l'API.
@@ -71,11 +110,11 @@ function ProduitsList() {
     try {
       // Construire les paramètres de requête
       const params = {};
-      if (filterNom.trim()) {
-        params.recherche = filterNom.trim();
+      if (filters.nom.trim()) {
+        params.recherche = filters.nom.trim();
       }
-      if (filterEstActif !== '') {
-        params.est_actif = filterEstActif === 'true';
+      if (filters.estActif !== '') {
+        params.est_actif = filters.estActif === 'true';
       }
 
       // Récupérer tous les produits (on peut augmenter la limite si nécessaire)
@@ -100,7 +139,7 @@ function ProduitsList() {
   // Charger les produits au montage et lorsque les filtres changent
   useEffect(() => {
     fetchProduits();
-  }, [filterNom, filterEstActif]);
+  }, [filters]);
 
   /**
    * Gère l'ouverture de la modal pour créer un nouveau produit.
@@ -282,6 +321,43 @@ function ProduitsList() {
         />
       ),
     },
+    {
+      id: 'types_utilisation',
+      label: 'Utilisation',
+      sortable: false,
+      filterable: false,
+      // Colonne virtuelle basée sur pour_clients / pour_fournisseurs
+      // Le DataGrid appelle format(cellValue, row), donc on utilise le second paramètre.
+      format: (_value, row) => {
+        if (!row) return null;
+
+        const chips = [];
+        if (row.pour_clients) {
+          chips.push(
+            <Chip
+              key="client"
+              label="Client"
+              color="primary"
+              size="small"
+              sx={{ mr: 0.5 }}
+            />
+          );
+        }
+        if (row.pour_fournisseurs) {
+          chips.push(
+            <Chip
+              key="fournisseur"
+              label="Fournisseur"
+              color="secondary"
+              size="small"
+            />
+          );
+        }
+
+        // Cas de compatibilité : si aucun flag n'est défini, on n'affiche rien
+        return chips.length > 0 ? <Box sx={{ display: 'flex' }}>{chips}</Box> : null;
+      },
+    },
   ];
 
   return (
@@ -324,37 +400,17 @@ function ProduitsList() {
         </Alert>
       )}
 
-      {/* Filtres */}
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 2,
-          mb: 3,
-          flexWrap: 'wrap',
-        }}
-      >
-        <TextField
-          label="Rechercher par nom"
-          variant="outlined"
-          size="small"
-          value={filterNom}
-          onChange={(e) => setFilterNom(e.target.value)}
-          sx={{ minWidth: 250 }}
-          placeholder="Nom du produit..."
-        />
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>Statut</InputLabel>
-          <Select
-            value={filterEstActif}
-            label="Statut"
-            onChange={(e) => setFilterEstActif(e.target.value)}
-          >
-            <MenuItem value="">Tous</MenuItem>
-            <MenuItem value="true">Actifs</MenuItem>
-            <MenuItem value="false">Inactifs</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
+      {/* Filtres avec SmartFilterPanel */}
+      <SmartFilterPanel
+        pageKey="produits"
+        filterDefinitions={filterDefinitions}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        onClearAll={handleClearAllFilters}
+        maxInlineFilters={2}
+        resultCount={produits.length}
+        totalCount={produits.length}
+      />
 
       {/* DataGrid */}
       <DataGrid

@@ -63,8 +63,8 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     # Origines autorisées pour les requêtes CORS (séparées par des virgules)
-    # Ports courants : 3000 (React), 5173 (Vite), 8080 (Vue CLI), 4200 (Angular), 5174 (Vite alternatif)
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://localhost:4200,http://localhost:5174"
+    # Ports courants : 3000 (React), 3002 (React alternatif), 5173 (Vite), 8080 (Vue CLI), 4200 (Angular), 5174 (Vite alternatif)
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3002,http://localhost:5173,http://localhost:8080,http://localhost:4200,http://localhost:5174"
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60

@@ -1,7 +1,7 @@
 """
 Schémas Pydantic pour la validation des données produits.
 """
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional
 
 
@@ -20,6 +20,21 @@ class ProduitBase(BaseModel):
         True,
         description="Indique si le produit est actif (soft delete)"
     )
+    pour_clients: bool = Field(
+        True,
+        description="Indique si le produit peut être utilisé pour des transactions clients"
+    )
+    pour_fournisseurs: bool = Field(
+        True,
+        description="Indique si le produit peut être utilisé pour des transactions fournisseurs"
+    )
+    
+    @model_validator(mode='after')
+    def validate_au_moins_un_type(self):
+        """Valide qu'au moins un type est sélectionné."""
+        if not self.pour_clients and not self.pour_fournisseurs:
+            raise ValueError("Un produit doit être utilisable au moins pour les clients OU les fournisseurs")
+        return self
 
 
 class ProduitCreate(ProduitBase):
@@ -54,6 +69,14 @@ class ProduitUpdate(BaseModel):
         None,
         description="Indique si le produit est actif (soft delete)"
     )
+    pour_clients: Optional[bool] = Field(
+        None,
+        description="Indique si le produit peut être utilisé pour des transactions clients"
+    )
+    pour_fournisseurs: Optional[bool] = Field(
+        None,
+        description="Indique si le produit peut être utilisé pour des transactions fournisseurs"
+    )
 
     @field_validator('nom_produit')
     @classmethod
@@ -65,6 +88,9 @@ class ProduitUpdate(BaseModel):
         if not v:
             raise ValueError("Le nom du produit ne peut pas être vide")
         return v
+    
+    # Note: Validation "au moins un type" will be done at the router level
+    # since we need to check against existing values in the database
 
 
 class ProduitRead(ProduitBase):

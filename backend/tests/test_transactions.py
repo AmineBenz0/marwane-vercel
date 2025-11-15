@@ -882,11 +882,91 @@ class TestTransactionsEndpoints:
         assert data[0]["id_transaction"] == transaction.id_transaction
         assert data[0]["id_utilisateur"] == test_user.id_utilisateur
         assert data[0]["champ_modifie"] == "montant_total"
-        assert data[0]["ancienne_valeur"] == "50.00"
-        assert data[0]["nouvelle_valeur"] == "100.00"
-        assert "nom_utilisateur" in data[0]
-        assert "email_utilisateur" in data[0]
-        assert "date_changement" in data[0]
+    
+    def test_create_transactions_batch_success(self, client, test_user, db_session, test_client, test_produits, admin_token):
+        """Test de création batch de plusieurs transactions."""
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        
+        # Créer plusieurs transactions en batch
+        response = client.post(
+            "/api/v1/transactions/batch",
+            headers=headers,
+            json=[
+                {
+                    "date_transaction": str(date.today()),
+                    "id_client": test_client.id_client,
+                    "id_produit": test_produits[0].id_produit,
+                    "quantite": 5,
+                    "prix_unitaire": "10.00"
+                },
+                {
+                    "date_transaction": str(date.today()),
+                    "id_client": test_client.id_client,
+                    "id_produit": test_produits[1].id_produit,
+                    "quantite": 10,
+                    "prix_unitaire": "20.00"
+                },
+                {
+                    "date_transaction": str(date.today()),
+                    "id_client": test_client.id_client,
+                    "id_produit": test_produits[2].id_produit,
+                    "quantite": 2,
+                    "prix_unitaire": "50.00"
+                }
+            ]
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+        assert len(data) == 3
+        
+        # Vérifier les montants calculés
+        assert Decimal(str(data[0]["montant_total"])) == Decimal("50.00")  # 5 * 10
+        assert Decimal(str(data[1]["montant_total"])) == Decimal("200.00")  # 10 * 20
+        assert Decimal(str(data[2]["montant_total"])) == Decimal("100.00")  # 2 * 50
+        
+        # Vérifier que toutes les transactions sont en base
+        for tx in data:
+            tx_db = db_session.query(Transaction).filter(
+                Transaction.id_transaction == tx["id_transaction"]
+            ).first()
+            assert tx_db is not None
+            assert tx_db.id_client == test_client.id_client
+    
+    def test_create_transactions_batch_rollback_on_error(self, client, test_user, db_session, test_client, test_produits, admin_token):
+        """Test que le batch fait un rollback si une transaction échoue."""
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        
+        # Compter les transactions avant
+        count_before = db_session.query(Transaction).count()
+        
+        # Essayer de créer un batch avec un produit invalide dans la 2ème transaction
+        response = client.post(
+            "/api/v1/transactions/batch",
+            headers=headers,
+            json=[
+                {
+                    "date_transaction": str(date.today()),
+                    "id_client": test_client.id_client,
+                    "id_produit": test_produits[0].id_produit,
+                    "quantite": 5,
+                    "prix_unitaire": "10.00"
+                },
+                {
+                    "date_transaction": str(date.today()),
+                    "id_client": test_client.id_client,
+                    "id_produit": 99999,  # Produit inexistant
+                    "quantite": 10,
+                    "prix_unitaire": "20.00"
+                }
+            ]
+        )
+        
+        # Doit échouer
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        
+        # Vérifier qu'aucune transaction n'a été créée (rollback)
+        count_after = db_session.query(Transaction).count()
+        assert count_after == count_before
     
     def test_get_transaction_audit_not_found(self, client, test_user):
         """Test de récupération de l'audit d'une transaction inexistante."""

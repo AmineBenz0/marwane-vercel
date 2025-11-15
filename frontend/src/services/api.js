@@ -374,6 +374,26 @@ export const del = async (url, config = {}) => {
 };
 
 /**
+ * Récupère la liste des produits filtrés par type de transaction.
+ * 
+ * @param {string} typeTransaction - Type de transaction ('client' ou 'fournisseur')
+ * @param {object} params - Paramètres optionnels (skip, limit, est_actif, recherche)
+ * @returns {Promise} La liste des produits filtrés
+ * 
+ * @example
+ * const produitsClient = await getProduitsParType('client');
+ * const produitsFournisseur = await getProduitsParType('fournisseur', { est_actif: true });
+ */
+export const getProduitsParType = async (typeTransaction, params = {}) => {
+  try {
+    const response = await api.get(`/produits/par-type/${typeTransaction}`, { params });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Exporte également l'instance axios pour des cas d'usage avancés.
  * Utile si vous avez besoin d'accéder directement à axios (ex: upload de fichiers).
  */

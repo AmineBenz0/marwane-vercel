@@ -7,7 +7,7 @@
  * - Graphique d'évolution du solde sur 30 derniers jours
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Grid,
@@ -17,7 +17,6 @@ import {
   CircularProgress,
   Alert,
   useTheme,
-  TextField,
   Button,
   Paper,
   Table,
@@ -32,7 +31,6 @@ import {
 import {
   AccountBalance as AccountBalanceIcon,
   Refresh as RefreshIcon,
-  FilterList as FilterListIcon,
   FileDownload as FileDownloadIcon,
   PictureAsPdf as PictureAsPdfIcon,
 } from '@mui/icons-material';
@@ -49,6 +47,7 @@ import {
 import { format, subDays, parseISO } from 'date-fns';
 import fr from 'date-fns/locale/fr';
 import StatCard from '../../components/StatCard/StatCard';
+import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportCaisseReport } from '../../utils/exportToPDF';
@@ -160,10 +159,63 @@ function Caisse() {
   const [mouvements, setMouvements] = useState([]);
   const [chartData, setChartData] = useState([]);
   
-  // États pour les filtres
-  const [dateDebut, setDateDebut] = useState('');
-  const [dateFin, setDateFin] = useState('');
-  const [filtersApplied, setFiltersApplied] = useState(false);
+  // États pour les filtres (objet unique)
+  const [filters, setFilters] = useState({
+    dateDebut: '',
+    dateFin: '',
+  });
+
+  /**
+   * Gestion des filtres.
+   */
+  const handleFilterChange = (filterId, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [filterId]: value,
+    }));
+  };
+
+  const handleClearAllFilters = () => {
+    setFilters({
+      dateDebut: '',
+      dateFin: '',
+    });
+  };
+
+  /**
+   * Définitions des filtres pour SmartFilterPanel.
+   */
+  const filterDefinitions = useMemo(() => [
+    {
+      id: 'dateDebut',
+      label: 'Date début',
+      type: 'date',
+      alwaysInline: true,
+      formatChipValue: (value) => {
+        try {
+          return new Date(value).toLocaleDateString('fr-FR');
+        } catch {
+          return value;
+        }
+      },
+    },
+    {
+      id: 'dateFin',
+      label: 'Date fin',
+      type: 'date',
+      alwaysInline: true,
+      formatChipValue: (value) => {
+        try {
+          return new Date(value).toLocaleDateString('fr-FR');
+        } catch {
+          return value;
+        }
+      },
+    },
+  ], []);
+
+  // Vérifier si des filtres sont appliqués
+  const filtersApplied = filters.dateDebut && filters.dateFin;
   
   /**
    * Charge les données de la caisse.
@@ -182,9 +234,9 @@ function Caisse() {
       };
       
       // Si des filtres sont appliqués, les utiliser
-      if (useFilters && dateDebut && dateFin) {
-        mouvementsParams.date_debut = dateDebut;
-        mouvementsParams.date_fin = dateFin;
+      if (useFilters && filters.dateDebut && filters.dateFin) {
+        mouvementsParams.date_debut = filters.dateDebut;
+        mouvementsParams.date_fin = filters.dateFin;
       } else {
         // Sinon, récupérer les 30 derniers jours pour le graphique
         mouvementsParams.date_debut = format(dateDebut30Jours, 'yyyy-MM-dd');
@@ -248,36 +300,22 @@ function Caisse() {
   useEffect(() => {
     loadCaisseData(false);
   }, []);
-  
+
   /**
-   * Applique les filtres de date.
+   * Charge les données quand les filtres changent.
    */
-  const handleApplyFilters = () => {
-    if (dateDebut && dateFin) {
-      if (new Date(dateDebut) > new Date(dateFin)) {
+  useEffect(() => {
+    // Si les deux filtres sont remplis, charger avec filtres
+    if (filters.dateDebut && filters.dateFin) {
+      if (new Date(filters.dateDebut) > new Date(filters.dateFin)) {
         const errorMessage = 'La date de début doit être antérieure à la date de fin.';
         setError(errorMessage);
         notification.warning(errorMessage);
         return;
       }
-      setFiltersApplied(true);
       loadCaisseData(true);
-    } else {
-      const errorMessage = 'Veuillez sélectionner une date de début et une date de fin.';
-      setError(errorMessage);
-      notification.warning(errorMessage);
     }
-  };
-  
-  /**
-   * Réinitialise les filtres.
-   */
-  const handleResetFilters = () => {
-    setDateDebut('');
-    setDateFin('');
-    setFiltersApplied(false);
-    loadCaisseData(false);
-  };
+  }, [filters]);
 
   /**
    * Gère l'export Excel des mouvements de caisse filtrés.
@@ -423,62 +461,17 @@ function Caisse() {
         )}
       </Grid>
       
-      {/* Filtres par date */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <FilterListIcon sx={{ mr: 1 }} />
-            <Typography variant="h6">Filtres par date</Typography>
-          </Box>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={5}>
-              <TextField
-                fullWidth
-                label="Date de début"
-                type="date"
-                value={dateDebut}
-                onChange={(e) => setDateDebut(e.target.value)}
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={5}>
-              <TextField
-                fullWidth
-                label="Date de fin"
-                type="date"
-                value={dateFin}
-                onChange={(e) => setDateFin(e.target.value)}
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={2}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="contained"
-                  onClick={handleApplyFilters}
-                  disabled={!dateDebut || !dateFin}
-                  size="small"
-                >
-                  Appliquer
-                </Button>
-                {filtersApplied && (
-                  <Button
-                    variant="outlined"
-                    onClick={handleResetFilters}
-                    size="small"
-                  >
-                    Réinitialiser
-                  </Button>
-                )}
-              </Box>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+      {/* Filtres avec SmartFilterPanel */}
+      <SmartFilterPanel
+        pageKey="caisse"
+        filterDefinitions={filterDefinitions}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        onClearAll={handleClearAllFilters}
+        maxInlineFilters={2}
+        resultCount={mouvements.length}
+        totalCount={mouvements.length}
+      />
       
       {/* Graphique d'évolution du solde */}
       <Card sx={{ mb: 4 }}>
