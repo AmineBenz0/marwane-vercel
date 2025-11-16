@@ -14,11 +14,18 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Vérifier que Docker Compose est installé
-if ! command -v docker-compose &> /dev/null; then
+# Vérifier que Docker Compose est installé (v1 ou v2)
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+else
     echo "❌ Docker Compose n'est pas installé. Veuillez l'installer d'abord."
+    echo "Installation : sudo apt install -y docker-compose-plugin"
     exit 1
 fi
+
+echo "✅ Utilisation de : $DOCKER_COMPOSE"
 
 # Vérifier que les fichiers .env existent
 if [ ! -f "backend/.env" ]; then
@@ -48,7 +55,7 @@ fi
 # Arrêter les conteneurs existants
 echo ""
 echo "📦 Arrêt des conteneurs existants..."
-docker-compose down
+$DOCKER_COMPOSE down
 
 # Supprimer les anciennes images (optionnel, décommenter si nécessaire)
 # echo "🗑️  Nettoyage des anciennes images..."
@@ -57,12 +64,12 @@ docker-compose down
 # Construire les nouvelles images
 echo ""
 echo "🔨 Construction des images Docker..."
-docker-compose build
+$DOCKER_COMPOSE build
 
 # Démarrer les conteneurs
 echo ""
 echo "▶️  Démarrage des conteneurs..."
-docker-compose up -d
+$DOCKER_COMPOSE up -d
 
 # Attendre que les services soient prêts
 echo ""
@@ -72,7 +79,7 @@ sleep 15
 # Vérifier le statut
 echo ""
 echo "✅ Vérification du statut des conteneurs..."
-docker-compose ps
+$DOCKER_COMPOSE ps
 
 # Vérifier la santé de la base de données
 echo ""
@@ -98,7 +105,7 @@ fi
 echo ""
 echo "📋 Logs récents (dernières 20 lignes)..."
 echo "----------------------------------------"
-docker-compose logs --tail=20
+$DOCKER_COMPOSE logs --tail=20
 
 # Récupérer l'IP publique
 echo ""
@@ -128,9 +135,9 @@ echo "  3. Configurer les backups automatiques"
 echo "  4. Configurer HTTPS (si domaine disponible)"
 echo ""
 echo "🔍 Commandes utiles :"
-echo "  - Voir les logs : docker-compose logs -f"
-echo "  - Arrêter : docker-compose down"
-echo "  - Redémarrer : docker-compose restart"
-echo "  - Statut : docker-compose ps"
+echo "  - Voir les logs : $DOCKER_COMPOSE logs -f"
+echo "  - Arrêter : $DOCKER_COMPOSE down"
+echo "  - Redémarrer : $DOCKER_COMPOSE restart"
+echo "  - Statut : $DOCKER_COMPOSE ps"
 echo ""
 
