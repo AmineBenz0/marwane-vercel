@@ -14,15 +14,23 @@ import axios from 'axios';
 import useNotificationStore from '../store/notificationStore';
 
 // Configuration de l'URL de base de l'API
-// Utilise la variable d'environnement VITE_API_URL ou une valeur par défaut
-const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined 
-  ? import.meta.env.VITE_API_URL 
-  : 'http://localhost:8000';
+// Si VITE_API_URL est vide ou non défini, utiliser un chemin relatif
+const envApiUrl = import.meta.env.VITE_API_URL;
 const API_PREFIX = '/api/v1';
+
+// Déterminer la baseURL
+let baseURL;
+if (envApiUrl === '' || envApiUrl === undefined) {
+  // Production avec Nginx reverse proxy : utiliser chemin relatif
+  baseURL = API_PREFIX;
+} else {
+  // Développement ou URL complète spécifiée
+  baseURL = `${envApiUrl}${API_PREFIX}`;
+}
 
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
-  baseURL: API_BASE_URL ? `${API_BASE_URL}${API_PREFIX}` : API_PREFIX,
+  baseURL: baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
