@@ -15,12 +15,14 @@ import useNotificationStore from '../store/notificationStore';
 
 // Configuration de l'URL de base de l'API
 // Utilise la variable d'environnement VITE_API_URL ou une valeur par défaut
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined 
+  ? import.meta.env.VITE_API_URL 
+  : 'http://localhost:8000';
 const API_PREFIX = '/api/v1';
 
 // Créer une instance axios avec la configuration de base
 const api = axios.create({
-  baseURL: `${API_BASE_URL}${API_PREFIX}`,
+  baseURL: API_BASE_URL ? `${API_BASE_URL}${API_PREFIX}` : API_PREFIX,
   headers: {
     'Content-Type': 'application/json',
   },
