@@ -17,6 +17,7 @@ import {
   CircularProgress,
   Alert,
   useTheme,
+  useMediaQuery,
   Button,
   Paper,
   Table,
@@ -27,6 +28,7 @@ import {
   TableRow,
   Chip,
   IconButton,
+  Divider,
 } from '@mui/material';
 import {
   AccountBalance as AccountBalanceIcon,
@@ -34,6 +36,7 @@ import {
   FileDownload as FileDownloadIcon,
   PictureAsPdf as PictureAsPdfIcon,
 } from '@mui/icons-material';
+import MobileCardList from '../../components/MobileCardList/MobileCardList';
 import {
   LineChart,
   Line,
@@ -149,6 +152,7 @@ const calculateBalanceEvolution = (mouvements, startDate, soldeActuel) => {
  */
 function Caisse() {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -405,15 +409,23 @@ function Caisse() {
   }
   
   return (
-    <Box>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Titre de la page */}
-      <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 4 }}>
+      <Typography 
+        variant="h4" 
+        component="h1" 
+        gutterBottom 
+        sx={{ 
+          mb: { xs: 2, sm: 3, md: 4 },
+          fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
+        }}
+      >
         Gestion de la Caisse
       </Typography>
       
       {/* Affichage de l'erreur */}
       {error && (
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
           <Alert 
             severity="error" 
             onClose={() => setError(null)}
@@ -434,7 +446,7 @@ function Caisse() {
       )}
       
       {/* Solde actuel en évidence */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
         <Grid item xs={12} md={6}>
           <StatCard
             title="Solde actuel de la caisse"
@@ -474,9 +486,14 @@ function Caisse() {
       />
       
       {/* Graphique d'évolution du solde */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Typography variant="h6" component="h2" gutterBottom>
+      <Card sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Typography 
+            variant="h6" 
+            component="h2" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+          >
             Évolution du solde (30 derniers jours)
           </Typography>
           {loading ? (
@@ -485,42 +502,53 @@ function Caisse() {
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                height: 400,
+                height: { xs: 300, sm: 350, md: 400 },
               }}
             >
               <CircularProgress />
             </Box>
           ) : (
-            <Box sx={{ width: '100%', height: 400, mt: 3 }}>
+            <Box sx={{ 
+              width: '100%', 
+              height: { xs: 300, sm: 350, md: 400 }, 
+              mt: { xs: 2, sm: 2.5, md: 3 } 
+            }}>
               <ResponsiveContainer>
                 <LineChart
                   data={chartData}
                   margin={{
                     top: 5,
-                    right: 30,
-                    left: 20,
+                    right: isMobile ? 10 : 30,
+                    left: isMobile ? 5 : 20,
                     bottom: 5,
                   }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
                     angle={-45}
                     textAnchor="end"
                     height={80}
                   />
                   <YAxis
-                    label={{ value: 'Solde (MAD)', angle: -90, position: 'insideLeft' }}
+                    label={{ 
+                      value: 'Solde (MAD)', 
+                      angle: -90, 
+                      position: 'insideLeft',
+                      style: { fontSize: isMobile ? 10 : 12 }
+                    }}
                     tickFormatter={(value) => formatAxisValue(value)}
-                    width={80}
-                    tick={{ fontSize: 12 }}
+                    width={isMobile ? 60 : 80}
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
                   />
                   <Tooltip
                     formatter={(value) => formatMontantForTooltip(value)}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
-                  <Legend />
+                  <Legend 
+                    wrapperStyle={{ fontSize: isMobile ? '0.75rem' : '0.875rem' }}
+                  />
                   <Line
                     type="monotone"
                     dataKey="solde"
@@ -539,31 +567,49 @@ function Caisse() {
       
       {/* Liste des mouvements récents */}
       <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" component="h2">
+        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between', 
+            alignItems: { xs: 'stretch', sm: 'center' }, 
+            mb: { xs: 1.5, sm: 2 },
+            gap: { xs: 1.5, sm: 0 }
+          }}>
+            <Typography 
+              variant="h6" 
+              component="h2"
+              sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+            >
               {filtersApplied 
                 ? `Mouvements (${dateDebut} - ${dateFin})`
                 : 'Mouvements récents'
               }
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: { xs: 1, sm: 1 },
+              width: { xs: '100%', sm: 'auto' }
+            }}>
               <Button
                 variant="outlined"
-                startIcon={<FileDownloadIcon />}
+                startIcon={!isMobile && <FileDownloadIcon />}
                 onClick={handleExportExcel}
                 disabled={loading || mouvements.length === 0}
                 size="small"
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 Excel
               </Button>
               <Button
                 variant="outlined"
                 color="error"
-                startIcon={<PictureAsPdfIcon />}
+                startIcon={!isMobile && <PictureAsPdfIcon />}
                 onClick={handleExportPDF}
                 disabled={loading || mouvements.length === 0}
                 size="small"
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 PDF
               </Button>
@@ -584,9 +630,59 @@ function Caisse() {
             <Alert severity="info" sx={{ mt: 2 }}>
               Aucun mouvement trouvé pour la période sélectionnée.
             </Alert>
+          ) : isMobile ? (
+            <Box sx={{ mt: { xs: 1.5, sm: 2 } }}>
+              <MobileCardList
+                items={mouvements}
+                loading={false}
+                emptyMessage="Aucun mouvement trouvé"
+                renderCard={(mouvement) => (
+                  <Box>
+                    {/* En-tête */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                          {format(parseISO(mouvement.date_mouvement), "dd MMM yyyy 'à' HH:mm", { locale: fr })}
+                        </Typography>
+                        <Typography variant="subtitle1" fontWeight="medium" sx={{ mt: 0.5 }}>
+                          Transaction #{mouvement.id_transaction}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={mouvement.type_mouvement}
+                        color={mouvement.type_mouvement === 'ENTREE' ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </Box>
+
+                    <Divider sx={{ my: 1.5 }} />
+
+                    {/* Montant */}
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Montant
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 600,
+                          color: mouvement.type_mouvement === 'ENTREE'
+                            ? theme.palette.success.main
+                            : theme.palette.error.main,
+                          mt: 0.5,
+                        }}
+                      >
+                        {mouvement.type_mouvement === 'ENTREE' ? '+' : '-'}
+                        {formatCurrency(parseFloat(mouvement.montant || 0))}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              />
+            </Box>
           ) : (
-            <TableContainer component={Paper} sx={{ mt: 2 }}>
-              <Table>
+            <TableContainer component={Paper} sx={{ mt: { xs: 1.5, sm: 2 }, overflowX: 'auto' }}>
+              <Table size={isMobile ? 'small' : 'medium'}>
                 <TableHead>
                   <TableRow>
                     <TableCell><strong>Date</strong></TableCell>

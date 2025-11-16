@@ -22,15 +22,20 @@ import {
   DialogActions,
   Chip,
   Link,
+  useTheme,
+  useMediaQuery,
+  Divider,
 } from '@mui/material';
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
+import MobileCardList from '../../components/MobileCardList/MobileCardList';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post, put, patch, del } from '../../services/api';
 import * as yup from 'yup';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { format } from 'date-fns';
+import fr from 'date-fns/locale/fr';
 import useNotification from '../../hooks/useNotification';
 
 /**
@@ -40,6 +45,8 @@ function ClientsList() {
   // Hook pour les notifications
   const notification = useNotification();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // État pour les clients
   const [clients, setClients] = useState([]);
@@ -378,12 +385,14 @@ function ClientsList() {
       sortable: true,
       filterable: false,
       align: 'right',
+      mobilePriority: false,
     },
     {
       id: 'nom_client',
       label: 'Nom du client',
       sortable: true,
       filterable: false, // Désactivé car nous avons un filtre dédié au-dessus
+      mobilePriority: true,
       format: (value, row) => (
         <Link
           component="button"
@@ -406,6 +415,7 @@ function ClientsList() {
       label: 'Statut',
       sortable: true,
       filterable: false,
+      mobilePriority: true,
       format: (value) => (
         <Chip
           label={value ? 'Actif' : 'Inactif'}
@@ -419,6 +429,7 @@ function ClientsList() {
       label: 'Date de création',
       sortable: true,
       filterable: false,
+      mobilePriority: true,
       format: (value) => {
         if (!value) return '-';
         const date = new Date(value);
@@ -436,6 +447,7 @@ function ClientsList() {
       label: 'Dernière modification',
       sortable: true,
       filterable: false,
+      mobilePriority: false,
       format: (value) => {
         if (!value) return '-';
         const date = new Date(value);
@@ -451,34 +463,46 @@ function ClientsList() {
   ];
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* En-tête */}
       <Box
         sx={{
           display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 3,
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: { xs: 2, sm: 0 },
+          mb: { xs: 2, sm: 2.5, md: 3 },
         }}
       >
-        <Typography variant="h4" component="h1">
+        <Typography 
+          variant="h4" 
+          component="h1"
+          sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
+        >
           Liste des Clients
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: 1.5, sm: 2 } 
+        }}>
           <Button
             variant="outlined"
-            startIcon={<FileDownloadIcon />}
+            startIcon={!isMobile && <FileDownloadIcon />}
             onClick={handleExportExcel}
             disabled={loading || clients.length === 0}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            Exporter
+            {isMobile ? 'Exporter' : 'Exporter (Excel)'}
           </Button>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            startIcon={!isMobile && <AddIcon />}
             onClick={handleCreate}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            Créer un client
+            {isMobile ? 'Créer' : 'Créer un client'}
           </Button>
         </Box>
       </Box>
@@ -502,18 +526,79 @@ function ClientsList() {
         totalCount={clients.length}
       />
 
-      {/* DataGrid */}
-      <DataGrid
-        rows={clients}
-        columns={columns}
-        onView={handleViewProfile}
-        onEdit={handleEdit}
-        onDelete={handleDeleteClick}
-        onReactivate={handleReactivate}
-        loading={loading}
-        pageSize={10}
-        showActions={true}
-      />
+      {/* Affichage conditionnel : Cartes sur mobile, Tableau sur desktop */}
+      {isMobile ? (
+        <MobileCardList
+          items={clients}
+          loading={loading}
+          onView={handleViewProfile}
+          onEdit={handleEdit}
+          onDelete={handleDeleteClick}
+          onReactivate={handleReactivate}
+          emptyMessage="Aucun client trouvé"
+          renderCard={(client) => (
+            <Box>
+              {/* En-tête */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    Client #{client.id_client}
+                  </Typography>
+                  <Link
+                    component="button"
+                    variant="subtitle1"
+                    onClick={() => handleViewProfile(client)}
+                    sx={{
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                      fontWeight: 'medium',
+                      mt: 0.5,
+                      display: 'block',
+                      textAlign: 'left',
+                      '&:hover': {
+                        textDecoration: 'underline',
+                      },
+                    }}
+                  >
+                    {client.nom_client}
+                  </Link>
+                </Box>
+                <Chip
+                  label={client.est_actif ? 'Actif' : 'Inactif'}
+                  color={client.est_actif ? 'success' : 'default'}
+                  size="small"
+                />
+              </Box>
+
+              <Divider sx={{ my: 1.5 }} />
+
+              {/* Informations */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 1 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Date de création
+                  </Typography>
+                  <Typography variant="body2">
+                    {format(new Date(client.date_creation), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        />
+      ) : (
+        <DataGrid
+          rows={clients}
+          columns={columns}
+          onView={handleViewProfile}
+          onEdit={handleEdit}
+          onDelete={handleDeleteClick}
+          onReactivate={handleReactivate}
+          loading={loading}
+          pageSize={10}
+          showActions={true}
+        />
+      )}
 
       {/* Modal de création/édition */}
       <ModalForm

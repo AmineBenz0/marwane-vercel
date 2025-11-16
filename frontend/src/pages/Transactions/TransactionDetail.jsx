@@ -26,6 +26,8 @@ import {
   DialogActions,
   Divider,
   Stack,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -42,6 +44,8 @@ import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 function TransactionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // États pour les données
   const [transaction, setTransaction] = useState(null);
@@ -271,30 +275,45 @@ function TransactionDetail() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* En-tête avec bouton retour */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' },
+        alignItems: { xs: 'flex-start', sm: 'center' }, 
+        mb: { xs: 2, sm: 2.5, md: 3 }, 
+        gap: { xs: 1.5, sm: 2 } 
+      }}>
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/transactions')}
           variant="outlined"
+          size={isMobile ? 'small' : 'medium'}
         >
           Retour
         </Button>
-        <Typography variant="h4" component="h1">
-          Détails de la Transaction #{transaction.id_transaction}
+        <Typography 
+          variant="h4" 
+          component="h1"
+          sx={{ fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}
+        >
+          Transaction #{transaction.id_transaction}
         </Typography>
       </Box>
 
       {/* Informations principales */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <Grid item xs={12} md={6}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+              <Typography 
+                variant="h6" 
+                gutterBottom
+                sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+              >
                 Informations Générales
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
               <Stack spacing={1.5}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -326,11 +345,15 @@ function TransactionDetail() {
 
         <Grid item xs={12} md={6}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+              <Typography 
+                variant="h6" 
+                gutterBottom
+                sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+              >
                 Informations de Traçabilité
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
               <Stack spacing={1.5}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -375,13 +398,17 @@ function TransactionDetail() {
       </Grid>
 
       {/* Détails de la transaction */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
+      <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Typography 
+            variant="h6" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+          >
             Détails de la Transaction
           </Typography>
-          <Divider sx={{ mb: 2 }} />
-          <Grid container spacing={2}>
+          <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
+          <Grid container spacing={{ xs: 1.5, sm: 2 }}>
             <Grid item xs={12} sm={6}>
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -427,31 +454,54 @@ function TransactionDetail() {
       </Card>
 
       {/* Historique d'audit */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">
-              Historique d'Audit (5 derniers)
+      <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between', 
+            alignItems: { xs: 'flex-start', sm: 'center' }, 
+            mb: { xs: 1.5, sm: 2 },
+            gap: { xs: 1.5, sm: 0 }
+          }}>
+            <Typography 
+              variant="h6"
+              sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+            >
+              Historique d'Audit {!isMobile && '(5 derniers)'}
             </Typography>
             <Button
               variant="outlined"
-              startIcon={<HistoryIcon />}
+              startIcon={!isMobile && <HistoryIcon />}
               onClick={handleOpenAuditDialog}
+              size={isMobile ? 'small' : 'medium'}
+              fullWidth={isMobile}
             >
-              Voir l'audit complet
+              {isMobile ? 'Audit complet' : 'Voir l\'audit complet'}
             </Button>
           </Box>
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           {auditHistory.length > 0 ? (
-            <Stack spacing={2}>
+            <Stack spacing={{ xs: 1.5, sm: 2 }}>
               {auditHistory.map((audit) => (
-                <Paper key={audit.id_audit} variant="outlined" sx={{ p: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                <Paper key={audit.id_audit} variant="outlined" sx={{ p: { xs: 1.5, sm: 2 } }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    justifyContent: 'space-between', 
+                    alignItems: 'flex-start', 
+                    mb: 1,
+                    gap: { xs: 1, sm: 0 }
+                  }}>
                     <Box>
-                      <Typography variant="subtitle2" gutterBottom>
+                      <Typography 
+                        variant="subtitle2" 
+                        gutterBottom
+                        sx={{ fontSize: { xs: '0.875rem', sm: '0.875rem' } }}
+                      >
                         {audit.champ_modifie || 'Champ modifié'}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                         Par: {audit.nom_utilisateur || audit.email_utilisateur || `Utilisateur #${audit.id_utilisateur}`}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
@@ -459,20 +509,39 @@ function TransactionDetail() {
                       </Typography>
                     </Box>
                   </Box>
-                  <Box sx={{ mt: 1, display: 'flex', gap: 2 }}>
-                    <Box>
+                  <Box sx={{ 
+                    mt: 1, 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    gap: { xs: 1.5, sm: 2 } 
+                  }}>
+                    <Box sx={{ flex: 1 }}>
                       <Typography variant="caption" color="text.secondary">
                         Ancienne valeur:
                       </Typography>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontFamily: 'monospace',
+                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                          wordBreak: 'break-word'
+                        }}
+                      >
                         {audit.ancienne_valeur || '-'}
                       </Typography>
                     </Box>
-                    <Box>
+                    <Box sx={{ flex: 1 }}>
                       <Typography variant="caption" color="text.secondary">
                         Nouvelle valeur:
                       </Typography>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontFamily: 'monospace',
+                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                          wordBreak: 'break-word'
+                        }}
+                      >
                         {audit.nouvelle_valeur || '-'}
                       </Typography>
                     </Box>
@@ -494,6 +563,7 @@ function TransactionDetail() {
         onClose={handleCloseAuditDialog}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

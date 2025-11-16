@@ -42,6 +42,8 @@ import {
   MenuItem,
   InputLabel,
   FormHelperText,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 
@@ -60,6 +62,9 @@ function ModalForm({
   loading = false,
   errorMessage = null,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   // Initialiser react-hook-form avec le resolver Yup
   const {
     control,
@@ -215,37 +220,63 @@ function ModalForm({
               );
 
             case 'switch':
+              // Extraire helperText de fieldProps car Switch ne le supporte pas
+              const { helperText: switchHelperText, ...switchProps } = fieldProps;
               return (
-                <FormControlLabel
-                  control={
-                    <Switch
-                      {...fieldProps}
-                      checked={!!value}
-                      onChange={(e) => onChange(e.target.checked)}
-                      onBlur={onBlur}
-                      disabled={disabled || loading}
-                    />
-                  }
-                  label={label}
-                  sx={{ mt: 2, mb: 1 }}
-                />
+                <Box sx={{ mt: 2, mb: 1 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        {...switchProps}
+                        checked={!!value}
+                        onChange={(e) => onChange(e.target.checked)}
+                        onBlur={onBlur}
+                        disabled={disabled || loading}
+                      />
+                    }
+                    label={label}
+                  />
+                  {switchHelperText && (
+                    <FormHelperText sx={{ ml: 0, mt: 0.5 }}>
+                      {switchHelperText}
+                    </FormHelperText>
+                  )}
+                  {errors[name] && (
+                    <FormHelperText error sx={{ ml: 0 }}>
+                      {errors[name]?.message}
+                    </FormHelperText>
+                  )}
+                </Box>
               );
 
             case 'checkbox':
+              // Extraire helperText de fieldProps car Checkbox ne le supporte pas
+              const { helperText: checkboxHelperText, ...checkboxProps } = fieldProps;
               return (
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      {...fieldProps}
-                      checked={!!value}
-                      onChange={(e) => onChange(e.target.checked)}
-                      onBlur={onBlur}
-                      disabled={disabled || loading}
-                    />
-                  }
-                  label={label}
-                  sx={{ mt: 2, mb: 1 }}
-                />
+                <Box sx={{ mt: 2, mb: 1 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        {...checkboxProps}
+                        checked={!!value}
+                        onChange={(e) => onChange(e.target.checked)}
+                        onBlur={onBlur}
+                        disabled={disabled || loading}
+                      />
+                    }
+                    label={label}
+                  />
+                  {checkboxHelperText && (
+                    <FormHelperText sx={{ ml: 0, mt: 0.5 }}>
+                      {checkboxHelperText}
+                    </FormHelperText>
+                  )}
+                  {errors[name] && (
+                    <FormHelperText error sx={{ ml: 0 }}>
+                      {errors[name]?.message}
+                    </FormHelperText>
+                  )}
+                </Box>
               );
 
             case 'date':
@@ -324,9 +355,10 @@ function ModalForm({
       onClose={handleClose}
       maxWidth="sm"
       fullWidth
+      fullScreen={isMobile}
       PaperProps={{
         sx: {
-          minHeight: '300px',
+          minHeight: isMobile ? '100vh' : '300px',
         },
       }}
     >
@@ -372,11 +404,19 @@ function ModalForm({
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions 
+          sx={{ 
+            px: isMobile ? 2 : 3, 
+            py: isMobile ? 1.5 : 2,
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: isMobile ? 1 : 0,
+          }}
+        >
           <Button
             onClick={handleClose}
             disabled={loading}
             color="inherit"
+            fullWidth={isMobile}
           >
             Annuler
           </Button>
@@ -385,6 +425,7 @@ function ModalForm({
             variant="contained"
             disabled={loading || !isDirty}
             startIcon={loading ? <CircularProgress size={16} /> : null}
+            fullWidth={isMobile}
           >
             {loading ? 'Enregistrement...' : submitLabel}
           </Button>

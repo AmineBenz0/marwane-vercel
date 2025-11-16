@@ -317,13 +317,14 @@ function AppLayout({ children }) {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 2, sm: 2.5, md: 3 },
           width: { md: `calc(100% - ${effectiveDrawerWidth}px)` },
           minHeight: '100vh',
           backgroundColor: theme.palette.background.default,
           transition: theme.transitions.create('width', {
             duration: theme.transitions.duration.shorter,
           }),
+          overflowX: 'hidden', // Empêcher le scroll horizontal
         }}
       >
         <Toolbar /> {/* Espace pour l'AppBar fixe */}

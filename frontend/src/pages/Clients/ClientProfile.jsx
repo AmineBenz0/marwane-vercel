@@ -24,6 +24,7 @@ import {
   CircularProgress,
   Alert,
   useTheme,
+  useMediaQuery,
   Divider,
 } from '@mui/material';
 import {
@@ -90,6 +91,7 @@ function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
 
   // États pour les données
@@ -492,38 +494,67 @@ function ClientProfile() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' },
+        alignItems: { xs: 'stretch', sm: 'center' }, 
+        mb: { xs: 2, sm: 2.5, md: 3 }, 
+        gap: { xs: 1.5, sm: 2 }, 
+        flexWrap: 'wrap' 
+      }}>
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/clients')}
           variant="outlined"
+          size={isMobile ? 'small' : 'medium'}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           Retour
         </Button>
-        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Typography variant="h4" component="h1">
+        <Box sx={{ 
+          flexGrow: 1, 
+          display: 'flex', 
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'flex-start', sm: 'center' }, 
+          gap: { xs: 1, sm: 2 }, 
+          flexWrap: 'wrap' 
+        }}>
+          <Typography 
+            variant="h4" 
+            component="h1"
+            sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
+          >
             {client.nom_client}
           </Typography>
           <Chip
             label={client.est_actif ? 'Actif' : 'Inactif'}
             color={client.est_actif ? 'success' : 'default'}
-            size="medium"
+            size={isMobile ? 'small' : 'medium'}
           />
         </Box>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: 1.5, sm: 2 }, 
+          width: { xs: '100%', sm: 'auto' }
+        }}>
           <Button
             variant="outlined"
-            startIcon={<EditIcon />}
+            startIcon={!isMobile && <EditIcon />}
             onClick={handleEdit}
+            size={isMobile ? 'medium' : 'medium'}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Éditer
           </Button>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            startIcon={!isMobile && <AddIcon />}
             onClick={handleNewTransaction}
+            size={isMobile ? 'medium' : 'medium'}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Nouvelle transaction
           </Button>
@@ -531,7 +562,7 @@ function ClientProfile() {
       </Box>
 
       {/* Cartes statistiques */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <Grid item xs={12} sm={6} md={4}>
           <StatCard
             title="Total ventes"
@@ -564,43 +595,59 @@ function ClientProfile() {
       </Grid>
 
       {/* Graphique d'évolution des ventes */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" component="h2" gutterBottom>
+      <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Typography 
+            variant="h6" 
+            component="h2" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+          >
             Évolution des ventes (6 derniers mois)
           </Typography>
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           {chartData.length > 0 ? (
-            <Box sx={{ width: '100%', height: 400, mt: 3 }}>
+            <Box sx={{ 
+              width: '100%', 
+              height: { xs: 300, sm: 350, md: 400 }, 
+              mt: { xs: 2, sm: 2.5, md: 3 } 
+            }}>
               <ResponsiveContainer>
                 <LineChart
                   data={chartData}
                   margin={{
                     top: 5,
-                    right: 30,
-                    left: 20,
+                    right: isMobile ? 10 : 30,
+                    left: isMobile ? 5 : 20,
                     bottom: 5,
                   }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="mois"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
                     angle={-45}
                     textAnchor="end"
                     height={80}
                   />
                   <YAxis
-                    label={{ value: 'Montant (MAD)', angle: -90, position: 'insideLeft' }}
+                    label={{ 
+                      value: 'Montant (MAD)', 
+                      angle: -90, 
+                      position: 'insideLeft',
+                      style: { fontSize: isMobile ? 10 : 12 }
+                    }}
                     tickFormatter={(value) => formatMontantForAxis(value)}
-                    width={80}
-                    tick={{ fontSize: 12 }}
+                    width={isMobile ? 60 : 80}
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
                   />
                   <Tooltip
                     formatter={(value) => formatMontantForTooltip(value)}
                     labelFormatter={(label) => `Mois: ${label}`}
                   />
-                  <Legend />
+                  <Legend 
+                    wrapperStyle={{ fontSize: isMobile ? '0.75rem' : '0.875rem' }}
+                  />
                   <Line
                     type="monotone"
                     dataKey="montant"
@@ -625,21 +672,34 @@ function ClientProfile() {
 
       {/* Tableau des transactions */}
       <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" component="h2">
+        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between', 
+            alignItems: { xs: 'stretch', sm: 'center' }, 
+            mb: { xs: 1.5, sm: 2 },
+            gap: { xs: 1.5, sm: 0 }
+          }}>
+            <Typography 
+              variant="h6" 
+              component="h2"
+              sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+            >
               Historique des transactions
             </Typography>
             <Button
               variant="outlined"
-              startIcon={<FileDownloadIcon />}
+              startIcon={!isMobile && <FileDownloadIcon />}
               onClick={handleExportExcel}
               disabled={!transactions || transactions.length === 0}
+              size={isMobile ? 'small' : 'medium'}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
-              Exporter (Excel)
+              {isMobile ? 'Exporter' : 'Exporter (Excel)'}
             </Button>
           </Box>
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           {transactions && transactions.length > 0 ? (
             <DataGrid
               rows={transactions}

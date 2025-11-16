@@ -36,6 +36,8 @@ import {
   CircularProgress,
   Typography,
   Tooltip,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -60,6 +62,9 @@ function DataGrid({
   showActions = true,
   onDisplayedRowsChange,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   // État pour la pagination
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(initialPageSize);
@@ -224,15 +229,30 @@ function DataGrid({
     );
   }
 
+  // Filtrer les colonnes à afficher sur mobile (garder les plus importantes)
+  const visibleColumns = useMemo(() => {
+    if (!isMobile) return columns;
+    // Sur mobile, afficher uniquement les colonnes marquées comme prioritaires
+    // ou les 3 premières colonnes si aucune n'est marquée
+    const priorityColumns = columns.filter((col) => col.mobilePriority);
+    if (priorityColumns.length > 0) {
+      return priorityColumns;
+    }
+    // Par défaut, prendre les 3 premières colonnes
+    return columns.slice(0, 3);
+  }, [columns, isMobile]);
+
   return (
     <Paper>
       {/* Zone de filtres */}
-      <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      <Box p={isMobile ? 1.5 : 2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: 2,
+            gridTemplateColumns: isMobile 
+              ? '1fr' 
+              : 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: isMobile ? 1.5 : 2,
           }}
         >
           {columns
@@ -252,21 +272,26 @@ function DataGrid({
                   ),
                 }}
                 variant="outlined"
+                fullWidth
               />
             ))}
         </Box>
       </Box>
 
       {/* Tableau */}
-      <TableContainer>
-        <Table stickyHeader>
+      <TableContainer sx={{ overflowX: 'auto' }}>
+        <Table stickyHeader size={isMobile ? 'small' : 'medium'}>
           <TableHead>
             <TableRow>
-              {columns.map((column) => (
+              {visibleColumns.map((column) => (
                 <TableCell
                   key={column.id}
                   align={column.align || 'left'}
-                  sx={{ fontWeight: 'bold' }}
+                  sx={{ 
+                    fontWeight: 'bold',
+                    fontSize: isMobile ? '0.75rem' : '0.875rem',
+                    padding: isMobile ? '8px 4px' : '16px',
+                  }}
                 >
                   {column.sortable !== false ? (
                     <TableSortLabel
@@ -282,7 +307,15 @@ function DataGrid({
                 </TableCell>
               ))}
               {showActions && (onEdit || onDelete || onView || onReactivate) && (
-                <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 150 }}>
+                <TableCell 
+                  align="center" 
+                  sx={{ 
+                    fontWeight: 'bold', 
+                    minWidth: isMobile ? 80 : 150,
+                    fontSize: isMobile ? '0.75rem' : '0.875rem',
+                    padding: isMobile ? '8px 4px' : '16px',
+                  }}
+                >
                   Actions
                 </TableCell>
               )}
@@ -292,7 +325,7 @@ function DataGrid({
               {loading ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + (showActions && (onEdit || onDelete || onView || onReactivate) ? 1 : 0)}
+                  colSpan={visibleColumns.length + (showActions && (onEdit || onDelete || onView || onReactivate) ? 1 : 0)}
                   align="center"
                   sx={{ py: 4 }}
                 >
@@ -302,7 +335,7 @@ function DataGrid({
             ) : paginatedRows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + (showActions && (onEdit || onDelete || onView || onReactivate) ? 1 : 0)}
+                  colSpan={visibleColumns.length + (showActions && (onEdit || onDelete || onView || onReactivate) ? 1 : 0)}
                   align="center"
                   sx={{ py: 4 }}
                 >
@@ -314,7 +347,7 @@ function DataGrid({
             ) : (
               paginatedRows.map((row, rowIndex) => (
                 <TableRow key={row.id || rowIndex} hover>
-                  {columns.map((column) => {
+                  {visibleColumns.map((column) => {
                     const cellValue = row[column.id];
                     let displayValue = cellValue;
 
@@ -334,6 +367,8 @@ function DataGrid({
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
+                          fontSize: isMobile ? '0.75rem' : '0.875rem',
+                          padding: isMobile ? '8px 4px' : '16px',
                         }}
                       >
                         {displayValue}
@@ -341,49 +376,56 @@ function DataGrid({
                     );
                   })}
                   {showActions && (onEdit || onDelete || onView) && (
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                    <TableCell 
+                      align="center"
+                      sx={{ padding: isMobile ? '8px 4px' : '16px' }}
+                    >
+                      <Box sx={{ display: 'flex', gap: isMobile ? 0.5 : 1, justifyContent: 'center' }}>
                         {onView && (
-                          <Tooltip title="Voir détails">
+                          <Tooltip title={isMobile ? "" : "Voir détails"}>
                             <IconButton
                               size="small"
                               color="info"
                               onClick={() => handleView(row)}
+                              sx={{ padding: isMobile ? '4px' : '8px' }}
                             >
-                              <VisibilityIcon fontSize="small" />
+                              <VisibilityIcon fontSize={isMobile ? 'small' : 'small'} />
                             </IconButton>
                           </Tooltip>
                         )}
                         {onEdit && (
-                          <Tooltip title="Éditer">
+                          <Tooltip title={isMobile ? "" : "Éditer"}>
                             <IconButton
                               size="small"
                               color="primary"
                               onClick={() => handleEdit(row)}
+                              sx={{ padding: isMobile ? '4px' : '8px' }}
                             >
-                              <EditIcon fontSize="small" />
+                              <EditIcon fontSize={isMobile ? 'small' : 'small'} />
                             </IconButton>
                           </Tooltip>
                         )}
                         {/* Afficher "Réactiver" si la ligne est inactive, sinon "Supprimer" */}
                         {row.est_actif === false && onReactivate ? (
-                          <Tooltip title="Réactiver">
+                          <Tooltip title={isMobile ? "" : "Réactiver"}>
                             <IconButton
                               size="small"
                               color="success"
                               onClick={() => handleReactivate(row)}
+                              sx={{ padding: isMobile ? '4px' : '8px' }}
                             >
-                              <RestoreIcon fontSize="small" />
+                              <RestoreIcon fontSize={isMobile ? 'small' : 'small'} />
                             </IconButton>
                           </Tooltip>
                         ) : onDelete ? (
-                          <Tooltip title="Supprimer">
+                          <Tooltip title={isMobile ? "" : "Supprimer"}>
                             <IconButton
                               size="small"
                               color="error"
                               onClick={() => handleDelete(row)}
+                              sx={{ padding: isMobile ? '4px' : '8px' }}
                             >
-                              <DeleteIcon fontSize="small" />
+                              <DeleteIcon fontSize={isMobile ? 'small' : 'small'} />
                             </IconButton>
                           </Tooltip>
                         ) : null}
@@ -405,11 +447,22 @@ function DataGrid({
         onPageChange={handleChangePage}
         rowsPerPage={rowsPerPage}
         onRowsPerPageChange={handleChangeRowsPerPage}
-        rowsPerPageOptions={[5, 10, 25, 50, 100]}
-        labelRowsPerPage="Lignes par page:"
+        rowsPerPageOptions={isMobile ? [5, 10, 25] : [5, 10, 25, 50, 100]}
+        labelRowsPerPage={isMobile ? "Lignes:" : "Lignes par page:"}
         labelDisplayedRows={({ from, to, count }) =>
-          `${from}-${to} sur ${count !== -1 ? count : `plus de ${to}`}`
+          isMobile 
+            ? `${from}-${to}/${count}`
+            : `${from}-${to} sur ${count !== -1 ? count : `plus de ${to}`}`
         }
+        sx={{
+          '.MuiTablePagination-toolbar': {
+            paddingLeft: isMobile ? 1 : 2,
+            paddingRight: isMobile ? 1 : 2,
+          },
+          '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+            fontSize: isMobile ? '0.75rem' : '0.875rem',
+          },
+        }}
       />
     </Paper>
   );

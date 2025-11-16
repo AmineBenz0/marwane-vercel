@@ -36,31 +36,52 @@ services:
       # JWT Configuration
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
       ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 15
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
       # Application Configuration
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      DEBUG: ${DEBUG:-True}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-False}
       API_V1_PREFIX: /api/v1
       # CORS Configuration
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:5173
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       # Rate Limiting
       RATE_LIMIT_PER_MINUTE: 60
-      ENABLE_AUTH: ${ENABLE_AUTH:-False}
-      ENABLE_RATE_LIMITING: ${ENABLE_RATE_LIMITING:-False}
+      ENABLE_AUTH: ${ENABLE_AUTH:-True}
+      ENABLE_RATE_LIMITING: ${ENABLE_RATE_LIMITING:-True}
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - /app/__pycache__
-      - /app/.pytest_cache
+      - ./backend/logs:/app/logs
     networks:
       - comptabilite_network
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: comptabilite_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - comptabilite_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
 volumes:
   postgres_data:

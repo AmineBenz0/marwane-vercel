@@ -221,14 +221,22 @@ function Dashboard() {
   }
   
   return (
-    <Box>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Titre de la page */}
-      <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 4 }}>
+      <Typography 
+        variant="h4" 
+        component="h1" 
+        gutterBottom 
+        sx={{ 
+          mb: { xs: 2, sm: 3, md: 4 },
+          fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' },
+        }}
+      >
         Dashboard
       </Typography>
       
       {/* Grille des statistiques */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
         {/* Solde de la caisse */}
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -279,42 +287,61 @@ function Dashboard() {
       
       {/* Graphique d'évolution des transactions */}
       <Card>
-        <CardContent>
-          <Typography variant="h6" component="h2" gutterBottom>
+        <CardContent sx={{ px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Typography 
+            variant="h6" 
+            component="h2" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+          >
             Évolution des transactions (30 derniers jours)
           </Typography>
-          <Box sx={{ width: '100%', height: 400, mt: 3 }}>
+          <Box sx={{ 
+            width: '100%', 
+            height: { xs: 300, sm: 350, md: 400 }, 
+            mt: { xs: 2, sm: 2.5, md: 3 } 
+          }}>
             <ResponsiveContainer>
               <LineChart
                 data={chartData}
                 margin={{
                   top: 5,
-                  right: 30,
-                  left: 20,
+                  right: theme.breakpoints.down('sm') ? 10 : 30,
+                  left: theme.breakpoints.down('sm') ? 5 : 20,
                   bottom: 5,
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: theme.breakpoints.down('sm') ? 10 : 12 }}
                   angle={-45}
                   textAnchor="end"
                   height={80}
                 />
                 <YAxis
                   yAxisId="left"
-                  label={{ value: 'Nombre', angle: -90, position: 'insideLeft' }}
-                  width={60}
-                  tick={{ fontSize: 12 }}
+                  label={{ 
+                    value: 'Nombre', 
+                    angle: -90, 
+                    position: 'insideLeft',
+                    style: { fontSize: theme.breakpoints.down('sm') ? 10 : 12 }
+                  }}
+                  width={theme.breakpoints.down('sm') ? 40 : 60}
+                  tick={{ fontSize: theme.breakpoints.down('sm') ? 10 : 12 }}
                 />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  label={{ value: 'Montant (MAD)', angle: 90, position: 'insideRight' }}
+                  label={{ 
+                    value: 'Montant (MAD)', 
+                    angle: 90, 
+                    position: 'insideRight',
+                    style: { fontSize: theme.breakpoints.down('sm') ? 10 : 12 }
+                  }}
                   tickFormatter={(value) => formatNumberForAxis(value)}
-                  width={80}
-                  tick={{ fontSize: 12 }}
+                  width={theme.breakpoints.down('sm') ? 50 : 80}
+                  tick={{ fontSize: theme.breakpoints.down('sm') ? 10 : 12 }}
                 />
                 <Tooltip
                   formatter={(value, name) => {
@@ -331,26 +358,28 @@ function Dashboard() {
                   }}
                   labelFormatter={(label) => `Date: ${label}`}
                 />
-                <Legend />
+                <Legend 
+                  wrapperStyle={{ fontSize: theme.breakpoints.down('sm') ? '0.75rem' : '0.875rem' }}
+                />
                 <Line
                   yAxisId="left"
                   type="monotone"
                   dataKey="count"
                   stroke={theme.palette.primary.main}
-                  strokeWidth={2}
+                  strokeWidth={theme.breakpoints.down('sm') ? 1.5 : 2}
                   name="Nombre de transactions"
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={{ r: theme.breakpoints.down('sm') ? 3 : 4 }}
+                  activeDot={{ r: theme.breakpoints.down('sm') ? 5 : 6 }}
                 />
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="total"
                   stroke={theme.palette.secondary.main}
-                  strokeWidth={2}
+                  strokeWidth={theme.breakpoints.down('sm') ? 1.5 : 2}
                   name="Montant total (MAD)"
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={{ r: theme.breakpoints.down('sm') ? 3 : 4 }}
+                  activeDot={{ r: theme.breakpoints.down('sm') ? 5 : 6 }}
                 />
               </LineChart>
             </ResponsiveContainer>

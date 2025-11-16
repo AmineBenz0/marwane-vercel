@@ -131,21 +131,26 @@ function Login() {
           theme.palette.mode === 'light'
             ? theme.palette.grey[100]
             : theme.palette.grey[900],
-        padding: 2,
+        padding: { xs: 2, sm: 3 },
       }}
     >
       <Container maxWidth="sm">
         <Paper
           elevation={3}
           sx={{
-            padding: 4,
+            padding: { xs: 3, sm: 4 },
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
           }}
         >
           {/* Titre */}
-          <Typography component="h1" variant="h4" gutterBottom>
+          <Typography 
+            component="h1" 
+            variant="h4" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}
+          >
             Connexion
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>

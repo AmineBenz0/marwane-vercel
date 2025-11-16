@@ -24,6 +24,9 @@ import {
   DialogActions,
   Chip,
   Tooltip,
+  useTheme,
+  useMediaQuery,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -32,6 +35,7 @@ import {
   Info as InfoIcon,
 } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
+import MobileCardList from '../../components/MobileCardList/MobileCardList';
 import TransactionForm from './TransactionForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post, put, patch, del } from '../../services/api';
@@ -47,6 +51,8 @@ import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
  */
 function TransactionsList() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // Hook pour les notifications
   const notification = useNotification();
@@ -659,6 +665,7 @@ function TransactionsList() {
   /**
    * Configuration des colonnes du DataGrid.
    * Ordre : ID, Date, Client/Fournisseur, Produit, Prix unitaire, Quantité, Montant Total, Statut, Actions
+   * mobilePriority: true pour les colonnes à afficher en priorité sur mobile
    */
   const columns = [
     {
@@ -667,12 +674,14 @@ function TransactionsList() {
       sortable: true,
       filterable: false,
       align: 'right',
+      mobilePriority: false,
     },
     {
       id: 'date_transaction',
       label: 'Date',
       sortable: true,
       filterable: false,
+      mobilePriority: true,
       format: (value) => {
         if (!value) return '-';
         try {
@@ -687,6 +696,7 @@ function TransactionsList() {
       label: 'Client / Fournisseur',
       sortable: false,
       filterable: false,
+      mobilePriority: true,
       format: (value, row) => {
         const isClient = row.id_client !== null;
         const name = getClientOuFournisseur(row);
@@ -712,6 +722,7 @@ function TransactionsList() {
       label: 'Produit',
       sortable: false,
       filterable: false,
+      mobilePriority: false,
       format: (value, row) => {
         return produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`;
       },
@@ -722,6 +733,7 @@ function TransactionsList() {
       sortable: true,
       filterable: false,
       align: 'right',
+      mobilePriority: false,
       format: (value) => {
         if (value === null || value === undefined) return '-';
         return formatMontant(value);
@@ -733,6 +745,7 @@ function TransactionsList() {
       sortable: true,
       filterable: false,
       align: 'right',
+      mobilePriority: false,
     },
     {
       id: 'montant_total',
@@ -740,6 +753,7 @@ function TransactionsList() {
       sortable: true,
       filterable: false,
       align: 'right',
+      mobilePriority: true,
       format: (value, row) => {
         // Vert pour les entrées d'argent (transactions clients)
         // Rouge pour les sorties d'argent (transactions fournisseurs)
@@ -769,6 +783,7 @@ function TransactionsList() {
       label: 'Statut',
       sortable: true,
       filterable: false,
+      mobilePriority: false,
       format: (value) => (
         <Chip
           label={value ? 'Actif' : 'Inactif'}
@@ -797,25 +812,37 @@ function TransactionsList() {
   }, [displayedRows, transactionsForGrid]);
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* En-tête */}
       <Box
         sx={{
           display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 3,
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: { xs: 2, sm: 0 },
+          mb: { xs: 2, sm: 2.5, md: 3 },
         }}
       >
-        <Typography variant="h4" component="h1">
+        <Typography 
+          variant="h4" 
+          component="h1"
+          sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
+        >
           Liste des Transactions
         </Typography>
 
-        {/* OPTION 1: Légende dans la barre de boutons (à gauche des boutons) */}
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        {/* Boutons d'action */}
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: 1.5, sm: 2 }, 
+          alignItems: { xs: 'stretch', sm: 'center' },
+        }}>
+          {/* Légende (masquée sur mobile) */}
           <Box 
             sx={{ 
-              display: 'flex', 
+              display: { xs: 'none', md: 'flex' },
               gap: 2, 
               mr: 1,
               pr: 2,
@@ -838,6 +865,7 @@ function TransactionsList() {
             startIcon={<FileDownloadIcon />}
             onClick={handleExportExcel}
             disabled={loading || rowsForExport.length === 0}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Excel
           </Button>
@@ -847,6 +875,7 @@ function TransactionsList() {
             startIcon={<PictureAsPdfIcon />}
             onClick={handleExportPDF}
             disabled={loading || rowsForExport.length === 0}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             PDF
           </Button>
@@ -854,6 +883,7 @@ function TransactionsList() {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleCreate}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Créer une transaction
           </Button>
@@ -880,19 +910,95 @@ function TransactionsList() {
         totalCount={transactions.length}
       />
 
-      {/* DataGrid */}
-      <DataGrid
-        rows={transactionsForGrid}
-        columns={columns}
-        onView={handleViewDetails}
-        onEdit={handleEdit}
-        onDelete={handleDeleteClick}
-        onReactivate={handleReactivate}
-        loading={loading}
-        pageSize={10}
-        showActions={true}
-        onDisplayedRowsChange={setDisplayedRows}
-      />
+      {/* Affichage conditionnel : Cartes sur mobile, Tableau sur desktop */}
+      {isMobile ? (
+        <MobileCardList
+          items={transactionsForGrid}
+          loading={loading}
+          onView={handleViewDetails}
+          onEdit={handleEdit}
+          onDelete={handleDeleteClick}
+          onReactivate={handleReactivate}
+          emptyMessage="Aucune transaction trouvée"
+          renderCard={(transaction) => (
+            <Box>
+              {/* En-tête de la carte */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    Transaction #{transaction.id_transaction}
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight="medium" sx={{ mt: 0.5 }}>
+                    {getClientOuFournisseur(transaction)}
+                  </Typography>
+                </Box>
+                <Chip
+                  label={transaction.est_actif ? 'Actif' : 'Inactif'}
+                  color={transaction.est_actif ? 'success' : 'default'}
+                  size="small"
+                />
+              </Box>
+
+              <Divider sx={{ my: 1.5 }} />
+
+              {/* Informations principales */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Date
+                  </Typography>
+                  <Typography variant="body2">
+                    {format(new Date(transaction.date_transaction), 'dd/MM/yyyy', { locale: fr })}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Produit
+                  </Typography>
+                  <Typography variant="body2">
+                    {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit}`}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Quantité
+                  </Typography>
+                  <Typography variant="body2">
+                    {transaction.quantite}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Montant Total
+                  </Typography>
+                  <Typography 
+                    variant="body1" 
+                    fontWeight="bold"
+                    sx={{
+                      color: transaction.id_client !== null ? 'success.main' : 'error.main'
+                    }}
+                  >
+                    {formatMontant(transaction.montant_total)}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        />
+      ) : (
+        <DataGrid
+          rows={transactionsForGrid}
+          columns={columns}
+          onView={handleViewDetails}
+          onEdit={handleEdit}
+          onDelete={handleDeleteClick}
+          onReactivate={handleReactivate}
+          loading={loading}
+          pageSize={10}
+          showActions={true}
+          onDisplayedRowsChange={setDisplayedRows}
+        />
+      )}
 
       {/* Modal de création/édition */}
       <TransactionForm

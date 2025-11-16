@@ -24,6 +24,8 @@ import {
   IconButton,
   Tooltip,
   InputAdornment,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   FilterList as FilterListIcon,
@@ -60,6 +62,8 @@ function SmartFilterPanel({
   totalCount,
   showResetButton = false,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Hook de tracking des filtres
@@ -118,8 +122,8 @@ function SmartFilterPanel({
     const value = filters[filter.id] || filter.defaultValue || '';
     const commonProps = {
       size: 'small',
-      fullWidth: !isInline,
-      sx: isInline ? { minWidth: 200, maxWidth: 300 } : {},
+      fullWidth: isMobile || !isInline,
+      sx: isInline && !isMobile ? { minWidth: 200, maxWidth: 300 } : {},
     };
 
     switch (filter.type) {
@@ -230,25 +234,27 @@ function SmartFilterPanel({
   }, [filters]);
 
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
       {/* Filtres inline */}
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: { xs: 1.5, sm: 2 } }}>
         <Box
           sx={{
             display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            mb: 2,
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'stretch' : 'center',
+            gap: isMobile ? 1.5 : 2,
+            mb: isMobile ? 1 : 2,
           }}
         >
-          <FilterListIcon color="action" />
+          {!isMobile && <FilterListIcon color="action" />}
           <Box
             sx={{
               display: 'flex',
-              gap: 2,
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: isMobile ? 1.5 : 2,
               flexWrap: 'wrap',
               flex: 1,
-              alignItems: 'center',
+              alignItems: isMobile ? 'stretch' : 'center',
             }}
           >
             {inlineFilters.map((filter) => renderFilterField(filter, true))}
@@ -262,13 +268,14 @@ function SmartFilterPanel({
               onClick={() => setAdvancedOpen(!advancedOpen)}
               endIcon={advancedOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
               sx={{ flexShrink: 0 }}
+              fullWidth={isMobile}
             >
               Filtres avancés ({advancedFilters.length})
             </Button>
           )}
 
           {/* Bouton de reset du tracking (debug) */}
-          {showResetButton && (
+          {showResetButton && !isMobile && (
             <Tooltip title="Réinitialiser le tracking des filtres">
               <IconButton
                 size="small"
@@ -283,12 +290,14 @@ function SmartFilterPanel({
 
         {/* Panneau des filtres avancés */}
         <Collapse in={advancedOpen}>
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: isMobile ? 1.5 : 2 }} />
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-              gap: 2,
+              gridTemplateColumns: isMobile 
+                ? '1fr' 
+                : 'repeat(auto-fill, minmax(250px, 1fr))',
+              gap: isMobile ? 1.5 : 2,
             }}
           >
             {advancedFilters.map((filter) => renderFilterField(filter, false))}

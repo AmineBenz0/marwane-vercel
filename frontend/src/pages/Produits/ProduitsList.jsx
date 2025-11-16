@@ -20,9 +20,13 @@ import {
   DialogContentText,
   DialogActions,
   Chip,
+  useTheme,
+  useMediaQuery,
+  Divider,
 } from '@mui/material';
 import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import DataGrid from '../../components/DataGrid/DataGrid';
+import MobileCardList from '../../components/MobileCardList/MobileCardList';
 import ProduitForm from './ProduitForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post, put, patch, del } from '../../services/api';
@@ -36,6 +40,8 @@ import useNotification from '../../hooks/useNotification';
 function ProduitsList() {
   // Hook pour les notifications
   const notification = useNotification();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // État pour les produits
   const [produits, setProduits] = useState([]);
@@ -301,18 +307,21 @@ function ProduitsList() {
       sortable: true,
       filterable: false,
       align: 'right',
+      mobilePriority: false,
     },
     {
       id: 'nom_produit',
       label: 'Nom du produit',
       sortable: true,
       filterable: false, // Désactivé car nous avons un filtre dédié au-dessus
+      mobilePriority: true,
     },
     {
       id: 'est_actif',
       label: 'Statut',
       sortable: true,
       filterable: false,
+      mobilePriority: true,
       format: (value) => (
         <Chip
           label={value ? 'Actif' : 'Inactif'}
@@ -326,6 +335,7 @@ function ProduitsList() {
       label: 'Utilisation',
       sortable: false,
       filterable: false,
+      mobilePriority: true,
       // Colonne virtuelle basée sur pour_clients / pour_fournisseurs
       // Le DataGrid appelle format(cellValue, row), donc on utilise le second paramètre.
       format: (_value, row) => {
@@ -361,34 +371,46 @@ function ProduitsList() {
   ];
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* En-tête */}
       <Box
         sx={{
           display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 3,
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: { xs: 2, sm: 0 },
+          mb: { xs: 2, sm: 2.5, md: 3 },
         }}
       >
-        <Typography variant="h4" component="h1">
+        <Typography 
+          variant="h4" 
+          component="h1"
+          sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
+        >
           Liste des Produits
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: 1.5, sm: 2 } 
+        }}>
           <Button
             variant="outlined"
-            startIcon={<FileDownloadIcon />}
+            startIcon={!isMobile && <FileDownloadIcon />}
             onClick={handleExportExcel}
             disabled={loading || produits.length === 0}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            Exporter
+            {isMobile ? 'Exporter' : 'Exporter (Excel)'}
           </Button>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            startIcon={!isMobile && <AddIcon />}
             onClick={handleCreate}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            Créer un produit
+            {isMobile ? 'Créer' : 'Créer un produit'}
           </Button>
         </Box>
       </Box>
@@ -412,17 +434,78 @@ function ProduitsList() {
         totalCount={produits.length}
       />
 
-      {/* DataGrid */}
-      <DataGrid
-        rows={produits}
-        columns={columns}
-        onEdit={handleEdit}
-        onDelete={handleDeleteClick}
-        onReactivate={handleReactivate}
-        loading={loading}
-        pageSize={10}
-        showActions={true}
-      />
+      {/* Affichage conditionnel : Cartes sur mobile, Tableau sur desktop */}
+      {isMobile ? (
+        <MobileCardList
+          items={produits}
+          loading={loading}
+          onEdit={handleEdit}
+          onDelete={handleDeleteClick}
+          onReactivate={handleReactivate}
+          emptyMessage="Aucun produit trouvé"
+          renderCard={(produit) => (
+            <Box>
+              {/* En-tête */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    Produit #{produit.id_produit}
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight="medium" sx={{ mt: 0.5 }}>
+                    {produit.nom_produit}
+                  </Typography>
+                </Box>
+                <Chip
+                  label={produit.est_actif ? 'Actif' : 'Inactif'}
+                  color={produit.est_actif ? 'success' : 'default'}
+                  size="small"
+                />
+              </Box>
+
+              <Divider sx={{ my: 1.5 }} />
+
+              {/* Utilisation */}
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Utilisation
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+                  {produit.pour_clients && (
+                    <Chip
+                      label="Client"
+                      color="primary"
+                      size="small"
+                    />
+                  )}
+                  {produit.pour_fournisseurs && (
+                    <Chip
+                      label="Fournisseur"
+                      color="secondary"
+                      size="small"
+                    />
+                  )}
+                  {!produit.pour_clients && !produit.pour_fournisseurs && (
+                    <Typography variant="body2" color="text.secondary">
+                      Non spécifié
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            </Box>
+          )}
+        />
+      ) : (
+        <DataGrid
+          rows={produits}
+          columns={columns}
+          onEdit={handleEdit}
+          onDelete={handleDeleteClick}
+          onReactivate={handleReactivate}
+          loading={loading}
+          pageSize={10}
+          showActions={true}
+        />
+      )}
 
       {/* Modal de création/édition */}
       <ProduitForm

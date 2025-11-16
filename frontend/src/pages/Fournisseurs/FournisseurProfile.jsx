@@ -24,6 +24,7 @@ import {
   CircularProgress,
   Alert,
   useTheme,
+  useMediaQuery,
   Divider,
 } from '@mui/material';
 import {
@@ -90,6 +91,7 @@ function FournisseurProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
 
   // États pour les données
@@ -492,7 +494,7 @@ function FournisseurProfile() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
         <Button
