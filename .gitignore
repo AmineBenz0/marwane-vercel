@@ -1,56 +1,31 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-venv/
-env/
-ENV/
-.venv
-
-# FastAPI
-*.db
-*.sqlite
-*.sqlite3
-
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
-.npm
-.eslintcache
-.node_repl_history
-*.tgz
-.yarn-integrity
-
 # Environment variables
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
+*.env
+!*.env.example
+
+# Backend
+backend/.env
+backend/.env.local
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/logs/*.log
+
+# Frontend
+frontend/.env
+frontend/.env.local
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+frontend/.parcel-cache/
 
 # IDE
 .vscode/
@@ -58,42 +33,20 @@ lerna-debug.log*
 *.swp
 *.swo
 *~
-.DS_Store
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Testing
-.coverage
-.pytest_cache/
-htmlcov/
-.tox/
-.hypothesis/
-
-# Build
-dist/
-build/
-*.egg-info/
-
-# Docker
-.dockerignore
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
 
 # OS
-Thumbs.db
 .DS_Store
+Thumbs.db
+desktop.ini
 
-# Project specific
-backup/
-temp/
-*.bak
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Temporary files
 *.tmp
-
+*.temp
+.cache/
