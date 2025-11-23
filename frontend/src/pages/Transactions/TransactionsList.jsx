@@ -38,6 +38,7 @@ import DataGrid from '../../components/DataGrid/DataGrid';
 import MobileCardList from '../../components/MobileCardList/MobileCardList';
 import TransactionForm from './TransactionForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
+import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import { get, post, put, patch, del } from '../../services/api';
 import { format } from 'date-fns';
 import fr from 'date-fns/locale/fr';
@@ -365,17 +366,103 @@ function TransactionsList() {
     setFormError(null);
 
     try {
+      let result = null;
+      
       if (editingTransaction) {
         // Mode édition : PUT (une seule transaction)
-        await put(`/transactions/${editingTransaction.id_transaction}`, data);
+        // Extraire les données de paiement si présentes
+        const { paiement, ...transactionData } = data;
+        
+        result = await put(`/transactions/${editingTransaction.id_transaction}`, transactionData);
+        
+        // Gérer le paiement si présent
+        if (paiement && paiement.ajouter_paiement) {
+          try {
+            const paiementData = {
+              date_paiement: paiement.paiement_date,
+              montant: parseFloat(paiement.paiement_montant),
+              type_paiement: paiement.paiement_type,
+              notes: paiement.paiement_notes || null,
+            };
+            
+            // Ajouter les champs spécifiques selon le type
+            if (paiement.paiement_type === 'cheque') {
+              paiementData.numero_cheque = paiement.paiement_numero_cheque || null;
+              paiementData.banque = paiement.paiement_banque || null;
+              paiementData.statut_cheque = 'a_encaisser';
+            } else if (paiement.paiement_type === 'virement') {
+              paiementData.reference_virement = paiement.paiement_reference || null;
+            }
+            
+            // Vérifier si c'est une mise à jour ou une création
+            if (paiement.paiement_id) {
+              // Mise à jour d'un paiement existant
+              await put(`/paiements/${paiement.paiement_id}`, paiementData);
+            } else {
+              // Création d'un nouveau paiement
+              paiementData.id_transaction = editingTransaction.id_transaction;
+              await post('/paiements', paiementData);
+            }
+          } catch (err) {
+            console.error('Erreur lors de la gestion du paiement:', err);
+            notification.error('Transaction modifiée mais erreur lors de la mise à jour du paiement');
+          }
+        }
+        
+        notification.success('Transaction modifiée avec succès');
       } else {
         // Mode création : vérifier si c'est un batch ou une transaction simple
         if (data.batch && data.transactions) {
           // Création batch : POST /transactions/batch
-          await post('/transactions/batch', data.transactions);
+          result = await post('/transactions/batch', data.transactions);
+          
+          // Créer les paiements pour les lignes qui ont ajouter_paiement = true
+          if (result && Array.isArray(result) && data.lignesData) {
+            let nombrePaiementsCrees = 0;
+            
+            const paiementsPromises = result.map(async (transaction, index) => {
+              const ligneData = data.lignesData[index];
+              
+              // Vérifier si cette ligne a un paiement à créer
+              if (ligneData?.ajouter_paiement && ligneData.paiement_montant > 0) {
+                try {
+                  const paiementData = {
+                    id_transaction: transaction.id_transaction,
+                    date_paiement: ligneData.paiement_date,
+                    montant: parseFloat(ligneData.paiement_montant),
+                    type_paiement: ligneData.paiement_type,
+                    notes: ligneData.paiement_notes || null,
+                  };
+                  
+                  // Ajouter les champs spécifiques selon le type
+                  if (ligneData.paiement_type === 'cheque') {
+                    paiementData.numero_cheque = ligneData.paiement_numero_cheque || null;
+                    paiementData.banque = ligneData.paiement_banque || null;
+                    paiementData.statut_cheque = 'a_encaisser';
+                  } else if (ligneData.paiement_type === 'virement') {
+                    paiementData.reference_virement = ligneData.paiement_reference || null;
+                  }
+                  
+                  await post('/paiements', paiementData);
+                  nombrePaiementsCrees++;
+                } catch (err) {
+                  console.error(`Erreur lors de la création du paiement pour la transaction ${transaction.id_transaction}:`, err);
+                  // Ne pas bloquer si un paiement échoue
+                }
+              }
+            });
+            
+            await Promise.allSettled(paiementsPromises);
+            
+            if (nombrePaiementsCrees > 0) {
+              notification.success(`${result.length} transaction(s) créée(s) dont ${nombrePaiementsCrees} avec paiement`);
+            } else {
+              notification.success(`${result.length} transaction(s) créée(s)`);
+            }
+          }
         } else {
           // Création simple : POST /transactions
-          await post('/transactions', data);
+          result = await post('/transactions', data);
         }
       }
 
@@ -383,6 +470,8 @@ function TransactionsList() {
       setModalOpen(false);
       setEditingTransaction(null);
       await fetchTransactions();
+      
+      return result;
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       setFormError(
@@ -779,6 +868,18 @@ function TransactionsList() {
       },
     },
     {
+      id: 'statut_paiement',
+      label: 'Paiement',
+      sortable: false,
+      filterable: false,
+      mobilePriority: false,
+      format: (value, row) => {
+        // Déterminer le statut : si en retard, afficher "en_retard", sinon le statut normal
+        const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
+        return <PaymentStatusBadge statut={statut} />;
+      },
+    },
+    {
       id: 'est_actif',
       label: 'Statut',
       sortable: true,
@@ -986,18 +1087,18 @@ function TransactionsList() {
           )}
         />
       ) : (
-        <DataGrid
-          rows={transactionsForGrid}
-          columns={columns}
-          onView={handleViewDetails}
-          onEdit={handleEdit}
-          onDelete={handleDeleteClick}
-          onReactivate={handleReactivate}
-          loading={loading}
-          pageSize={10}
-          showActions={true}
-          onDisplayedRowsChange={setDisplayedRows}
-        />
+      <DataGrid
+        rows={transactionsForGrid}
+        columns={columns}
+        onView={handleViewDetails}
+        onEdit={handleEdit}
+        onDelete={handleDeleteClick}
+        onReactivate={handleReactivate}
+        loading={loading}
+        pageSize={10}
+        showActions={true}
+        onDisplayedRowsChange={setDisplayedRows}
+      />
       )}
 
       {/* Modal de création/édition */}

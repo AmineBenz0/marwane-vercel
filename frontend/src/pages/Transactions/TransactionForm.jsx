@@ -51,9 +51,23 @@ import {
   Select,
   MenuItem,
   InputLabel,
+  Checkbox,
+  Divider,
+  Collapse,
+  Grid,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
 } from '@mui/material';
-import { Close as CloseIcon, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { get, getProduitsParType } from '../../services/api';
+import { 
+  Close as CloseIcon, 
+  Add as AddIcon, 
+  Delete as DeleteIcon,
+  ExpandMore as ExpandMoreIcon,
+  Payment as PaymentIcon,
+} from '@mui/icons-material';
+import { get, getProduitsParType, post, put } from '../../services/api';
 
 /**
  * Schéma de validation Yup pour une ligne de transaction.
@@ -88,6 +102,16 @@ const ligneValidationSchema = yup.object().shape({
       const num = Number(originalValue);
       return isNaN(num) ? undefined : num;
     }),
+  // Champs pour le paiement de cette ligne (optionnels)
+  ajouter_paiement: yup.boolean(),
+  paiement_date: yup.string().nullable(),
+  paiement_montant: yup.number().nullable().positive('Le montant doit être positif'),
+  paiement_type: yup.string().nullable(),
+  paiement_numero_cheque: yup.string().nullable(),
+  paiement_banque: yup.string().nullable(),
+  paiement_reference: yup.string().nullable(),
+  paiement_notes: yup.string().nullable(),
+  paiement_id: yup.number().nullable(), // ID du paiement existant (en mode édition)
 });
 
 /**
@@ -98,6 +122,16 @@ const transactionValidationSchema = yup.object().shape({
     .string()
     .required('La date de transaction est requise')
     .matches(/^\d{4}-\d{2}-\d{2}$/, 'La date doit être au format YYYY-MM-DD'),
+  date_echeance: yup
+    .string()
+    .nullable()
+    .matches(/^\d{4}-\d{2}-\d{2}$/, 'La date doit être au format YYYY-MM-DD')
+    .test('date-apres-transaction', 'La date d\'échéance doit être après la date de transaction', function(value) {
+      if (!value) return true; // Optionnel
+      const dateTransaction = this.parent.date_transaction;
+      if (!dateTransaction) return true;
+      return new Date(value) >= new Date(dateTransaction);
+    }),
   type_entite: yup
     .string()
     .required('Vous devez sélectionner un client ou un fournisseur')
@@ -143,6 +177,15 @@ function TransactionForm({
   const [fournisseurs, setFournisseurs] = useState([]);
   const [produits, setProduits] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
+  
+  // État pour gérer les paiements par ligne (tableau de booleans)
+  const [paiementsParLigne, setPaiementsParLigne] = useState([false]);
+  
+  // État pour gérer l'expansion des accordions (première ligne expanded par défaut)
+  const [expandedAccordion, setExpandedAccordion] = useState(0);
+
+  // État pour stocker les paiements existants (en mode édition)
+  const [paiementsExistants, setPaiementsExistants] = useState([]);
 
   // Initialiser react-hook-form avec le resolver Yup
   const {
@@ -158,10 +201,23 @@ function TransactionForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
       date_transaction: new Date().toISOString().split('T')[0],
+      date_echeance: null,
       type_entite: 'client',
       id_client: null,
       id_fournisseur: null,
-      lignes: [{ id_produit: '', quantite: undefined, prix_unitaire: undefined }],
+      lignes: [{ 
+        id_produit: '', 
+        quantite: undefined, 
+        prix_unitaire: undefined,
+        ajouter_paiement: false,
+        paiement_date: new Date().toISOString().split('T')[0],
+        paiement_montant: null,
+        paiement_type: 'cash',
+        paiement_numero_cheque: null,
+        paiement_banque: null,
+        paiement_reference: null,
+        paiement_notes: null,
+      }],
     },
     mode: 'onChange',
   });
@@ -169,6 +225,7 @@ function TransactionForm({
   // Observer les valeurs du formulaire pour calculer le total
   const watchedLignes = watch('lignes');
   const watchedTypeEntite = watch('type_entite');
+
 
   /**
    * Charge les données de référence (clients, fournisseurs, produits).
@@ -192,6 +249,22 @@ function TransactionForm({
     }
   };
 
+  /**
+   * Charge les paiements existants pour une transaction (en mode édition).
+   */
+  const fetchPaiementsExistants = async (idTransaction) => {
+    try {
+      const paiements = await get('/paiements', {
+        params: { id_transaction: idTransaction },
+      });
+      setPaiementsExistants(paiements || []);
+      return paiements || [];
+    } catch (err) {
+      console.error('Erreur lors du chargement des paiements:', err);
+      return [];
+    }
+  };
+
   // Charger les données de référence au montage et à l'ouverture de la modal
   useEffect(() => {
     if (open) {
@@ -201,41 +274,79 @@ function TransactionForm({
 
   // Réinitialiser le formulaire lorsque initialValues change (pour l'édition)
   useEffect(() => {
-    if (open) {
-      const isEditing = initialValues && initialValues.id_transaction;
-      
-      if (isEditing) {
-        // Mode édition : pré-remplir avec UNE ligne (la transaction à éditer)
-        const typeEntite = initialValues.id_client ? 'client' : 'fournisseur';
+    const loadFormData = async () => {
+      if (open) {
+        const isEditing = initialValues && initialValues.id_transaction;
         
-        reset({
-          date_transaction: initialValues.date_transaction
-            ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
-            : new Date().toISOString().split('T')[0],
-          type_entite: typeEntite,
-          id_client: initialValues.id_client || null,
-          id_fournisseur: initialValues.id_fournisseur || null,
-          lignes: [{
-            id_produit: initialValues.id_produit || '',
-            quantite: initialValues.quantite || undefined,
-            prix_unitaire: initialValues.prix_unitaire || undefined,
-          }],
-        });
-      } else {
-        // Mode création : valeurs par défaut ou pré-remplies
-        const hasPrefillClient = prefillClientId !== null && prefillClientId !== undefined;
-        const hasPrefillFournisseur = prefillFournisseurId !== null && prefillFournisseurId !== undefined;
-        
-        reset({
-          date_transaction: new Date().toISOString().split('T')[0],
-          type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : 'client',
-          id_client: hasPrefillClient ? prefillClientId : null,
-          id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : null,
-          lignes: [{ id_produit: '', quantite: undefined, prix_unitaire: undefined }],
-        });
+        if (isEditing) {
+          // Mode édition : pré-remplir avec UNE ligne (la transaction à éditer)
+          const typeEntite = initialValues.id_client ? 'client' : 'fournisseur';
+          
+          // Charger les paiements existants
+          const paiements = await fetchPaiementsExistants(initialValues.id_transaction);
+          
+          // Vérifier s'il y a au moins un paiement
+          const hasPaiement = paiements && paiements.length > 0;
+          const premierPaiement = hasPaiement ? paiements[0] : null;
+          
+          reset({
+            date_transaction: initialValues.date_transaction
+              ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0],
+            date_echeance: initialValues.date_echeance
+              ? new Date(initialValues.date_echeance).toISOString().split('T')[0]
+              : null,
+            type_entite: typeEntite,
+            id_client: initialValues.id_client || null,
+            id_fournisseur: initialValues.id_fournisseur || null,
+            lignes: [{
+              id_produit: initialValues.id_produit || '',
+              quantite: initialValues.quantite || undefined,
+              prix_unitaire: initialValues.prix_unitaire || undefined,
+              ajouter_paiement: hasPaiement,
+              paiement_date: premierPaiement 
+                ? new Date(premierPaiement.date_paiement).toISOString().split('T')[0]
+                : new Date().toISOString().split('T')[0],
+              paiement_montant: premierPaiement ? parseFloat(premierPaiement.montant) : null,
+              paiement_type: premierPaiement ? premierPaiement.type_paiement : 'cash',
+              paiement_numero_cheque: premierPaiement ? premierPaiement.numero_cheque : null,
+              paiement_banque: premierPaiement ? premierPaiement.banque : null,
+              paiement_reference: premierPaiement ? premierPaiement.reference_virement : null,
+              paiement_notes: premierPaiement ? premierPaiement.notes : null,
+              paiement_id: premierPaiement ? premierPaiement.id_paiement : null, // Sauvegarder l'ID pour la mise à jour
+            }],
+          });
+        } else {
+          // Mode création : valeurs par défaut ou pré-remplies
+          const hasPrefillClient = prefillClientId !== null && prefillClientId !== undefined;
+          const hasPrefillFournisseur = prefillFournisseurId !== null && prefillFournisseurId !== undefined;
+          
+          reset({
+            date_transaction: new Date().toISOString().split('T')[0],
+            date_echeance: null,
+            type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : 'client',
+            id_client: hasPrefillClient ? prefillClientId : null,
+            id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : null,
+            lignes: [{ 
+              id_produit: '', 
+              quantite: undefined, 
+              prix_unitaire: undefined,
+              ajouter_paiement: false,
+              paiement_date: new Date().toISOString().split('T')[0],
+              paiement_montant: null,
+              paiement_type: 'cash',
+              paiement_numero_cheque: null,
+              paiement_banque: null,
+              paiement_reference: null,
+              paiement_notes: null,
+            }],
+          });
+        }
+        clearErrors();
       }
-      clearErrors();
-    }
+    };
+    
+    loadFormData();
   }, [open, initialValues, reset, clearErrors, prefillClientId, prefillFournisseurId]);
 
   // Nettoyer les erreurs serveur lorsque la modal se ferme
@@ -259,6 +370,7 @@ function TransactionForm({
     }, 0);
   };
 
+
   /**
    * Gère la soumission du formulaire.
    */
@@ -270,6 +382,7 @@ function TransactionForm({
         // Mode édition : on édite UNE seule transaction
         const transactionData = {
           date_transaction: data.date_transaction,
+          date_echeance: data.date_echeance || null,
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           id_produit: parseInt(data.lignes[0].id_produit),
@@ -278,11 +391,25 @@ function TransactionForm({
           est_actif: initialValues.est_actif !== undefined ? initialValues.est_actif : true,
         };
         
-        await onSubmit(transactionData);
+        // Passer aussi les données de paiement pour que le parent les gère
+        const paiementData = data.lignes[0].ajouter_paiement ? {
+          ajouter_paiement: true,
+          paiement_id: data.lignes[0].paiement_id || null,
+          paiement_date: data.lignes[0].paiement_date,
+          paiement_montant: parseFloat(data.lignes[0].paiement_montant),
+          paiement_type: data.lignes[0].paiement_type,
+          paiement_numero_cheque: data.lignes[0].paiement_numero_cheque || null,
+          paiement_banque: data.lignes[0].paiement_banque || null,
+          paiement_reference: data.lignes[0].paiement_reference || null,
+          paiement_notes: data.lignes[0].paiement_notes || null,
+        } : null;
+        
+        await onSubmit({ ...transactionData, paiement: paiementData });
       } else {
         // Mode création : on crée N transactions via l'endpoint batch
         const transactionsData = data.lignes.map((ligne) => ({
           date_transaction: data.date_transaction,
+          date_echeance: data.date_echeance || null,
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           id_produit: parseInt(ligne.id_produit),
@@ -291,8 +418,8 @@ function TransactionForm({
           est_actif: true,
         }));
         
-        // Appeler le callback onSubmit avec le tableau de transactions
-        await onSubmit({ batch: true, transactions: transactionsData });
+        // Appeler le callback onSubmit avec le tableau de transactions et les données des lignes (pour les paiements)
+        await onSubmit({ batch: true, transactions: transactionsData, lignesData: data.lignes });
       }
       
       // Si la soumission réussit, réinitialiser le formulaire
@@ -359,9 +486,23 @@ function TransactionForm({
    */
   const handleAddLine = () => {
     const currentLignes = watch('lignes') || [];
-    setValue('lignes', [...currentLignes, { id_produit: '', quantite: undefined, prix_unitaire: undefined }], {
+    setValue('lignes', [...currentLignes, { 
+      id_produit: '', 
+      quantite: undefined, 
+      prix_unitaire: undefined,
+      ajouter_paiement: false,
+      paiement_date: watch('date_transaction') || new Date().toISOString().split('T')[0],
+      paiement_montant: null,
+      paiement_type: 'cash',
+      paiement_numero_cheque: null,
+      paiement_banque: null,
+      paiement_reference: null,
+      paiement_notes: null,
+    }], {
       shouldDirty: true,
     });
+    // Expand le nouvel accordion
+    setExpandedAccordion(currentLignes.length);
   };
 
   /**
@@ -372,6 +513,13 @@ function TransactionForm({
     if (currentLignes.length > 1) {
       const newLignes = currentLignes.filter((_, i) => i !== index);
       setValue('lignes', newLignes, { shouldDirty: true });
+      
+      // Ajuster l'accordion expanded si nécessaire
+      if (expandedAccordion === index) {
+        setExpandedAccordion(0); // Expand la première ligne
+      } else if (expandedAccordion > index) {
+        setExpandedAccordion(expandedAccordion - 1); // Décaler l'index
+      }
     }
   };
 
@@ -462,6 +610,28 @@ function TransactionForm({
                     error={!!error}
                     helperText={error?.message || ''}
                     required
+                    disabled={loading}
+                    margin="normal"
+                    variant="outlined"
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                )}
+              />
+
+              {/* Date d'échéance (optionnel) */}
+              <Controller
+                name="date_echeance"
+                control={control}
+                render={({ field, fieldState: { error } }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Date d'échéance du paiement (optionnel)"
+                    type="date"
+                    error={!!error}
+                    helperText={error?.message || 'Date limite pour le paiement'}
                     disabled={loading}
                     margin="normal"
                     variant="outlined"
@@ -573,7 +743,7 @@ function TransactionForm({
                 />
               )}
 
-              {/* Lignes de transaction */}
+              {/* Lignes de transaction avec Accordions */}
               <Box sx={{ mt: 3, mb: 2 }}>
                 <Box
                   sx={{
@@ -603,47 +773,63 @@ function TransactionForm({
                   </Alert>
                 )}
 
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Produit</TableCell>
-                        <TableCell align="right">Quantité</TableCell>
-                        <TableCell align="right">Prix unitaire</TableCell>
-                        <TableCell align="right">Total</TableCell>
-                        {!isEditing && (
-                          <TableCell align="center" width={80}>
-                            Actions
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
+                {/* Accordions pour chaque ligne */}
                       {watchedLignes?.map((ligne, index) => {
                         const ligneTotal =
                           (parseFloat(ligne.quantite) || 0) *
                           (parseFloat(ligne.prix_unitaire) || 0);
+                  const produitNom = produits.find(p => p.id_produit === ligne.id_produit)?.nom_produit || 'Produit non sélectionné';
+                  
                         return (
-                          <TableRow key={index}>
-                            <TableCell>
+                    <Accordion 
+                      key={index}
+                      expanded={expandedAccordion === index}
+                      onChange={() => setExpandedAccordion(expandedAccordion === index ? -1 : index)}
+                      sx={{ mb: 1 }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', pr: 2 }}>
+                          <Chip 
+                            label={`Ligne ${index + 1}`} 
+                            size="small" 
+                            color="primary" 
+                            variant="outlined"
+                          />
+                          <Typography variant="body1" sx={{ flex: 1 }}>
+                            {produitNom}
+                          </Typography>
+                          <Typography variant="body2" fontWeight="bold" color="primary">
+                            {ligneTotal.toFixed(2)} MAD
+                          </Typography>
+                          {ligne.ajouter_paiement && (
+                            <Chip 
+                              icon={<PaymentIcon />}
+                              label="Avec paiement" 
+                              size="small" 
+                              color="success"
+                            />
+                          )}
+                        </Box>
+                      </AccordionSummary>
+                      
+                      <AccordionDetails>
+                        <Grid container spacing={2}>
+                          {/* Produit */}
+                          <Grid item xs={12}>
                               <Controller
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
-                                  <FormControl
-                                    fullWidth
-                                    size="small"
-                                    error={!!error}
-                                    disabled={loading}
-                                  >
+                                <FormControl fullWidth error={!!error} disabled={loading}>
+                                  <InputLabel>Produit *</InputLabel>
                                     <Select
                                       {...field}
                                       value={field.value || ''}
-                                      displayEmpty
+                                    label="Produit *"
                                       disabled={loading}
                                     >
                                       <MenuItem value="">
-                                        <em>Sélectionner</em>
+                                      <em>Sélectionner un produit</em>
                                       </MenuItem>
                                       {produits.map((produit) => (
                                         <MenuItem
@@ -662,78 +848,301 @@ function TransactionForm({
                                   </FormControl>
                                 )}
                               />
-                            </TableCell>
-                            <TableCell align="right">
+                          </Grid>
+
+                          {/* Quantité */}
+                          <Grid item xs={12} sm={6}>
                               <Controller
                                 name={`lignes.${index}.quantite`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
                                   <TextField
                                     {...field}
+                                    fullWidth
+                                    label="Quantité *"
                                     type="number"
-                                    size="small"
                                     inputProps={{ min: 1, step: 1 }}
                                     value={field.value ?? ''}
                                     error={!!error}
                                     helperText={error?.message || ''}
                                     disabled={loading}
-                                    sx={{ width: 100 }}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
+                                      // Mettre à jour le montant du paiement si paiement activé
+                                      if (ligne.ajouter_paiement) {
+                                        const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
+                                        setValue(`lignes.${index}.paiement_montant`, newTotal);
+                                      }
                                     }}
                                     onBlur={field.onBlur}
                                   />
                                 )}
                               />
-                            </TableCell>
-                            <TableCell align="right">
+                          </Grid>
+
+                          {/* Prix unitaire */}
+                          <Grid item xs={12} sm={6}>
                               <Controller
                                 name={`lignes.${index}.prix_unitaire`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
                                   <TextField
                                     {...field}
+                                    fullWidth
+                                    label="Prix unitaire (MAD) *"
                                     type="number"
-                                    size="small"
                                     inputProps={{ min: 0, step: 0.01 }}
                                     value={field.value ?? ''}
                                     error={!!error}
                                     helperText={error?.message || ''}
                                     disabled={loading}
-                                    sx={{ width: 120 }}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
+                                      // Mettre à jour le montant du paiement si paiement activé
+                                      if (ligne.ajouter_paiement) {
+                                        const newTotal = (parseFloat(ligne.quantite) || 0) * (parseFloat(value) || 0);
+                                        setValue(`lignes.${index}.paiement_montant`, newTotal);
+                                      }
                                     }}
                                     onBlur={field.onBlur}
                                   />
                                 )}
                               />
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body2">
+                          </Grid>
+
+                          {/* Total de cette ligne */}
+                          <Grid item xs={12}>
+                            <Box sx={{ p: 1.5, bgcolor: 'primary.50', borderRadius: 1 }}>
+                              <Typography variant="body2" color="text.secondary">
+                                Total de cette ligne
+                              </Typography>
+                              <Typography variant="h6" color="primary" fontWeight="bold">
                                 {ligneTotal.toFixed(2)} MAD
                               </Typography>
-                            </TableCell>
-                            {!isEditing && (
-                              <TableCell align="center">
-                                <IconButton
+                            </Box>
+                          </Grid>
+
+                          <Grid item xs={12}>
+                            <Divider />
+                          </Grid>
+
+                          {/* Section Paiement */}
+                          <Grid item xs={12}>
+                            <Controller
+                              name={`lignes.${index}.ajouter_paiement`}
+                              control={control}
+                              render={({ field }) => (
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      {...field}
+                                      checked={field.value || false}
+                                      disabled={loading}
+                                      onChange={(e) => {
+                                        field.onChange(e.target.checked);
+                                        // Pré-remplir le montant avec le total de la ligne
+                                        if (e.target.checked && ligneTotal > 0) {
+                                          setValue(`lignes.${index}.paiement_montant`, ligneTotal);
+                                          setValue(`lignes.${index}.paiement_date`, watch('date_transaction'));
+                                        }
+                                      }}
+                                    />
+                                  }
+                                  label={
+                                    <Box>
+                                      <Typography variant="subtitle2" fontWeight="medium">
+                                        💰 Ajouter un paiement pour cette ligne
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Le paiement sera créé en même temps que la transaction
+                                      </Typography>
+                                    </Box>
+                                  }
+                                />
+                              )}
+                            />
+
+                            {/* Champs de paiement conditionnels */}
+                            <Collapse in={ligne.ajouter_paiement}>
+                              <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderRadius: 1 }}>
+                                <Typography variant="subtitle2" gutterBottom color="success.dark">
+                                  📋 Informations du paiement
+                                </Typography>
+                                
+                                <Grid container spacing={2}>
+                                  {/* Date du paiement */}
+                                  <Grid item xs={12} sm={6}>
+                                    <Controller
+                                      name={`lignes.${index}.paiement_date`}
+                                      control={control}
+                                      render={({ field, fieldState: { error } }) => (
+                                        <TextField
+                                          {...field}
+                                          fullWidth
+                                          label="Date du paiement"
+                                          type="date"
+                                          error={!!error}
+                                          helperText={error?.message}
+                                          disabled={loading}
+                                          InputLabelProps={{ shrink: true }}
                                   size="small"
+                                        />
+                                      )}
+                                    />
+                                  </Grid>
+
+                                  {/* Montant */}
+                                  <Grid item xs={12} sm={6}>
+                                    <Controller
+                                      name={`lignes.${index}.paiement_montant`}
+                                      control={control}
+                                      render={({ field, fieldState: { error } }) => (
+                                        <TextField
+                                          {...field}
+                                          fullWidth
+                                          label="Montant (MAD)"
+                                          type="number"
+                                          error={!!error}
+                                          helperText={error?.message || `Max: ${ligneTotal.toFixed(2)} MAD`}
+                                          disabled={loading}
+                                          inputProps={{ step: '0.01', min: '0.01' }}
+                                          InputLabelProps={{ shrink: true }}
+                                          size="small"
+                                        />
+                                      )}
+                                    />
+                                  </Grid>
+
+                                  {/* Type de paiement */}
+                                  <Grid item xs={12}>
+                                    <Controller
+                                      name={`lignes.${index}.paiement_type`}
+                                      control={control}
+                                      render={({ field, fieldState: { error } }) => (
+                                        <TextField
+                                          {...field}
+                                          select
+                                          fullWidth
+                                          label="Type de paiement"
+                                          error={!!error}
+                                          helperText={error?.message}
+                                          disabled={loading}
+                                          size="small"
+                                        >
+                                          <MenuItem value="cash">💵 Espèces</MenuItem>
+                                          <MenuItem value="cheque">💳 Chèque</MenuItem>
+                                          <MenuItem value="virement">🏦 Virement</MenuItem>
+                                          <MenuItem value="carte">💳 Carte bancaire</MenuItem>
+                                          <MenuItem value="traite">📝 Traite</MenuItem>
+                                          <MenuItem value="compensation">↔️ Compensation</MenuItem>
+                                          <MenuItem value="autre">📄 Autre</MenuItem>
+                                        </TextField>
+                                      )}
+                                    />
+                                  </Grid>
+
+                                  {/* Champs conditionnels pour chèque */}
+                                  {ligne.paiement_type === 'cheque' && (
+                                    <>
+                                      <Grid item xs={12} sm={6}>
+                                        <Controller
+                                          name={`lignes.${index}.paiement_numero_cheque`}
+                                          control={control}
+                                          render={({ field }) => (
+                                            <TextField
+                                              {...field}
+                                              fullWidth
+                                              label="Numéro du chèque"
+                                              disabled={loading}
+                                              size="small"
+                                            />
+                                          )}
+                                        />
+                                      </Grid>
+                                      <Grid item xs={12} sm={6}>
+                                        <Controller
+                                          name={`lignes.${index}.paiement_banque`}
+                                          control={control}
+                                          render={({ field }) => (
+                                            <TextField
+                                              {...field}
+                                              fullWidth
+                                              label="Banque"
+                                              disabled={loading}
+                                              size="small"
+                                            />
+                                          )}
+                                        />
+                                      </Grid>
+                                    </>
+                                  )}
+
+                                  {/* Champs conditionnels pour virement */}
+                                  {ligne.paiement_type === 'virement' && (
+                                    <Grid item xs={12}>
+                                      <Controller
+                                        name={`lignes.${index}.paiement_reference`}
+                                        control={control}
+                                        render={({ field }) => (
+                                          <TextField
+                                            {...field}
+                                            fullWidth
+                                            label="Référence du virement"
+                                            disabled={loading}
+                                            size="small"
+                                            placeholder="Ex: VIR-2025-001234"
+                                          />
+                                        )}
+                                      />
+                                    </Grid>
+                                  )}
+
+                                  {/* Notes */}
+                                  <Grid item xs={12}>
+                                    <Controller
+                                      name={`lignes.${index}.paiement_notes`}
+                                      control={control}
+                                      render={({ field }) => (
+                                        <TextField
+                                          {...field}
+                                          fullWidth
+                                          label="Notes (optionnel)"
+                                          multiline
+                                          rows={2}
+                                          disabled={loading}
+                                          size="small"
+                                        />
+                                      )}
+                                    />
+                                  </Grid>
+                                </Grid>
+                              </Box>
+                            </Collapse>
+                          </Grid>
+
+                          {/* Bouton supprimer la ligne */}
+                          {!isEditing && watchedLignes.length > 1 && (
+                            <Grid item xs={12}>
+                              <Button
+                                startIcon={<DeleteIcon />}
                                   onClick={() => handleRemoveLine(index)}
-                                  disabled={loading || watchedLignes.length <= 1}
+                                disabled={loading}
                                   color="error"
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </TableCell>
+                                size="small"
+                                fullWidth
+                                variant="outlined"
+                              >
+                                Supprimer cette ligne
+                              </Button>
+                            </Grid>
                             )}
-                          </TableRow>
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
                         );
                       })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
 
                 {/* Montant total */}
                 <Box
@@ -754,7 +1163,8 @@ function TransactionForm({
                 
                 {!isEditing && watchedLignes.length > 1 && (
                   <Alert severity="info" sx={{ mt: 2 }}>
-                    {watchedLignes.length} transactions indépendantes seront créées (une par ligne)
+                    {watchedLignes.length} transactions indépendantes seront créées (une par ligne).
+                    Vous pouvez ajouter un paiement pour chacune dans son accordion.
                   </Alert>
                 )}
               </Box>

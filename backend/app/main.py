@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.config.logging_config import setup_logging
 from app.database import engine, Base
-from app.routers import auth, users, clients, fournisseurs, produits, transactions, caisse
+from app.routers import auth, users, clients, fournisseurs, produits, transactions, caisse, paiements
 from app.utils.rate_limit import limiter
 from app.middleware.logging_middleware import LoggingMiddleware
 
@@ -112,5 +112,6 @@ app.include_router(clients.router, prefix=settings.API_V1_PREFIX)
 app.include_router(fournisseurs.router, prefix=settings.API_V1_PREFIX)
 app.include_router(produits.router, prefix=settings.API_V1_PREFIX)
 app.include_router(transactions.router, prefix=settings.API_V1_PREFIX)
+app.include_router(paiements.router, prefix=settings.API_V1_PREFIX)
 app.include_router(caisse.router, prefix=settings.API_V1_PREFIX)
 

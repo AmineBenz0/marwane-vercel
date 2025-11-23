@@ -5,7 +5,7 @@ Gère les endpoints pour les mouvements, le solde et l'historique de la caisse.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, or_, and_
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -13,9 +13,11 @@ from app.database import get_db
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.transaction import Transaction
+from app.models.paiement import Paiement
 from app.schemas.caisse import (
     MouvementCaisseRead,
     SoldeCaisseRead,
+    SoldeCaisseCompletRead,
     HistoriqueSoldeRead
 )
 from app.utils.dependencies import get_current_active_user
@@ -91,7 +93,10 @@ def get_solde(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Récupère le solde actuel de la caisse calculé en temps réel.
+    Récupère le solde actuel de la caisse calculé en temps réel (THÉORIQUE).
+    
+    ⚠️ ATTENTION : Ce solde est basé sur les TRANSACTIONS, pas sur les paiements réels.
+    Pour avoir le solde réel basé sur les encaissements, utilisez /solde/complet
     
     Le solde est calculé comme la différence entre les entrées et les sorties :
     solde = somme(ENTREE) - somme(SORTIE)
@@ -135,6 +140,145 @@ def get_solde(
     return SoldeCaisseRead(
         solde_actuel=solde_actuel,
         derniere_maj=derniere_maj
+    )
+
+
+@router.get("/solde/complet", response_model=SoldeCaisseCompletRead, status_code=status.HTTP_200_OK)
+def get_solde_complet(
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """
+    Récupère une vision complète de la caisse avec deux perspectives :
+    
+    1. 💰 SOLDE THÉORIQUE (Expected) : Basé sur les transactions enregistrées
+       - Représente ce qui est "dû" (créances) et ce qui est "à payer" (dettes)
+       - Calculé à partir des mouvements de caisse liés aux transactions
+    
+    2. 💵 SOLDE RÉEL (Actual) : Basé sur les paiements effectivement encaissés
+       - Représente l'argent réellement entré/sorti de la caisse
+       - Calculé à partir des paiements validés et des chèques encaissés
+    
+    3. 📊 ÉCART : Différence entre théorique et réel
+       - Créances clients non encaissées
+       - Dettes fournisseurs non payées
+    
+    Args:
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié (via dépendance)
+        
+    Returns:
+        Vue complète du solde de la caisse (SoldeCaisseCompletRead)
+    """
+    
+    # ==================== SOLDE THÉORIQUE ====================
+    # Basé sur les transactions (mouvements de caisse)
+    
+    entrees_theoriques = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
+        Transaction, Caisse.id_transaction == Transaction.id_transaction
+    ).filter(
+        Caisse.type_mouvement == 'ENTREE',
+        Transaction.est_actif == True
+    ).scalar() or Decimal('0.00')
+    
+    sorties_theoriques = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
+        Transaction, Caisse.id_transaction == Transaction.id_transaction
+    ).filter(
+        Caisse.type_mouvement == 'SORTIE',
+        Transaction.est_actif == True
+    ).scalar() or Decimal('0.00')
+    
+    solde_theorique = Decimal(str(entrees_theoriques)) - Decimal(str(sorties_theoriques))
+    
+    # Date du dernier mouvement
+    derniere_maj_transaction = db.query(func.max(Caisse.date_mouvement)).join(
+        Transaction, Caisse.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.est_actif == True
+    ).scalar()
+    
+    # ==================== SOLDE RÉEL ====================
+    # Basé sur les paiements effectivement encaissés
+    
+    # Paiements clients (entrées réelles)
+    # Ne compter que les paiements valides et les chèques encaissés
+    entrees_reelles = db.query(func.coalesce(func.sum(Paiement.montant), 0)).join(
+        Transaction, Paiement.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.est_actif == True,
+        Transaction.id_client.isnot(None),  # Transactions clients
+        or_(
+            # Paiements non-chèque avec statut valide
+            and_(
+                Paiement.type_paiement != 'cheque',
+                Paiement.statut == 'valide'
+            ),
+            # Chèques encaissés
+            and_(
+                Paiement.type_paiement == 'cheque',
+                Paiement.statut_cheque == 'encaisse'
+            )
+        )
+    ).scalar() or Decimal('0.00')
+    
+    # Paiements fournisseurs (sorties réelles)
+    sorties_reelles = db.query(func.coalesce(func.sum(Paiement.montant), 0)).join(
+        Transaction, Paiement.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.est_actif == True,
+        Transaction.id_fournisseur.isnot(None),  # Transactions fournisseurs
+        or_(
+            # Paiements non-chèque avec statut valide
+            and_(
+                Paiement.type_paiement != 'cheque',
+                Paiement.statut == 'valide'
+            ),
+            # Chèques encaissés
+            and_(
+                Paiement.type_paiement == 'cheque',
+                Paiement.statut_cheque == 'encaisse'
+            )
+        )
+    ).scalar() or Decimal('0.00')
+    
+    solde_reel = Decimal(str(entrees_reelles)) - Decimal(str(sorties_reelles))
+    
+    # Date du dernier paiement
+    derniere_maj_paiement = db.query(func.max(Paiement.date_paiement)).join(
+        Transaction, Paiement.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.est_actif == True
+    ).scalar()
+    
+    # ==================== ÉCART ET DÉTAILS ====================
+    
+    ecart = solde_theorique - solde_reel
+    
+    # Créances clients = Transactions clients - Paiements clients
+    creances_clients = Decimal(str(entrees_theoriques)) - Decimal(str(entrees_reelles))
+    
+    # Dettes fournisseurs = Transactions fournisseurs - Paiements fournisseurs
+    dettes_fournisseurs = Decimal(str(sorties_theoriques)) - Decimal(str(sorties_reelles))
+    
+    return SoldeCaisseCompletRead(
+        # Solde théorique
+        solde_theorique=solde_theorique,
+        entrees_theoriques=Decimal(str(entrees_theoriques)),
+        sorties_theoriques=Decimal(str(sorties_theoriques)),
+        
+        # Solde réel
+        solde_reel=solde_reel,
+        entrees_reelles=Decimal(str(entrees_reelles)),
+        sorties_reelles=Decimal(str(sorties_reelles)),
+        
+        # Écart
+        ecart=ecart,
+        creances_clients=creances_clients,
+        dettes_fournisseurs=dettes_fournisseurs,
+        
+        # Métadonnées
+        derniere_maj_transaction=derniere_maj_transaction,
+        derniere_maj_paiement=derniere_maj_paiement
     )
 
 

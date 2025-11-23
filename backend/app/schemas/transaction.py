@@ -48,6 +48,10 @@ class TransactionBase(BaseModel):
         None,
         description="ID du fournisseur concerné (exclusion mutuelle avec id_client)"
     )
+    date_echeance: Optional[date] = Field(
+        None,
+        description="Date d'échéance du paiement (optionnelle)"
+    )
 
 
 class TransactionCreate(TransactionBase):
@@ -185,13 +189,23 @@ class TransactionUpdate(BaseModel):
 class TransactionRead(TransactionBase):
     """
     Schéma pour lire une transaction.
-    Inclut les champs générés automatiquement (id, dates, utilisateurs).
+    Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")
     date_creation: datetime = Field(..., description="Date de création de la transaction")
     date_modification: datetime = Field(..., description="Date de dernière modification")
     id_utilisateur_creation: Optional[int] = Field(None, description="ID de l'utilisateur qui a créé la transaction")
     id_utilisateur_modification: Optional[int] = Field(None, description="ID de l'utilisateur qui a modifié la transaction")
+    
+    # Champs de paiement (ajoutés pour la gestion des paiements)
+    date_echeance: Optional[date] = Field(None, description="Date d'échéance du paiement")
+    
+    # Champs calculés (via les propriétés @property du modèle Transaction)
+    montant_paye: Decimal = Field(default=Decimal('0'), description="Montant total payé (calculé)")
+    montant_restant: Decimal = Field(default=Decimal('0'), description="Montant restant à payer (calculé)")
+    statut_paiement: str = Field(default='impaye', description="Statut du paiement (calculé)")
+    est_en_retard: bool = Field(default=False, description="Indique si le paiement est en retard (calculé)")
+    pourcentage_paye: float = Field(default=0.0, description="Pourcentage du montant payé (calculé)")
 
     model_config = ConfigDict(from_attributes=True)
 

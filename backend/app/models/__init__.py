@@ -7,6 +7,7 @@ from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
 from app.models.transaction import Transaction
+from app.models.paiement import Paiement
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.audit import TransactionAudit, AuditConnexion
@@ -18,6 +19,7 @@ __all__ = [
     "Fournisseur",
     "Produit",
     "Transaction",
+    "Paiement",
     "Caisse",
     "CaisseSoldeHistorique",
     "TransactionAudit",

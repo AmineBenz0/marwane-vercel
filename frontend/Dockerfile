@@ -1,16 +1,22 @@
 # Stage 1: Build
 FROM node:18-alpine AS builder
 
+# Argument de build pour l'URL de l'API
+ARG VITE_API_URL=http://localhost:8000
+
 WORKDIR /app
 
 # Copier package.json et package-lock.json
 COPY package*.json ./
 
-# Installer les dépendances
-RUN npm ci --only=production
+# Installer TOUTES les dépendances (y compris devDependencies pour le build)
+RUN npm ci
 
 # Copier le code source
 COPY . .
+
+# Définir la variable d'environnement pour le build
+ENV VITE_API_URL=$VITE_API_URL
 
 # Build de production
 RUN npm run build

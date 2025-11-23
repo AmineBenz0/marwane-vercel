@@ -32,11 +32,33 @@ import {
 import {
   ArrowBack as ArrowBackIcon,
   History as HistoryIcon,
+  Add as AddIcon,
+  AttachMoney as AttachMoneyIcon,
+  TrendingUp as TrendingUpIcon,
+  AccountBalance as AccountBalanceIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { get } from '../../services/api';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  LinearProgress,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import { get, post, put, del } from '../../services/api';
 import { format } from 'date-fns';
 import fr from 'date-fns/locale/fr';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
+import PaymentStatusBadge from '../../components/PaymentStatusBadge';
+import PaymentTypeBadge from '../../components/PaymentTypeBadge';
+import PaiementForm from '../../components/PaiementForm';
+import useNotification from '../../hooks/useNotification';
+import { useForm } from 'react-hook-form';
 
 /**
  * Composant TransactionDetail.
@@ -47,11 +69,18 @@ function TransactionDetail() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  const notification = useNotification();
+  
   // États pour les données
   const [transaction, setTransaction] = useState(null);
   const [auditHistory, setAuditHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // États pour les paiements
+  const [paiements, setPaiements] = useState([]);
+  const [statutPaiement, setStatutPaiement] = useState(null);
+  const [loadingPaiements, setLoadingPaiements] = useState(false);
 
   // États pour les données de référence
   const [produits, setProduits] = useState([]);
@@ -62,6 +91,15 @@ function TransactionDetail() {
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
   const [fullAuditHistory, setFullAuditHistory] = useState([]);
   const [loadingFullAudit, setLoadingFullAudit] = useState(false);
+
+  // État pour la modal d'ajout/édition de paiement
+  const [paiementDialogOpen, setPaiementDialogOpen] = useState(false);
+  const [editingPaiement, setEditingPaiement] = useState(null);
+  
+  // État pour la confirmation de suppression de paiement
+  const [deletePaiementDialogOpen, setDeletePaiementDialogOpen] = useState(false);
+  const [paiementToDelete, setPaiementToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   /**
    * Crée des maps de lookup pour produits, clients et fournisseurs.
@@ -127,6 +165,45 @@ function TransactionDetail() {
   };
 
   /**
+   * Charge les paiements de la transaction.
+   */
+  const fetchPaiements = async () => {
+    setLoadingPaiements(true);
+    try {
+      const data = await get(`/paiements`, {
+        params: { id_transaction: id },
+      });
+      setPaiements(data || []);
+    } catch (err) {
+      console.error('Erreur lors du chargement des paiements:', err);
+    } finally {
+      setLoadingPaiements(false);
+    }
+  };
+
+  /**
+   * Charge le statut de paiement de la transaction.
+   */
+  const fetchStatutPaiement = async () => {
+    try {
+      const data = await get(`/paiements/transaction/${id}/statut`);
+      setStatutPaiement(data);
+    } catch (err) {
+      console.error('Erreur lors du chargement du statut de paiement:', err);
+    }
+  };
+
+  /**
+   * Rafraîchit les données de paiement.
+   */
+  const refreshPaiements = async () => {
+    await Promise.all([
+      fetchPaiements(),
+      fetchStatutPaiement(),
+    ]);
+  };
+
+  /**
    * Charge l'historique d'audit récent (5 derniers).
    */
   const fetchAuditHistory = async () => {
@@ -162,6 +239,8 @@ function TransactionDetail() {
       fetchReferenceData();
       fetchTransaction();
       fetchAuditHistory();
+      fetchPaiements();
+      fetchStatutPaiement();
     }
   }, [id]);
 
@@ -238,6 +317,156 @@ function TransactionDetail() {
    */
   const handleCloseAuditDialog = () => {
     setAuditDialogOpen(false);
+  };
+
+  /**
+   * Configuration du formulaire de paiement avec react-hook-form.
+   */
+  const {
+    register: registerPaiement,
+    handleSubmit: handleSubmitPaiement,
+    formState: { errors: paiementErrors, isSubmitting: isPaiementSubmitting },
+    watch: watchPaiement,
+    reset: resetPaiement,
+    setValue: setValuePaiement,
+  } = useForm({
+    defaultValues: {
+      date_paiement: format(new Date(), 'yyyy-MM-dd'),
+      montant: 0,
+      type_paiement: 'cash',
+      statut_cheque: 'a_encaisser',
+    },
+  });
+
+  /**
+   * Ouvre le dialog pour éditer un paiement existant.
+   */
+  const handleEditPaiement = (paiement) => {
+    setEditingPaiement(paiement);
+    resetPaiement({
+      date_paiement: format(new Date(paiement.date_paiement), 'yyyy-MM-dd'),
+      montant: parseFloat(paiement.montant),
+      type_paiement: paiement.type_paiement,
+      numero_cheque: paiement.numero_cheque || '',
+      banque: paiement.banque || '',
+      date_encaissement_prevue: paiement.date_encaissement_prevue 
+        ? format(new Date(paiement.date_encaissement_prevue), 'yyyy-MM-dd')
+        : '',
+      statut_cheque: paiement.statut_cheque || 'a_encaisser',
+      reference_virement: paiement.reference_virement || '',
+      notes: paiement.notes || '',
+    });
+    setPaiementDialogOpen(true);
+  };
+
+  /**
+   * Ouvre le dialog de confirmation de suppression.
+   */
+  const handleDeletePaiementClick = (paiement) => {
+    setPaiementToDelete(paiement);
+    setDeletePaiementDialogOpen(true);
+  };
+
+  /**
+   * Supprime un paiement.
+   */
+  const handleConfirmDeletePaiement = async () => {
+    if (!paiementToDelete) return;
+
+    setDeleteLoading(true);
+    try {
+      await del(`/paiements/${paiementToDelete.id_paiement}`);
+      
+      // Rafraîchir les données
+      await refreshPaiements();
+      
+      // Fermer le dialog
+      setDeletePaiementDialogOpen(false);
+      setPaiementToDelete(null);
+      
+      notification.success('Paiement supprimé avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la suppression du paiement:', err);
+      notification.error(err?.message || 'Une erreur est survenue lors de la suppression du paiement');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  /**
+   * Gère la soumission du formulaire de paiement (création ou modification).
+   */
+  const onSubmitPaiement = async (data) => {
+    try {
+      // Préparer les données
+      const paiementData = {
+        date_paiement: data.date_paiement,
+        montant: parseFloat(data.montant),
+        type_paiement: data.type_paiement,
+        notes: data.notes || null,
+      };
+
+      // Ajouter les champs spécifiques selon le type
+      if (data.type_paiement === 'cheque') {
+        paiementData.numero_cheque = data.numero_cheque || null;
+        paiementData.banque = data.banque || null;
+        paiementData.date_encaissement_prevue = data.date_encaissement_prevue || null;
+        paiementData.statut_cheque = data.statut_cheque || 'a_encaisser';
+      } else if (data.type_paiement === 'virement') {
+        paiementData.reference_virement = data.reference_virement || null;
+      }
+
+      // Mode édition ou création
+      if (editingPaiement) {
+        // Modification
+        await put(`/paiements/${editingPaiement.id_paiement}`, paiementData);
+        notification.success('Paiement modifié avec succès');
+      } else {
+        // Création
+        paiementData.id_transaction = parseInt(id);
+        await post('/paiements', paiementData);
+        notification.success('Paiement ajouté avec succès');
+      }
+
+      // Rafraîchir les données
+      await refreshPaiements();
+
+      // Fermer la modal et réinitialiser le formulaire
+      setPaiementDialogOpen(false);
+      setEditingPaiement(null);
+      resetPaiement();
+    } catch (err) {
+      console.error('Erreur lors de la soumission du paiement:', err);
+      notification.error(err?.message || 'Une erreur est survenue lors de l\'enregistrement du paiement');
+    }
+  };
+
+  /**
+   * Gère la fermeture de la modal de paiement.
+   */
+  const handleClosePaiementDialog = () => {
+    setPaiementDialogOpen(false);
+    setEditingPaiement(null);
+    resetPaiement();
+  };
+
+  /**
+   * Gère l'ouverture de la modal d'ajout de paiement (nouveau).
+   */
+  const handleAddPaiement = () => {
+    setEditingPaiement(null);
+    resetPaiement({
+      date_paiement: format(new Date(), 'yyyy-MM-dd'),
+      montant: statutPaiement?.montant_restant || 0,
+      type_paiement: 'cash',
+      statut_cheque: 'a_encaisser',
+      numero_cheque: '',
+      banque: '',
+      date_encaissement_prevue: '',
+      reference_virement: '',
+      notes: '',
+    });
+    setPaiementDialogOpen(true);
   };
 
   if (loading) {
@@ -453,6 +682,264 @@ function TransactionDetail() {
         </CardContent>
       </Card>
 
+      {/* État du paiement */}
+      {statutPaiement && (
+        <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+            <Typography 
+              variant="h6" 
+              gutterBottom
+              sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' }, mb: { xs: 2, sm: 2.5 } }}
+            >
+              💰 État du Paiement
+            </Typography>
+
+            {/* Barre de progression */}
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Progression du paiement
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  {statutPaiement.pourcentage_paye.toFixed(1)}%
+                </Typography>
+              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={Math.min(statutPaiement.pourcentage_paye, 100)}
+                sx={{ 
+                  height: 10, 
+                  borderRadius: 5,
+                  backgroundColor: 'grey.200',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 5,
+                    backgroundColor: 
+                      statutPaiement.pourcentage_paye >= 100 ? 'success.main' :
+                      statutPaiement.pourcentage_paye >= 50 ? 'warning.main' : 'error.main'
+                  }
+                }}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {formatMontant(statutPaiement.montant_paye)} payé
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {formatMontant(statutPaiement.montant_total)} total
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* KPIs Paiement */}
+            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ 
+                  p: { xs: 1.5, sm: 2 }, 
+                  bgcolor: 'grey.50', 
+                  borderRadius: 1,
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Montant dû
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
+                    {formatMontant(statutPaiement.montant_total)}
+                  </Typography>
+                </Box>
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ 
+                  p: { xs: 1.5, sm: 2 }, 
+                  bgcolor: 'success.50', 
+                  borderRadius: 1,
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="caption" color="success.dark">
+                    Montant payé
+                  </Typography>
+                  <Typography variant="h6" color="success.main" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
+                    {formatMontant(statutPaiement.montant_paye)}
+                  </Typography>
+                </Box>
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ 
+                  p: { xs: 1.5, sm: 2 }, 
+                  bgcolor: statutPaiement.montant_restant > 0 ? 'error.50' : 'success.50',
+                  borderRadius: 1,
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="caption" color={statutPaiement.montant_restant > 0 ? 'error.dark' : 'success.dark'}>
+                    Montant restant
+                  </Typography>
+                  <Typography 
+                    variant="h6" 
+                    color={statutPaiement.montant_restant > 0 ? 'error.main' : 'success.main'}
+                    sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
+                  >
+                    {formatMontant(statutPaiement.montant_restant)}
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+
+            {/* Badges de statut */}
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+              <PaymentStatusBadge statut={statutPaiement.statut_paiement} size="medium" />
+              {transaction.date_echeance && (
+                <Chip 
+                  label={`Échéance: ${formatDate(transaction.date_echeance)}`}
+                  size="small"
+                  color={statutPaiement.est_en_retard ? 'error' : 'default'}
+                  variant={statutPaiement.est_en_retard ? 'filled' : 'outlined'}
+                />
+              )}
+              {statutPaiement.nombre_paiements > 0 && (
+                <Chip 
+                  label={`${statutPaiement.nombre_paiements} paiement${statutPaiement.nombre_paiements > 1 ? 's' : ''}`}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Historique des paiements */}
+      {statutPaiement && (
+        <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: { xs: 'column', sm: 'row' },
+              justifyContent: 'space-between', 
+              alignItems: { xs: 'stretch', sm: 'center' }, 
+              mb: { xs: 1.5, sm: 2 },
+              gap: { xs: 1.5, sm: 0 }
+            }}>
+              <Typography 
+                variant="h6"
+                sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
+              >
+                📋 Historique des Paiements
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddPaiement}
+                disabled={statutPaiement.montant_restant <= 0}
+                size={isMobile ? 'small' : 'medium'}
+                fullWidth={isMobile}
+              >
+                Ajouter un paiement
+              </Button>
+            </Box>
+            <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
+            
+            {loadingPaiements ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress size={30} />
+              </Box>
+            ) : paiements && paiements.length > 0 ? (
+              <TableContainer>
+                  <Table size={isMobile ? 'small' : 'medium'}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell align="right">Montant</TableCell>
+                      {!isMobile && <TableCell>Type</TableCell>}
+                      {!isMobile && <TableCell>Référence</TableCell>}
+                      <TableCell>Statut</TableCell>
+                      <TableCell align="center">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paiements.map((paiement) => (
+                      <TableRow key={paiement.id_paiement}>
+                        <TableCell>{formatDate(paiement.date_paiement)}</TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight="medium" color="success.main">
+                            {formatMontant(paiement.montant)}
+                          </Typography>
+                        </TableCell>
+                        {!isMobile && (
+                          <TableCell>
+                            <PaymentTypeBadge type={paiement.type_paiement} />
+                          </TableCell>
+                        )}
+                        {!isMobile && (
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                              {paiement.numero_cheque || paiement.reference_virement || '-'}
+                            </Typography>
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          {paiement.type_paiement === 'cheque' && paiement.statut_cheque ? (
+                            <Chip 
+                              label={paiement.statut_cheque}
+                              size="small"
+                              color={paiement.statut_cheque === 'encaisse' ? 'success' : 'default'}
+                            />
+                          ) : (
+                            <Chip 
+                              label={paiement.statut}
+                              size="small"
+                              color={paiement.statut === 'valide' ? 'success' : 'default'}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                            <Tooltip title="Modifier">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleEditPaiement(paiement)}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Supprimer">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeletePaiementClick(paiement)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 3 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Aucun paiement enregistré pour cette transaction
+                </Typography>
+                {statutPaiement.montant_restant > 0 && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={handleAddPaiement}
+                    sx={{ mt: 2 }}
+                    size="small"
+                  >
+                    Ajouter le premier paiement
+                  </Button>
+                )}
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Historique d'audit */}
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
@@ -622,6 +1109,107 @@ function TransactionDetail() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseAuditDialog}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal d'ajout/édition de paiement */}
+      <Dialog
+        open={paiementDialogOpen}
+        onClose={handleClosePaiementDialog}
+        maxWidth="md"
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <form onSubmit={handleSubmitPaiement(onSubmitPaiement)}>
+          <DialogTitle>
+            <Typography variant="h6" component="span">
+              {editingPaiement ? '✏️ Modifier le Paiement' : '➕ Ajouter un Paiement'}
+            </Typography>
+            {statutPaiement && !editingPaiement && (
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                Transaction #{id} - Montant restant: {formatMontant(statutPaiement.montant_restant)}
+              </Typography>
+            )}
+            {editingPaiement && (
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                Paiement #{editingPaiement.id_paiement}
+              </Typography>
+            )}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 1 }}>
+              <PaiementForm
+                defaultValues={{}}
+                transaction={statutPaiement}
+                register={registerPaiement}
+                errors={paiementErrors}
+                watch={watchPaiement}
+                setValue={setValuePaiement}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, gap: 1 }}>
+            <Button 
+              onClick={handleClosePaiementDialog}
+              disabled={isPaiementSubmitting}
+            >
+              Annuler
+            </Button>
+            <Button 
+              type="submit"
+              variant="contained"
+              disabled={isPaiementSubmitting}
+            >
+              {isPaiementSubmitting ? 'Enregistrement...' : (editingPaiement ? 'Modifier' : 'Enregistrer')}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Dialog de confirmation de suppression de paiement */}
+      <Dialog
+        open={deletePaiementDialogOpen}
+        onClose={() => !deleteLoading && setDeletePaiementDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Êtes-vous sûr de vouloir supprimer ce paiement ?
+          </Typography>
+          {paiementToDelete && (
+            <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
+              <Typography variant="body2">
+                <strong>Montant :</strong> {formatMontant(paiementToDelete.montant)}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Date :</strong> {formatDate(paiementToDelete.date_paiement)}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Type :</strong> {paiementToDelete.type_paiement}
+              </Typography>
+            </Box>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Cette action est irréversible. Le montant restant sera recalculé automatiquement.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeletePaiementDialogOpen(false)}
+            disabled={deleteLoading}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleConfirmDeletePaiement}
+            color="error"
+            variant="contained"
+            disabled={deleteLoading}
+          >
+            {deleteLoading ? 'Suppression...' : 'Supprimer'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

@@ -35,6 +35,12 @@ import {
   Refresh as RefreshIcon,
   FileDownload as FileDownloadIcon,
   PictureAsPdf as PictureAsPdfIcon,
+  AccountBalanceWallet as WalletIcon,
+  AttachMoney as MoneyIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckIcon,
 } from '@mui/icons-material';
 import MobileCardList from '../../components/MobileCardList/MobileCardList';
 import {
@@ -159,6 +165,7 @@ function Caisse() {
   
   // États pour les données
   const [solde, setSolde] = useState(0);
+  const [soldeComplet, setSoldeComplet] = useState(null); // Double vision : théorique + réel
   const [derniereMaj, setDerniereMaj] = useState(null);
   const [mouvements, setMouvements] = useState([]);
   const [chartData, setChartData] = useState([]);
@@ -249,12 +256,12 @@ function Caisse() {
       
       // Charger toutes les données en parallèle
       const [
-        soldeResponse,
+        soldeCompletResponse,
         mouvementsResponse,
         mouvements30JoursResponse,
       ] = await Promise.all([
-        // 1. Solde actuel
-        get('/caisse/solde'),
+        // 1. Solde complet (théorique + réel)
+        get('/caisse/solde/complet'),
         
         // 2. Mouvements récents (avec filtres ou 30 derniers jours)
         get('/caisse/mouvements', {
@@ -271,9 +278,10 @@ function Caisse() {
         }),
       ]);
       
-      // Traiter le solde
-      setSolde(parseFloat(soldeResponse.solde_actuel || 0));
-      setDerniereMaj(soldeResponse.derniere_maj);
+      // Traiter le solde complet
+      setSoldeComplet(soldeCompletResponse);
+      setSolde(parseFloat(soldeCompletResponse.solde_theorique || 0)); // Pour la compatibilité avec le graphique
+      setDerniereMaj(soldeCompletResponse.derniere_maj_transaction);
       
       // Traiter les mouvements récents
       const mouvementsData = mouvementsResponse || [];
@@ -284,7 +292,7 @@ function Caisse() {
       const chartDataFormatted = calculateBalanceEvolution(
         mouvements30Jours,
         dateDebut30Jours,
-        parseFloat(soldeResponse.solde_actuel || 0)
+        parseFloat(soldeCompletResponse.solde_theorique || 0)
       );
       setChartData(chartDataFormatted);
       
@@ -445,33 +453,310 @@ function Caisse() {
         </Box>
       )}
       
-      {/* Solde actuel en évidence */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-        <Grid item xs={12} md={6}>
-          <StatCard
-            title="Solde actuel de la caisse"
-            value={solde}
-            icon={<AccountBalanceIcon />}
-            color="primary"
-            valueFormat="currency"
-            currency="MAD"
-          />
-        </Grid>
-        {derniereMaj && (
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Dernière mise à jour
-                </Typography>
-                <Typography variant="h6">
-                  {format(parseISO(derniereMaj), "dd MMMM yyyy 'à' HH:mm", { locale: fr })}
-                </Typography>
-              </CardContent>
-            </Card>
+      {/* Double Vision de la Caisse : Théorique vs Réel */}
+      {soldeComplet && (
+        <>
+          {/* Soldes Théorique et Réel */}
+          <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
+            {/* Solde Théorique */}
+            <Grid item xs={12} md={6}>
+              <Card 
+                elevation={3}
+                sx={{
+                  height: '100%',
+                  border: '1px solid',
+                  borderColor: 'primary.light'
+                }}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                    <Box display="flex" alignItems="center">
+                      <WalletIcon color="primary" sx={{ mr: 1, fontSize: { xs: 28, md: 32 } }} />
+                      <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}>
+                        Solde Théorique
+                      </Typography>
+                    </Box>
+                    <Chip 
+                      label="Expected" 
+                      color="primary" 
+                      size="small" 
+                      variant="outlined"
+                    />
+                  </Box>
+                  
+                  <Typography 
+                    variant="h3" 
+                    sx={{ 
+                      color: parseFloat(soldeComplet.solde_theorique) >= 0 ? 'success.main' : 'error.main',
+                      fontWeight: 'bold',
+                      mb: 1,
+                      fontSize: { xs: '1.75rem', sm: '2.25rem', md: '3rem' }
+                    }}
+                  >
+                    {formatCurrency(parseFloat(soldeComplet.solde_theorique))}
+                  </Typography>
+                  
+                  <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                    Basé sur les transactions enregistrées
+                  </Typography>
+                  
+                  <Divider sx={{ my: 2 }} />
+                  
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                      <Box display="flex" alignItems="center">
+                        <TrendingUpIcon fontSize="small" sx={{ color: 'success.main', mr: 1 }} />
+                        <Typography variant="body2">Entrées (Ventes)</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatCurrency(parseFloat(soldeComplet.entrees_theoriques))}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Box display="flex" alignItems="center">
+                        <TrendingDownIcon fontSize="small" sx={{ color: 'error.main', mr: 1 }} />
+                        <Typography variant="body2">Sorties (Achats)</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatCurrency(parseFloat(soldeComplet.sorties_theoriques))}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Solde Réel */}
+            <Grid item xs={12} md={6}>
+              <Card 
+                elevation={3}
+                sx={{ 
+                  height: '100%',
+                  border: '3px solid',
+                  borderColor: 'success.main',
+                  backgroundColor: 'rgba(76, 175, 80, 0.05)'
+                }}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                    <Box display="flex" alignItems="center">
+                      <MoneyIcon color="success" sx={{ mr: 1, fontSize: { xs: 28, md: 32 } }} />
+                      <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}>
+                        Solde Réel
+                      </Typography>
+                    </Box>
+                    <Chip 
+                      label="CASH FLOW" 
+                      color="success" 
+                      size="small"
+                    />
+                  </Box>
+                  
+                  <Typography 
+                    variant="h3" 
+                    sx={{ 
+                      color: parseFloat(soldeComplet.solde_reel) >= 0 ? 'success.main' : 'error.main',
+                      fontWeight: 'bold',
+                      mb: 1,
+                      fontSize: { xs: '1.75rem', sm: '2.25rem', md: '3rem' }
+                    }}
+                  >
+                    {formatCurrency(parseFloat(soldeComplet.solde_reel))}
+                  </Typography>
+                  
+                  <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                    💵 Argent réellement disponible (paiements encaissés)
+                  </Typography>
+                  
+                  <Divider sx={{ my: 2 }} />
+                  
+                  <Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                      <Box display="flex" alignItems="center">
+                        <TrendingUpIcon fontSize="small" sx={{ color: 'success.main', mr: 1 }} />
+                        <Typography variant="body2">Encaissé</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatCurrency(parseFloat(soldeComplet.entrees_reelles))}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Box display="flex" alignItems="center">
+                        <TrendingDownIcon fontSize="small" sx={{ color: 'error.main', mr: 1 }} />
+                        <Typography variant="body2">Décaissé</Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatCurrency(parseFloat(soldeComplet.sorties_reelles))}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
           </Grid>
-        )}
-      </Grid>
+
+          {/* KPIs - Vue uniforme */}
+          <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
+            {/* Écart */}
+            <Grid item xs={12} sm={6} md={4}>
+              <Card 
+                elevation={2}
+                sx={{
+                  borderLeft: '4px solid',
+                  borderLeftColor: 
+                    Math.abs(parseFloat(soldeComplet.ecart) / parseFloat(soldeComplet.solde_theorique || 1)) * 100 < 10 
+                      ? 'success.light' 
+                      : Math.abs(parseFloat(soldeComplet.ecart) / parseFloat(soldeComplet.solde_theorique || 1)) * 100 < 30 
+                        ? 'warning.light' 
+                        : 'error.light'
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    📊 Écart
+                  </Typography>
+                  <Typography variant="h3" color="primary.main" gutterBottom>
+                    {formatCurrency(parseFloat(soldeComplet.ecart))}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Théorique - Réel
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Créances Clients */}
+            <Grid item xs={12} sm={6} md={4}>
+              <Card 
+                elevation={2}
+                sx={{
+                  borderLeft: '4px solid',
+                  borderLeftColor: 'warning.light'
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    💰 Créances Clients
+                  </Typography>
+                  <Typography variant="h3" color="primary.main" gutterBottom>
+                    {formatCurrency(parseFloat(soldeComplet.creances_clients))}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {parseFloat(soldeComplet.creances_clients) > 0 
+                      ? 'À encaisser auprès des clients'
+                      : 'Tous les clients sont à jour'
+                    }
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Dettes Fournisseurs */}
+            <Grid item xs={12} sm={6} md={4}>
+              <Card 
+                elevation={2}
+                sx={{
+                  borderLeft: '4px solid',
+                  borderLeftColor: 'error.light'
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    💸 Dettes Fournisseurs
+                  </Typography>
+                  <Typography variant="h3" color="primary.main" gutterBottom>
+                    {formatCurrency(parseFloat(soldeComplet.dettes_fournisseurs))}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {parseFloat(soldeComplet.dettes_fournisseurs) > 0 
+                      ? 'À payer aux fournisseurs'
+                      : 'Tous les fournisseurs sont payés'
+                    }
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Taux d'Encaissement */}
+            <Grid item xs={12} sm={6} md={4}>
+              <Card 
+                elevation={2}
+                sx={{
+                  borderLeft: '4px solid',
+                  borderLeftColor: 'primary.light'
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Taux d'Encaissement
+                  </Typography>
+                  <Typography variant="h3" color="primary.main" gutterBottom>
+                    {parseFloat(soldeComplet.entrees_theoriques) > 0 
+                      ? Math.round((parseFloat(soldeComplet.entrees_reelles) / parseFloat(soldeComplet.entrees_theoriques)) * 100)
+                      : 0
+                    }%
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Paiements encaissés / Ventes totales
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Créances / Ventes */}
+            <Grid item xs={12} sm={6} md={4}>
+              <Card 
+                elevation={2}
+                sx={{
+                  borderLeft: '4px solid',
+                  borderLeftColor: 'primary.light'
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Créances / Ventes
+                  </Typography>
+                  <Typography variant="h3" color="primary.main" gutterBottom>
+                    {parseFloat(soldeComplet.entrees_theoriques) > 0 
+                      ? Math.round((parseFloat(soldeComplet.creances_clients) / parseFloat(soldeComplet.entrees_theoriques)) * 100)
+                      : 0
+                    }%
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Part des ventes non encaissées
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Dettes / Achats */}
+            <Grid item xs={12} sm={6} md={4}>
+              <Card 
+                elevation={2}
+                sx={{
+                  borderLeft: '4px solid',
+                  borderLeftColor: 'primary.light'
+                }}
+              >
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Dettes / Achats
+                  </Typography>
+                  <Typography variant="h3" color="primary.main" gutterBottom>
+                    {parseFloat(soldeComplet.sorties_theoriques) > 0 
+                      ? Math.round((parseFloat(soldeComplet.dettes_fournisseurs) / parseFloat(soldeComplet.sorties_theoriques)) * 100)
+                      : 0
+                    }%
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Part des achats non payés
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </>
+      )}
       
       {/* Filtres avec SmartFilterPanel */}
       <SmartFilterPanel

@@ -154,3 +154,75 @@ class FournisseurStatsMensuelles(BaseModel):
     """
     periode: str = Field(..., description="Période sélectionnée (6_mois ou 12_mois)")
     data: List[FournisseurStatsMensuellesItem] = Field(..., description="Liste des statistiques par mois")
+
+
+class ProduitVendu(BaseModel):
+    """
+    Schéma pour un produit vendu par un fournisseur avec ses statistiques.
+    """
+    id_produit: int = Field(..., description="Identifiant du produit")
+    nom_produit: str = Field(..., description="Nom du produit")
+    quantite_totale: int = Field(..., description="Quantité totale vendue")
+    montant_total: Decimal = Field(..., description="Montant total reçu pour ce produit")
+    nombre_ventes: int = Field(..., description="Nombre de fois que ce produit a été vendu")
+    prix_moyen: Decimal = Field(..., description="Prix moyen de vente (montant_total / quantite_totale)")
+    derniere_date_vente: Optional[date] = Field(None, description="Date de la dernière vente de ce produit")
+    premiere_date_vente: Optional[date] = Field(None, description="Date de la première vente de ce produit")
+
+
+class FournisseurProduitsVendus(BaseModel):
+    """
+    Schéma pour la liste des produits vendus par un fournisseur avec statistiques globales.
+    """
+    fournisseur_id: int = Field(..., description="Identifiant du fournisseur")
+    nombre_produits_differents: int = Field(..., description="Nombre de produits différents vendus")
+    quantite_totale_tous_produits: int = Field(..., description="Quantité totale tous produits confondus")
+    montant_total_tous_produits: Decimal = Field(..., description="Montant total reçu tous produits confondus")
+    produits: List[ProduitVendu] = Field(default_factory=list, description="Liste des produits vendus")
+
+
+class FournisseurInsightsFinanciers(BaseModel):
+    """
+    Schéma pour les insights financiers avancés d'un fournisseur.
+    """
+    taux_paiement: float = Field(0.0, description="Pourcentage du montant total qui a été payé (0-100)")
+    montant_impaye: Decimal = Field(Decimal('0'), description="Montant total impayé (factures)")
+    delai_moyen_paiement: Optional[float] = Field(None, description="Délai moyen en jours entre transaction et paiement")
+    frequence_moyenne: Optional[float] = Field(None, description="Nombre de jours moyens entre deux transactions")
+    jours_depuis_derniere_transaction: Optional[int] = Field(None, description="Nombre de jours depuis la dernière transaction")
+    nombre_transactions_en_retard: int = Field(0, description="Nombre de transactions avec paiement en retard")
+    montant_en_retard: Decimal = Field(Decimal('0'), description="Montant total des transactions en retard")
+    tendance: Optional[str] = Field(None, description="Tendance des achats: 'hausse', 'baisse', ou 'stable'")
+
+
+class FournisseurScore(BaseModel):
+    """
+    Schéma pour le score de performance d'un fournisseur.
+    
+    Le score est calculé sur 100 points basé sur :
+    - Taux de paiement de notre part (40 points) : Notre fiabilité de paiement
+    - Respect de nos engagements (30 points) : Ratio de paiements à l'heure
+    - Régularité de collaboration (20 points) : Fréquence et constance des commandes
+    - Ancienneté de la relation (10 points) : Durée de la relation commerciale
+    """
+    score_total: float = Field(..., ge=0, le=100, description="Score total sur 100")
+    
+    # Détail des composantes du score
+    score_paiement: float = Field(..., ge=0, le=40, description="Score basé sur notre taux de paiement (max 40)")
+    score_delais: float = Field(..., ge=0, le=30, description="Score basé sur notre respect des délais (max 30)")
+    score_regularite: float = Field(..., ge=0, le=20, description="Score basé sur la régularité des commandes (max 20)")
+    score_anciennete: float = Field(..., ge=0, le=10, description="Score basé sur l'ancienneté (max 10)")
+    
+    # Catégorisation et interprétation
+    categorie: str = Field(..., description="Catégorie: 'excellent', 'bon', 'moyen', 'risque'")
+    label: str = Field(..., description="Label lisible: 'Excellent', 'Bon', 'Moyen', 'À risque'")
+    couleur: str = Field(..., description="Couleur associée: 'success', 'info', 'warning', 'error'")
+    
+    # Métriques utilisées pour le calcul
+    taux_paiement: float = Field(..., description="Notre taux de paiement (0-100)")
+    taux_respect_delais: float = Field(..., description="Notre taux de paiements sans retard (0-100)")
+    frequence_jours: Optional[float] = Field(None, description="Fréquence moyenne entre commandes en jours")
+    anciennete_mois: Optional[int] = Field(None, description="Nombre de mois depuis première commande")
+    
+    # Recommandations
+    recommandation: Optional[str] = Field(None, description="Recommandation basée sur le score")

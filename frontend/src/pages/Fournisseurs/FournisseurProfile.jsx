@@ -35,6 +35,8 @@ import {
   AttachMoney as AttachMoneyIcon,
   Receipt as ReceiptIcon,
   TrendingUp as TrendingUpIcon,
+  Inventory as InventoryIcon,
+  Store as StoreIcon,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -52,6 +54,9 @@ import StatCard from '../../components/StatCard/StatCard';
 import DataGrid from '../../components/DataGrid/DataGrid';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import TransactionForm from '../Transactions/TransactionForm';
+import PaymentStatusBadge from '../../components/PaymentStatusBadge';
+import FinancialInsights from '../../components/FinancialInsights/FinancialInsights';
+import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
 import { get, put, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
@@ -100,6 +105,9 @@ function FournisseurProfile() {
   const [transactions, setTransactions] = useState([]);
   const [statsMensuelles, setStatsMensuelles] = useState([]);
   const [produits, setProduits] = useState([]);
+  const [produitsVendus, setProduitsVendus] = useState(null);
+  const [insightsFinanciers, setInsightsFinanciers] = useState(null);
+  const [fournisseurScore, setFournisseurScore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -139,6 +147,42 @@ function FournisseurProfile() {
   };
 
   /**
+   * Charge les produits vendus par le fournisseur.
+   */
+  const fetchProduitsVendus = async () => {
+    try {
+      const produitsData = await get(`/fournisseurs/${id}/produits-vendus`);
+      setProduitsVendus(produitsData);
+    } catch (err) {
+      console.error('Erreur lors du chargement des produits vendus:', err);
+    }
+  };
+
+  /**
+   * Charge les insights financiers du fournisseur.
+   */
+  const fetchInsightsFinanciers = async () => {
+    try {
+      const insightsData = await get(`/fournisseurs/${id}/insights-financiers`);
+      setInsightsFinanciers(insightsData);
+    } catch (err) {
+      console.error('Erreur lors du chargement des insights financiers:', err);
+    }
+  };
+
+  /**
+   * Charge le score de performance du fournisseur.
+   */
+  const fetchFournisseurScore = async () => {
+    try {
+      const scoreData = await get(`/fournisseurs/${id}/score`);
+      setFournisseurScore(scoreData);
+    } catch (err) {
+      console.error('Erreur lors du chargement du score fournisseur:', err);
+    }
+  };
+
+  /**
    * Charge le profil du fournisseur.
    */
   const fetchFournisseurProfile = async () => {
@@ -165,6 +209,13 @@ function FournisseurProfile() {
       });
 
       setStatsMensuelles(statsMensuellesData.data || []);
+
+      // Charger les produits vendus, les insights financiers et le score
+      await Promise.all([
+        fetchProduitsVendus(),
+        fetchInsightsFinanciers(),
+        fetchFournisseurScore(),
+      ]);
     } catch (err) {
       console.error('Erreur lors du chargement du profil fournisseur:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors du chargement du profil fournisseur';
@@ -264,6 +315,16 @@ function FournisseurProfile() {
             {formatMontant(value, { useCompactNotation: false })}
           </Typography>
         );
+      },
+    },
+    {
+      id: 'statut_paiement',
+      label: 'Paiement',
+      sortable: false,
+      filterable: false,
+      format: (value, row) => {
+        const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
+        return <PaymentStatusBadge statut={statut} />;
       },
     },
     {
@@ -565,6 +626,13 @@ function FournisseurProfile() {
         </Grid>
       </Grid>
 
+      {/* Insights Financiers */}
+      <FinancialInsights 
+        insights={insightsFinanciers}
+        loading={loading}
+        type="fournisseur"
+      />
+
       {/* Graphique d'évolution des achats */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -624,6 +692,56 @@ function FournisseurProfile() {
           )}
         </CardContent>
       </Card>
+
+      {/* Section Produits Vendus */}
+      {produitsVendus && produitsVendus.produits && produitsVendus.produits.length > 0 && (
+        <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+            <Typography 
+              variant="h6" 
+              component="h2" 
+              gutterBottom
+              sx={{ 
+                fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' },
+                mb: { xs: 2, sm: 2.5, md: 3 }
+              }}
+            >
+             Produits Vendus - Inventaire Fournisseur
+            </Typography>
+
+            {/* KPIs Produits */}
+            <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+              <Grid item xs={12} sm={6} md={4}>
+                <StatCard
+                  title="Produits différents"
+                  value={produitsVendus.nombre_produits_differents || 0}
+                  icon={<StoreIcon />}
+                  valueFormat="number"
+                  color="info"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <StatCard
+                  title="Quantité totale"
+                  value={produitsVendus.quantite_totale_tous_produits || 0}
+                  icon={<InventoryIcon />}
+                  valueFormat="number"
+                  color="warning"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <StatCardWithGauge
+                  title="SCORE"
+                  score={fournisseurScore?.score_total || 0}
+                  label={fournisseurScore?.label || ''}
+                  color={fournisseurScore?.couleur || 'primary'}
+                  loading={loading}
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tableau des transactions */}
       <Card>
