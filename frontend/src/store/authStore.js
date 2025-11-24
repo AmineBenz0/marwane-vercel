@@ -219,30 +219,16 @@ const useAuthStore = create(
         const refreshToken = localStorage.getItem('refresh_token');
 
         if (accessToken && refreshToken) {
-          // Extraire les informations utilisateur depuis le token
-          const user = extractUserFromToken(accessToken);
-
-          if (user && user.id && user.email) {
-            // Restaurer l'état d'authentification
-            set({
-              user,
-              accessToken,
-              refreshToken,
-              isAuthenticated: true,
-              isInitialized: true,
-            });
-          } else {
-            // Si le token est invalide, nettoyer
-            set({
-              user: null,
-              accessToken: null,
-              refreshToken: null,
-              isAuthenticated: false,
-              isInitialized: true,
-            });
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-          }
+          // Ne plus activer automatiquement l'authentification.
+          // On conserve les tokens pour un éventuel rafraîchissement manuel,
+          // mais on laisse isAuthenticated à false jusqu'à une action explicite (login/refresh).
+          set({
+            user: null,
+            accessToken,
+            refreshToken,
+            isAuthenticated: false,
+            isInitialized: true,
+          });
         } else {
           // Pas de tokens, s'assurer que le store est vide
           set({
@@ -261,42 +247,20 @@ const useAuthStore = create(
       // Configuration de la persistance
       name: 'auth-storage', // Nom de la clé dans localStorage
       storage: createJSONStorage(() => localStorage),
-      // Persister uniquement les tokens et l'état d'authentification
-      // Les informations utilisateur seront recalculées depuis le token
+      // Persister uniquement les tokens (plus isAuthenticated)
+      // isAuthenticated sera déterminé uniquement après une action explicite
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
-        isAuthenticated: state.isAuthenticated,
       }),
       // Callback appelé après la réhydratation depuis localStorage
       onRehydrateStorage: () => (state) => {
-        // Après la réhydratation, recalculer l'utilisateur depuis le token
-        if (state && state.accessToken) {
-          const user = extractUserFromToken(state.accessToken);
-          if (user && user.id && user.email) {
-            state.user = user;
-            state.isAuthenticated = true;
-            state.isInitialized = true;
-            // S'assurer que les tokens sont dans localStorage pour l'API service
-            localStorage.setItem('access_token', state.accessToken);
-            if (state.refreshToken) {
-              localStorage.setItem('refresh_token', state.refreshToken);
-            }
-          } else {
-            // Token invalide, nettoyer
-            state.user = null;
-            state.accessToken = null;
-            state.refreshToken = null;
-            state.isAuthenticated = false;
-            state.isInitialized = true;
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-          }
-        } else {
-          // Pas de token, marquer comme initialisé quand même
-          if (state) {
-            state.isInitialized = true;
-          }
+        // Ne plus autoconnecter lors de la réhydratation.
+        if (state) {
+          state.user = null;
+          state.isAuthenticated = false;
+          state.isInitialized = true;
+          // On laisse les tokens tels quels dans localStorage; pas de recalcul user ici
         }
       },
     }

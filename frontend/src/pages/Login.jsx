@@ -51,20 +51,16 @@ const loginSchema = yup.object().shape({
  */
 function Login() {
   const navigate = useNavigate();
-  const { login, isAuthenticated, isInitialized } = useAuthStore();
+  const { login } = useAuthStore();
   
   // État pour le chargement et les erreurs
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Si l'utilisateur est déjà authentifié, rediriger vers le dashboard
-  // Attendre que le store soit initialisé pour éviter une boucle de redirection
-  useEffect(() => {
-    if (isInitialized && isAuthenticated) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [isAuthenticated, isInitialized, navigate]);
+  // Note: Nous ne redirigeons plus automatiquement si déjà authentifié
+  // pour éviter les boucles de redirection. L'utilisateur peut accéder
+  // directement à /dashboard s'il est déjà connecté.
 
   // Initialiser react-hook-form avec le resolver Yup
   const {

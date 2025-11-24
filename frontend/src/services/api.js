@@ -47,11 +47,32 @@ const getAccessToken = () => {
 };
 
 /**
+ * Récupère le refresh token depuis le localStorage.
+ * 
+ * @returns {string|null} Le refresh token ou null s'il n'existe pas
+ */
+const getRefreshToken = () => {
+  return localStorage.getItem('refresh_token');
+};
+
+/**
  * Supprime les tokens du localStorage.
  */
 const clearTokens = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
+};
+
+/**
+ * Met à jour les tokens dans le localStorage.
+ */
+const setTokens = (accessToken, refreshToken) => {
+  if (accessToken) {
+    localStorage.setItem('access_token', accessToken);
+  }
+  if (refreshToken) {
+    localStorage.setItem('refresh_token', refreshToken);
+  }
 };
 
 /**
@@ -169,6 +190,65 @@ const shouldShowNotification = (status) => {
   return status !== 401;
 };
 
+// ----- Gestion du rafraîchissement de token (single-flight) -----
+let isRefreshing = false;
+let refreshPromise = null;
+let pendingRequests = [];
+
+/**
+ * Ajoute une requête en attente qui sera relancée après refresh.
+ * @param {(token: string|null, error?: any) => void} cb 
+ */
+const addPendingRequest = (cb) => {
+  pendingRequests.push(cb);
+};
+
+/**
+ * Notifie toutes les requêtes en attente que le token est rafraîchi.
+ * @param {string} newToken 
+ */
+const resolvePendingRequests = (newToken) => {
+  pendingRequests.forEach((cb) => cb(newToken));
+  pendingRequests = [];
+};
+
+/**
+ * Notifie toutes les requêtes en attente que le refresh a échoué.
+ * @param {any} error 
+ */
+const rejectPendingRequests = (error) => {
+  pendingRequests.forEach((cb) => cb(null, error));
+  pendingRequests = [];
+};
+
+/**
+ * Client axios sans intercepteurs pour appeler /auth/refresh sans boucle.
+ */
+const refreshClient = axios.create({
+  baseURL: baseURL,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 15000,
+});
+
+/**
+ * Tente de rafraîchir le token d'accès en utilisant le refresh token.
+ * @returns {Promise<string>} Le nouveau access_token
+ */
+const performTokenRefresh = async () => {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    throw new Error('Aucun refresh token disponible');
+  }
+  const resp = await refreshClient.post('/auth/refresh', { refresh_token: refreshToken });
+  const { access_token, refresh_token } = resp.data || {};
+  if (!access_token) {
+    throw new Error('Réponse de refresh invalide');
+  }
+  // Mettre à jour les tokens en localStorage
+  setTokens(access_token, refresh_token);
+  return access_token;
+};
+
 /**
  * Intercepteur de requête : ajoute automatiquement le token JWT aux requêtes.
  */
@@ -210,6 +290,7 @@ api.interceptors.response.use(
     if (error.response) {
       const { status, data, config } = error.response;
       const url = config?.url || 'Unknown';
+      const originalRequest = error.config || {};
       
       // Extraire le message d'erreur
       const errorMessage = extractErrorMessage(data, status);
@@ -222,13 +303,57 @@ api.interceptors.response.use(
         originalError: error,
       };
       
-      // Si l'erreur est 401 (Unauthorized), rediriger vers la page de connexion
+      // Si l'erreur est 401 (Unauthorized), tenter un refresh une seule fois
       if (status === 401) {
-        if (isDevelopment()) {
-          console.warn('Token invalide ou expiré. Redirection vers la page de connexion.');
+        // Ne jamais tenter de refresh sur les endpoints d'auth eux-mêmes
+        const isAuthEndpoint = typeof originalRequest.url === 'string' &&
+          (originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/refresh'));
+
+        // Empêcher boucle infinie: si déjà retentée, on sort
+        if (originalRequest._retry || isAuthEndpoint) {
+          redirectToLogin();
+          return Promise.reject(formattedError);
         }
-        redirectToLogin();
-        // Ne pas afficher de notification pour 401 (redirection déjà effectuée)
+
+        originalRequest._retry = true;
+
+        // Si pas de refresh token -> redirection immédiate
+        if (!getRefreshToken()) {
+          redirectToLogin();
+          return Promise.reject(formattedError);
+        }
+
+        // Mettre la requête en attente jusqu'au refresh
+        return new Promise((resolve, reject) => {
+          addPendingRequest((newToken, refreshErr) => {
+            if (refreshErr || !newToken) {
+              reject(formattedError);
+              return;
+            }
+            // Mettre à jour le header et relancer la requête originale
+            originalRequest.headers = originalRequest.headers || {};
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(api(originalRequest));
+          });
+
+          // Déclencher le refresh si pas déjà en cours
+          if (!isRefreshing) {
+            isRefreshing = true;
+            refreshPromise = performTokenRefresh()
+              .then((newAccessToken) => {
+                isRefreshing = false;
+                refreshPromise = null;
+                resolvePendingRequests(newAccessToken);
+              })
+              .catch((refreshErr) => {
+                isRefreshing = false;
+                refreshPromise = null;
+                rejectPendingRequests(refreshErr);
+                redirectToLogin();
+              });
+          }
+        });
+
       } else if (shouldShowNotification(status)) {
         // Afficher une notification pour les autres erreurs
         notificationStore.error(errorMessage);
