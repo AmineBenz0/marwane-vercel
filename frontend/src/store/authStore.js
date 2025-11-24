@@ -85,6 +85,7 @@ const useAuthStore = create(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+      isInitialized: false, // Indique si la réhydratation est terminée
 
       /**
        * Connecte un utilisateur avec son email et mot de passe.
@@ -142,6 +143,7 @@ const useAuthStore = create(
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
+          isInitialized: true, // Garder isInitialized à true
         });
 
         // Nettoyer le localStorage
@@ -227,14 +229,31 @@ const useAuthStore = create(
               accessToken,
               refreshToken,
               isAuthenticated: true,
+              isInitialized: true,
             });
           } else {
             // Si le token est invalide, nettoyer
-            get().logout();
+            set({
+              user: null,
+              accessToken: null,
+              refreshToken: null,
+              isAuthenticated: false,
+              isInitialized: true,
+            });
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
           }
         } else {
           // Pas de tokens, s'assurer que le store est vide
-          get().logout();
+          set({
+            user: null,
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+            isInitialized: true,
+          });
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
         }
       },
     }),
@@ -257,6 +276,7 @@ const useAuthStore = create(
           if (user && user.id && user.email) {
             state.user = user;
             state.isAuthenticated = true;
+            state.isInitialized = true;
             // S'assurer que les tokens sont dans localStorage pour l'API service
             localStorage.setItem('access_token', state.accessToken);
             if (state.refreshToken) {
@@ -268,8 +288,14 @@ const useAuthStore = create(
             state.accessToken = null;
             state.refreshToken = null;
             state.isAuthenticated = false;
+            state.isInitialized = true;
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
+          }
+        } else {
+          // Pas de token, marquer comme initialisé quand même
+          if (state) {
+            state.isInitialized = true;
           }
         }
       },

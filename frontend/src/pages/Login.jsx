@@ -51,7 +51,7 @@ const loginSchema = yup.object().shape({
  */
 function Login() {
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuthStore();
+  const { login, isAuthenticated, isInitialized } = useAuthStore();
   
   // État pour le chargement et les erreurs
   const [loading, setLoading] = useState(false);
@@ -59,11 +59,12 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Si l'utilisateur est déjà authentifié, rediriger vers le dashboard
+  // Attendre que le store soit initialisé pour éviter une boucle de redirection
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isInitialized && isAuthenticated) {
       navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isInitialized, navigate]);
 
   // Initialiser react-hook-form avec le resolver Yup
   const {
@@ -119,6 +120,27 @@ function Login() {
   const handleTogglePasswordVisibility = () => {
     setShowPassword((prev) => !prev);
   };
+
+  // Afficher un loader pendant l'initialisation du store
+  // Cela évite une boucle de redirection lors du chargement initial
+  if (!isInitialized) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh',
+          backgroundColor: (theme) =>
+            theme.palette.mode === 'light'
+              ? theme.palette.grey[100]
+              : theme.palette.grey[900],
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box
