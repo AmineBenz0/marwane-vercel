@@ -214,33 +214,66 @@ const useAuthStore = create(
        * Vérifie si un token existe et restaure l'état d'authentification.
        * Cette fonction est appelée automatiquement au chargement de l'application.
        */
-      initialize: () => {
+      initialize: async () => {
+        // Démarrer en mode non-initialisé pour afficher un loader côté UI
+        set({ isInitialized: false });
         const accessToken = localStorage.getItem('access_token');
         const refreshToken = localStorage.getItem('refresh_token');
 
-        if (accessToken && refreshToken) {
-          // Ne plus activer automatiquement l'authentification.
-          // On conserve les tokens pour un éventuel rafraîchissement manuel,
-          // mais on laisse isAuthenticated à false jusqu'à une action explicite (login/refresh).
-          set({
-            user: null,
-            accessToken,
-            refreshToken,
-            isAuthenticated: false,
-            isInitialized: true,
-          });
-        } else {
-          // Pas de tokens, s'assurer que le store est vide
-          set({
-            user: null,
-            accessToken: null,
-            refreshToken: null,
-            isAuthenticated: false,
-            isInitialized: true,
-          });
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+        try {
+          // Si un refresh token existe, tenter un rafraîchissement silencieux
+          if (refreshToken) {
+            const response = await post('/auth/refresh', {
+              refresh_token: refreshToken,
+            });
+            const { access_token, refresh_token } = response;
+            const user = extractUserFromToken(access_token);
+            if (!user || !user.id || !user.email) {
+              throw new Error('Impossible d\'extraire les informations utilisateur du token rafraîchi');
+            }
+            // Mettre à jour les tokens et l'état
+            set({
+              user,
+              accessToken: access_token,
+              refreshToken: refresh_token || refreshToken,
+              isAuthenticated: true,
+              isInitialized: true,
+            });
+            localStorage.setItem('access_token', access_token);
+            if (refresh_token) {
+              localStorage.setItem('refresh_token', refresh_token);
+            }
+            return;
+          }
+
+          // Pas de refresh token : si un access token existe, tenter de le décoder
+          if (accessToken) {
+            const user = extractUserFromToken(accessToken);
+            if (user && user.id && user.email) {
+              set({
+                user,
+                accessToken,
+                isAuthenticated: true,
+                isInitialized: true,
+              });
+              return;
+            }
+          }
+        } catch (error) {
+          // Echec du refresh : on nettoie et on demande une reconnexion
+          console.error('Initialisation auth: échec du rafraîchissement silencieux', error);
         }
+
+        // Par défaut, pas authentifié
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          isInitialized: true,
+        });
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
       },
     }),
     {
@@ -259,8 +292,8 @@ const useAuthStore = create(
         if (state) {
           state.user = null;
           state.isAuthenticated = false;
-          state.isInitialized = true;
-          // On laisse les tokens tels quels dans localStorage; pas de recalcul user ici
+          // Laisser isInitialized à false; initialize() s'en chargera
+          state.isInitialized = false;
         }
       },
     }
@@ -270,14 +303,10 @@ const useAuthStore = create(
 // Initialiser le store au chargement si les tokens existent dans localStorage
 // mais ne sont pas encore dans le store (cas de première utilisation)
 if (typeof window !== 'undefined') {
-  const storedAccessToken = localStorage.getItem('access_token');
-  const storedRefreshToken = localStorage.getItem('refresh_token');
   const storeState = useAuthStore.getState();
-  
-  // Si des tokens existent dans localStorage mais pas dans le store, initialiser
-  if ((storedAccessToken || storedRefreshToken) && !storeState.accessToken) {
-    storeState.initialize();
-  }
+  // Toujours tenter une initialisation silencieuse (refresh si possible)
+  // Aucune conséquence si appelée plusieurs fois
+  Promise.resolve(storeState.initialize()).catch(() => {});
 }
 
 export default useAuthStore;
