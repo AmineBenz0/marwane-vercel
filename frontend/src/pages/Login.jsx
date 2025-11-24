@@ -51,7 +51,7 @@ const loginSchema = yup.object().shape({
  */
 function Login() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login, isInitialized } = useAuthStore();
   
   // État pour le chargement et les erreurs
   const [loading, setLoading] = useState(false);
