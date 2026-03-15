@@ -2,6 +2,16 @@
 Schémas Pydantic pour la validation des données.
 """
 from app.schemas.user import UserBase, UserCreate, UserRead, UserUpdate
+from app.schemas.paiement import (
+    PaiementCreate, PaiementUpdate, PaiementRead,
+    StatutPaiementTransaction, PaiementSummary
+)
+from app.schemas.lettre_credit import (
+    LettreCreditCreate, LettreCreditUpdate, LettreCreditRead, LettreCreditSummary
+)
+from app.schemas.cession_lc import (
+    CessionLCCreate, CessionLCRead
+)
 from app.schemas.client import ClientBase, ClientCreate, ClientRead, ClientUpdate, ClientProfile, ClientProfileStats
 from app.schemas.fournisseur import FournisseurBase, FournisseurCreate, FournisseurRead, FournisseurUpdate, FournisseurProfile, FournisseurProfileStats
 from app.schemas.produit import ProduitBase, ProduitCreate, ProduitRead, ProduitUpdate
@@ -29,6 +39,15 @@ __all__ = [
     "UserCreate",
     "UserRead",
     "UserUpdate",
+    "PaiementRead",
+    "StatutPaiementTransaction",
+    "PaiementSummary",
+    "LettreCreditCreate",
+    "LettreCreditUpdate",
+    "LettreCreditRead",
+    "LettreCreditSummary",
+    "CessionLCCreate",
+    "CessionLCRead",
     "ClientBase",
     "ClientCreate",
     "ClientRead",

@@ -1,7 +1,7 @@
 """
 Schémas Pydantic pour la validation des données de paiements.
 """
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional
 from datetime import datetime, date
 from decimal import Decimal
@@ -31,6 +31,9 @@ class PaiementBase(BaseModel):
     # Informations pour les virements
     reference_virement: Optional[str] = Field(None, max_length=100, description="Référence du virement")
     
+    # Informations pour les Lettres de Crédit
+    id_lc: Optional[int] = Field(None, description="ID de la Lettre de Crédit associée")
+    
     # Informations générales
     notes: Optional[str] = Field(None, description="Notes ou commentaires")
     
@@ -38,7 +41,7 @@ class PaiementBase(BaseModel):
     @classmethod
     def validate_type_paiement(cls, v: str) -> str:
         """Valide que le type de paiement est dans la liste autorisée."""
-        types_valides = ['cash', 'cheque', 'virement', 'carte', 'traite', 'compensation', 'autre']
+        types_valides = ['cash', 'cheque', 'virement', 'carte', 'traite', 'compensation', 'lc', 'autre']
         if v.lower() not in types_valides:
             raise ValueError(
                 f"Type de paiement invalide. Doit être l'un de: {', '.join(types_valides)}"
@@ -72,6 +75,13 @@ class PaiementCreate(PaiementBase):
         if v <= 0:
             raise ValueError("Le montant doit être supérieur à 0")
         return v
+    
+    @model_validator(mode='after')
+    def validate_lc_presence(self):
+        """Valide que si le type est 'lc', id_lc est fourni."""
+        if self.type_paiement == 'lc' and self.id_lc is None:
+            raise ValueError("L'identifiant de la Lettre de Crédit (id_lc) est requis pour ce type de paiement.")
+        return self
 
 
 class PaiementUpdate(BaseModel):
@@ -89,6 +99,7 @@ class PaiementUpdate(BaseModel):
     statut_cheque: Optional[str] = Field(None, description="Statut du chèque")
     motif_rejet: Optional[str] = Field(None, description="Motif du rejet du chèque")
     reference_virement: Optional[str] = Field(None, max_length=100, description="Référence du virement")
+    id_lc: Optional[int] = Field(None, description="ID de la Lettre de Crédit")
     notes: Optional[str] = Field(None, description="Notes ou commentaires")
     statut: Optional[str] = Field(None, description="Statut du paiement (valide, en_attente, rejete, annule)")
     

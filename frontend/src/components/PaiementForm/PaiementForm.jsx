@@ -30,6 +30,7 @@ const TYPES_PAIEMENT = [
   { value: 'carte', label: '💳 Carte bancaire' },
   { value: 'traite', label: '📝 Traite' },
   { value: 'compensation', label: '↔️ Compensation' },
+  { value: 'lc', label: '📜 Lettre de Crédit' },
   { value: 'autre', label: '📄 Autre' },
 ];
 
@@ -47,7 +48,10 @@ const TYPES_PAIEMENT = [
 function PaiementForm({ defaultValues, transaction, register, errors, watch, setValue }) {
   const typePaiement = watch('type_paiement');
   const montant = watch('montant');
+  const selectedLcId = watch('id_lc');
   const [initialMontantSet, setInitialMontantSet] = useState(false);
+  const [availableLcs, setAvailableLcs] = useState([]);
+  const [loadingLcs, setLoadingLcs] = useState(false);
   
   // Calculer le montant restant côté frontend (si transaction fournie)
   const montantRestant = transaction?.montant_restant || 0;
@@ -60,6 +64,39 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
       setInitialMontantSet(true);
     }
   }, []);
+
+  // Charger les LC disponibles quand le type est LC
+  useEffect(() => {
+    if (typePaiement === 'lc') {
+      const fetchLcs = async () => {
+        setLoadingLcs(true);
+        try {
+          const { get } = await import('../../services/api');
+          const params = {};
+          if (transaction?.id_client) params.id_client = transaction.id_client;
+          if (transaction?.id_fournisseur) params.id_fournisseur = transaction.id_fournisseur;
+          
+          const data = await get('/lettres-credit/disponibles', { params });
+          setAvailableLcs(data || []);
+        } catch (err) {
+          console.error('Erreur chargement LC:', err);
+        } finally {
+          setLoadingLcs(false);
+        }
+      };
+      fetchLcs();
+    }
+  }, [typePaiement, transaction]);
+
+  // Si une LC est sélectionnée, mettre à jour le montant
+  useEffect(() => {
+    if (typePaiement === 'lc' && selectedLcId) {
+      const selectedLc = availableLcs.find(l => l.id_lc === selectedLcId);
+      if (selectedLc) {
+        setValue('montant', parseFloat(selectedLc.montant));
+      }
+    }
+  }, [selectedLcId, availableLcs, typePaiement, setValue]);
 
   return (
     <Box>
@@ -217,6 +254,45 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
                 helperText={errors.reference_virement?.message || 'Ex: VIR-2025-001234'}
               />
             </Grid>
+          </Grid>
+        </Collapse>
+
+        {/* Champs spécifiques pour les Lettres de Crédit (LC) */}
+        <Collapse in={typePaiement === 'lc'} sx={{ width: '100%' }}>
+          <Grid container spacing={2} sx={{ mt: 0.5, px: 2 }}>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" color="primary" gutterBottom>
+                📜 Sélection de la Lettre de Crédit
+              </Typography>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                {...register('id_lc', {
+                  required: typePaiement === 'lc' ? 'Veuillez sélectionner une LC' : false
+                })}
+                select
+                label="Choisir une Lettre de Crédit"
+                fullWidth
+                error={!!errors.id_lc}
+                helperText={errors.id_lc?.message || (availableLcs.length === 0 && !loadingLcs ? 'Aucune LC disponible pour ce partenaire' : '')}
+                disabled={loadingLcs}
+              >
+                {availableLcs.map((l) => (
+                  <MenuItem key={l.id_lc} value={l.id_lc}>
+                    {l.numero_reference} - {l.banque_emettrice} ({formatMontant(l.montant)})
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            
+            {selectedLcId && (
+              <Grid item xs={12}>
+                <Alert severity="warning">
+                  Une Lettre de Crédit doit être utilisée en totalité pour le paiement.
+                </Alert>
+              </Grid>
+            )}
           </Grid>
         </Collapse>
 

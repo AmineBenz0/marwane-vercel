@@ -40,6 +40,7 @@ import {
   AccountBalance as AccountBalanceIcon,
   Security as SecurityIcon,
   Logout as LogoutIcon,
+  CreditCard as CreditCardIcon,
 } from '@mui/icons-material';
 import useAuthStore from '../../store/authStore';
 
@@ -59,6 +60,7 @@ const menuItems = [
   { text: 'Clients', icon: <PeopleIcon />, path: '/clients' },
   { text: 'Fournisseurs', icon: <BusinessIcon />, path: '/fournisseurs' },
   { text: 'Produits', icon: <InventoryIcon />, path: '/produits' },
+  { text: 'LC', icon: <CreditCardIcon />, path: '/lettres-credit' },
   { text: 'Caisse', icon: <AccountBalanceIcon />, path: '/caisse' },
   { text: 'Audit', icon: <SecurityIcon />, path: '/audit', adminOnly: true },
 ];

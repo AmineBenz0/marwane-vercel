@@ -118,6 +118,9 @@ docker-compose up -d postgres
 
 - [Documentation Complète](./Documentation.md) - Architecture détaillée et spécifications
 - [Backlog du Projet](./BACKLOG.md) - Suivi des tâches et progression
+- [Guide de Développement](./DEVELOPMENT_WORKFLOW.md) - Workflow complet local/production
+- [Guide Rapide de Développement](./QUICK_DEV_GUIDE.md) - Démarrage rapide
+- [Guide de Déploiement Azure](./DEPLOYMENT_AZURE_GUIDE.md) - Déploiement sur Azure VM
 
 ## 🔐 Sécurité
 

@@ -8,6 +8,8 @@ from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
 from app.models.transaction import Transaction
 from app.models.paiement import Paiement
+from app.models.lettre_credit import LettreDeCredit
+from app.models.cession_lc import CessionLC
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.audit import TransactionAudit, AuditConnexion
@@ -20,6 +22,8 @@ __all__ = [
     "Produit",
     "Transaction",
     "Paiement",
+    "LettreDeCredit",
+    "CessionLC",
     "Caisse",
     "CaisseSoldeHistorique",
     "TransactionAudit",

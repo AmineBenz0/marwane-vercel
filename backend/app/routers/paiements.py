@@ -11,6 +11,7 @@ from decimal import Decimal
 from app.database import get_db
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
+from app.models.lettre_credit import LettreDeCredit
 from app.models.user import Utilisateur
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
@@ -142,6 +143,66 @@ def create_paiement(
                    f"le montant restant à payer ({montant_restant} MAD)"
         )
     
+    # Logique spécifique pour les Lettres de Crédit (LC)
+    if paiement_data.type_paiement == 'lc':
+        if not paiement_data.id_lc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="L'ID de la Lettre de Crédit est requis pour ce type de paiement"
+            )
+            
+        lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == paiement_data.id_lc).first()
+        if not lc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Lettre de Crédit avec l'ID {paiement_data.id_lc} introuvable"
+            )
+            
+        # 1. Vérifier le statut
+        if lc.statut != 'active':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La Lettre de Crédit n'est pas active (Statut: {lc.statut})"
+            )
+            
+        # 2. Vérifier la disponibilité (date)
+        if not lc.est_disponible:
+            from datetime import date
+            if lc.date_disponibilite > date.today():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
+                )
+            if lc.date_expiration < date.today():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cette LC a expiré le {lc.date_expiration}"
+                )
+        
+        # 3. Vérifier le montant (Doit être utilisée en totalité)
+        if paiement_data.montant != lc.montant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Le montant du paiement ({paiement_data.montant} MAD) doit correspondre "
+                       f"au montant total de la LC ({lc.montant} MAD) car elle doit être utilisée en totalité."
+            )
+            
+        # 4. Vérifier le détenteur (Optionnel mais recommandé)
+        if transaction.id_client and lc.type_detenteur == 'client' and lc.id_client != transaction.id_client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cette LC n'appartient pas au client de cette transaction"
+            )
+        if transaction.id_fournisseur and lc.type_detenteur == 'fournisseur' and lc.id_fournisseur != transaction.id_fournisseur:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cette LC n'appartient pas au fournisseur de cette transaction"
+            )
+            
+        # Marquer la LC comme utilisée
+        lc.statut = 'utilisee'
+        lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    
     # Déterminer le statut initial
     statut_initial = 'valide'
     if paiement_data.type_paiement == 'cheque':
@@ -158,6 +219,7 @@ def create_paiement(
         date_encaissement_prevue=paiement_data.date_encaissement_prevue,
         statut_cheque=paiement_data.statut_cheque.lower() if paiement_data.statut_cheque else None,
         reference_virement=paiement_data.reference_virement,
+        id_lc=paiement_data.id_lc if paiement_data.type_paiement == 'lc' else None,
         notes=paiement_data.notes,
         statut=statut_initial,
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None

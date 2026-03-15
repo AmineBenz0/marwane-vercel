@@ -68,6 +68,7 @@ import {
   Payment as PaymentIcon,
 } from '@mui/icons-material';
 import { get, getProduitsParType, post, put } from '../../services/api';
+import { formatMontant } from '../../utils/formatNumber';
 
 /**
  * Schéma de validation Yup pour une ligne de transaction.
@@ -110,9 +111,92 @@ const ligneValidationSchema = yup.object().shape({
   paiement_numero_cheque: yup.string().nullable(),
   paiement_banque: yup.string().nullable(),
   paiement_reference: yup.string().nullable(),
+  paiement_id_lc: yup.number().nullable(),
   paiement_notes: yup.string().nullable(),
   paiement_id: yup.number().nullable(), // ID du paiement existant (en mode édition)
 });
+
+/**
+ * Composant interne pour la sélection d'une Lettre de Crédit dans une ligne de transaction.
+ * Encapsule la logique de chargement des LC disponibles pour éviter les mises à jour d'état
+ * pendant le rendu du composant parent.
+ */
+const LcPaymentSelector = ({ index, control, watch, setValue, loading, formatMontant }) => {
+  const [lcs, setLcs] = React.useState([]);
+  const [fetching, setFetching] = React.useState(false);
+  
+  const typeEntite = watch('type_entite');
+  const clientId = watch('id_client');
+  const fournisseurId = watch('id_fournisseur');
+
+  React.useEffect(() => {
+    const fetchLcs = async () => {
+      setFetching(true);
+      try {
+        const params = {};
+        if (typeEntite === 'client') {
+          if (clientId) params.id_client = clientId;
+          else {
+            setLcs([]);
+            setFetching(false);
+            return;
+          }
+        } else {
+          if (fournisseurId) params.id_fournisseur = fournisseurId;
+          else {
+            setLcs([]);
+            setFetching(false);
+            return;
+          }
+        }
+        const data = await get('/lettres-credit/disponibles', { params });
+        setLcs(data || []);
+      } catch (err) {
+        console.error('Erreur chargement LC:', err);
+        setLcs([]);
+      } finally {
+        setFetching(false);
+      }
+    };
+
+    fetchLcs();
+  }, [typeEntite, clientId, fournisseurId]);
+
+  return (
+    <Controller
+      name={`lignes.${index}.paiement_id_lc`}
+      control={control}
+      rules={{ required: 'Veuillez sélectionner une LC' }}
+      render={({ field, fieldState: { error } }) => (
+        <TextField
+          {...field}
+          select
+          fullWidth
+          label="Choisir une Lettre de Crédit"
+          error={!!error}
+          helperText={error?.message || (lcs.length === 0 && !fetching ? 'Aucune LC disponible pour ce partenaire' : '')}
+          disabled={loading || fetching}
+          size="small"
+          value={field.value || ''}
+          onChange={(e) => {
+            field.onChange(e.target.value);
+            // Auto-remplissage du montant avec le montant de la LC
+            const selectedLc = lcs.find(l => l.id_lc === e.target.value);
+            if (selectedLc) {
+              setValue(`lignes.${index}.paiement_montant`, parseFloat(selectedLc.montant));
+            }
+          }}
+        >
+          {lcs.map((l) => (
+            <MenuItem key={l.id_lc} value={l.id_lc}>
+              {l.numero_reference} ({formatMontant(l.montant)})
+            </MenuItem>
+          ))}
+        </TextField>
+      )}
+    />
+  );
+};
 
 /**
  * Schéma de validation Yup pour le formulaire transaction.
@@ -201,22 +285,23 @@ function TransactionForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
       date_transaction: new Date().toISOString().split('T')[0],
-      date_echeance: null,
+      date_echeance: '',
       type_entite: 'client',
-      id_client: null,
-      id_fournisseur: null,
+      id_client: '',
+      id_fournisseur: '',
       lignes: [{ 
         id_produit: '', 
         quantite: undefined, 
         prix_unitaire: undefined,
         ajouter_paiement: false,
         paiement_date: new Date().toISOString().split('T')[0],
-        paiement_montant: null,
+        paiement_montant: '',
         paiement_type: 'cash',
-        paiement_numero_cheque: null,
-        paiement_banque: null,
-        paiement_reference: null,
-        paiement_notes: null,
+        paiement_numero_cheque: '',
+        paiement_banque: '',
+        paiement_reference: '',
+        paiement_id_lc: '',
+        paiement_notes: '',
       }],
     },
     mode: 'onChange',
@@ -295,10 +380,10 @@ function TransactionForm({
               : new Date().toISOString().split('T')[0],
             date_echeance: initialValues.date_echeance
               ? new Date(initialValues.date_echeance).toISOString().split('T')[0]
-              : null,
+              : '',
             type_entite: typeEntite,
-            id_client: initialValues.id_client || null,
-            id_fournisseur: initialValues.id_fournisseur || null,
+            id_client: initialValues.id_client || '',
+            id_fournisseur: initialValues.id_fournisseur || '',
             lignes: [{
               id_produit: initialValues.id_produit || '',
               quantite: initialValues.quantite || undefined,
@@ -307,13 +392,14 @@ function TransactionForm({
               paiement_date: premierPaiement 
                 ? new Date(premierPaiement.date_paiement).toISOString().split('T')[0]
                 : new Date().toISOString().split('T')[0],
-              paiement_montant: premierPaiement ? parseFloat(premierPaiement.montant) : null,
+              paiement_montant: premierPaiement ? parseFloat(premierPaiement.montant) : '',
               paiement_type: premierPaiement ? premierPaiement.type_paiement : 'cash',
-              paiement_numero_cheque: premierPaiement ? premierPaiement.numero_cheque : null,
-              paiement_banque: premierPaiement ? premierPaiement.banque : null,
-              paiement_reference: premierPaiement ? premierPaiement.reference_virement : null,
-              paiement_notes: premierPaiement ? premierPaiement.notes : null,
-              paiement_id: premierPaiement ? premierPaiement.id_paiement : null, // Sauvegarder l'ID pour la mise à jour
+              paiement_numero_cheque: premierPaiement ? (premierPaiement.numero_cheque || '') : '',
+              paiement_banque: premierPaiement ? (premierPaiement.banque || '') : '',
+              paiement_reference: premierPaiement ? (premierPaiement.reference_virement || '') : '',
+              paiement_id_lc: premierPaiement ? (premierPaiement.id_lc || '') : '',
+              paiement_notes: premierPaiement ? (premierPaiement.notes || '') : '',
+              paiement_id: premierPaiement ? premierPaiement.id_paiement : '', // Sauvegarder l'ID pour la mise à jour
             }],
           });
         } else {
@@ -323,22 +409,23 @@ function TransactionForm({
           
           reset({
             date_transaction: new Date().toISOString().split('T')[0],
-            date_echeance: null,
+            date_echeance: '',
             type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : 'client',
-            id_client: hasPrefillClient ? prefillClientId : null,
-            id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : null,
+            id_client: hasPrefillClient ? prefillClientId : '',
+            id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : '',
             lignes: [{ 
               id_produit: '', 
               quantite: undefined, 
               prix_unitaire: undefined,
               ajouter_paiement: false,
               paiement_date: new Date().toISOString().split('T')[0],
-              paiement_montant: null,
+              paiement_montant: '',
               paiement_type: 'cash',
-              paiement_numero_cheque: null,
-              paiement_banque: null,
-              paiement_reference: null,
-              paiement_notes: null,
+              paiement_numero_cheque: '',
+              paiement_banque: '',
+              paiement_reference: '',
+              paiement_id_lc: '',
+              paiement_notes: '',
             }],
           });
         }
@@ -492,12 +579,13 @@ function TransactionForm({
       prix_unitaire: undefined,
       ajouter_paiement: false,
       paiement_date: watch('date_transaction') || new Date().toISOString().split('T')[0],
-      paiement_montant: null,
+      paiement_montant: '',
       paiement_type: 'cash',
-      paiement_numero_cheque: null,
-      paiement_banque: null,
-      paiement_reference: null,
-      paiement_notes: null,
+      paiement_numero_cheque: '',
+      paiement_banque: '',
+      paiement_reference: '',
+      paiement_id_lc: '',
+      paiement_notes: '',
     }], {
       shouldDirty: true,
     });
@@ -528,8 +616,8 @@ function TransactionForm({
    */
   const handleTypeEntiteChange = async (newType) => {
     setValue('type_entite', newType, { shouldDirty: true });
-    setValue('id_client', null, { shouldDirty: true });
-    setValue('id_fournisseur', null, { shouldDirty: true });
+    setValue('id_client', '', { shouldDirty: true });
+    setValue('id_fournisseur', '', { shouldDirty: true });
 
     // Recharger les produits pour le type sélectionné
     setLoadingData(true);
@@ -1037,6 +1125,7 @@ function TransactionForm({
                                           <MenuItem value="carte">💳 Carte bancaire</MenuItem>
                                           <MenuItem value="traite">📝 Traite</MenuItem>
                                           <MenuItem value="compensation">↔️ Compensation</MenuItem>
+                                          <MenuItem value="lc">📜 Lettre de Crédit</MenuItem>
                                           <MenuItem value="autre">📄 Autre</MenuItem>
                                         </TextField>
                                       )}
@@ -1096,6 +1185,25 @@ function TransactionForm({
                                           />
                                         )}
                                       />
+                                    </Grid>
+                                  )}
+
+                                  {/* Champs conditionnels pour Lettre de Crédit */}
+                                  {ligne.paiement_type === 'lc' && (
+                                    <Grid item xs={12}>
+                                      <LcPaymentSelector
+                                        index={index}
+                                        control={control}
+                                        watch={watch}
+                                        setValue={setValue}
+                                        loading={loading}
+                                        formatMontant={formatMontant}
+                                      />
+                                      {ligne.paiement_id_lc && (
+                                        <Alert severity="warning" sx={{ mt: 1 }}>
+                                          Une Lettre de Crédit doit être utilisée en totalité.
+                                        </Alert>
+                                      )}
                                     </Grid>
                                   )}
 

@@ -392,6 +392,8 @@ function TransactionsList() {
               paiementData.statut_cheque = 'a_encaisser';
             } else if (paiement.paiement_type === 'virement') {
               paiementData.reference_virement = paiement.paiement_reference || null;
+            } else if (paiement.paiement_type === 'lc') {
+              paiementData.id_lc = paiement.paiement_id_lc || null;
             }
             
             // Vérifier si c'est une mise à jour ou une création
@@ -441,6 +443,8 @@ function TransactionsList() {
                     paiementData.statut_cheque = 'a_encaisser';
                   } else if (ligneData.paiement_type === 'virement') {
                     paiementData.reference_virement = ligneData.paiement_reference || null;
+                  } else if (ligneData.paiement_type === 'lc') {
+                    paiementData.id_lc = ligneData.paiement_id_lc || null;
                   }
                   
                   await post('/paiements', paiementData);

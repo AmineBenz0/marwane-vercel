@@ -414,6 +414,8 @@ function TransactionDetail() {
         paiementData.statut_cheque = data.statut_cheque || 'a_encaisser';
       } else if (data.type_paiement === 'virement') {
         paiementData.reference_virement = data.reference_virement || null;
+      } else if (data.type_paiement === 'lc') {
+        paiementData.id_lc = data.id_lc || null;
       }
 
       // Mode édition ou création

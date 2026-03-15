@@ -1712,7 +1712,7 @@ Avant de marquer une tâche comme terminée, posez-vous ces questions :
 
 ---
 
-  ## 🎨 Phase 2.5 : Fonctionnalités Avancées Clients/Fournisseurs
+## 🎨 Phase 2.5 : Fonctionnalités Avancées Clients/Fournisseurs
 
 **Objectif** : Enrichir l'application avec des pages de profil détaillées et un système de suivi des paiements.
 
@@ -2244,7 +2244,7 @@ sqlmap (si nécessaire)
 - ✅ Backend démarre dans le conteneur
 - ✅ Connexion à la base de données fonctionne
 
-**Estimation** : 2h  
+**Estimation** : 2h
 **Statut** : ✅ Terminé
 
 ---
@@ -2263,7 +2263,7 @@ sqlmap (si nécessaire)
 - ✅ Routing SPA fonctionne
 - ✅ Assets optimisés (gzip, cache)
 
-**Estimation** : 3h  
+**Estimation** : 3h
 **Statut** : ✅ Terminé
 
 **Fichiers créés :**
@@ -2286,7 +2286,7 @@ sqlmap (si nécessaire)
 - ✅ Application fonctionnelle
 - ✅ Healthchecks opérationnels
 
-**Estimation** : 3h  
+**Estimation** : 3h
 **Statut** : ✅ Terminé
 
 **Fichiers créés/modifiés :**

@@ -36,6 +36,10 @@ import FournisseurProfile from './pages/Fournisseurs/FournisseurProfile';
 import Produits from './pages/Produits';
 import Caisse from './pages/Caisse';
 import Audit from './pages/Audit';
+import LettresCreditList from './pages/LettresCredit/LettresCreditList';
+import LettreCreditDetail from './pages/LettresCredit/LettreCreditDetail';
+import LCFormPage from './pages/LettresCredit/LCFormPage';
+import CederLCPage from './pages/LettresCredit/CederLCPage';
 
 function App() {
   return (
@@ -133,6 +137,56 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <Caisse />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lettres-credit"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <LettresCreditList />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lettres-credit/nouvelle"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <LCFormPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lettres-credit/:id"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <LettreCreditDetail />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lettres-credit/:id/modifier"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <LCFormPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lettres-credit/:id/ceder"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <CederLCPage />
               </AppLayout>
             </ProtectedRoute>
           }
