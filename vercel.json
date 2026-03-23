@@ -18,8 +18,7 @@
     },
     {
       "source": "/(.*)",
-      "destination": "frontend/$1",
-      "checkInternalReplication": false
+      "destination": "frontend/$1"
     }
   ],
   "env": {
