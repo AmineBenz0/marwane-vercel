@@ -17,7 +17,7 @@ import { useForm } from 'react-hook-form';
 import lettreCreditService from '../../services/lettreCreditService';
 import { get } from '../../services/api';
 import useNotification from '../../hooks/useNotification';
-import { format, addMonths } from 'date-fns';
+import { format } from 'date-fns';
 
 function LCFormPage() {
   const { id } = useParams();
@@ -27,7 +27,6 @@ function LCFormPage() {
 
   const [loading, setLoading] = useState(isEdit);
   const [clients, setClients] = useState([]);
-  const [fournisseurs, setFournisseurs] = useState([]);
 
   const {
     register,
@@ -40,22 +39,14 @@ function LCFormPage() {
     defaultValues: {
       date_emission: format(new Date(), 'yyyy-MM-dd'),
       date_disponibilite: format(new Date(), 'yyyy-MM-dd'),
-      date_expiration: format(addMonths(new Date(), 3), 'yyyy-MM-dd'),
-      type_detenteur: 'client',
     }
   });
-
-  const typeDetenteur = watch('type_detenteur');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [cData, fData] = await Promise.all([
-          get('/clients', { params: { limit: 1000, est_actif: true } }),
-          get('/fournisseurs', { params: { limit: 1000, est_actif: true } }),
-        ]);
+        const cData = await get('/clients', { params: { limit: 1000, est_actif: true } });
         setClients(cData || []);
-        setFournisseurs(fData || []);
 
         if (isEdit) {
           const lcData = await lettreCreditService.getById(id);
@@ -63,7 +54,6 @@ function LCFormPage() {
             ...lcData,
             date_emission: format(new Date(lcData.date_emission), 'yyyy-MM-dd'),
             date_disponibilite: format(new Date(lcData.date_disponibilite), 'yyyy-MM-dd'),
-            date_expiration: format(new Date(lcData.date_expiration), 'yyyy-MM-dd'),
           });
         }
       } catch (err) {
@@ -79,10 +69,14 @@ function LCFormPage() {
   const onSubmit = async (data) => {
     try {
       const payload = {
-        ...data,
+        numero_reference: data.numero_reference,
+        numero_serie: data.numero_serie || null,
+        banque_emettrice: data.banque_emettrice || null,
         montant: parseFloat(data.montant),
-        id_client: data.type_detenteur === 'client' ? data.id_client : null,
-        id_fournisseur: data.type_detenteur === 'fournisseur' ? data.id_fournisseur : null,
+        date_emission: data.date_emission,
+        date_disponibilite: data.date_disponibilite,
+        id_client: data.id_client,
+        notes: data.notes || null,
       };
 
       if (isEdit) {
@@ -127,10 +121,18 @@ function LCFormPage() {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                {...register('banque_emettrice', { required: 'La banque est requise' })}
-                label="Banque Émettrice"
+                {...register('numero_serie')}
+                label="Numéro de série"
                 fullWidth
-                required
+                error={!!errors.numero_serie}
+                helperText={errors.numero_serie?.message}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                {...register('banque_emettrice')}
+                label="Banque Émettrice (optionnel)"
+                fullWidth
                 error={!!errors.banque_emettrice}
                 helperText={errors.banque_emettrice?.message}
               />
@@ -168,55 +170,22 @@ function LCFormPage() {
                 helperText="Date à partir de laquelle la LC peut être utilisée"
               />
             </Grid>
+
+            <Grid item xs={12}><Divider sx={{ my: 1 }}>Client détenteur de la LC</Divider></Grid>
+
             <Grid item xs={12} sm={6}>
               <TextField
-                {...register('date_expiration', { required: 'Requis' })}
-                label="Date d'expiration"
-                type="date"
+                {...register('id_client', { required: 'Le client est requis' })}
+                select
+                label="Sélectionner le Client"
                 fullWidth
                 required
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            <Grid item xs={12}><Divider sx={{ my: 1 }}>Détenteur de la LC</Divider></Grid>
-
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('type_detenteur')}
-                select
-                label="Type de détenteur"
-                fullWidth
+                error={!!errors.id_client}
+                helperText={errors.id_client?.message}
               >
-                <MenuItem value="client">Client</MenuItem>
-                <MenuItem value="fournisseur">Fournisseur</MenuItem>
+                <MenuItem value=""><em>-- Choisir --</em></MenuItem>
+                {clients.map(c => <MenuItem key={c.id_client} value={c.id_client}>{c.nom_client}</MenuItem>)}
               </TextField>
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              {typeDetenteur === 'client' ? (
-                <TextField
-                  {...register('id_client', { required: typeDetenteur === 'client' })}
-                  select
-                  label="Sélectionner le Client"
-                  fullWidth
-                  error={!!errors.id_client}
-                >
-                  <MenuItem value=""><em>-- Choisir --</em></MenuItem>
-                  {clients.map(c => <MenuItem key={c.id_client} value={c.id_client}>{c.nom_client}</MenuItem>)}
-                </TextField>
-              ) : (
-                <TextField
-                  {...register('id_fournisseur', { required: typeDetenteur === 'fournisseur' })}
-                  select
-                  label="Sélectionner le Fournisseur"
-                  fullWidth
-                  error={!!errors.id_fournisseur}
-                >
-                  <MenuItem value=""><em>-- Choisir --</em></MenuItem>
-                  {fournisseurs.map(f => <MenuItem key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom_fournisseur}</MenuItem>)}
-                </TextField>
-              )}
             </Grid>
 
             <Grid item xs={12}>

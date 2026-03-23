@@ -28,7 +28,6 @@ const TYPES_PAIEMENT = [
   { value: 'cheque', label: '💳 Chèque' },
   { value: 'virement', label: '🏦 Virement' },
   { value: 'carte', label: '💳 Carte bancaire' },
-  { value: 'traite', label: '📝 Traite' },
   { value: 'compensation', label: '↔️ Compensation' },
   { value: 'lc', label: '📜 Lettre de Crédit' },
   { value: 'autre', label: '📄 Autre' },
@@ -137,9 +136,6 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
               valueAsNumber: true,
               validate: (value) => {
                 if (!value || value <= 0) return 'Le montant doit être supérieur à 0';
-                if (transaction && value > transaction.montant_restant) {
-                  return `Le montant ne peut pas dépasser ${formatMontant(transaction.montant_restant)}`;
-                }
                 return true;
               }
             })}

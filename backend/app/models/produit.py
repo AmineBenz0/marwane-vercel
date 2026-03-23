@@ -21,6 +21,10 @@ class Produit(Base):
     
     id_produit = Column(Integer, primary_key=True, index=True)
     nom_produit = Column(String(255), unique=True, nullable=False)
+    
+    # 'produit_fini' ou 'matiere_premiere'
+    type_produit = Column(String(20), nullable=False, default='produit_fini', index=True)
+    
     est_actif = Column(Boolean, default=True, nullable=False)
     
     # Type flags: at least one must be true

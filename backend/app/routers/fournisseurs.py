@@ -230,12 +230,27 @@ def get_fournisseur_stats_mensuelles(
     
     # Calculer la date de début (N mois avant aujourd'hui, premier jour du mois)
     date_fin = date.today()
-    # Calculer le premier jour du mois qui est N mois avant aujourd'hui
     date_debut = (date_fin.replace(day=1) - relativedelta(months=periode-1))
     
-    # Requête pour obtenir les statistiques agrégées par mois
-    # Utiliser extract pour être compatible avec SQLite et PostgreSQL
-    # Extraire l'année et le mois, puis formater en Python
+    # --- 1. Calculer le solde initial (tout avant date_debut) ---
+    total_achats_avant = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
+        Transaction.id_fournisseur == id,
+        Transaction.est_actif == True,
+        Transaction.date_transaction < date_debut
+    ).scalar() or 0
+    
+    total_paiements_avant = db.query(func.coalesce(func.sum(Paiement.montant), 0)).join(
+        Transaction, Paiement.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.id_fournisseur == id,
+        Transaction.est_actif == True,
+        Paiement.statut == 'valide',
+        Paiement.date_paiement < date_debut
+    ).scalar() or 0
+    
+    solde_initial = Decimal(str(total_achats_avant)) - Decimal(str(total_paiements_avant))
+    
+    # --- 2. Requête pour les achats mensuels ---
     stats_query = db.query(
         extract('year', Transaction.date_transaction).label('annee'),
         extract('month', Transaction.date_transaction).label('mois'),
@@ -249,49 +264,61 @@ def get_fournisseur_stats_mensuelles(
     ).group_by(
         extract('year', Transaction.date_transaction),
         extract('month', Transaction.date_transaction)
-    ).order_by(
-        extract('year', Transaction.date_transaction),
-        extract('month', Transaction.date_transaction)
     )
     
-    # Récupérer les résultats
+    # --- 3. Requête pour les paiements mensuels ---
+    paiements_query = db.query(
+        extract('year', Paiement.date_paiement).label('annee'),
+        extract('month', Paiement.date_paiement).label('mois'),
+        func.coalesce(func.sum(Paiement.montant), Decimal('0')).label('montant')
+    ).join(
+        Transaction, Paiement.id_transaction == Transaction.id_transaction
+    ).filter(
+        Transaction.id_fournisseur == id,
+        Transaction.est_actif == True,
+        Paiement.statut == 'valide',
+        Paiement.date_paiement >= date_debut,
+        Paiement.date_paiement <= date_fin
+    ).group_by(
+        extract('year', Paiement.date_paiement),
+        extract('month', Paiement.date_paiement)
+    )
+    
     stats_results = stats_query.all()
+    paiements_results = paiements_query.all()
     
-    # Créer un dictionnaire avec les données réelles
-    stats_dict = {}
-    for result in stats_results:
-        # Formater le mois en YYYY-MM
-        mois_key = f"{int(result.annee)}-{int(result.mois):02d}"
-        stats_dict[mois_key] = {
-            'montant': result.montant or Decimal('0'),
-            'nb_transactions': result.nb_transactions or 0
-        }
+    # Consolider dans des dictionnaires
+    achats_dict = {f"{int(r.annee)}-{int(r.mois):02d}": r for r in stats_results}
+    paiements_dict = {f"{int(r.annee)}-{int(r.mois):02d}": r.montant for r in paiements_results}
     
-    # Générer tous les mois de la période (même ceux sans transactions)
+    # Générer tous les mois avec solde cumulé
     data = []
-    current_date = date_debut  # Premier jour du mois de début
+    current_date = date_debut
+    solde_courant = solde_initial
     
     while current_date <= date_fin:
         mois_key = current_date.strftime('%Y-%m')
         
-        # Utiliser les données réelles si disponibles, sinon 0
-        montant = stats_dict.get(mois_key, {}).get('montant', Decimal('0'))
-        nb_transactions = stats_dict.get(mois_key, {}).get('nb_transactions', 0)
+        achats_mois = achats_dict.get(mois_key)
+        montant_achats = achats_mois.montant if achats_mois else Decimal('0')
+        nb_trans = achats_mois.nb_transactions if achats_mois else 0
+        montant_paiements = paiements_dict.get(mois_key, Decimal('0'))
+        
+        # Le solde augmente avec les achats et diminue avec les paiements
+        solde_courant += (montant_achats - montant_paiements)
         
         data.append(FournisseurStatsMensuellesItem(
             mois=mois_key,
-            montant=montant,
-            nb_transactions=nb_transactions
+            montant=montant_achats,
+            paiements=montant_paiements,
+            solde_cumule=solde_courant,
+            nb_transactions=nb_trans
         ))
         
-        # Passer au mois suivant
         current_date = current_date + relativedelta(months=1)
     
-    # Formater la période pour la réponse
-    periode_str = f"{periode}_mois"
-    
     return FournisseurStatsMensuelles(
-        periode=periode_str,
+        periode=f"{periode}_mois",
         data=data
     )
 

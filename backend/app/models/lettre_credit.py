@@ -12,24 +12,25 @@ class LettreDeCredit(Base):
     Modèle représentant une Lettre de Crédit (LC).
     
     Une LC est un instrument financier utilisé comme mode de paiement.
-    Elle peut être détenue par un client ou un fournisseur et peut être cédée (transférée).
+    Elle est toujours détenue par un client et peut être cédée (transférée).
     """
     __tablename__ = "lettres_credit"
     
     id_lc = Column(Integer, primary_key=True, index=True)
     numero_reference = Column(String(50), nullable=False, unique=True, index=True)
-    banque_emettrice = Column(String(100), nullable=False)
+    numero_serie = Column(String(50), nullable=True, index=True) # Numéro de série interne ou supplémentaire
+    banque_emettrice = Column(String(100), nullable=True)  # Rendu optionnel
     montant = Column(Numeric(15, 2), nullable=False)
     
     date_emission = Column(Date, nullable=False)
     date_disponibilite = Column(Date, nullable=False, index=True)
-    date_expiration = Column(Date, nullable=False, index=True)
+    # date_expiration supprimé
     
     # active, utilisee, cedee, expiree, annulee
     statut = Column(String(20), nullable=False, default='active', index=True)
     
-    # client ou fournisseur
-    type_detenteur = Column(String(20), nullable=False, index=True)
+    # Toujours 'client' - le champ est conservé pour compatibilité des données existantes
+    type_detenteur = Column(String(20), nullable=False, default='client', index=True)
     id_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True, index=True)
     id_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True, index=True)
     
@@ -82,6 +83,5 @@ class LettreDeCredit(Base):
         today = date.today()
         return (
             self.statut == 'active' and 
-            self.date_disponibilite <= today and 
-            self.date_expiration >= today
+            self.date_disponibilite <= today
         )

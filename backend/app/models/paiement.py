@@ -78,7 +78,7 @@ class Paiement(Base):
     __table_args__ = (
         CheckConstraint('montant > 0', name='check_paiement_montant_positif'),
         CheckConstraint(
-            "type_paiement IN ('cash', 'cheque', 'virement', 'carte', 'traite', 'compensation', 'lc', 'autre')",
+            "type_paiement IN ('cash', 'cheque', 'virement', 'carte', 'compensation', 'lc', 'autre')",
             name='check_type_paiement_valide'
         ),
         CheckConstraint(

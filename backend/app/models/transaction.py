@@ -101,6 +101,7 @@ class Transaction(Base):
     def montant_restant(self) -> Decimal:
         """
         Calcule le montant restant à payer pour cette transaction.
+        Peut être négatif en cas de surpaiement (avance).
         
         Returns:
             Decimal: Montant restant (montant_total - montant_paye)
@@ -113,16 +114,20 @@ class Transaction(Base):
         Détermine le statut de paiement de la transaction automatiquement.
         
         Statuts possibles:
+        - 'surpaye': Montant payé dépasse le montant total
         - 'paye': Montant totalement payé
         - 'partiel': Montant partiellement payé
         - 'impaye': Aucun paiement reçu
-        - 'en_retard': Paiement incomplet après la date d'échéance
         
         Returns:
             str: Statut du paiement
         """
         montant_paye = self.montant_paye
         montant_total = Decimal(str(self.montant_total))
+        
+        # Surpayé
+        if montant_paye > montant_total + Decimal('0.01'):
+            return 'surpaye'
         
         # Totalement payé (avec une tolérance de 0.01 pour les arrondis)
         if montant_paye >= montant_total - Decimal('0.01'):

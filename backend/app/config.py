@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     ENABLE_AUTH: bool = False  # Désactive l'authentification si False
     ENABLE_RATE_LIMITING: bool = False  # Désactive le rate limiting si False
     
-    model_config = ConfigDict(env_file=".env", case_sensitive=True)
+    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
     
     @property
     def cors_origins_list(self) -> List[str]:

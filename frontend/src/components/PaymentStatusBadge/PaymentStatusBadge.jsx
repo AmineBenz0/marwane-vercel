@@ -2,6 +2,7 @@
  * Composant Badge pour afficher le statut de paiement d'une transaction.
  * 
  * Affiche un badge coloré selon le statut :
+ * - 'surpaye' → Bleu "Surpayé"
  * - 'paye' → Vert "Payé"
  * - 'partiel' → Orange "Partiel"
  * - 'impaye' → Gris "Impayé"
@@ -15,12 +16,18 @@ import {
   HourglassEmpty as HourglassEmptyIcon,
   Warning as WarningIcon,
   Error as ErrorIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 
 /**
  * Configuration des statuts de paiement.
  */
 const PAYMENT_STATUS_CONFIG = {
+  surpaye: {
+    label: 'Surpayé',
+    color: 'info',
+    icon: TrendingUpIcon,
+  },
   paye: {
     label: 'Payé',
     color: 'success',

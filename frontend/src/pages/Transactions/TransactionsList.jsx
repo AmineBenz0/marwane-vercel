@@ -375,39 +375,24 @@ function TransactionsList() {
         
         result = await put(`/transactions/${editingTransaction.id_transaction}`, transactionData);
         
-        // Gérer le paiement si présent
-        if (paiement && paiement.ajouter_paiement) {
-          try {
-            const paiementData = {
-              date_paiement: paiement.paiement_date,
-              montant: parseFloat(paiement.paiement_montant),
-              type_paiement: paiement.paiement_type,
-              notes: paiement.paiement_notes || null,
+        // Gérer les paiements si présents
+        if (data.paiements && data.paiements.length > 0) {
+          const paymentsPromises = data.paiements.map(async (p) => {
+            const pData = {
+              ...p,
+              id_transaction: editingTransaction.id_transaction,
             };
-            
-            // Ajouter les champs spécifiques selon le type
-            if (paiement.paiement_type === 'cheque') {
-              paiementData.numero_cheque = paiement.paiement_numero_cheque || null;
-              paiementData.banque = paiement.paiement_banque || null;
-              paiementData.statut_cheque = 'a_encaisser';
-            } else if (paiement.paiement_type === 'virement') {
-              paiementData.reference_virement = paiement.paiement_reference || null;
-            } else if (paiement.paiement_type === 'lc') {
-              paiementData.id_lc = paiement.paiement_id_lc || null;
-            }
-            
-            // Vérifier si c'est une mise à jour ou une création
-            if (paiement.paiement_id) {
-              // Mise à jour d'un paiement existant
-              await put(`/paiements/${paiement.paiement_id}`, paiementData);
+            if (p.id_paiement) {
+              return put(`/paiements/${p.id_paiement}`, pData);
             } else {
-              // Création d'un nouveau paiement
-              paiementData.id_transaction = editingTransaction.id_transaction;
-              await post('/paiements', paiementData);
+              return post('/paiements', pData);
             }
+          });
+          try {
+            await Promise.all(paymentsPromises);
           } catch (err) {
-            console.error('Erreur lors de la gestion du paiement:', err);
-            notification.error('Transaction modifiée mais erreur lors de la mise à jour du paiement');
+            console.error('Erreur lors de la gestion des paiements:', err);
+            notification.warning('Transaction modifiée mais certains paiements ont échoué');
           }
         }
         
@@ -420,46 +405,35 @@ function TransactionsList() {
           
           // Créer les paiements pour les lignes qui ont ajouter_paiement = true
           if (result && Array.isArray(result) && data.lignesData) {
-            let nombrePaiementsCrees = 0;
+            const allPaiementsInBatch = [];
             
-            const paiementsPromises = result.map(async (transaction, index) => {
+            result.forEach((transaction, index) => {
               const ligneData = data.lignesData[index];
-              
-              // Vérifier si cette ligne a un paiement à créer
-              if (ligneData?.ajouter_paiement && ligneData.paiement_montant > 0) {
-                try {
-                  const paiementData = {
+              if (ligneData?.ajouter_paiement && ligneData.paiements?.length > 0) {
+                ligneData.paiements.forEach(p => {
+                  allPaiementsInBatch.push({
                     id_transaction: transaction.id_transaction,
-                    date_paiement: ligneData.paiement_date,
-                    montant: parseFloat(ligneData.paiement_montant),
-                    type_paiement: ligneData.paiement_type,
-                    notes: ligneData.paiement_notes || null,
-                  };
-                  
-                  // Ajouter les champs spécifiques selon le type
-                  if (ligneData.paiement_type === 'cheque') {
-                    paiementData.numero_cheque = ligneData.paiement_numero_cheque || null;
-                    paiementData.banque = ligneData.paiement_banque || null;
-                    paiementData.statut_cheque = 'a_encaisser';
-                  } else if (ligneData.paiement_type === 'virement') {
-                    paiementData.reference_virement = ligneData.paiement_reference || null;
-                  } else if (ligneData.paiement_type === 'lc') {
-                    paiementData.id_lc = ligneData.paiement_id_lc || null;
-                  }
-                  
-                  await post('/paiements', paiementData);
-                  nombrePaiementsCrees++;
-                } catch (err) {
-                  console.error(`Erreur lors de la création du paiement pour la transaction ${transaction.id_transaction}:`, err);
-                  // Ne pas bloquer si un paiement échoue
-                }
+                    date_paiement: p.date,
+                    montant: parseFloat(p.montant),
+                    type_paiement: p.type,
+                    numero_cheque: p.numero_cheque || null,
+                    banque: p.banque || null,
+                    reference_virement: p.reference || null,
+                    id_lc: p.id_lc || null,
+                    notes: p.notes || null,
+                  });
+                });
               }
             });
             
-            await Promise.allSettled(paiementsPromises);
-            
-            if (nombrePaiementsCrees > 0) {
-              notification.success(`${result.length} transaction(s) créée(s) dont ${nombrePaiementsCrees} avec paiement`);
+            if (allPaiementsInBatch.length > 0) {
+              try {
+                await post('/paiements/batch', { paiements: allPaiementsInBatch });
+                notification.success(`${result.length} transactions créées avec ${allPaiementsInBatch.length} paiements.`);
+              } catch (err) {
+                console.error('Erreur lors de la création du batch de paiements:', err);
+                notification.warning(`${result.length} transactions créées mais échec de création des paiements.`);
+              }
             } else {
               notification.success(`${result.length} transaction(s) créée(s)`);
             }

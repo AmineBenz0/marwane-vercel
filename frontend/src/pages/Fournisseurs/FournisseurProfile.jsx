@@ -37,6 +37,7 @@ import {
   TrendingUp as TrendingUpIcon,
   Inventory as InventoryIcon,
   Store as StoreIcon,
+  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -47,6 +48,9 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Area,
+  ComposedChart,
+  Bar,
 } from 'recharts';
 import { format, subMonths, startOfMonth } from 'date-fns';
 import fr from 'date-fns/locale/fr';
@@ -248,6 +252,8 @@ function FournisseurProfile() {
       mois: formatMonth(item.mois),
       moisKey: item.mois,
       montant: parseFloat(item.montant || 0),
+      paiements: parseFloat(item.paiements || 0),
+      solde: parseFloat(item.solde_cumule || 0),
       nb_transactions: item.nb_transactions || 0,
     }));
   }, [statsMensuelles]);
@@ -595,7 +601,17 @@ function FournisseurProfile() {
 
       {/* Cartes statistiques */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="Solde à payer"
+            value={insightsFinanciers?.montant_impaye || 0}
+            icon={<AccountBalanceIcon />}
+            valueFormat="currency"
+            currency="MAD"
+            color="error"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Total achats"
             value={statistiques?.montant_total_achats || 0}
@@ -605,7 +621,7 @@ function FournisseurProfile() {
             color="primary"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Nombre transactions"
             value={statistiques?.total_transactions || 0}
@@ -614,7 +630,7 @@ function FournisseurProfile() {
             color="info"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Montant moyen"
             value={statistiques?.montant_moyen_transaction || 0}
@@ -643,7 +659,7 @@ function FournisseurProfile() {
           {chartData.length > 0 ? (
             <Box sx={{ width: '100%', height: 400, mt: 3 }}>
               <ResponsiveContainer>
-                <LineChart
+                <ComposedChart
                   data={chartData}
                   margin={{
                     top: 5,
@@ -652,7 +668,7 @@ function FournisseurProfile() {
                     bottom: 5,
                   }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="mois"
                     tick={{ fontSize: 12 }}
@@ -661,7 +677,7 @@ function FournisseurProfile() {
                     height={80}
                   />
                   <YAxis
-                    label={{ value: 'Montant (MAD)', angle: -90, position: 'insideLeft' }}
+                    label={{ value: 'Montant (MAD)', angle: -90, position: 'insideLeft', offset: 0 }}
                     tickFormatter={(value) => formatMontantForAxis(value)}
                     width={80}
                     tick={{ fontSize: 12 }}
@@ -669,18 +685,41 @@ function FournisseurProfile() {
                   <Tooltip
                     formatter={(value) => formatMontantForTooltip(value)}
                     labelFormatter={(label) => `Mois: ${label}`}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
-                  <Legend />
+                  <Legend verticalAlign="top" height={36}/>
+                  
+                  {/* Solde cumulé en arrière-plan (Area) */}
+                  <Area
+                    type="monotone"
+                    dataKey="solde"
+                    fill={theme.palette.error.main}
+                    stroke={theme.palette.error.main}
+                    fillOpacity={0.15}
+                    name="Evolution du solde (Dette)"
+                    strokeWidth={2}
+                  />
+                  
+                  {/* Achats du mois (Line) */}
                   <Line
                     type="monotone"
                     dataKey="montant"
                     stroke={theme.palette.primary.main}
-                    strokeWidth={2}
-                    name="Montant total (MAD)"
+                    strokeWidth={3}
+                    name="Achats du mois"
                     dot={{ r: 4 }}
                     activeDot={{ r: 6 }}
                   />
-                </LineChart>
+
+                  {/* Paiements du mois (Bar) */}
+                  <Bar 
+                    dataKey="paiements" 
+                    fill={theme.palette.success.main} 
+                    name="Paiements effectués"
+                    radius={[4, 4, 0, 0]}
+                    barSize={20}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </Box>
           ) : (

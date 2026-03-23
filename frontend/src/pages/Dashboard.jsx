@@ -24,6 +24,8 @@ import {
   Receipt as ReceiptIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
+  Egg as EggIcon,
+  Inventory as InventoryIcon,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -103,6 +105,9 @@ function Dashboard() {
   const [nbTransactionsMois, setNbTransactionsMois] = useState(0);
   const [totalVentes, setTotalVentes] = useState(0);
   const [totalAchats, setTotalAchats] = useState(0);
+  const [totalOeufsAujourdhui, setTotalOeufsAujourdhui] = useState(0);
+  const [totalCartonsAujourdhui, setTotalCartonsAujourdhui] = useState(0);
+
   
   // État pour le graphique
   const [chartData, setChartData] = useState([]);
@@ -124,11 +129,11 @@ function Dashboard() {
         // Date pour les 30 derniers jours
         const dateDebut30Jours = subDays(now, 30);
         
-        // Charger toutes les données en parallèle
         const [
           soldeResponse,
           transactionsMoisResponse,
           transactions30JoursResponse,
+          productionResponse,
         ] = await Promise.all([
           // 1. Solde de la caisse
           get('/caisse/solde'),
@@ -150,6 +155,14 @@ function Dashboard() {
               date_fin: format(now, 'yyyy-MM-dd'),
               est_actif: true,
               limit: 1000, // Limite élevée pour récupérer toutes les transactions
+            },
+          }),
+
+          // 4. Production d'aujourd'hui
+          get('/productions', {
+            params: {
+              date_debut: format(now, 'yyyy-MM-dd'),
+              date_fin: format(now, 'yyyy-MM-dd'),
             },
           }),
         ]);
@@ -181,6 +194,14 @@ function Dashboard() {
         const transactions30Jours = transactions30JoursResponse || [];
         const chartDataFormatted = groupTransactionsByDay(transactions30Jours);
         setChartData(chartDataFormatted);
+
+        // Traiter la production d'aujourd'hui
+        const productionsToday = productionResponse || [];
+        const oeufsToday = productionsToday.reduce((sum, p) => sum + (p.nombre_oeufs || 0), 0);
+        const cartonsToday = productionsToday.reduce((sum, p) => sum + (p.nombre_cartons || 0), 0);
+        setTotalOeufsAujourdhui(oeufsToday);
+        setTotalCartonsAujourdhui(cartonsToday);
+
         
       } catch (err) {
         console.error('Erreur lors du chargement du dashboard:', err);
@@ -273,7 +294,7 @@ function Dashboard() {
         </Grid>
         
         {/* Total des achats */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <StatCard
             title="Total des achats"
             value={totalAchats}
@@ -281,6 +302,28 @@ function Dashboard() {
             color="warning"
             valueFormat="currency"
             currency="MAD"
+          />
+        </Grid>
+
+        {/* Œufs d'aujourd'hui */}
+        <Grid item xs={12} sm={6} md={2}>
+          <StatCard
+            title="Œufs aujourd'hui"
+            value={totalOeufsAujourdhui}
+            icon={<EggIcon />}
+            color="secondary"
+            valueFormat="number"
+          />
+        </Grid>
+
+        {/* Cartons d'aujourd'hui */}
+        <Grid item xs={12} sm={6} md={2}>
+          <StatCard
+            title="Cartons aujourd'hui"
+            value={totalCartonsAujourdhui}
+            icon={<InventoryIcon />}
+            color="secondary"
+            valueFormat="number"
           />
         </Grid>
       </Grid>

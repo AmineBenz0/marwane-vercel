@@ -21,9 +21,17 @@ class MouvementCaisseBase(BaseModel):
         ...,
         description="Type de mouvement : 'ENTREE' ou 'SORTIE'"
     )
-    id_transaction: int = Field(
-        ...,
+    id_transaction: int | None = Field(
+        None,
         description="ID de la transaction associée"
+    )
+    id_charge: int | None = Field(
+        None,
+        description="ID de la dépense associée"
+    )
+    id_paiement: int | None = Field(
+        None,
+        description="ID du paiement associé"
     )
 
 

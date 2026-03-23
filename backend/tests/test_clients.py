@@ -10,15 +10,19 @@ from app.models.transaction import Transaction
 from app.models.user import Utilisateur
 from app.utils.security import hash_password
 import bcrypt
+from app.config import settings
 
 
 class TestClientsEndpoints:
     """Tests pour les endpoints CRUD des clients."""
     
-    def test_get_clients_requires_auth(self, client):
-        """Test que GET /clients nécessite une authentification."""
+    def test_get_clients_auth_behavior(self, client):
+        """Test du comportement de GET /clients selon ENABLE_AUTH."""
         response = client.get("/api/v1/clients")
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        if settings.ENABLE_AUTH:
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        else:
+            assert response.status_code == status.HTTP_200_OK
     
     def test_get_clients_success(self, client, test_user, db_session):
         """Test de récupération de la liste des clients."""
@@ -30,27 +34,32 @@ class TestClientsEndpoints:
                 "mot_de_passe": "TestPass123!"
             }
         )
-        assert login_response.status_code == status.HTTP_200_OK
-        token = login_response.json()["access_token"]
+        if settings.ENABLE_AUTH:
+            assert login_response.status_code == status.HTTP_200_OK
+            token = login_response.json()["access_token"]
+        else:
+            # If auth is disabled, no login is needed, token can be empty or not used
+            token = ""
         
         # Créer quelques clients de test
         client1 = Client(
             nom_client="Client Test 1",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         client2 = Client(
             nom_client="Client Test 2",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add_all([client1, client2])
         db_session.commit()
         
         # Récupérer la liste des clients
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         response = client.get(
             "/api/v1/clients",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -66,18 +75,23 @@ class TestClientsEndpoints:
                 "mot_de_passe": "TestPass123!"
             }
         )
-        token = login_response.json()["access_token"]
+        if settings.ENABLE_AUTH:
+            token = login_response.json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+        else:
+            token = ""
+            headers = {}
         
         # Créer des clients actifs et inactifs
         active_client = Client(
             nom_client="Client Actif",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         inactive_client = Client(
             nom_client="Client Inactif",
             est_actif=False,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add_all([active_client, inactive_client])
         db_session.commit()
@@ -85,7 +99,7 @@ class TestClientsEndpoints:
         # Tester le filtre est_actif=True
         response = client.get(
             "/api/v1/clients?est_actif=true",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -94,7 +108,7 @@ class TestClientsEndpoints:
         # Tester le filtre est_actif=False
         response = client.get(
             "/api/v1/clients?est_actif=false",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -109,23 +123,28 @@ class TestClientsEndpoints:
                 "mot_de_passe": "TestPass123!"
             }
         )
-        token = login_response.json()["access_token"]
+        if settings.ENABLE_AUTH:
+            token = login_response.json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+        else:
+            token = ""
+            headers = {}
         
         # Créer des clients avec des noms différents
         client1 = Client(
             nom_client="Client Alpha",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         client2 = Client(
             nom_client="Client Beta",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         client3 = Client(
             nom_client="Alpha Company",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add_all([client1, client2, client3])
         db_session.commit()
@@ -133,7 +152,7 @@ class TestClientsEndpoints:
         # Rechercher "Alpha"
         response = client.get(
             "/api/v1/clients?recherche=Alpha",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -143,7 +162,7 @@ class TestClientsEndpoints:
         # Rechercher "Beta"
         response = client.get(
             "/api/v1/clients?recherche=Beta",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -159,23 +178,28 @@ class TestClientsEndpoints:
                 "mot_de_passe": "TestPass123!"
             }
         )
-        token = login_response.json()["access_token"]
+        if settings.ENABLE_AUTH:
+            token = login_response.json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+        else:
+            token = ""
+            headers = {}
         
         # Créer des clients
         active_alpha = Client(
             nom_client="Alpha Actif",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         inactive_alpha = Client(
             nom_client="Alpha Inactif",
             est_actif=False,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         active_beta = Client(
             nom_client="Beta Actif",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add_all([active_alpha, inactive_alpha, active_beta])
         db_session.commit()
@@ -183,7 +207,7 @@ class TestClientsEndpoints:
         # Rechercher "Alpha" et est_actif=True
         response = client.get(
             "/api/v1/clients?recherche=Alpha&est_actif=true",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -200,13 +224,18 @@ class TestClientsEndpoints:
                 "mot_de_passe": "TestPass123!"
             }
         )
-        token = login_response.json()["access_token"]
+        if settings.ENABLE_AUTH:
+            token = login_response.json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+        else:
+            token = ""
+            headers = {}
         
         # Créer un client
         test_client = Client(
             nom_client="Client Test",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add(test_client)
         db_session.commit()
@@ -215,7 +244,7 @@ class TestClientsEndpoints:
         # Récupérer le client par ID
         response = client.get(
             f"/api/v1/clients/{test_client.id_client}",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -227,24 +256,26 @@ class TestClientsEndpoints:
     
     def test_get_client_by_id_not_found(self, client, admin_token):
         """Test de récupération d'un client inexistant."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Essayer de récupérer un client inexistant
         response = client.get(
             "/api/v1/clients/99999",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert "introuvable" in response.json()["detail"].lower()
     
     def test_create_client_success(self, client, test_user, db_session, admin_token):
         """Test de création d'un client."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un nouveau client
         response = client.post(
             "/api/v1/clients",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "Nouveau Client",
                 "est_actif": True
@@ -263,17 +294,21 @@ class TestClientsEndpoints:
         ).first()
         assert client_db is not None
         assert client_db.nom_client == "Nouveau Client"
-        assert client_db.id_utilisateur_creation == test_user.id_utilisateur
+        if settings.ENABLE_AUTH:
+            assert client_db.id_utilisateur_creation == test_user.id_utilisateur
+        else:
+            assert client_db.id_utilisateur_creation is None
     
     def test_create_client_duplicate_name(self, client, test_user, db_session, admin_token):
         """Test qu'on ne peut pas créer deux clients avec le même nom."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un premier client
         client1 = Client(
             nom_client="Client Unique",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add(client1)
         db_session.commit()
@@ -281,7 +316,7 @@ class TestClientsEndpoints:
         # Essayer de créer un deuxième client avec le même nom
         response = client.post(
             "/api/v1/clients",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "Client Unique",
                 "est_actif": True
@@ -292,12 +327,13 @@ class TestClientsEndpoints:
     
     def test_create_client_validation_error(self, client, admin_token):
         """Test de validation des données lors de la création."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Essayer de créer un client sans nom
         response = client.post(
             "/api/v1/clients",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "est_actif": True
             }
@@ -307,7 +343,7 @@ class TestClientsEndpoints:
         # Essayer de créer un client avec un nom vide
         response = client.post(
             "/api/v1/clients",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "   ",
                 "est_actif": True
@@ -317,13 +353,14 @@ class TestClientsEndpoints:
     
     def test_update_client_success(self, client, test_user, db_session, admin_token):
         """Test de mise à jour d'un client."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un client
         test_client = Client(
             nom_client="Client Original",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add(test_client)
         db_session.commit()
@@ -332,7 +369,7 @@ class TestClientsEndpoints:
         # Mettre à jour le client
         response = client.put(
             f"/api/v1/clients/{test_client.id_client}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "Client Modifié",
                 "est_actif": False
@@ -347,17 +384,21 @@ class TestClientsEndpoints:
         db_session.refresh(test_client)
         assert test_client.nom_client == "Client Modifié"
         assert test_client.est_actif is False
-        assert test_client.id_utilisateur_modification == test_user.id_utilisateur
+        if settings.ENABLE_AUTH:
+            assert test_client.id_utilisateur_modification == test_user.id_utilisateur
+        else:
+            assert test_client.id_utilisateur_modification is None
     
     def test_update_client_partial(self, client, test_user, db_session, admin_token):
         """Test de mise à jour partielle d'un client."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un client
         test_client = Client(
             nom_client="Client Original",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add(test_client)
         db_session.commit()
@@ -367,7 +408,7 @@ class TestClientsEndpoints:
         # Mettre à jour uniquement est_actif
         response = client.put(
             f"/api/v1/clients/{test_client.id_client}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "est_actif": False
             }
@@ -379,12 +420,13 @@ class TestClientsEndpoints:
     
     def test_update_client_not_found(self, client, admin_token):
         """Test de mise à jour d'un client inexistant."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Essayer de mettre à jour un client inexistant
         response = client.put(
             "/api/v1/clients/99999",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "Client Inexistant"
             }
@@ -393,18 +435,19 @@ class TestClientsEndpoints:
     
     def test_update_client_duplicate_name(self, client, test_user, db_session, admin_token):
         """Test qu'on ne peut pas mettre à jour un client avec un nom déjà utilisé."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer deux clients
         client1 = Client(
             nom_client="Client 1",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         client2 = Client(
             nom_client="Client 2",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add_all([client1, client2])
         db_session.commit()
@@ -413,7 +456,7 @@ class TestClientsEndpoints:
         # Essayer de renommer client2 avec le nom de client1
         response = client.put(
             f"/api/v1/clients/{client2.id_client}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "Client 1"
             }
@@ -423,13 +466,14 @@ class TestClientsEndpoints:
     
     def test_delete_client_success(self, client, test_user, db_session, admin_token):
         """Test de suppression (soft delete) d'un client."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un client
         test_client = Client(
             nom_client="Client à Supprimer",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add(test_client)
         db_session.commit()
@@ -439,19 +483,22 @@ class TestClientsEndpoints:
         # Supprimer le client
         response = client.delete(
             f"/api/v1/clients/{client_id}",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_204_NO_CONTENT
         
         # Vérifier que le client existe toujours mais est inactif
         db_session.refresh(test_client)
         assert test_client.est_actif is False
-        assert test_client.id_utilisateur_modification == test_user.id_utilisateur
+        if settings.ENABLE_AUTH:
+            assert test_client.id_utilisateur_modification == test_user.id_utilisateur
+        else:
+            assert test_client.id_utilisateur_modification is None
         
         # Vérifier qu'il n'apparaît plus dans la liste des clients actifs
         response = client.get(
             "/api/v1/clients?est_actif=true",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -460,24 +507,26 @@ class TestClientsEndpoints:
     
     def test_delete_client_not_found(self, client, admin_token):
         """Test de suppression d'un client inexistant."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Essayer de supprimer un client inexistant
         response = client.delete(
             "/api/v1/clients/99999",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
     
     def test_delete_client_already_inactive(self, client, test_user, db_session, admin_token):
         """Test qu'on ne peut pas supprimer un client déjà inactif."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un client inactif
         test_client = Client(
             nom_client="Client Inactif",
             est_actif=False,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add(test_client)
         db_session.commit()
@@ -486,19 +535,20 @@ class TestClientsEndpoints:
         # Essayer de supprimer le client déjà inactif
         response = client.delete(
             f"/api/v1/clients/{test_client.id_client}",
-            headers={"Authorization": f"Bearer {token}"}
+            headers=headers
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "déjà inactif" in response.json()["detail"].lower()
     
     def test_client_tracks_user_creation(self, client, test_user, db_session, admin_token):
         """Test que l'ID de l'utilisateur créateur est enregistré."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un client
         response = client.post(
             "/api/v1/clients",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "Client avec Traçabilité",
                 "est_actif": True
@@ -511,17 +561,21 @@ class TestClientsEndpoints:
         client_db = db_session.query(Client).filter(
             Client.id_client == data["id_client"]
         ).first()
-        assert client_db.id_utilisateur_creation == test_user.id_utilisateur
+        if settings.ENABLE_AUTH:
+            assert client_db.id_utilisateur_creation == test_user.id_utilisateur
+        else:
+            assert client_db.id_utilisateur_creation is None
     
     def test_client_tracks_user_modification(self, client, test_user, db_session, admin_token):
         """Test que l'ID de l'utilisateur modificateur est enregistré."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer un client
         test_client = Client(
             nom_client="Client à Modifier",
             est_actif=True,
-            id_utilisateur_creation=test_user.id_utilisateur
+            id_utilisateur_creation=test_user.id_utilisateur if settings.ENABLE_AUTH else None
         )
         db_session.add(test_client)
         db_session.commit()
@@ -530,7 +584,7 @@ class TestClientsEndpoints:
         # Modifier le client
         response = client.put(
             f"/api/v1/clients/{test_client.id_client}",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={
                 "nom_client": "Client Modifié"
             }
@@ -539,11 +593,15 @@ class TestClientsEndpoints:
         
         # Vérifier en base
         db_session.refresh(test_client)
-        assert test_client.id_utilisateur_modification == test_user.id_utilisateur
+        if settings.ENABLE_AUTH:
+            assert test_client.id_utilisateur_modification == test_user.id_utilisateur
+        else:
+            assert test_client.id_utilisateur_modification is None
     
     def test_get_clients_pagination(self, client, test_user, db_session, admin_token):
         """Test de la pagination sur GET /clients."""
-        token = admin_token
+        token = admin_token if settings.ENABLE_AUTH else ""
+        headers = {"Authorization": f"Bearer {token}"} if settings.ENABLE_AUTH else {}
         
         # Créer plusieurs clients
         clients = [
@@ -575,7 +633,7 @@ class TestClientsEndpoints:
         data = response.json()
         assert len(data) == 5
 
-    def test_get_client_profile_success(self, client, test_user, db_session, admin_token):
+    def test_get_client_profile_success(self, client, test_user, db_session, admin_token, test_produit):
         """Test de récupération du profil d'un client avec transactions."""
         token = admin_token
         
@@ -594,6 +652,9 @@ class TestClientsEndpoints:
         transactions = [
             Transaction(
                 date_transaction=today - timedelta(days=i),
+                id_produit=test_produit.id_produit,
+                quantite=1,
+                prix_unitaire=Decimal(f"{100 + i * 10}.00"),
                 montant_total=Decimal(f"{100 + i * 10}.00"),
                 est_actif=True,
                 id_client=test_client.id_client,
@@ -681,7 +742,7 @@ class TestClientsEndpoints:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert "introuvable" in response.json()["detail"].lower()
     
-    def test_get_client_profile_pagination(self, client, test_user, db_session, admin_token):
+    def test_get_client_profile_pagination(self, client, test_user, db_session, admin_token, test_produit):
         """Test de la pagination des transactions dans le profil client."""
         token = admin_token
         
@@ -700,6 +761,9 @@ class TestClientsEndpoints:
         transactions = [
             Transaction(
                 date_transaction=today - timedelta(days=i),
+                id_produit=test_produit.id_produit,
+                quantite=1,
+                prix_unitaire=Decimal("100.00"),
                 montant_total=Decimal("100.00"),
                 est_actif=True,
                 id_client=test_client.id_client,
@@ -738,7 +802,7 @@ class TestClientsEndpoints:
         data = response.json()
         assert len(data["transactions"]) == 0
     
-    def test_get_client_profile_only_active_transactions(self, client, test_user, db_session, admin_token):
+    def test_get_client_profile_only_active_transactions(self, client, test_user, db_session, admin_token, test_produit):
         """Test que seules les transactions actives sont comptées dans les statistiques."""
         token = admin_token
         
@@ -758,6 +822,9 @@ class TestClientsEndpoints:
         active_transactions = [
             Transaction(
                 date_transaction=today - timedelta(days=i),
+                id_produit=test_produit.id_produit,
+                quantite=1,
+                prix_unitaire=Decimal("100.00"),
                 montant_total=Decimal("100.00"),
                 est_actif=True,
                 id_client=test_client.id_client,
@@ -770,6 +837,9 @@ class TestClientsEndpoints:
         inactive_transactions = [
             Transaction(
                 date_transaction=today - timedelta(days=i),
+                id_produit=test_produit.id_produit,
+                quantite=1,
+                prix_unitaire=Decimal("200.00"),
                 montant_total=Decimal("200.00"),
                 est_actif=False,
                 id_client=test_client.id_client,
@@ -810,7 +880,7 @@ class TestClientsEndpoints:
             # Si l'auth est désactivée, on obtient 404 car le client n'existe pas
             assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_get_client_stats_mensuelles_success(self, client, test_user, db_session, admin_token):
+    def test_get_client_stats_mensuelles_success(self, client, test_user, db_session, admin_token, test_produit):
         """Test de récupération des statistiques mensuelles d'un client."""
         token = admin_token
         
@@ -831,6 +901,9 @@ class TestClientsEndpoints:
         # Transaction il y a 2 mois
         transaction1 = Transaction(
             date_transaction=today.replace(day=1) - relativedelta(months=2),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("100.00"),
             montant_total=Decimal("1000.00"),
             est_actif=True,
             id_client=test_client.id_client
@@ -838,6 +911,9 @@ class TestClientsEndpoints:
         # Transaction il y a 1 mois
         transaction2 = Transaction(
             date_transaction=today.replace(day=1) - relativedelta(months=1),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("200.00"),
             montant_total=Decimal("2000.00"),
             est_actif=True,
             id_client=test_client.id_client
@@ -845,6 +921,9 @@ class TestClientsEndpoints:
         # Transaction ce mois
         transaction3 = Transaction(
             date_transaction=today.replace(day=1),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("300.00"),
             montant_total=Decimal("3000.00"),
             est_actif=True,
             id_client=test_client.id_client

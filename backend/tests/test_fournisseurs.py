@@ -455,7 +455,7 @@ class TestFournisseursEndpoints:
         data = response.json()
         assert len(data) == 5
     
-    def test_get_fournisseur_profile_success(self, client, test_user, db_session, admin_token):
+    def test_get_fournisseur_profile_success(self, client, test_user, db_session, admin_token, test_produit):
         """Test de récupération du profil d'un fournisseur avec transactions."""
         token = admin_token
         
@@ -474,6 +474,9 @@ class TestFournisseursEndpoints:
         transactions = [
             Transaction(
                 date_transaction=today - timedelta(days=i),
+                id_produit=test_produit.id_produit,
+                quantite=1,
+                prix_unitaire=Decimal(f"{100 + i * 10}.00"),
                 montant_total=Decimal(f"{100 + i * 10}.00"),
                 est_actif=True,
                 id_fournisseur=test_fournisseur.id_fournisseur,
@@ -561,7 +564,7 @@ class TestFournisseursEndpoints:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert "introuvable" in response.json()["detail"].lower()
     
-    def test_get_fournisseur_profile_pagination(self, client, test_user, db_session, admin_token):
+    def test_get_fournisseur_profile_pagination(self, client, test_user, db_session, admin_token, test_produit):
         """Test de la pagination des transactions dans le profil fournisseur."""
         token = admin_token
         
@@ -580,6 +583,9 @@ class TestFournisseursEndpoints:
         transactions = [
             Transaction(
                 date_transaction=today - timedelta(days=i),
+                id_produit=test_produit.id_produit,
+                quantite=1,
+                prix_unitaire=Decimal("100.00"),
                 montant_total=Decimal("100.00"),
                 est_actif=True,
                 id_fournisseur=test_fournisseur.id_fournisseur,
@@ -609,7 +615,7 @@ class TestFournisseursEndpoints:
         data = response.json()
         assert len(data["transactions"]) == 5  # Il reste 5 transactions
 
-    def test_get_fournisseur_stats_mensuelles_success(self, client, test_user, db_session, admin_token):
+    def test_get_fournisseur_stats_mensuelles_success(self, client, test_user, db_session, admin_token, test_produit):
         """Test de récupération des statistiques mensuelles d'un fournisseur."""
         token = admin_token
         
@@ -630,6 +636,9 @@ class TestFournisseursEndpoints:
         # Transaction il y a 2 mois
         transaction1 = Transaction(
             date_transaction=today.replace(day=1) - relativedelta(months=2),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("150.00"),
             montant_total=Decimal("1500.00"),
             est_actif=True,
             id_fournisseur=test_fournisseur.id_fournisseur
@@ -637,6 +646,9 @@ class TestFournisseursEndpoints:
         # Transaction il y a 1 mois
         transaction2 = Transaction(
             date_transaction=today.replace(day=1) - relativedelta(months=1),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("250.00"),
             montant_total=Decimal("2500.00"),
             est_actif=True,
             id_fournisseur=test_fournisseur.id_fournisseur
@@ -644,6 +656,9 @@ class TestFournisseursEndpoints:
         # Transaction ce mois
         transaction3 = Transaction(
             date_transaction=today.replace(day=1),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("350.00"),
             montant_total=Decimal("3500.00"),
             est_actif=True,
             id_fournisseur=test_fournisseur.id_fournisseur

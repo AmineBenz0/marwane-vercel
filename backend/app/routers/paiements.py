@@ -5,21 +5,103 @@ Gère les endpoints pour créer, lire, modifier et supprimer des paiements.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
+from datetime import datetime, date
 from decimal import Decimal
 
 from app.database import get_db
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.lettre_credit import LettreDeCredit
+from app.models.caisse import Caisse
+from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.user import Utilisateur
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
-    StatutPaiementTransaction, PaiementSummary
+    PaiementBatchCreate, StatutPaiementTransaction, PaiementSummary
 )
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/paiements", tags=["Paiements"])
+
+
+def _update_caisse_movement(db: Session, paiement: Paiement, transaction: Transaction):
+    """
+    Helper pour créer/mettre à jour un mouvement de caisse lié à un paiement.
+    """
+    # Types qui affectent immédiatement la caisse
+    types_immediats = ['cash', 'virement', 'lc', 'carte', 'compensation', 'autre']
+    
+    doit_creer_mouvement = False
+    
+    # 1. Vérifier si on doit créer un mouvement
+    if paiement.type_paiement in types_immediats and paiement.statut == 'valide':
+        doit_creer_mouvement = True
+    elif paiement.type_paiement == 'cheque' and paiement.statut_cheque == 'encaisse':
+        doit_creer_mouvement = True
+        
+    if doit_creer_mouvement:
+        # Vérifier si un mouvement existe déjà pour ce paiement
+        existing = db.query(Caisse).filter(Caisse.id_paiement == paiement.id_paiement).first()
+        if existing:
+            # Mettre à jour le montant si nécessaire
+            if existing.montant != paiement.montant:
+                existing.montant = paiement.montant
+            return existing
+
+        # Déterminer le type de mouvement (ENTRÉE pour client, SORTIE pour fournisseur)
+        type_mouvement = 'ENTREE' if transaction.id_client is not None else 'SORTIE'
+        
+        # Créer le nouveau mouvement
+        new_mouvement = Caisse(
+            montant=paiement.montant,
+            type_mouvement=type_mouvement,
+            id_transaction=transaction.id_transaction,
+            id_paiement=paiement.id_paiement,
+            # On utilise la date du paiement pour le mouvement de caisse
+            date_mouvement=datetime.combine(paiement.date_paiement, datetime.min.time())
+        )
+        db.add(new_mouvement)
+        db.flush() # Pour obtenir id_mouvement
+        
+        # Mettre à jour l'historique de solde (Snapshot)
+        _create_caisse_snapshot(db, new_mouvement.id_mouvement)
+        
+        return new_mouvement
+    else:
+        # Si on ne doit pas avoir de mouvement, mais qu'il en existe un (ex: statut changé), on le supprime
+        existing = db.query(Caisse).filter(Caisse.id_paiement == paiement.id_paiement).first()
+        if existing:
+            # Avant de supprimer, on pourrait vouloir marquer le snapshot ? 
+            # Pour simplifier, on supprime juste le mouvement. 
+            # Les snapshots suivants recalculeront le solde correctement.
+            db.delete(existing)
+            db.flush()
+            
+    return None
+
+
+def _create_caisse_snapshot(db: Session, id_mouvement: int):
+    """
+    Crée un snapshot du solde après un mouvement.
+    """
+    solde_actuel = db.query(
+        func.sum(
+            case(
+                (Caisse.type_mouvement == 'ENTREE', Caisse.montant),
+                else_=-Caisse.montant
+            )
+        )
+    ).scalar() or Decimal('0.00')
+    
+    new_history = CaisseSoldeHistorique(
+        solde=solde_actuel,
+        id_mouvement=id_mouvement,
+        date_snapshot=datetime.now()
+    )
+    db.add(new_history)
+
+
 
 
 @router.get("", response_model=List[PaiementRead], status_code=status.HTTP_200_OK)
@@ -134,14 +216,7 @@ def create_paiement(
             detail=f"Transaction avec l'ID {paiement_data.id_transaction} introuvable"
         )
     
-    # Vérifier que le montant ne dépasse pas le montant restant
-    montant_restant = transaction.montant_restant
-    if paiement_data.montant > montant_restant:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le montant du paiement ({paiement_data.montant} MAD) dépasse "
-                   f"le montant restant à payer ({montant_restant} MAD)"
-        )
+    # Note: Les paiements dépassant le montant restant sont autorisés (avances, surpaiements)
     
     # Logique spécifique pour les Lettres de Crédit (LC)
     if paiement_data.type_paiement == 'lc':
@@ -172,11 +247,6 @@ def create_paiement(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
-                )
-            if lc.date_expiration < date.today():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cette LC a expiré le {lc.date_expiration}"
                 )
         
         # 3. Vérifier le montant (Doit être utilisée en totalité)
@@ -226,6 +296,11 @@ def create_paiement(
     )
     
     db.add(nouveau_paiement)
+    db.flush() # Pour obtenir l'ID
+    
+    # Mettre à jour la caisse
+    _update_caisse_movement(db, nouveau_paiement, transaction)
+    
     db.commit()
     db.refresh(nouveau_paiement)
     
@@ -270,6 +345,11 @@ def update_paiement(
     # Mettre à jour l'utilisateur de modification
     paiement.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     
+    # Mettre à jour la caisse si nécessaire (ex: chèque passé à 'encaisse')
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
+    if transaction:
+        _update_caisse_movement(db, paiement, transaction)
+        
     db.commit()
     db.refresh(paiement)
     
@@ -301,6 +381,11 @@ def delete_paiement(
             detail=f"Paiement avec l'ID {id} introuvable"
         )
     
+    # Supprimer les mouvements de caisse associés
+    caisse_mouvements = db.query(Caisse).filter(Caisse.id_paiement == id).all()
+    for mvmt in caisse_mouvements:
+        db.delete(mvmt)
+        
     db.delete(paiement)
     db.commit()
     
@@ -397,4 +482,67 @@ def get_statistiques_paiements_par_type(
         )
         for stat in stats
     ]
+
+
+@router.post("/batch", response_model=List[PaiementRead], status_code=status.HTTP_201_CREATED)
+def create_paiements_batch(
+    batch_data: PaiementBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """
+    Crée plusieurs paiements de manière atomique.
+    Idéal pour le nouveau formulaire de paiement multi-lignes.
+    """
+    if not batch_data.paiements:
+        raise HTTPException(status_code=400, detail="Liste de paiements vide")
+        
+    created_paiements = []
+    
+    try:
+        for p_data in batch_data.paiements:
+            # Récupérer la transaction
+            transaction = db.query(Transaction).filter(Transaction.id_transaction == p_data.id_transaction).first()
+            if not transaction:
+                raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
+                
+            # Logique LC (simplifiée ici, on réutilise la logique de create_paiement)
+            if p_data.type_paiement == 'lc':
+                lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == p_data.id_lc).first()
+                if not lc or lc.statut != 'active':
+                    raise HTTPException(status_code=400, detail=f"LC {p_data.id_lc} non disponible")
+                lc.statut = 'utilisee'
+                lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+            
+            # Déterminer le statut initial
+            statut_initial = 'valide'
+            if p_data.type_paiement == 'cheque':
+                statut_initial = 'en_attente'
+                
+            # Créer le paiement
+            nouveau_paiement = Paiement(
+                **p_data.model_dump(),
+                statut=statut_initial,
+                id_utilisateur_creation=current_user.id_utilisateur if current_user else None
+            )
+            db.add(nouveau_paiement)
+            db.flush()
+            
+            # Mouvement de caisse
+            _update_caisse_movement(db, nouveau_paiement, transaction)
+            created_paiements.append(nouveau_paiement)
+            
+        db.commit()
+        for p in created_paiements:
+            db.refresh(p)
+            
+        return created_paiements
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
 

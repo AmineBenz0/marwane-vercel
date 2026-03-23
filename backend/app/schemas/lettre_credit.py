@@ -12,28 +12,19 @@ class LettreCreditBase(BaseModel):
     Schéma de base pour une Lettre de Crédit.
     """
     numero_reference: str = Field(..., max_length=50, description="Numéro de référence unique")
-    banque_emettrice: str = Field(..., max_length=100, description="Banque émettrice")
+    numero_serie: Optional[str] = Field(None, max_length=50, description="Numéro de série interne ou supplémentaire")
+    banque_emettrice: Optional[str] = Field(None, max_length=100, description="Banque émettrice (optionnel)")
     montant: Decimal = Field(..., gt=0, description="Montant total de la LC")
     date_emission: date = Field(..., description="Date d'émission")
     date_disponibilite: date = Field(..., description="Date à laquelle la LC devient utilisable")
-    date_expiration: date = Field(..., description="Date d'expiration")
-    type_detenteur: str = Field(..., description="Type du détenteur (client ou fournisseur)")
     id_client: Optional[int] = Field(None, description="ID du client détenteur")
-    id_fournisseur: Optional[int] = Field(None, description="ID du fournisseur détenteur")
     notes: Optional[str] = Field(None, description="Notes additionnelles")
-
-    @field_validator('type_detenteur')
-    @classmethod
-    def validate_type_detenteur(cls, v: str) -> str:
-        types_valides = ['client', 'fournisseur']
-        if v.lower() not in types_valides:
-            raise ValueError(f"Type de détenteur invalide. Doit être: {', '.join(types_valides)}")
-        return v.lower()
 
 
 class LettreCreditCreate(LettreCreditBase):
     """
     Schéma pour créer une nouvelle LC.
+    Le type_detenteur est toujours 'client', pas besoin de le spécifier.
     """
     pass
 
@@ -43,15 +34,13 @@ class LettreCreditUpdate(BaseModel):
     Schéma pour mettre à jour une LC.
     """
     numero_reference: Optional[str] = Field(None, max_length=50)
+    numero_serie: Optional[str] = Field(None, max_length=50)
     banque_emettrice: Optional[str] = Field(None, max_length=100)
     montant: Optional[Decimal] = Field(None, gt=0)
     date_emission: Optional[date] = Field(None)
     date_disponibilite: Optional[date] = Field(None)
-    date_expiration: Optional[date] = Field(None)
     statut: Optional[str] = Field(None)
-    type_detenteur: Optional[str] = Field(None)
     id_client: Optional[int] = Field(None)
-    id_fournisseur: Optional[int] = Field(None)
     notes: Optional[str] = Field(None)
 
     @field_validator('statut')
@@ -64,11 +53,21 @@ class LettreCreditUpdate(BaseModel):
         return v.lower()
 
 
-class LettreCreditRead(LettreCreditBase):
+class LettreCreditRead(BaseModel):
     """
     Schéma pour lire une LC.
     """
     id_lc: int
+    numero_reference: str
+    numero_serie: Optional[str] = None
+    banque_emettrice: Optional[str] = None
+    montant: Decimal
+    date_emission: date
+    date_disponibilite: date
+    type_detenteur: str = 'client'
+    id_client: Optional[int] = None
+    id_fournisseur: Optional[int] = None
+    notes: Optional[str] = None
     statut: str
     date_creation: datetime
     date_modification: datetime
@@ -88,11 +87,12 @@ class LettreCreditSummary(BaseModel):
     """
     id_lc: int
     numero_reference: str
-    banque_emettrice: str
+    numero_serie: Optional[str] = None
+    banque_emettrice: Optional[str] = None
     montant: Decimal
     statut: str
     date_disponibilite: date
-    date_expiration: date
+    type_detenteur: str = 'client'
     detenteur_nom: Optional[str] = None
     est_disponible: bool = False
 

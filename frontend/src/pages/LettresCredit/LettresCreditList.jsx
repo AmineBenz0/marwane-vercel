@@ -136,7 +136,6 @@ function LettresCreditList() {
               <TableCell>Détenteur</TableCell>
               <TableCell align="right">Montant</TableCell>
               <TableCell>Disponibilité</TableCell>
-              <TableCell>Expiration</TableCell>
               <TableCell>Statut</TableCell>
               <TableCell align="center">Actions</TableCell>
             </TableRow>
@@ -144,13 +143,13 @@ function LettresCreditList() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                   Chargement...
                 </TableCell>
               </TableRow>
             ) : filteredLcs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                   Aucune Lettre de Crédit trouvée
                 </TableCell>
               </TableRow>
@@ -161,15 +160,11 @@ function LettresCreditList() {
                   <TableCell>{lc.banque_emettrice}</TableCell>
                   <TableCell>
                     <Typography variant="body2">{lc.detenteur_nom}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                      ({lc.type_detenteur})
-                    </Typography>
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                     {formatMontant(lc.montant)}
                   </TableCell>
                   <TableCell>{formatDate(lc.date_disponibilite)}</TableCell>
-                  <TableCell>{formatDate(lc.date_expiration)}</TableCell>
                   <TableCell>
                     <LCStatusBadge statut={lc.statut} estDisponible={lc.est_disponible} />
                   </TableCell>

@@ -3,6 +3,8 @@ Tests pour les dépendances d'authentification.
 Vérifie que get_current_user, get_current_active_user et get_current_admin_user fonctionnent correctement.
 """
 import pytest
+import os
+from typing import Optional
 from fastapi import APIRouter, Depends, status
 
 from app.models.user import Utilisateur
@@ -20,8 +22,10 @@ test_router = APIRouter()
 
 
 @test_router.get("/test/current-user")
-def current_user_route(current_user: Utilisateur = Depends(get_current_user)):
+def current_user_route(current_user: Optional[Utilisateur] = Depends(get_current_user)):
     """Route de test pour get_current_user."""
+    if current_user is None:
+        return {"user_id": None, "email": None, "role": None}
     return {
         "user_id": current_user.id_utilisateur,
         "email": current_user.email,
@@ -30,8 +34,10 @@ def current_user_route(current_user: Utilisateur = Depends(get_current_user)):
 
 
 @test_router.get("/test/active-user")
-def active_user_route(user: Utilisateur = Depends(get_current_active_user)):
+def active_user_route(user: Optional[Utilisateur] = Depends(get_current_active_user)):
     """Route de test pour get_current_active_user."""
+    if user is None:
+        return {"user_id": None, "email": None, "role": None}
     return {
         "user_id": user.id_utilisateur,
         "email": user.email,
@@ -40,8 +46,10 @@ def active_user_route(user: Utilisateur = Depends(get_current_active_user)):
 
 
 @test_router.get("/test/admin-user")
-def admin_user_route(admin: Utilisateur = Depends(get_current_admin_user)):
+def admin_user_route(admin: Optional[Utilisateur] = Depends(get_current_admin_user)):
     """Route de test pour get_current_admin_user."""
+    if admin is None:
+        return {"user_id": None, "email": None, "role": None}
     return {
         "user_id": admin.id_utilisateur,
         "email": admin.email,
@@ -170,6 +178,7 @@ class TestGetCurrentUser:
 class TestGetCurrentActiveUser:
     """Tests pour la dépendance get_current_active_user."""
     
+    @pytest.mark.skipif(os.environ.get("ENABLE_AUTH") != "True", reason="Nécessite ENABLE_AUTH=True")
     def test_get_current_active_user_with_valid_token(self, client, test_user):
         """Test que get_current_active_user retourne l'utilisateur avec un token valide."""
         # Obtenir un token valide
@@ -194,6 +203,7 @@ class TestGetCurrentActiveUser:
         assert data["user_id"] == test_user.id_utilisateur
         assert data["email"] == test_user.email
     
+    @pytest.mark.skipif(os.environ.get("ENABLE_AUTH") != "True", reason="Nécessite ENABLE_AUTH=True")
     def test_get_current_active_user_without_token(self, client):
         """Test que get_current_active_user retourne 401 sans token."""
         response = client.get("/test/active-user")

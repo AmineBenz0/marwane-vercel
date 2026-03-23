@@ -146,14 +146,8 @@ def create_transactions_batch(
             db.add(new_transaction)
             db.flush()  # Pour obtenir l'ID
             
-            # Créer le mouvement de caisse
-            type_mouvement = 'ENTREE' if new_transaction.id_client is not None else 'SORTIE'
-            new_mouvement = Caisse(
-                montant=montant_total,
-                type_mouvement=type_mouvement,
-                id_transaction=new_transaction.id_transaction
-            )
-            db.add(new_mouvement)
+            # Création du mouvement de caisse supprimée ici. 
+            # Les mouvements sont désormains créés lors de l'enregistrement des paiements.
             
             created_transactions.append(new_transaction)
         
@@ -433,26 +427,8 @@ def create_transaction(
     db.add(new_transaction)
     db.flush()  # Pour obtenir l'ID de la transaction
     
-    # Créer automatiquement un mouvement de caisse pour cette transaction
-    # Si c'est une transaction client : ENTRÉE (argent qui entre)
-    # Si c'est une transaction fournisseur : SORTIE (argent qui sort)
-    if new_transaction.id_client is not None:
-        type_mouvement = 'ENTREE'
-    elif new_transaction.id_fournisseur is not None:
-        type_mouvement = 'SORTIE'
-    else:
-        # Ne devrait jamais arriver grâce aux contraintes, mais par sécurité
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Une transaction doit avoir soit un client, soit un fournisseur"
-        )
-    
-    new_mouvement = Caisse(
-        montant=montant_total,
-        type_mouvement=type_mouvement,
-        id_transaction=new_transaction.id_transaction
-    )
-    db.add(new_mouvement)
+    # Création du mouvement de caisse supprimée ici. 
+    # Les mouvements sont désormais créés lors de l'enregistrement des paiements.
     
     db.commit()
     db.refresh(new_transaction)
@@ -556,16 +532,6 @@ def update_transaction(
     
     db.commit()
     db.refresh(transaction)
-    
-    # Mettre à jour le mouvement de caisse associé si le montant a changé
-    mouvement_caisse = db.query(Caisse).filter(
-        Caisse.id_transaction == transaction.id_transaction
-    ).first()
-    
-    if mouvement_caisse and mouvement_caisse.montant != transaction.montant_total:
-        # Le montant a changé, mettre à jour le mouvement de caisse
-        mouvement_caisse.montant = transaction.montant_total
-        db.commit()
     
     return transaction
 

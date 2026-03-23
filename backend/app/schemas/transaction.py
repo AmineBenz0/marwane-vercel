@@ -3,9 +3,10 @@ Schémas Pydantic pour la validation des données transactions.
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
+from app.schemas.paiement import PaiementRead
 
 
 class TransactionBase(BaseModel):
@@ -171,6 +172,17 @@ class TransactionUpdate(BaseModel):
         return v
     
     @model_validator(mode='after')
+    def calculate_montant_total(self):
+        """
+        Recalcule le montant_total si la quantité ET le prix unitaire sont fournis.
+        """
+        qty = self.quantite
+        price = self.prix_unitaire
+        if qty is not None and price is not None:
+            self.montant_total = Decimal(str(qty)) * price
+        return self
+
+    @model_validator(mode='after')
     def validate_client_ou_fournisseur(self):
         """
         Valide l'exclusion mutuelle lors de la mise à jour.
@@ -206,6 +218,9 @@ class TransactionRead(TransactionBase):
     statut_paiement: str = Field(default='impaye', description="Statut du paiement (calculé)")
     est_en_retard: bool = Field(default=False, description="Indique si le paiement est en retard (calculé)")
     pourcentage_paye: float = Field(default=0.0, description="Pourcentage du montant payé (calculé)")
+    
+    # Liste des paiements associés
+    paiements: List[PaiementRead] = Field(default_factory=list, description="Liste des paiements associés")
 
     model_config = ConfigDict(from_attributes=True)
 

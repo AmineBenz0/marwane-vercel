@@ -13,13 +13,17 @@ avant chaque test et supprimée après, garantissant l'isolation complète.
 import os
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Configurer l'environnement de test AVANT d'importer app.database
-# Cela évite que app.database essaie de se connecter à PostgreSQL
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+# Configurer l'environnement de test AVANT d'importer app.database et app.main
+os.environ["ENVIRONMENT"] = "testing"
+os.environ["ENABLE_RATE_LIMITING"] = os.environ.get("ENABLE_RATE_LIMITING", "False")
+os.environ["ENABLE_AUTH"] = os.environ.get("ENABLE_AUTH", "False")
+# Par défaut SQLite en mémoire si non spécifié
+TEST_DB_URL = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
+os.environ["DATABASE_URL"] = TEST_DB_URL
 
 from app.database import Base, get_db
 from app.main import app
@@ -28,22 +32,11 @@ from app.models.audit import AuditConnexion
 from app.utils.security import hash_password
 import bcrypt
 
-# Inclure le router de test pour les tests de dépendances (une seule fois au niveau du module)
-try:
-    from tests.test_dependencies import test_router
-    app.include_router(test_router)
-except ImportError:
-    # Si le module n'existe pas encore, on continue
-    pass
-
-
-# Base de données de test en mémoire SQLite
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
+# Moteur de base de données configuré selon l'URL (SQLite ou Postgres)
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    TEST_DB_URL,
+    connect_args={"check_same_thread": False} if "sqlite" in TEST_DB_URL else {},
+    poolclass=StaticPool if "sqlite" in TEST_DB_URL else None,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -66,23 +59,22 @@ def db_session():
         yield session
     finally:
         session.close()
+        # Supprimer les objets dépendants (vues) qui empêchent le drop des tables sous Postgres
+        if "postgresql" in str(engine.url):
+            with engine.connect() as conn:
+                conn.execute(text("DROP VIEW IF EXISTS Vue_Solde_Caisse CASCADE"))
+                conn.execute(text("DROP MATERIALIZED VIEW IF EXISTS Vue_Solde_Caisse CASCADE"))
+                conn.commit()
         Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture(scope="function", autouse=True)
 def reset_rate_limiter():
     """
-    Réinitialise le rate limiter avant chaque test pour isoler les tests.
+    Désactivé car ENABLE_RATE_LIMITING=False est défini,
+    mais conservé pour compatibilité si réactivé.
     """
-    from limits.storage import MemoryStorage
-    # Réinitialiser le storage du limiter attaché à l'app avant chaque test
-    if hasattr(app.state, 'limiter'):
-        # Créer un nouveau storage vide pour chaque test
-        app.state.limiter._storage = MemoryStorage()
     yield
-    # Nettoyer après le test aussi
-    if hasattr(app.state, 'limiter'):
-        app.state.limiter._storage = MemoryStorage()
 
 
 @pytest.fixture(scope="function")
@@ -107,6 +99,16 @@ def client(db_session):
             pass
     
     app.dependency_overrides[get_db] = override_get_db
+    
+    # Inclure le router de test pour les tests de dépendances
+    # On le fait ici pour éviter de modifier l'app globale au niveau du module
+    try:
+        from tests.test_dependencies import test_router
+        if not any(r.path == "/test/current-user" for r in app.routes):
+            app.include_router(test_router)
+    except ImportError:
+        pass
+
     test_client = TestClient(app)
     yield test_client
     app.dependency_overrides.clear()
@@ -183,4 +185,46 @@ def admin_token(test_user):
         "role": test_user.role
     }
     return create_access_token(token_data)
+
+
+@pytest.fixture(scope="function")
+def auth_headers(client, test_user):
+    """
+    Fixture pour obtenir les headers d'authentification selon ENABLE_AUTH.
+    Si auth est activée, effectue un login et retourne le Bearer token.
+    Si auth est désactivée, retourne un dictionnaire vide.
+    """
+    from app.config import settings
+    headers = {}
+    if settings.ENABLE_AUTH:
+        from fastapi import status
+        login_response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "test@example.com",
+                "mot_de_passe": "TestPass123!"
+            }
+        )
+        if login_response.status_code == status.HTTP_200_OK:
+            token = login_response.json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+    return headers
+
+
+@pytest.fixture
+def test_produit(db_session, test_user):
+    """
+    Crée un produit de test global utilisable par tous les tests.
+    """
+    from app.models.produit import Produit
+    produit = Produit(
+        nom_produit="Produit Test Global",
+        est_actif=True,
+        pour_clients=True,
+        pour_fournisseurs=True
+    )
+    db_session.add(produit)
+    db_session.commit()
+    db_session.refresh(produit)
+    return produit
 

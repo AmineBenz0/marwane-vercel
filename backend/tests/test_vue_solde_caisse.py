@@ -13,15 +13,11 @@ Ils sont désactivés avec SQLite (tests unitaires). Pour les exécuter:
 import pytest
 from sqlalchemy import inspect
 
-# Détecter si on utilise SQLite ou PostgreSQL
-def is_sqlite(db_session):
-    """Vérifie si la base de données est SQLite."""
-    return db_session.bind.dialect.name == 'sqlite'
-
+import os
 # Marquer tous les tests de ce fichier comme nécessitant PostgreSQL
 pytestmark = pytest.mark.skipif(
-    True,  # Toujours skip avec SQLite par défaut
-    reason="Ces tests nécessitent PostgreSQL avec vues matérialisées et triggers"
+    not os.environ.get("TEST_DATABASE_URL"),
+    reason="Ces tests nécessitent PostgreSQL avec vues matérialisées et triggers (définir TEST_DATABASE_URL)"
 )
 import uuid
 import time
@@ -30,18 +26,42 @@ from datetime import date
 from decimal import Decimal
 
 from app.database import SessionLocal, engine
-from app.models import Transaction, Caisse, Client, Fournisseur, Utilisateur
+from app.models import Transaction, Caisse, Client, Fournisseur, Utilisateur, Produit
 
 
-@pytest.fixture(scope="function")
-def db_session():
-    """Créer une session de base de données pour les tests."""
-    session = SessionLocal()
+@pytest.fixture(scope="function", autouse=True)
+def setup_caisse_view(db_session):
+    """
+    Crée la vue Vue_Solde_Caisse sur PostgreSQL pour les tests.
+    Nécessaire car Base.metadata.create_all n'inclut pas les vues.
+    """
+    engine = db_session.bind
+    if engine.dialect.name != "postgresql":
+        yield
+        return
+
+    # SQL pour créer la vue (identique à la migration Head)
+    create_view_sql = """
+    CREATE OR REPLACE VIEW Vue_Solde_Caisse AS
+    SELECT 
+        COALESCE(SUM(CASE WHEN type_mouvement = 'ENTREE' THEN montant ELSE 0 END), 0) -
+        COALESCE(SUM(CASE WHEN type_mouvement = 'SORTIE' THEN montant ELSE 0 END), 0) as solde_actuel,
+        MAX(date_mouvement) as derniere_maj
+    FROM caisse;
+    """
     try:
-        yield session
-    finally:
-        session.rollback()
-        session.close()
+        db_session.execute(text(create_view_sql))
+        db_session.commit()
+    except Exception as e:
+        db_session.rollback()
+        print(f"Erreur lors de la création de la vue caisse: {e}")
+
+    yield
+
+    # Pas besoin de drop car conftest le fait
+
+
+# Use global db_session from conftest.py
 
 
 @pytest.fixture(scope="function")
@@ -77,6 +97,15 @@ def setup_test_data(db_session):
     )
     db_session.add(fournisseur)
     db_session.flush()
+    # Créer un produit de test
+    produit = Produit(
+        nom_produit=f"Produit Test {unique_id}",
+        est_actif=True,
+        pour_clients=True,
+        pour_fournisseurs=True
+    )
+    db_session.add(produit)
+    db_session.flush()
     
     db_session.commit()
     
@@ -84,7 +113,8 @@ def setup_test_data(db_session):
     yield {
         "user": user,
         "client": client,
-        "fournisseur": fournisseur
+        "fournisseur": fournisseur,
+        "produit": produit
     }
     
     # Cleanup : supprimer les données de test après chaque test
@@ -102,42 +132,20 @@ def setup_test_data(db_session):
 
 
 def test_vue_solde_caisse_exists(db_session):
-    """Test que la vue matérialisée existe."""
+    """Test que la vue existe (maintenant une vue simple, plus matérialisée)."""
     result = db_session.execute(text("""
         SELECT EXISTS (
             SELECT 1 
-            FROM pg_matviews 
-            WHERE matviewname = 'vue_solde_caisse'
+            FROM pg_views 
+            WHERE viewname = 'vue_solde_caisse'
         )
     """))
     exists = result.scalar()
-    assert exists is True, "La vue matérialisée Vue_Solde_Caisse devrait exister. Assurez-vous que la migration a été appliquée."
+    assert exists is True, "La vue Vue_Solde_Caisse devrait exister."
 
 
-def test_trigger_exists(db_session):
-    """Test que le trigger existe sur la table caisse."""
-    result = db_session.execute(text("""
-        SELECT EXISTS (
-            SELECT 1 
-            FROM pg_trigger 
-            WHERE tgname = 'trigger_refresh_vue_solde_caisse'
-        )
-    """))
-    exists = result.scalar()
-    assert exists is True, "Le trigger trigger_refresh_vue_solde_caisse devrait exister. Assurez-vous que la migration a été appliquée."
-
-
-def test_function_exists(db_session):
-    """Test que la fonction de rafraîchissement existe."""
-    result = db_session.execute(text("""
-        SELECT EXISTS (
-            SELECT 1 
-            FROM pg_proc 
-            WHERE proname = 'refresh_vue_solde_caisse'
-        )
-    """))
-    exists = result.scalar()
-    assert exists is True, "La fonction refresh_vue_solde_caisse devrait exister. Assurez-vous que la migration a été appliquée."
+# Les tests de trigger et fonction sont supprimés car la migration Head 
+# a remplacé la vue matérialisée par une vue simple qui n'en a plus besoin.
 
 
 def test_vue_solde_caisse_initial_solde_zero(db_session):
@@ -154,6 +162,9 @@ def test_vue_solde_caisse_calculates_correctly_after_insert(db_session, setup_te
     # Créer une transaction
     transaction = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=10,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("1000.00"),
         est_actif=True,
         id_client=data["client"].id_client,
@@ -186,6 +197,9 @@ def test_vue_solde_caisse_refreshes_after_insert_entree(db_session, setup_test_d
     # Créer une transaction
     transaction = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=5,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("500.00"),
         est_actif=True,
         id_client=data["client"].id_client,
@@ -223,6 +237,9 @@ def test_vue_solde_caisse_refreshes_after_insert_sortie(db_session, setup_test_d
     # Créer une transaction
     transaction = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=3,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("300.00"),
         est_actif=True,
         id_fournisseur=data["fournisseur"].id_fournisseur,
@@ -260,6 +277,9 @@ def test_vue_solde_caisse_refreshes_after_update(db_session, setup_test_data):
     # Créer une transaction
     transaction = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=2,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("200.00"),
         est_actif=True,
         id_client=data["client"].id_client,
@@ -301,6 +321,9 @@ def test_vue_solde_caisse_refreshes_after_delete(db_session, setup_test_data):
     # Créer une transaction
     transaction = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=1,
+        prix_unitaire=Decimal("150.00"),
         montant_total=Decimal("150.00"),
         est_actif=True,
         id_client=data["client"].id_client,
@@ -346,6 +369,9 @@ def test_vue_solde_caisse_calculates_multiple_movements(db_session, setup_test_d
     # Entrée 1: 1000
     t1 = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=10,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("1000.00"),
         est_actif=True,
         id_client=data["client"].id_client,
@@ -364,6 +390,9 @@ def test_vue_solde_caisse_calculates_multiple_movements(db_session, setup_test_d
     # Sortie 1: 300
     t2 = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=3,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("300.00"),
         est_actif=True,
         id_fournisseur=data["fournisseur"].id_fournisseur,
@@ -382,6 +411,9 @@ def test_vue_solde_caisse_calculates_multiple_movements(db_session, setup_test_d
     # Entrée 2: 500
     t3 = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=5,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("500.00"),
         est_actif=True,
         id_client=data["client"].id_client,
@@ -438,6 +470,9 @@ def test_vue_solde_caisse_derniere_maj(db_session, setup_test_data):
     # Créer une transaction et un mouvement
     transaction = Transaction(
         date_transaction=date.today(),
+        id_produit=data["produit"].id_produit,
+        quantite=1,
+        prix_unitaire=Decimal("100.00"),
         montant_total=Decimal("100.00"),
         est_actif=True,
         id_client=data["client"].id_client,

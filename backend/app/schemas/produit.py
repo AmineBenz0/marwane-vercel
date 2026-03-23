@@ -65,6 +65,10 @@ class ProduitUpdate(BaseModel):
         max_length=255,
         description="Nom du produit (doit être unique)"
     )
+    type_produit: Optional[str] = Field(
+        None,
+        description="Type de produit ('produit_fini' ou 'matiere_premiere')"
+    )
     est_actif: Optional[bool] = Field(
         None,
         description="Indique si le produit est actif (soft delete)"

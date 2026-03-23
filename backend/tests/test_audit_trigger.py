@@ -15,27 +15,85 @@ from app.models.audit import TransactionAudit
 from app.models.client import Client
 from app.models.user import Utilisateur
 from app.config import settings
-
-
-def get_auth_headers(client, test_user):
+@pytest.fixture(scope="function", autouse=True)
+def setup_audit_objects(db_session):
     """
-    Helper pour obtenir les headers d'authentification selon ENABLE_AUTH.
-    Retourne un dict vide si auth désactivée, sinon retourne les headers avec token.
+    Crée la fonction d'audit et le trigger sur PostgreSQL pour les tests.
+    Cette fixture est nécessaire car Base.metadata.create_all n'inclut pas
+    les triggers et fonctions définis dans les migrations Alembic.
     """
-    headers = {}
-    if settings.ENABLE_AUTH:
-        login_response = client.post(
-            "/api/v1/auth/login",
-            json={
-                "email": "test@example.com",
-                "mot_de_passe": "TestPass123!"
-            }
-        )
-        assert login_response.status_code == status.HTTP_200_OK
-        token = login_response.json()["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
-    return headers
+    engine = db_session.bind
+    if engine.dialect.name != "postgresql":
+        yield
+        return
 
+    # SQL pour créer la fonction d'audit (simplifiée pour les tests)
+    create_function_sql = """
+    CREATE OR REPLACE FUNCTION audit_transaction_changes()
+    RETURNS TRIGGER AS $$
+    DECLARE
+        user_id INTEGER;
+    BEGIN
+        user_id := COALESCE(
+            NEW.id_utilisateur_modification,
+            NEW.id_utilisateur_creation,
+            0
+        );
+        
+        -- date_transaction
+        IF OLD.date_transaction IS DISTINCT FROM NEW.date_transaction THEN
+            INSERT INTO transactions_audit (
+                id_transaction, id_utilisateur, date_changement, champ_modifie, ancienne_valeur, nouvelle_valeur
+            ) VALUES (
+                NEW.id_transaction, user_id, NOW(), 'date_transaction', OLD.date_transaction::TEXT, NEW.date_transaction::TEXT
+            );
+        END IF;
+        
+        -- montant_total
+        IF OLD.montant_total IS DISTINCT FROM NEW.montant_total THEN
+            INSERT INTO transactions_audit (
+                id_transaction, id_utilisateur, date_changement, champ_modifie, ancienne_valeur, nouvelle_valeur
+            ) VALUES (
+                NEW.id_transaction, user_id, NOW(), 'montant_total', OLD.montant_total::TEXT, NEW.montant_total::TEXT
+            );
+        END IF;
+
+        -- est_actif
+        IF OLD.est_actif IS DISTINCT FROM NEW.est_actif THEN
+            INSERT INTO transactions_audit (
+                id_transaction, id_utilisateur, date_changement, champ_modifie, ancienne_valeur, nouvelle_valeur
+            ) VALUES (
+                NEW.id_transaction, user_id, NOW(), 'est_actif', OLD.est_actif::TEXT, NEW.est_actif::TEXT
+            );
+        END IF;
+        
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    """
+
+    # SQL pour créer le trigger
+    create_trigger_sql = """
+    CREATE TRIGGER trigger_audit_transactions
+    AFTER UPDATE ON transactions
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_transaction_changes();
+    """
+
+    try:
+        db_session.execute(text(create_function_sql))
+        # Vérifier si le trigger existe déjà pour éviter l'erreur "already exists"
+        result = db_session.execute(text("SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_audit_transactions'"))
+        if not result.scalar():
+            db_session.execute(text(create_trigger_sql))
+        db_session.commit()
+    except Exception as e:
+        db_session.rollback()
+        print(f"Erreur lors de la création des objets d'audit: {e}")
+
+    yield
+
+    # Pas besoin de supprimer explicitement car conftest fait un drop_all
 
 @pytest.fixture
 def test_client(db_session, test_user):
@@ -118,7 +176,7 @@ class TestAuditTrigger:
     """Tests pour vérifier que le trigger d'audit fonctionne correctement."""
     
     def test_modify_transaction_creates_audit_entry(
-        self, client, test_user, db_session, test_client, admin_token
+        self, client, test_user, db_session, test_client, admin_token, test_produit
     ):
         """
         Test : modifier une transaction et vérifier qu'une entrée est créée dans Transactions_Audit.
@@ -140,9 +198,12 @@ class TestAuditTrigger:
         
         headers = {"Authorization": f"Bearer {admin_token}"}
         
-        # Créer une transaction initiale
+        # Créer une transaction initiale avec les champs obligatoires (flattened model)
         transaction = Transaction(
             date_transaction=date.today(),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("10.00"),
             montant_total=Decimal("100.00"),
             est_actif=True,
             id_client=test_client.id_client,
@@ -223,7 +284,7 @@ class TestAuditTrigger:
         assert date_audit.date_changement is not None
     
     def test_modify_single_field_creates_single_audit_entry(
-        self, client, test_user, db_session, test_client, admin_token
+        self, client, test_user, db_session, test_client, admin_token, test_produit
     ):
         """
         Test que la modification d'un seul champ crée une seule entrée d'audit.
@@ -243,6 +304,9 @@ class TestAuditTrigger:
         # Créer une transaction
         transaction = Transaction(
             date_transaction=date.today(),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("10.00"),
             montant_total=Decimal("100.00"),
             est_actif=True,
             id_client=test_client.id_client,
@@ -295,7 +359,7 @@ class TestAuditTrigger:
         assert latest_audit.id_utilisateur == test_user.id_utilisateur
     
     def test_modify_est_actif_creates_audit_entry(
-        self, client, test_user, db_session, test_client, admin_token
+        self, client, test_user, db_session, test_client, admin_token, test_produit
     ):
         """
         Test que la modification du champ est_actif crée une entrée d'audit.
@@ -315,6 +379,9 @@ class TestAuditTrigger:
         # Créer une transaction active
         transaction = Transaction(
             date_transaction=date.today(),
+            id_produit=test_produit.id_produit,
+            quantite=10,
+            prix_unitaire=Decimal("10.00"),
             montant_total=Decimal("100.00"),
             est_actif=True,
             id_client=test_client.id_client,

@@ -13,6 +13,11 @@ from app.models.cession_lc import CessionLC
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.audit import TransactionAudit, AuditConnexion
+from app.models.batiment import Batiment
+from app.models.production import Production
+from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
+from app.models.charge import Charge
+from app.models.transformation import Transformation, TransformationLigne
 
 # Export de tous les modèles pour faciliter les imports
 __all__ = [
@@ -28,4 +33,11 @@ __all__ = [
     "CaisseSoldeHistorique",
     "TransactionAudit",
     "AuditConnexion",
+    "Batiment",
+    "Production",
+    "CompteBancaire",
+    "MouvementBancaire",
+    "Charge",
+    "Transformation",
+    "TransformationLigne",
 ]

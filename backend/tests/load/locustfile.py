@@ -24,6 +24,8 @@ import random
 import json
 import logging
 
+import threading
+
 # Configuration
 API_BASE_URL = "/api/v1"
 API_HOST = "http://localhost:8000"  # Modifier selon votre configuration
@@ -36,6 +38,9 @@ test_data = {
     "produit_ids": [],
     "transaction_ids": []
 }
+
+# Verrou pour la sécurité des threads lors de la mise à jour de test_data
+test_data_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
 
@@ -268,14 +273,21 @@ class WriteModerateUser(HttpUser):
         
         headers = get_headers(self.client)
         
-        # Choisir aléatoirement entre client et fournisseur
-        use_client = random.choice([True, False]) if test_data["client_ids"] and test_data["fournisseur_ids"] else (
-            bool(test_data["client_ids"])
-        )
+        # Choisir un produit aléatoire
+        if not test_data["produit_ids"]:
+            return
+        
+        id_produit = random.choice(test_data["produit_ids"])
+        quantite = random.randint(1, 100)
+        prix_unitaire = round(random.uniform(5.0, 50.0), 2)
+        montant_total = round(quantite * prix_unitaire, 2)
         
         transaction_data = {
             "date_transaction": str(date.today() - timedelta(days=random.randint(0, 30))),
-            "montant_total": str(round(random.uniform(10.0, 1000.0), 2)),
+            "id_produit": id_produit,
+            "quantite": quantite,
+            "prix_unitaire": str(prix_unitaire),
+            "montant_total": str(montant_total),
             "est_actif": True
         }
         
@@ -297,7 +309,10 @@ class WriteModerateUser(HttpUser):
         if response.status_code == 201:
             transaction_id = response.json().get("id_transaction")
             if transaction_id:
-                test_data["transaction_ids"].append(transaction_id)
+                with test_data_lock:
+                    # Limiter la taille de la liste pour éviter une consommation excessive de mémoire
+                    if len(test_data["transaction_ids"]) < 1000:
+                        test_data["transaction_ids"].append(transaction_id)
     
     @task(1)
     def update_transaction(self):
@@ -405,7 +420,9 @@ class MixedUser(HttpUser):
             if response.status_code == 201:
                 transaction_id = response.json().get("id_transaction")
                 if transaction_id:
-                    test_data["transaction_ids"].append(transaction_id)
+                    with test_data_lock:
+                        if len(test_data["transaction_ids"]) < 1000:
+                            test_data["transaction_ids"].append(transaction_id)
         else:
             # 30% modification
             if test_data["transaction_ids"]:

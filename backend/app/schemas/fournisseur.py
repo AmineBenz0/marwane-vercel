@@ -144,7 +144,9 @@ class FournisseurStatsMensuellesItem(BaseModel):
     Schéma pour un élément de statistiques mensuelles d'un fournisseur.
     """
     mois: str = Field(..., description="Mois au format YYYY-MM (ex: 2024-01)")
-    montant: Decimal = Field(..., description="Montant total des transactions du mois")
+    montant: Decimal = Field(..., description="Montant total des transactions du mois (Achats)")
+    paiements: Decimal = Field(Decimal('0'), description="Montant total des paiements effectués au mois")
+    solde_cumule: Decimal = Field(Decimal('0'), description="Solde cumulé à la fin du mois (Total Achats - Total Paiements)")
     nb_transactions: int = Field(..., description="Nombre de transactions du mois")
 
 

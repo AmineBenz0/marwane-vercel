@@ -79,12 +79,11 @@ def get_lettres_credit_disponibles(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Récupère les LC actives et disponibles (date OK, non expirées)."""
+    """Récupère les LC actives et disponibles (date OK)."""
     today = date.today()
     query = db.query(LettreDeCredit).filter(
         LettreDeCredit.statut == 'active',
         LettreDeCredit.date_disponibilite <= today,
-        LettreDeCredit.date_expiration >= today
     )
     
     if id_client:
@@ -128,20 +127,25 @@ def create_lettre_credit(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Crée une nouvelle LC."""
+    """Crée une nouvelle LC. Le détenteur est toujours un client."""
     # Vérifier l'unicité de la référence
     existing = db.query(LettreDeCredit).filter(LettreDeCredit.numero_reference == lc_data.numero_reference).first()
     if existing:
         raise HTTPException(status_code=400, detail="Cette référence de LC existe déjà")
     
-    # Vérifier le détenteur
-    if lc_data.type_detenteur == 'client' and not lc_data.id_client:
-        raise HTTPException(status_code=400, detail="ID Client requis pour un détenteur de type client")
-    if lc_data.type_detenteur == 'fournisseur' and not lc_data.id_fournisseur:
-        raise HTTPException(status_code=400, detail="ID Fournisseur requis pour un détenteur de type fournisseur")
+    # Vérifier que le client est fourni
+    if not lc_data.id_client:
+        raise HTTPException(status_code=400, detail="ID Client requis pour une Lettre de Crédit")
 
     new_lc = LettreDeCredit(
-        **lc_data.model_dump(),
+        numero_reference=lc_data.numero_reference,
+        banque_emettrice=lc_data.banque_emettrice,
+        montant=lc_data.montant,
+        date_emission=lc_data.date_emission,
+        date_disponibilite=lc_data.date_disponibilite,
+        id_client=lc_data.id_client,
+        notes=lc_data.notes,
+        type_detenteur='client',  # Toujours client
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )
     

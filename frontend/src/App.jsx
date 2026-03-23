@@ -40,12 +40,16 @@ import LettresCreditList from './pages/LettresCredit/LettresCreditList';
 import LettreCreditDetail from './pages/LettresCredit/LettreCreditDetail';
 import LCFormPage from './pages/LettresCredit/LCFormPage';
 import CederLCPage from './pages/LettresCredit/CederLCPage';
+import ProductionList from './pages/Production/ProductionList';
+import ProductionDashboard from './pages/Production/ProductionDashboard';
+import ChargesList from './pages/Charges/ChargesList';
+import CompteBancaireList from './pages/ComptesBancaires/CompteBancaireList';
 
 function App() {
   return (
     <ErrorBoundary>
       <NotificationProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
         {/* Route publique : Login */}
         <Route path="/login" element={<Login />} />
@@ -137,6 +141,46 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <Caisse />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/production"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ProductionList />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/production/dashboard"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ProductionDashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/charges"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ChargesList />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/comptes-bancaires"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <CompteBancaireList />
               </AppLayout>
             </ProtectedRoute>
           }

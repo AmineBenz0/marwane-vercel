@@ -6,8 +6,8 @@
  * - 'cheque' → 💳 Chèque
  * - 'virement' → 🏦 Virement
  * - 'carte' → 💳 Carte
- * - 'traite' → 📝 Traite
  * - 'compensation' → ↔️ Compensation
+ * - 'lc' → 📜 LC
  * - 'autre' → 📄 Autre
  */
 
@@ -46,8 +46,8 @@ const PAYMENT_TYPE_CONFIG = {
     icon: CreditCardIcon,
     color: 'secondary',
   },
-  traite: {
-    label: 'Traite',
+  lc: {
+    label: 'LC',
     icon: ReceiptIcon,
     color: 'warning',
   },

@@ -17,6 +17,9 @@ down_revision: Union[str, None] = '1a0871c43c7d'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# NOTE: The schema produced by this migration is immediately modified by 
+# 'phase1_lc_adjustments' which follows it, notably making 'banque_emettrice' 
+# nullable and dropping 'date_expiration' to match the refined LC model.
 
 def upgrade() -> None:
     # 1. Créer la table lettres_credit

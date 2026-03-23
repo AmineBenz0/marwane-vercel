@@ -55,11 +55,15 @@ def get_mouvements(
     Returns:
         Liste des mouvements de caisse (MouvementCaisseRead)
     """
-    # Filtrer pour ne montrer que les mouvements liés aux transactions actives
-    query = db.query(Caisse).join(
+    # Mouvements de caisse filtrés : inclure les mouvements liés aux transactions actives 
+    # OU les mouvements sans transaction (comme les dépenses/charges)
+    query = db.query(Caisse).outerjoin(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
-        Transaction.est_actif == True
+        or_(
+            Transaction.est_actif == True,
+            Caisse.id_transaction.is_(None)
+        )
     )
     
     # Filtre par date
@@ -108,37 +112,30 @@ def get_solde(
     Returns:
         Solde actuel de la caisse avec la date du dernier mouvement (SoldeCaisseRead)
     """
-    # Calculer le solde : somme des entrées - somme des sorties
-    # IMPORTANT : Ne compter que les mouvements liés aux transactions actives
-    # Calculer séparément les entrées et sorties
-    entrees = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
-        Caisse.type_mouvement == 'ENTREE',
+    # Calculer le solde théorique : somme des transactions clients - somme des transactions fournisseurs
+    entrees = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
+        Transaction.id_client.isnot(None),
         Transaction.est_actif == True
     ).scalar() or Decimal('0.00')
     
-    sorties = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
-        Caisse.type_mouvement == 'SORTIE',
+    sorties = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
+        Transaction.id_fournisseur.isnot(None),
         Transaction.est_actif == True
     ).scalar() or Decimal('0.00')
     
-    # Calculer le solde
-    solde_actuel = Decimal(str(entrees)) - Decimal(str(sorties))
+    # Calculer le solde théorique
+    solde_theorique = Decimal(str(entrees)) - Decimal(str(sorties))
     
-    # Récupérer la date du dernier mouvement (uniquement des transactions actives)
-    derniere_maj = db.query(func.max(Caisse.date_mouvement)).join(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
+    # Récupérer la date de la dernière transaction active
+    derniere_maj = db.query(func.max(Transaction.date_transaction)).filter(
         Transaction.est_actif == True
     ).scalar()
+    
     if not derniere_maj:
         derniere_maj = datetime.now()
     
     return SoldeCaisseRead(
-        solde_actuel=solde_actuel,
+        solde_actuel=solde_theorique,
         derniere_maj=derniere_maj
     )
 
@@ -172,83 +169,49 @@ def get_solde_complet(
     """
     
     # ==================== SOLDE THÉORIQUE ====================
-    # Basé sur les transactions (mouvements de caisse)
+    # Basé directement sur les transactions (Chiffre d'affaires attendu)
     
-    entrees_theoriques = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
+    entrees_theoriques = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
+        Transaction.id_client.isnot(None),
+        Transaction.est_actif == True
+    ).scalar() or Decimal('0.00')
+    
+    sorties_theoriques = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
+        Transaction.id_fournisseur.isnot(None),
+        Transaction.est_actif == True
+    ).scalar() or Decimal('0.00')
+    
+    solde_theorique = Decimal(str(entrees_theoriques)) - Decimal(str(sorties_theoriques))
+    
+    # Date du dernier mouvement (transaction)
+    derniere_maj_transaction = db.query(func.max(Transaction.date_transaction)).filter(
+        Transaction.est_actif == True
+    ).scalar()
+    
+    # ==================== SOLDE RÉEL ====================
+    # Basé sur les mouvements de caisse enregistrés (Paiements effectifs)
+    
+    entrees_reelles = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
         Caisse.type_mouvement == 'ENTREE',
         Transaction.est_actif == True
     ).scalar() or Decimal('0.00')
     
-    sorties_theoriques = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
+    sorties_reelles = db.query(func.coalesce(func.sum(Caisse.montant), 0)).outerjoin(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
         Caisse.type_mouvement == 'SORTIE',
-        Transaction.est_actif == True
-    ).scalar() or Decimal('0.00')
-    
-    solde_theorique = Decimal(str(entrees_theoriques)) - Decimal(str(sorties_theoriques))
-    
-    # Date du dernier mouvement
-    derniere_maj_transaction = db.query(func.max(Caisse.date_mouvement)).join(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
-        Transaction.est_actif == True
-    ).scalar()
-    
-    # ==================== SOLDE RÉEL ====================
-    # Basé sur les paiements effectivement encaissés
-    
-    # Paiements clients (entrées réelles)
-    # Ne compter que les paiements valides et les chèques encaissés
-    entrees_reelles = db.query(func.coalesce(func.sum(Paiement.montant), 0)).join(
-        Transaction, Paiement.id_transaction == Transaction.id_transaction
-    ).filter(
-        Transaction.est_actif == True,
-        Transaction.id_client.isnot(None),  # Transactions clients
         or_(
-            # Paiements non-chèque avec statut valide
-            and_(
-                Paiement.type_paiement != 'cheque',
-                Paiement.statut == 'valide'
-            ),
-            # Chèques encaissés
-            and_(
-                Paiement.type_paiement == 'cheque',
-                Paiement.statut_cheque == 'encaisse'
-            )
-        )
-    ).scalar() or Decimal('0.00')
-    
-    # Paiements fournisseurs (sorties réelles)
-    sorties_reelles = db.query(func.coalesce(func.sum(Paiement.montant), 0)).join(
-        Transaction, Paiement.id_transaction == Transaction.id_transaction
-    ).filter(
-        Transaction.est_actif == True,
-        Transaction.id_fournisseur.isnot(None),  # Transactions fournisseurs
-        or_(
-            # Paiements non-chèque avec statut valide
-            and_(
-                Paiement.type_paiement != 'cheque',
-                Paiement.statut == 'valide'
-            ),
-            # Chèques encaissés
-            and_(
-                Paiement.type_paiement == 'cheque',
-                Paiement.statut_cheque == 'encaisse'
-            )
+            Transaction.est_actif == True,
+            Caisse.id_transaction.is_(None)
         )
     ).scalar() or Decimal('0.00')
     
     solde_reel = Decimal(str(entrees_reelles)) - Decimal(str(sorties_reelles))
     
-    # Date du dernier paiement
-    derniere_maj_paiement = db.query(func.max(Paiement.date_paiement)).join(
-        Transaction, Paiement.id_transaction == Transaction.id_transaction
-    ).filter(
-        Transaction.est_actif == True
-    ).scalar()
+    # Date du dernier paiement/mouvement
+    derniere_maj_paiement = db.query(func.max(Caisse.date_mouvement)).scalar()
     
     # ==================== ÉCART ET DÉTAILS ====================
     

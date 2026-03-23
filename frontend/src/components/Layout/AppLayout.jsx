@@ -41,6 +41,9 @@ import {
   Security as SecurityIcon,
   Logout as LogoutIcon,
   CreditCard as CreditCardIcon,
+  Factory as FactoryIcon,
+  MoneyOff as MoneyOffIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import useAuthStore from '../../store/authStore';
 
@@ -56,12 +59,16 @@ const drawerWidth = 240;
  */
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+  { text: 'Stats Production', icon: <TrendingUpIcon />, path: '/production/dashboard' },
+  { text: 'Production', icon: <FactoryIcon />, path: '/production' },
   { text: 'Transactions', icon: <ReceiptIcon />, path: '/transactions' },
   { text: 'Clients', icon: <PeopleIcon />, path: '/clients' },
   { text: 'Fournisseurs', icon: <BusinessIcon />, path: '/fournisseurs' },
   { text: 'Produits', icon: <InventoryIcon />, path: '/produits' },
+  { text: 'Dépenses', icon: <MoneyOffIcon />, path: '/charges' },
   { text: 'LC', icon: <CreditCardIcon />, path: '/lettres-credit' },
-  { text: 'Caisse', icon: <AccountBalanceIcon />, path: '/caisse' },
+  { text: 'Banques', icon: <AccountBalanceIcon />, path: '/comptes-bancaires' },
+  { text: 'Caisse', icon: <CreditCardIcon />, path: '/caisse' },
   { text: 'Audit', icon: <SecurityIcon />, path: '/audit', adminOnly: true },
 ];
 

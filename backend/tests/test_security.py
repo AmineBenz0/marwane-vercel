@@ -168,13 +168,11 @@ class TestRefreshToken:
         token = create_refresh_token(data)
         decoded = decode_token(token)
         
-        exp_time = datetime.fromtimestamp(decoded["exp"])
-        iat_time = datetime.fromtimestamp(decoded["iat"])
-        actual_delta = exp_time - iat_time
+        actual_delta_seconds = decoded["exp"] - decoded["iat"]
         
-        # Vérifier que l'expiration est proche de 7 jours (tolérance de 1 minute)
-        expected_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
-        assert abs(actual_delta.total_seconds() - expected_days * 24 * 60 * 60) < 60
+        # Vérifier que l'expiration est proche de 7 jours (tolérance de 5 secondes)
+        expected_seconds = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        assert abs(actual_delta_seconds - expected_seconds) < 5
 
 
 class TestDecodeToken:
@@ -224,20 +222,15 @@ class TestDecodeToken:
     
     def test_decode_token_wrong_secret(self):
         """Test qu'un token avec une mauvaise clé secrète lève une exception."""
+        from unittest.mock import patch
         # Créer un token avec les settings actuels
         data = {"sub": 1, "email": "user@example.com"}
         token = create_access_token(data)
         
-        # Modifier temporairement la clé secrète
-        original_secret = settings.SECRET_KEY
-        settings.SECRET_KEY = "wrong-secret-key"
-        
-        try:
+        # Simuler une autre clé secrète sans modifier l'objet global
+        with patch.object(settings, 'SECRET_KEY', 'wrong-secret-key'):
             with pytest.raises(JWTError):
                 decode_token(token)
-        finally:
-            # Restaurer la clé secrète originale
-            settings.SECRET_KEY = original_secret
     
     def test_decode_token_empty_token(self):
         """Test avec un token vide."""

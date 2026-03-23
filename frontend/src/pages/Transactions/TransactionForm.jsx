@@ -103,17 +103,21 @@ const ligneValidationSchema = yup.object().shape({
       const num = Number(originalValue);
       return isNaN(num) ? undefined : num;
     }),
-  // Champs pour le paiement de cette ligne (optionnels)
+  // Un paiement individuel
+  paiements: yup.array().of(
+    yup.object().shape({
+      date: yup.string().required('La date est requise'),
+      montant: yup.number().required('Le montant est requis').positive('Le montant doit être positif'),
+      type: yup.string().required('Le type est requis'),
+      numero_cheque: yup.string().nullable(),
+      banque: yup.string().nullable(),
+      reference: yup.string().nullable(),
+      id_lc: yup.number().nullable(),
+      notes: yup.string().nullable(),
+      id_paiement: yup.number().nullable(),
+    })
+  ).min(0),
   ajouter_paiement: yup.boolean(),
-  paiement_date: yup.string().nullable(),
-  paiement_montant: yup.number().nullable().positive('Le montant doit être positif'),
-  paiement_type: yup.string().nullable(),
-  paiement_numero_cheque: yup.string().nullable(),
-  paiement_banque: yup.string().nullable(),
-  paiement_reference: yup.string().nullable(),
-  paiement_id_lc: yup.number().nullable(),
-  paiement_notes: yup.string().nullable(),
-  paiement_id: yup.number().nullable(), // ID du paiement existant (en mode édition)
 });
 
 /**
@@ -121,7 +125,7 @@ const ligneValidationSchema = yup.object().shape({
  * Encapsule la logique de chargement des LC disponibles pour éviter les mises à jour d'état
  * pendant le rendu du composant parent.
  */
-const LcPaymentSelector = ({ index, control, watch, setValue, loading, formatMontant }) => {
+const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, loading, formatMontant }) => {
   const [lcs, setLcs] = React.useState([]);
   const [fetching, setFetching] = React.useState(false);
   
@@ -164,7 +168,7 @@ const LcPaymentSelector = ({ index, control, watch, setValue, loading, formatMon
 
   return (
     <Controller
-      name={`lignes.${index}.paiement_id_lc`}
+      name={`lignes.${index}.paiements.${paymentIndex}.id_lc`}
       control={control}
       rules={{ required: 'Veuillez sélectionner une LC' }}
       render={({ field, fieldState: { error } }) => (
@@ -183,7 +187,7 @@ const LcPaymentSelector = ({ index, control, watch, setValue, loading, formatMon
             // Auto-remplissage du montant avec le montant de la LC
             const selectedLc = lcs.find(l => l.id_lc === e.target.value);
             if (selectedLc) {
-              setValue(`lignes.${index}.paiement_montant`, parseFloat(selectedLc.montant));
+              setValue(`lignes.${index}.paiements.${paymentIndex}.montant`, parseFloat(selectedLc.montant));
             }
           }}
         >
@@ -294,14 +298,16 @@ function TransactionForm({
         quantite: undefined, 
         prix_unitaire: undefined,
         ajouter_paiement: false,
-        paiement_date: new Date().toISOString().split('T')[0],
-        paiement_montant: '',
-        paiement_type: 'cash',
-        paiement_numero_cheque: '',
-        paiement_banque: '',
-        paiement_reference: '',
-        paiement_id_lc: '',
-        paiement_notes: '',
+        paiements: [{
+          date: new Date().toISOString().split('T')[0],
+          montant: '',
+          type: 'cash',
+          numero_cheque: '',
+          banque: '',
+          reference: '',
+          id_lc: '',
+          notes: '',
+        }],
       }],
     },
     mode: 'onChange',
@@ -389,17 +395,17 @@ function TransactionForm({
               quantite: initialValues.quantite || undefined,
               prix_unitaire: initialValues.prix_unitaire || undefined,
               ajouter_paiement: hasPaiement,
-              paiement_date: premierPaiement 
-                ? new Date(premierPaiement.date_paiement).toISOString().split('T')[0]
-                : new Date().toISOString().split('T')[0],
-              paiement_montant: premierPaiement ? parseFloat(premierPaiement.montant) : '',
-              paiement_type: premierPaiement ? premierPaiement.type_paiement : 'cash',
-              paiement_numero_cheque: premierPaiement ? (premierPaiement.numero_cheque || '') : '',
-              paiement_banque: premierPaiement ? (premierPaiement.banque || '') : '',
-              paiement_reference: premierPaiement ? (premierPaiement.reference_virement || '') : '',
-              paiement_id_lc: premierPaiement ? (premierPaiement.id_lc || '') : '',
-              paiement_notes: premierPaiement ? (premierPaiement.notes || '') : '',
-              paiement_id: premierPaiement ? premierPaiement.id_paiement : '', // Sauvegarder l'ID pour la mise à jour
+              paiements: paiements.map(p => ({
+                date: new Date(p.date_paiement).toISOString().split('T')[0],
+                montant: parseFloat(p.montant),
+                type: p.type_paiement,
+                numero_cheque: p.numero_cheque || '',
+                banque: p.banque || '',
+                reference: p.reference_virement || '',
+                id_lc: p.id_lc || '',
+                notes: p.notes || '',
+                id_paiement: p.id_paiement,
+              })),
             }],
           });
         } else {
@@ -479,19 +485,19 @@ function TransactionForm({
         };
         
         // Passer aussi les données de paiement pour que le parent les gère
-        const paiementData = data.lignes[0].ajouter_paiement ? {
-          ajouter_paiement: true,
-          paiement_id: data.lignes[0].paiement_id || null,
-          paiement_date: data.lignes[0].paiement_date,
-          paiement_montant: parseFloat(data.lignes[0].paiement_montant),
-          paiement_type: data.lignes[0].paiement_type,
-          paiement_numero_cheque: data.lignes[0].paiement_numero_cheque || null,
-          paiement_banque: data.lignes[0].paiement_banque || null,
-          paiement_reference: data.lignes[0].paiement_reference || null,
-          paiement_notes: data.lignes[0].paiement_notes || null,
-        } : null;
+        const paiementsData = data.lignes[0].ajouter_paiement ? data.lignes[0].paiements.map(p => ({
+          id_paiement: p.id_paiement || null,
+          date_paiement: p.date,
+          montant: parseFloat(p.montant),
+          type_paiement: p.type,
+          numero_cheque: p.numero_cheque || null,
+          banque: p.banque || null,
+          reference_virement: p.reference || null,
+          id_lc: p.id_lc || null,
+          notes: p.notes || null,
+        })) : [];
         
-        await onSubmit({ ...transactionData, paiement: paiementData });
+        await onSubmit({ ...transactionData, paiements: paiementsData });
       } else {
         // Mode création : on crée N transactions via l'endpoint batch
         const transactionsData = data.lignes.map((ligne) => ({
@@ -1055,177 +1061,176 @@ function TransactionForm({
                             {/* Champs de paiement conditionnels */}
                             <Collapse in={ligne.ajouter_paiement}>
                               <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderRadius: 1 }}>
-                                <Typography variant="subtitle2" gutterBottom color="success.dark">
-                                  📋 Informations du paiement
-                                </Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                  <Typography variant="subtitle2" color="success.dark">
+                                    📋 Liste des paiements
+                                  </Typography>
+                                  <Button 
+                                    size="small" 
+                                    startIcon={<AddIcon />} 
+                                    onClick={() => {
+                                      const currentPaiements = watch(`lignes.${index}.paiements`) || [];
+                                      setValue(`lignes.${index}.paiements`, [...currentPaiements, {
+                                        date: watch('date_transaction') || new Date().toISOString().split('T')[0],
+                                        montant: '',
+                                        type: 'cash',
+                                        numero_cheque: '',
+                                        banque: '',
+                                        reference: '',
+                                        id_lc: '',
+                                        notes: '',
+                                      }]);
+                                    }}
+                                  >
+                                    Ajouter
+                                  </Button>
+                                </Box>
                                 
-                                <Grid container spacing={2}>
-                                  {/* Date du paiement */}
-                                  <Grid item xs={12} sm={6}>
-                                    <Controller
-                                      name={`lignes.${index}.paiement_date`}
-                                      control={control}
-                                      render={({ field, fieldState: { error } }) => (
-                                        <TextField
-                                          {...field}
-                                          fullWidth
-                                          label="Date du paiement"
-                                          type="date"
-                                          error={!!error}
-                                          helperText={error?.message}
-                                          disabled={loading}
-                                          InputLabelProps={{ shrink: true }}
-                                  size="small"
-                                        />
+                                {ligne.paiements?.map((paiement, pIndex) => (
+                                  <Box key={pIndex} sx={{ mb: 2, pb: 2, borderBottom: pIndex < ligne.paiements.length - 1 ? '1px dashed #ccc' : 'none' }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                      <Typography variant="caption" fontWeight="bold">Paiement #{pIndex + 1}</Typography>
+                                      {ligne.paiements.length > 1 && (
+                                        <IconButton size="small" color="error" onClick={() => {
+                                          const newPaiements = ligne.paiements.filter((_, i) => i !== pIndex);
+                                          setValue(`lignes.${index}.paiements`, newPaiements);
+                                        }}>
+                                          <DeleteIcon fontSize="small" />
+                                        </IconButton>
                                       )}
-                                    />
-                                  </Grid>
-
-                                  {/* Montant */}
-                                  <Grid item xs={12} sm={6}>
-                                    <Controller
-                                      name={`lignes.${index}.paiement_montant`}
-                                      control={control}
-                                      render={({ field, fieldState: { error } }) => (
-                                        <TextField
-                                          {...field}
-                                          fullWidth
-                                          label="Montant (MAD)"
-                                          type="number"
-                                          error={!!error}
-                                          helperText={error?.message || `Max: ${ligneTotal.toFixed(2)} MAD`}
-                                          disabled={loading}
-                                          inputProps={{ step: '0.01', min: '0.01' }}
-                                          InputLabelProps={{ shrink: true }}
-                                          size="small"
-                                        />
-                                      )}
-                                    />
-                                  </Grid>
-
-                                  {/* Type de paiement */}
-                                  <Grid item xs={12}>
-                                    <Controller
-                                      name={`lignes.${index}.paiement_type`}
-                                      control={control}
-                                      render={({ field, fieldState: { error } }) => (
-                                        <TextField
-                                          {...field}
-                                          select
-                                          fullWidth
-                                          label="Type de paiement"
-                                          error={!!error}
-                                          helperText={error?.message}
-                                          disabled={loading}
-                                          size="small"
-                                        >
-                                          <MenuItem value="cash">💵 Espèces</MenuItem>
-                                          <MenuItem value="cheque">💳 Chèque</MenuItem>
-                                          <MenuItem value="virement">🏦 Virement</MenuItem>
-                                          <MenuItem value="carte">💳 Carte bancaire</MenuItem>
-                                          <MenuItem value="traite">📝 Traite</MenuItem>
-                                          <MenuItem value="compensation">↔️ Compensation</MenuItem>
-                                          <MenuItem value="lc">📜 Lettre de Crédit</MenuItem>
-                                          <MenuItem value="autre">📄 Autre</MenuItem>
-                                        </TextField>
-                                      )}
-                                    />
-                                  </Grid>
-
-                                  {/* Champs conditionnels pour chèque */}
-                                  {ligne.paiement_type === 'cheque' && (
-                                    <>
+                                    </Box>
+                                    <Grid container spacing={2}>
+                                      {/* Date du paiement */}
                                       <Grid item xs={12} sm={6}>
                                         <Controller
-                                          name={`lignes.${index}.paiement_numero_cheque`}
+                                          name={`lignes.${index}.paiements.${pIndex}.date`}
                                           control={control}
-                                          render={({ field }) => (
+                                          render={({ field, fieldState: { error } }) => (
                                             <TextField
                                               {...field}
                                               fullWidth
-                                              label="Numéro du chèque"
+                                              label="Date"
+                                              type="date"
+                                              error={!!error}
+                                              helperText={error?.message}
                                               disabled={loading}
+                                              InputLabelProps={{ shrink: true }}
                                               size="small"
                                             />
                                           )}
                                         />
                                       </Grid>
+
+                                      {/* Montant */}
                                       <Grid item xs={12} sm={6}>
                                         <Controller
-                                          name={`lignes.${index}.paiement_banque`}
+                                          name={`lignes.${index}.paiements.${pIndex}.montant`}
                                           control={control}
-                                          render={({ field }) => (
+                                          render={({ field, fieldState: { error } }) => (
                                             <TextField
                                               {...field}
                                               fullWidth
-                                              label="Banque"
+                                              label="Montant (MAD)"
+                                              type="number"
+                                              error={!!error}
+                                              helperText={error?.message}
                                               disabled={loading}
+                                              inputProps={{ step: '0.01', min: '0.01' }}
+                                              InputLabelProps={{ shrink: true }}
                                               size="small"
                                             />
                                           )}
                                         />
                                       </Grid>
-                                    </>
-                                  )}
 
-                                  {/* Champs conditionnels pour virement */}
-                                  {ligne.paiement_type === 'virement' && (
-                                    <Grid item xs={12}>
-                                      <Controller
-                                        name={`lignes.${index}.paiement_reference`}
-                                        control={control}
-                                        render={({ field }) => (
-                                          <TextField
-                                            {...field}
-                                            fullWidth
-                                            label="Référence du virement"
-                                            disabled={loading}
-                                            size="small"
-                                            placeholder="Ex: VIR-2025-001234"
+                                      {/* Type de paiement */}
+                                      <Grid item xs={12}>
+                                        <Controller
+                                          name={`lignes.${index}.paiements.${pIndex}.type`}
+                                          control={control}
+                                          render={({ field, fieldState: { error } }) => (
+                                            <TextField
+                                              {...field}
+                                              select
+                                              fullWidth
+                                              label="Mode"
+                                              error={!!error}
+                                              helperText={error?.message}
+                                              disabled={loading}
+                                              size="small"
+                                            >
+                                              <MenuItem value="cash">💵 Espèces</MenuItem>
+                                              <MenuItem value="cheque">💳 Chèque</MenuItem>
+                                              <MenuItem value="virement">🏦 Virement</MenuItem>
+                                              <MenuItem value="carte">💳 Carte bancaire</MenuItem>
+                                              <MenuItem value="compensation">↔️ Compensation</MenuItem>
+                                              <MenuItem value="lc">📜 Lettre de Crédit</MenuItem>
+                                              <MenuItem value="autre">📄 Autre</MenuItem>
+                                            </TextField>
+                                          )}
+                                        />
+                                      </Grid>
+
+                                      {/* Champs conditionnels */}
+                                      {paiement.type === 'cheque' && (
+                                        <>
+                                          <Grid item xs={12} sm={6}>
+                                            <Controller
+                                              name={`lignes.${index}.paiements.${pIndex}.numero_cheque`}
+                                              control={control}
+                                              render={({ field }) => (
+                                                <TextField {...field} fullWidth label="N° Chèque" disabled={loading} size="small" />
+                                              )}
+                                            />
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Controller
+                                              name={`lignes.${index}.paiements.${pIndex}.banque`}
+                                              control={control}
+                                              render={({ field }) => (
+                                                <TextField {...field} fullWidth label="Banque" disabled={loading} size="small" />
+                                              )}
+                                            />
+                                          </Grid>
+                                        </>
+                                      )}
+
+                                      {paiement.type === 'virement' && (
+                                        <Grid item xs={12}>
+                                          <Controller
+                                            name={`lignes.${index}.paiements.${pIndex}.reference`}
+                                            control={control}
+                                            render={({ field }) => (
+                                              <TextField {...field} fullWidth label="Référence" disabled={loading} size="small" />
+                                            )}
                                           />
-                                        )}
-                                      />
-                                    </Grid>
-                                  )}
+                                        </Grid>
+                                      )}
 
-                                  {/* Champs conditionnels pour Lettre de Crédit */}
-                                  {ligne.paiement_type === 'lc' && (
-                                    <Grid item xs={12}>
-                                      <LcPaymentSelector
-                                        index={index}
-                                        control={control}
-                                        watch={watch}
-                                        setValue={setValue}
-                                        loading={loading}
-                                        formatMontant={formatMontant}
-                                      />
-                                      {ligne.paiement_id_lc && (
-                                        <Alert severity="warning" sx={{ mt: 1 }}>
-                                          Une Lettre de Crédit doit être utilisée en totalité.
-                                        </Alert>
+                                      {paiement.type === 'lc' && (
+                                        <Grid item xs={12}>
+                                          <LcPaymentSelector
+                                            index={index}
+                                            paymentIndex={pIndex}
+                                            control={control}
+                                            watch={watch}
+                                            setValue={setValue}
+                                            loading={loading}
+                                            formatMontant={formatMontant}
+                                          />
+                                        </Grid>
                                       )}
                                     </Grid>
-                                  )}
-
-                                  {/* Notes */}
-                                  <Grid item xs={12}>
-                                    <Controller
-                                      name={`lignes.${index}.paiement_notes`}
-                                      control={control}
-                                      render={({ field }) => (
-                                        <TextField
-                                          {...field}
-                                          fullWidth
-                                          label="Notes (optionnel)"
-                                          multiline
-                                          rows={2}
-                                          disabled={loading}
-                                          size="small"
-                                        />
-                                      )}
-                                    />
-                                  </Grid>
-                                </Grid>
+                                  </Box>
+                                ))}
+                                
+                                {ligne.ajouter_paiement && (
+                                  <Box sx={{ mt: 1, p: 1, borderTop: '1px solid #ddd' }}>
+                                    <Typography variant="caption">
+                                      Total payé pour cette ligne: <strong>{ligne.paiements.reduce((acc, p) => acc + (parseFloat(p.montant) || 0), 0).toFixed(2)} / {ligneTotal.toFixed(2)} MAD</strong>
+                                    </Typography>
+                                  </Box>
+                                )}
                               </Box>
                             </Collapse>
                           </Grid>

@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-comptabilite_db}
       POSTGRES_USER: ${POSTGRES_USER:-comptabilite_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -27,12 +27,12 @@ services:
     container_name: comptabilite_backend
     environment:
       # Database connection - use service name 'postgres' instead of localhost
-      DATABASE_URL: postgresql://${POSTGRES_USER:-comptabilite_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-comptabilite_db}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-comptabilite_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-comptabilite_db}
       POSTGRES_DB: ${POSTGRES_DB:-comptabilite_db}
       POSTGRES_USER: ${POSTGRES_USER:-comptabilite_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       # JWT Configuration
-      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
@@ -41,14 +41,17 @@ services:
       DEBUG: ${DEBUG:-False}
       API_V1_PREFIX: /api/v1
       # CORS Configuration
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       # Rate Limiting
       RATE_LIMIT_PER_MINUTE: 60
       ENABLE_AUTH: ${ENABLE_AUTH:-True}
       ENABLE_RATE_LIMITING: ${ENABLE_RATE_LIMITING:-True}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
     ports:
       - "8000:8000"
     volumes:
+      - ./backend:/app
       - ./backend/logs:/app/logs
     networks:
       - comptabilite_network

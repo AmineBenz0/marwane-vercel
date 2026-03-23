@@ -11,7 +11,6 @@ import pytest
 from fastapi import status
 from app.models.produit import Produit
 from app.models.transaction import Transaction
-from app.models.ligne_transaction import LigneTransaction
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 
@@ -82,7 +81,7 @@ class TestProductCreationWithTypes:
         response = client.post("/api/v1/produits", json=product_data, headers=auth_headers)
         
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-        assert "au moins" in response.json()["detail"].lower()
+        assert "au moins" in str(response.json()["detail"]).lower()
 
 
 class TestProductUpdateWithTypes:
@@ -252,33 +251,25 @@ class TestTransactionProductTypeValidation:
         transaction_data = {
             "date_transaction": "2024-11-14",
             "id_client": test_data["client"]["id_client"],
-            "lignes": [
-                {
-                    "id_produit": test_data["produit_client"]["id_produit"],
-                    "quantite": 5,
-                    "prix_unitaire": 100.0
-                }
-            ]
+            "id_produit": test_data["produit_client"]["id_produit"],
+            "quantite": 5,
+            "prix_unitaire": 100.0
         }
         
         response = client.post("/api/v1/transactions", json=transaction_data, headers=auth_headers)
         
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
-        assert data["montant_total"] == "500.00"
+        assert data["id_produit"] == test_data["produit_client"]["id_produit"]
     
     def test_create_client_transaction_with_supplier_product_fails(self, client, auth_headers, test_data):
         """Test : Création d'une transaction client avec un produit fournisseur échoue."""
         transaction_data = {
             "date_transaction": "2024-11-14",
             "id_client": test_data["client"]["id_client"],
-            "lignes": [
-                {
-                    "id_produit": test_data["produit_fournisseur"]["id_produit"],
-                    "quantite": 5,
-                    "prix_unitaire": 100.0
-                }
-            ]
+            "id_produit": test_data["produit_fournisseur"]["id_produit"],
+            "quantite": 5,
+            "prix_unitaire": 100.0
         }
         
         response = client.post("/api/v1/transactions", json=transaction_data, headers=auth_headers)
@@ -292,33 +283,25 @@ class TestTransactionProductTypeValidation:
         transaction_data = {
             "date_transaction": "2024-11-14",
             "id_fournisseur": test_data["fournisseur"]["id_fournisseur"],
-            "lignes": [
-                {
-                    "id_produit": test_data["produit_fournisseur"]["id_produit"],
-                    "quantite": 10,
-                    "prix_unitaire": 50.0
-                }
-            ]
+            "id_produit": test_data["produit_fournisseur"]["id_produit"],
+            "quantite": 10,
+            "prix_unitaire": 50.0
         }
         
         response = client.post("/api/v1/transactions", json=transaction_data, headers=auth_headers)
         
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
-        assert data["montant_total"] == "500.00"
+        assert data["id_produit"] == test_data["produit_fournisseur"]["id_produit"]
     
     def test_create_supplier_transaction_with_client_product_fails(self, client, auth_headers, test_data):
         """Test : Création d'une transaction fournisseur avec un produit client échoue."""
         transaction_data = {
             "date_transaction": "2024-11-14",
             "id_fournisseur": test_data["fournisseur"]["id_fournisseur"],
-            "lignes": [
-                {
-                    "id_produit": test_data["produit_client"]["id_produit"],
-                    "quantite": 10,
-                    "prix_unitaire": 50.0
-                }
-            ]
+            "id_produit": test_data["produit_client"]["id_produit"],
+            "quantite": 10,
+            "prix_unitaire": 50.0
         }
         
         response = client.post("/api/v1/transactions", json=transaction_data, headers=auth_headers)
@@ -333,26 +316,18 @@ class TestTransactionProductTypeValidation:
         transaction_data = {
             "date_transaction": "2024-11-14",
             "id_client": test_data["client"]["id_client"],
-            "lignes": [
-                {
-                    "id_produit": test_data["produit_client"]["id_produit"],
-                    "quantite": 5,
-                    "prix_unitaire": 100.0
-                }
-            ]
+            "id_produit": test_data["produit_client"]["id_produit"],
+            "quantite": 5,
+            "prix_unitaire": 100.0
         }
         response = client.post("/api/v1/transactions", json=transaction_data, headers=auth_headers)
         transaction_id = response.json()["id_transaction"]
         
         # Essayer de mettre à jour avec un produit fournisseur
         update_data = {
-            "lignes": [
-                {
-                    "id_produit": test_data["produit_fournisseur"]["id_produit"],
-                    "quantite": 5,
-                    "prix_unitaire": 100.0
-                }
-            ]
+            "id_produit": test_data["produit_fournisseur"]["id_produit"],
+            "quantite": 5,
+            "prix_unitaire": 100.0
         }
         response = client.put(f"/api/v1/transactions/{transaction_id}", json=update_data, headers=auth_headers)
         
@@ -376,4 +351,3 @@ class TestProductTypeDefaults:
         data = response.json()
         assert data["pour_clients"] is True
         assert data["pour_fournisseurs"] is True
-

@@ -11,7 +11,8 @@ from app.config.logging_config import setup_logging
 from app.database import engine, Base
 from app.routers import (
     auth, users, clients, fournisseurs, produits, 
-    transactions, caisse, paiements, lettres_credit, cessions_lc
+    transactions, caisse, paiements, lettres_credit, cessions_lc,
+    batiments, productions, charges, comptes_bancaires
 )
 from app.utils.rate_limit import limiter
 from app.middleware.logging_middleware import LoggingMiddleware
@@ -71,16 +72,16 @@ async def startup_event():
     
     # Créer les tables si elles n'existent pas (dev uniquement)
     # En production, utiliser Alembic pour les migrations
-    if settings.ENVIRONMENT == "development":
-        try:
-            Base.metadata.create_all(bind=engine)
-            logger.info("Database tables created/verified successfully")
-        except Exception as e:
-            logger.warning(
-                f"Failed to connect to database during startup: {e}. "
-                "The application will start, but database operations will fail until the database is available. "
-                "Make sure PostgreSQL is running (e.g., 'docker-compose up -d postgres')."
-            )
+    # if settings.ENVIRONMENT == "development":
+    #     try:
+    #         # Désactivé pour forcer l'utilisation d'alembic et éviter les conflits
+    #         # Base.metadata.create_all(bind=engine)
+    #         logger.info("Alembic is managing database tables")
+    #     except Exception as e:
+    #         logger.warning(
+    #             f"Failed to connect to database during startup: {e}. "
+    #             "The application will start, but database operations will fail until the database is available."
+    #         )
 
 
 @app.get("/")
@@ -119,4 +120,8 @@ app.include_router(paiements.router, prefix=settings.API_V1_PREFIX)
 app.include_router(caisse.router, prefix=settings.API_V1_PREFIX)
 app.include_router(lettres_credit.router, prefix=settings.API_V1_PREFIX)
 app.include_router(cessions_lc.router, prefix=settings.API_V1_PREFIX)
+app.include_router(batiments.router, prefix=settings.API_V1_PREFIX)
+app.include_router(productions.router, prefix=settings.API_V1_PREFIX)
+app.include_router(charges.router, prefix=settings.API_V1_PREFIX)
+app.include_router(comptes_bancaires.router, prefix=settings.API_V1_PREFIX)
 

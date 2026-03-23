@@ -20,6 +20,7 @@ def get_produits(
     skip: int = 0,
     limit: int = 100,
     est_actif: Optional[bool] = None,
+    type_produit: Optional[str] = None,
     recherche: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Utilisateur] = Depends(get_current_active_user)
@@ -42,9 +43,9 @@ def get_produits(
     """
     query = db.query(Produit)
     
-    # Filtre par est_actif si fourni
-    if est_actif is not None:
-        query = query.filter(Produit.est_actif == est_actif)
+    # Filtre par type_produit si fourni
+    if type_produit:
+        query = query.filter(Produit.type_produit == type_produit.lower())
     
     # Filtre par recherche (nom_produit) si fourni
     if recherche:
@@ -127,6 +128,7 @@ def create_produit(
     # Créer le nouveau produit
     new_produit = Produit(
         nom_produit=produit_data.nom_produit.strip(),
+        type_produit=produit_data.type_produit.lower() if produit_data.type_produit else 'produit_fini',
         est_actif=produit_data.est_actif,
         pour_clients=produit_data.pour_clients,
         pour_fournisseurs=produit_data.pour_fournisseurs
@@ -312,6 +314,7 @@ def get_produits_par_type(
     skip: int = 0,
     limit: int = 100,
     est_actif: Optional[bool] = True,
+    type_produit: Optional[str] = None,
     recherche: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Utilisateur] = Depends(get_current_active_user)
@@ -358,9 +361,9 @@ def get_produits_par_type(
     else:  # fournisseur
         query = query.filter(Produit.pour_fournisseurs == True)
     
-    # Filter by active status
-    if est_actif is not None:
-        query = query.filter(Produit.est_actif == est_actif)
+    # Filter by product type
+    if type_produit:
+        query = query.filter(Produit.type_produit == type_produit.lower())
     
     # Filtre par recherche (nom_produit) si fourni
     if recherche:

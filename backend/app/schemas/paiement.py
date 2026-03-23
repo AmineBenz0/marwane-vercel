@@ -16,7 +16,7 @@ class PaiementBase(BaseModel):
     montant: Decimal = Field(..., gt=0, description="Montant du paiement (doit être > 0)")
     type_paiement: str = Field(
         ...,
-        description="Type de paiement (cash, cheque, virement, carte, traite, compensation, autre)"
+        description="Type de paiement (cash, cheque, virement, carte, compensation, lc, autre)"
     )
     
     # Informations pour les chèques
@@ -41,7 +41,7 @@ class PaiementBase(BaseModel):
     @classmethod
     def validate_type_paiement(cls, v: str) -> str:
         """Valide que le type de paiement est dans la liste autorisée."""
-        types_valides = ['cash', 'cheque', 'virement', 'carte', 'traite', 'compensation', 'lc', 'autre']
+        types_valides = ['cash', 'cheque', 'virement', 'carte', 'compensation', 'lc', 'autre']
         if v.lower() not in types_valides:
             raise ValueError(
                 f"Type de paiement invalide. Doit être l'un de: {', '.join(types_valides)}"
@@ -163,4 +163,12 @@ class PaiementSummary(BaseModel):
     type_paiement: str = Field(..., description="Type de paiement")
     nombre_paiements: int = Field(..., description="Nombre de paiements de ce type")
     montant_total: Decimal = Field(..., description="Montant total de ce type de paiement")
+
+
+class PaiementBatchCreate(BaseModel):
+    """
+    Schéma pour créer plusieurs paiements d'un coup.
+    """
+    paiements: list[PaiementCreate] = Field(..., min_length=1, description="Liste des paiements à créer")
+
 

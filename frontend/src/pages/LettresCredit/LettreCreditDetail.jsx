@@ -100,17 +100,13 @@ function LettreCreditDetail() {
                   <Typography variant="caption" color="text.secondary">Montant</Typography>
                   <Typography variant="h6" color="primary">{formatMontant(lc.montant)}</Typography>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary">Date Émission</Typography>
                   <Typography variant="body2">{formatDate(lc.date_emission)}</Typography>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary">Disponibilité</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{formatDate(lc.date_disponibilite)}</Typography>
-                </Grid>
-                <Grid item xs={4}>
-                  <Typography variant="caption" color="text.secondary">Expiration</Typography>
-                  <Typography variant="body2">{formatDate(lc.date_expiration)}</Typography>
                 </Grid>
               </Grid>
             </CardContent>
@@ -127,8 +123,8 @@ function LettreCreditDetail() {
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                   {lc.detenteur_nom}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                  Type: {lc.type_detenteur}
+                <Typography variant="body2" color="text.secondary">
+                  Client
                 </Typography>
                 <Box sx={{ mt: 2 }}>
                   <Button 

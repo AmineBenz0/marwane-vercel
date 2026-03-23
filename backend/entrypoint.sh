@@ -22,25 +22,33 @@ echo "✅ Migrations applied successfully!"
 # Create admin user if not exists
 echo ""
 echo "👤 Checking admin user..."
+ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-Admin@123}"
+
 python -c "
+import os
 from sqlalchemy import text
 from app.database import SessionLocal
+from app.utils.security import hash_password
+
 db = SessionLocal()
+admin_email = os.environ.get('ADMIN_EMAIL', 'admin@example.com')
+admin_password = os.environ.get('ADMIN_PASSWORD', 'Admin@123')
+
 try:
-    result = db.execute(text(\"SELECT COUNT(*) FROM utilisateurs WHERE email = 'admin@example.com'\"))
+    result = db.execute(text(\"SELECT COUNT(*) FROM utilisateurs WHERE email = :email\"), {'email': admin_email})
     count = result.scalar()
     if count == 0:
-        print('   Admin user not found, creating...')
-        from app.utils.security import hash_password
-        password_hash = hash_password('Admin@123')
+        print(f'   Admin user ({admin_email}) not found, creating...')
+        pwd_hash = hash_password(admin_password)
         db.execute(text(\"\"\"
             INSERT INTO utilisateurs (nom_utilisateur, email, mot_de_passe_hash, role, est_actif, date_creation, date_modification)
-            VALUES ('Admin User', 'admin@example.com', :pwd, 'admin', TRUE, NOW(), NOW())
-        \"\"\"), {'pwd': password_hash})
+            VALUES ('Admin User', :email, :pwd, 'admin', TRUE, NOW(), NOW())
+        \"\"\"), {'email': admin_email, 'pwd': pwd_hash})
         db.commit()
-        print('   ✅ Admin user created (admin@example.com / Admin@123)')
+        print(f'   ✅ Admin user created ({admin_email})')
     else:
-        print('   ✅ Admin user already exists')
+        print(f'   ✅ Admin user already exists ({admin_email})')
 except Exception as e:
     print(f'   ⚠️  Could not check/create admin user: {e}')
     db.rollback()
@@ -54,4 +62,10 @@ echo "  🚀 Starting Uvicorn server..."
 echo "========================================="
 
 # Start the application
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+if [ "$ENVIRONMENT" = "development" ]; then
+    echo "🛠️ Starting in DEVELOPMENT mode with reload..."
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+else
+    echo "🚀 Starting in PRODUCTION mode..."
+    exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+fi

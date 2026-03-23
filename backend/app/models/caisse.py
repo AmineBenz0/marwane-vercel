@@ -28,15 +28,23 @@ class Caisse(Base):
     date_mouvement = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     montant = Column(Numeric(15, 2), nullable=False)
     type_mouvement = Column(String(10), nullable=False)
-    id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=False, index=True)
+    id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=True, index=True)
+    id_paiement = Column(Integer, ForeignKey("paiements.id_paiement"), nullable=True, index=True)
+    id_charge = Column(Integer, ForeignKey("charges.id_charge"), nullable=True, index=True)
     
     # Contraintes au niveau SQLAlchemy (seront aussi ajoutées via migrations)
     __table_args__ = (
         CheckConstraint('montant > 0', name='check_montant_caisse_positif'),
         CheckConstraint("type_mouvement IN ('ENTREE', 'SORTIE')", name='check_type_mouvement'),
+        CheckConstraint(
+            "(id_transaction IS NOT NULL) OR (id_charge IS NOT NULL)",
+            name='check_caisse_origine'
+        ),
     )
     
     # Relations
     transaction = relationship("Transaction", back_populates="mouvements_caisse")
+    paiement = relationship("Paiement", backref="mouvement_caisse")
+    charge = relationship("Charge", back_populates="mouvements_caisse")
     historiques_solde = relationship("CaisseSoldeHistorique", back_populates="mouvement")
 

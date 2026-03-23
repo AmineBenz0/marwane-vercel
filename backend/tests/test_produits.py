@@ -8,24 +8,6 @@ from app.models.user import Utilisateur
 from app.config import settings
 
 
-def get_auth_headers(client, test_user):
-    """
-    Helper pour obtenir les headers d'authentification selon ENABLE_AUTH.
-    Retourne un dict vide si auth désactivée, sinon retourne les headers avec token.
-    """
-    headers = {}
-    if settings.ENABLE_AUTH:
-        login_response = client.post(
-            "/api/v1/auth/login",
-            json={
-                "email": "test@example.com",
-                "mot_de_passe": "TestPass123!"
-            }
-        )
-        assert login_response.status_code == status.HTTP_200_OK
-        token = login_response.json()["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
-    return headers
 
 
 class TestProduitsEndpoints:
@@ -41,7 +23,7 @@ class TestProduitsEndpoints:
             # Si auth désactivée, doit retourner 200 (même liste vide)
             assert response.status_code == status.HTTP_200_OK
     
-    def test_get_produits_success(self, client, test_user, db_session):
+    def test_get_produits_success(self, client, test_user, db_session, auth_headers):
         """Test de récupération de la liste des produits."""
         # Créer quelques produits de test
         produit1 = Produit(
@@ -56,19 +38,17 @@ class TestProduitsEndpoints:
         db_session.commit()
         
         # Récupérer la liste des produits
-        headers = get_auth_headers(client, test_user)
         response = client.get(
             "/api/v1/produits",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert isinstance(data, list)
         assert len(data) >= 2
     
-    def test_get_produits_with_est_actif_filter(self, client, test_user, db_session):
+    def test_get_produits_with_est_actif_filter(self, client, test_user, db_session, auth_headers):
         """Test du filtre est_actif sur GET /produits."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer des produits actifs et inactifs
         active_produit = Produit(
@@ -85,7 +65,7 @@ class TestProduitsEndpoints:
         # Tester le filtre est_actif=True
         response = client.get(
             "/api/v1/produits?est_actif=true",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -94,15 +74,14 @@ class TestProduitsEndpoints:
         # Tester le filtre est_actif=False
         response = client.get(
             "/api/v1/produits?est_actif=false",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert all(p["est_actif"] is False for p in data)
     
-    def test_get_produits_with_recherche_filter(self, client, test_user, db_session):
+    def test_get_produits_with_recherche_filter(self, client, test_user, db_session, auth_headers):
         """Test du filtre recherche sur GET /produits."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer des produits avec des noms différents
         produit1 = Produit(
@@ -123,7 +102,7 @@ class TestProduitsEndpoints:
         # Rechercher "Alpha"
         response = client.get(
             "/api/v1/produits?recherche=Alpha",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -133,16 +112,15 @@ class TestProduitsEndpoints:
         # Rechercher "Beta"
         response = client.get(
             "/api/v1/produits?recherche=Beta",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert len(data) == 1
         assert data[0]["nom_produit"] == "Produit Beta"
     
-    def test_get_produits_with_combined_filters(self, client, test_user, db_session):
+    def test_get_produits_with_combined_filters(self, client, test_user, db_session, auth_headers):
         """Test des filtres combinés est_actif et recherche."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer des produits
         active_alpha = Produit(
@@ -163,7 +141,7 @@ class TestProduitsEndpoints:
         # Rechercher "Alpha" et est_actif=True
         response = client.get(
             "/api/v1/produits?recherche=Alpha&est_actif=true",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -171,9 +149,8 @@ class TestProduitsEndpoints:
         assert data[0]["nom_produit"] == "Alpha Actif"
         assert data[0]["est_actif"] is True
     
-    def test_get_produit_by_id_success(self, client, test_user, db_session):
+    def test_get_produit_by_id_success(self, client, test_user, db_session, auth_headers):
         """Test de récupération d'un produit par ID."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer un produit
         test_produit = Produit(
@@ -187,7 +164,7 @@ class TestProduitsEndpoints:
         # Récupérer le produit par ID
         response = client.get(
             f"/api/v1/produits/{test_produit.id_produit}",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -195,26 +172,24 @@ class TestProduitsEndpoints:
         assert data["nom_produit"] == "Produit Test"
         assert data["est_actif"] is True
     
-    def test_get_produit_by_id_not_found(self, client, test_user):
+    def test_get_produit_by_id_not_found(self, client, test_user, auth_headers):
         """Test de récupération d'un produit inexistant."""
-        headers = get_auth_headers(client, test_user)
         
         # Essayer de récupérer un produit inexistant
         response = client.get(
             "/api/v1/produits/99999",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert "introuvable" in response.json()["detail"].lower()
     
-    def test_create_produit_success(self, client, test_user, db_session):
+    def test_create_produit_success(self, client, test_user, db_session, auth_headers):
         """Test de création d'un produit."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer un nouveau produit
         response = client.post(
             "/api/v1/produits",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "nom_produit": "Nouveau Produit",
                 "est_actif": True
@@ -233,9 +208,8 @@ class TestProduitsEndpoints:
         assert produit_db is not None
         assert produit_db.nom_produit == "Nouveau Produit"
     
-    def test_create_produit_duplicate_name(self, client, test_user, db_session):
+    def test_create_produit_duplicate_name(self, client, test_user, db_session, auth_headers):
         """Test qu'on ne peut pas créer deux produits avec le même nom."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer un premier produit
         produit1 = Produit(
@@ -248,7 +222,7 @@ class TestProduitsEndpoints:
         # Essayer de créer un deuxième produit avec le même nom
         response = client.post(
             "/api/v1/produits",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "nom_produit": "Produit Unique",
                 "est_actif": True
@@ -257,14 +231,13 @@ class TestProduitsEndpoints:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "existe déjà" in response.json()["detail"].lower()
     
-    def test_create_produit_validation_error(self, client, test_user):
+    def test_create_produit_validation_error(self, client, test_user, auth_headers):
         """Test de validation des données lors de la création."""
-        headers = get_auth_headers(client, test_user)
         
         # Essayer de créer un produit sans nom
         response = client.post(
             "/api/v1/produits",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "est_actif": True
             }
@@ -274,7 +247,7 @@ class TestProduitsEndpoints:
         # Essayer de créer un produit avec un nom vide
         response = client.post(
             "/api/v1/produits",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "nom_produit": "   ",
                 "est_actif": True
@@ -282,9 +255,8 @@ class TestProduitsEndpoints:
         )
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     
-    def test_update_produit_success(self, client, test_user, db_session):
+    def test_update_produit_success(self, client, test_user, db_session, auth_headers):
         """Test de mise à jour d'un produit."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer un produit
         test_produit = Produit(
@@ -298,7 +270,7 @@ class TestProduitsEndpoints:
         # Mettre à jour le produit
         response = client.put(
             f"/api/v1/produits/{test_produit.id_produit}",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "nom_produit": "Produit Modifié",
                 "est_actif": False
@@ -314,9 +286,8 @@ class TestProduitsEndpoints:
         assert test_produit.nom_produit == "Produit Modifié"
         assert test_produit.est_actif is False
     
-    def test_update_produit_partial(self, client, test_user, db_session):
+    def test_update_produit_partial(self, client, test_user, db_session, auth_headers):
         """Test de mise à jour partielle d'un produit."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer un produit
         test_produit = Produit(
@@ -331,7 +302,7 @@ class TestProduitsEndpoints:
         # Mettre à jour uniquement est_actif
         response = client.put(
             f"/api/v1/produits/{test_produit.id_produit}",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "est_actif": False
             }
@@ -341,23 +312,21 @@ class TestProduitsEndpoints:
         assert data["nom_produit"] == original_name  # Nom inchangé
         assert data["est_actif"] is False  # Seul est_actif modifié
     
-    def test_update_produit_not_found(self, client, test_user):
+    def test_update_produit_not_found(self, client, test_user, auth_headers):
         """Test de mise à jour d'un produit inexistant."""
-        headers = get_auth_headers(client, test_user)
         
         # Essayer de mettre à jour un produit inexistant
         response = client.put(
             "/api/v1/produits/99999",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "nom_produit": "Produit Inexistant"
             }
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
     
-    def test_update_produit_duplicate_name(self, client, test_user, db_session):
+    def test_update_produit_duplicate_name(self, client, test_user, db_session, auth_headers):
         """Test qu'on ne peut pas mettre à jour un produit avec un nom déjà utilisé."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer deux produits
         produit1 = Produit(
@@ -375,7 +344,7 @@ class TestProduitsEndpoints:
         # Essayer de renommer produit2 avec le nom de produit1
         response = client.put(
             f"/api/v1/produits/{produit2.id_produit}",
-            headers=headers,
+            headers=auth_headers,
             json={
                 "nom_produit": "Produit 1"
             }
@@ -383,9 +352,8 @@ class TestProduitsEndpoints:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "existe déjà" in response.json()["detail"].lower()
     
-    def test_delete_produit_success(self, client, test_user, db_session):
+    def test_delete_produit_success(self, client, test_user, db_session, auth_headers):
         """Test de suppression (soft delete) d'un produit."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer un produit
         test_produit = Produit(
@@ -400,7 +368,7 @@ class TestProduitsEndpoints:
         # Supprimer le produit
         response = client.delete(
             f"/api/v1/produits/{produit_id}",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_204_NO_CONTENT
         
@@ -411,27 +379,25 @@ class TestProduitsEndpoints:
         # Vérifier qu'il n'apparaît plus dans la liste des produits actifs
         response = client.get(
             "/api/v1/produits?est_actif=true",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         produit_ids = [p["id_produit"] for p in data]
         assert produit_id not in produit_ids
     
-    def test_delete_produit_not_found(self, client, test_user):
+    def test_delete_produit_not_found(self, client, test_user, auth_headers):
         """Test de suppression d'un produit inexistant."""
-        headers = get_auth_headers(client, test_user)
         
         # Essayer de supprimer un produit inexistant
         response = client.delete(
             "/api/v1/produits/99999",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
     
-    def test_delete_produit_already_inactive(self, client, test_user, db_session):
+    def test_delete_produit_already_inactive(self, client, test_user, db_session, auth_headers):
         """Test qu'on ne peut pas supprimer un produit déjà inactif."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer un produit inactif
         test_produit = Produit(
@@ -445,14 +411,13 @@ class TestProduitsEndpoints:
         # Essayer de supprimer le produit déjà inactif
         response = client.delete(
             f"/api/v1/produits/{test_produit.id_produit}",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "déjà inactif" in response.json()["detail"].lower()
     
-    def test_get_produits_pagination(self, client, test_user, db_session):
+    def test_get_produits_pagination(self, client, test_user, db_session, auth_headers):
         """Test de la pagination sur GET /produits."""
-        headers = get_auth_headers(client, test_user)
         
         # Créer plusieurs produits
         produits = [
@@ -468,7 +433,7 @@ class TestProduitsEndpoints:
         # Récupérer la première page (5 produits)
         response = client.get(
             "/api/v1/produits?skip=0&limit=5",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -477,7 +442,7 @@ class TestProduitsEndpoints:
         # Récupérer la deuxième page
         response = client.get(
             "/api/v1/produits?skip=5&limit=5",
-            headers=headers
+            headers=auth_headers
         )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

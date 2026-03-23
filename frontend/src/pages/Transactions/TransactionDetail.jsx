@@ -58,7 +58,8 @@ import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import PaymentTypeBadge from '../../components/PaymentTypeBadge';
 import PaiementForm from '../../components/PaiementForm';
 import useNotification from '../../hooks/useNotification';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
+import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 
 /**
  * Composant TransactionDetail.
@@ -325,6 +326,7 @@ function TransactionDetail() {
   const {
     register: registerPaiement,
     handleSubmit: handleSubmitPaiement,
+    control: controlPaiement,
     formState: { errors: paiementErrors, isSubmitting: isPaiementSubmitting },
     watch: watchPaiement,
     reset: resetPaiement,
@@ -335,8 +337,37 @@ function TransactionDetail() {
       montant: 0,
       type_paiement: 'cash',
       statut_cheque: 'a_encaisser',
+      paiements: [], // Pour le mode multi-lignes
     },
   });
+
+  const { fields, append, remove } = useFieldArray({
+    control: controlPaiement,
+    name: "paiements",
+  });
+
+  // États pour les LC (nécessaires pour le multi-mode)
+  const [availableLcs, setAvailableLcs] = useState([]);
+  const [loadingLcs, setLoadingLcs] = useState(false);
+
+  useEffect(() => {
+    const fetchLcs = async () => {
+      if (!paiementDialogOpen) return;
+      setLoadingLcs(true);
+      try {
+        const params = {};
+        if (transaction?.id_client) params.id_client = transaction.id_client;
+        if (transaction?.id_fournisseur) params.id_fournisseur = transaction.id_fournisseur;
+        const data = await get('/lettres-credit/disponibles', { params });
+        setAvailableLcs(data || []);
+      } catch (err) {
+        console.error('Erreur chargement LC:', err);
+      } finally {
+        setLoadingLcs(false);
+      }
+    };
+    fetchLcs();
+  }, [paiementDialogOpen, editingPaiement, transaction]);
 
   /**
    * Ouvre le dialog pour éditer un paiement existant.
@@ -420,14 +451,34 @@ function TransactionDetail() {
 
       // Mode édition ou création
       if (editingPaiement) {
-        // Modification
+        // Modification (toujours individuel)
         await put(`/paiements/${editingPaiement.id_paiement}`, paiementData);
         notification.success('Paiement modifié avec succès');
       } else {
-        // Création
-        paiementData.id_transaction = parseInt(id);
-        await post('/paiements', paiementData);
-        notification.success('Paiement ajouté avec succès');
+        // Création (Multi-lignes)
+        if (data.paiements && data.paiements.length > 0) {
+          const batchData = {
+            paiements: data.paiements.map(p => ({
+              ...p,
+              id_transaction: parseInt(id),
+              montant: parseFloat(p.montant),
+              // Nettoyer les champs optionnels
+              numero_cheque: p.type_paiement === 'cheque' ? p.numero_cheque || null : null,
+              banque: p.type_paiement === 'cheque' ? p.banque || null : null,
+              date_encaissement_prevue: p.type_paiement === 'cheque' ? p.date_encaissement_prevue || null : null,
+              statut_cheque: p.type_paiement === 'cheque' ? p.statut_cheque || 'a_encaisser' : null,
+              reference_virement: p.type_paiement === 'virement' ? p.reference_virement || null : null,
+              id_lc: p.type_paiement === 'lc' ? p.id_lc || null : null,
+            }))
+          };
+          await post('/paiements/batch', batchData);
+          notification.success(`${data.paiements.length} paiement(s) ajouté(s) avec succès`);
+        } else {
+          // Fallback au mode simple si jamais
+          paiementData.id_transaction = parseInt(id);
+          await post('/paiements', paiementData);
+          notification.success('Paiement ajouté avec succès');
+        }
       }
 
       // Rafraîchir les données
@@ -1140,14 +1191,31 @@ function TransactionDetail() {
           </DialogTitle>
           <DialogContent>
             <Box sx={{ pt: 1 }}>
-              <PaiementForm
-                defaultValues={{}}
-                transaction={statutPaiement}
-                register={registerPaiement}
-                errors={paiementErrors}
-                watch={watchPaiement}
-                setValue={setValuePaiement}
-              />
+              {editingPaiement ? (
+                <PaiementForm
+                  defaultValues={{}}
+                  transaction={statutPaiement}
+                  register={registerPaiement}
+                  errors={paiementErrors}
+                  watch={watchPaiement}
+                  setValue={setValuePaiement}
+                  availableLcs={availableLcs}
+                  loadingLcs={loadingLcs}
+                />
+              ) : (
+                <MultiPaiementForm
+                  transaction={statutPaiement}
+                  fields={fields}
+                  append={append}
+                  remove={remove}
+                  register={registerPaiement}
+                  errors={paiementErrors}
+                  watch={watchPaiement}
+                  setValue={setValuePaiement}
+                  availableLcs={availableLcs}
+                  loadingLcs={loadingLcs}
+                />
+              )}
             </Box>
           </DialogContent>
           <DialogActions sx={{ p: 2, gap: 1 }}>
