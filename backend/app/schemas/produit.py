@@ -28,6 +28,10 @@ class ProduitBase(BaseModel):
         True,
         description="Indique si le produit peut être utilisé pour des transactions fournisseurs"
     )
+    type_produit: Optional[str] = Field(
+        'produit_fini',
+        description="Type de produit ('produit_fini' ou 'matiere_premiere')"
+    )
     
     @model_validator(mode='after')
     def validate_au_moins_un_type(self):
