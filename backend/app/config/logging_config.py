@@ -67,35 +67,13 @@ def setup_logging(
         backup_count: Nombre de fichiers de backup à conserver
         log_level: Niveau de logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
-    # Créer le répertoire de logs s'il n'existe pas
-    log_path = Path(log_dir)
-    log_path.mkdir(parents=True, exist_ok=True)
+    # Détecter si on est sur Vercel (environnement lecture seule)
+    is_vercel = os.environ.get("VERCEL") == "1"
     
     # Formatter JSON
     json_formatter = JSONFormatter()
     
-    # Handler pour les logs INFO (requêtes normales)
-    info_handler = logging.handlers.RotatingFileHandler(
-        filename=str(log_path / "app_info.log"),
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
-    )
-    info_handler.setLevel(logging.INFO)
-    info_handler.setFormatter(json_formatter)
-    info_handler.addFilter(lambda record: record.levelno == logging.INFO)
-    
-    # Handler pour les logs ERROR (erreurs et exceptions)
-    error_handler = logging.handlers.RotatingFileHandler(
-        filename=str(log_path / "app_error.log"),
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
-    )
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(json_formatter)
-    
-    # Handler pour la console (format simple pour développement)
+    # Handler pour la console (format simple pour développement, toujours présent)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG if os.getenv("DEBUG", "False").lower() == "true" else logging.INFO)
     console_formatter = logging.Formatter(
@@ -111,10 +89,45 @@ def setup_logging(
     # Nettoyer les handlers existants pour éviter les doublons
     root_logger.handlers.clear()
     
-    # Ajouter les handlers
-    root_logger.addHandler(info_handler)
-    root_logger.addHandler(error_handler)
+    # Ajouter le handler console qui fonctionne partout
     root_logger.addHandler(console_handler)
+    
+    # Ajouter les handlers fichiers seulement si on n'est pas sur Vercel
+    if not is_vercel:
+        try:
+            # Créer le répertoire de logs s'il n'existe pas
+            log_path = Path(log_dir)
+            log_path.mkdir(parents=True, exist_ok=True)
+            
+            # Handler pour les logs INFO (requêtes normales)
+            info_handler = logging.handlers.RotatingFileHandler(
+                filename=str(log_path / "app_info.log"),
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding="utf-8"
+            )
+            info_handler.setLevel(logging.INFO)
+            info_handler.setFormatter(json_formatter)
+            info_handler.addFilter(lambda record: record.levelno == logging.INFO)
+            
+            # Handler pour les logs ERROR (erreurs et exceptions)
+            error_handler = logging.handlers.RotatingFileHandler(
+                filename=str(log_path / "app_error.log"),
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding="utf-8"
+            )
+            error_handler.setLevel(logging.ERROR)
+            error_handler.setFormatter(json_formatter)
+            
+            # Ajouter les handlers fichiers
+            root_logger.addHandler(info_handler)
+            root_logger.addHandler(error_handler)
+        except (OSError, IOError) as e:
+            # Si on échoue à créer les logs (ex: système de fichiers en lecture seule non détecté)
+            # on continue avec seulement la console
+            root_logger.warning(f"Could not initialize file logging: {e}. Falling back to console logging.")
+
     
     # Désactiver les logs verbeux de certaines bibliothèques
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
