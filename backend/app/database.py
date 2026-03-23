@@ -7,8 +7,13 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from app.config import settings
 
 # Création du moteur SQLAlchemy
+# SQLAlchemy 1.4+ nécessite le préfixe postgresql:// au lieu de postgres://
+database_url = settings.DATABASE_URL
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(
-    settings.DATABASE_URL,
+    database_url,
     pool_pre_ping=True,  # Vérifie la connexion avant utilisation
     echo=settings.DEBUG,  # Affiche les requêtes SQL en mode debug
 )
