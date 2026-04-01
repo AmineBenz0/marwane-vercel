@@ -144,7 +144,7 @@ function StatCard({
         },
       }}
     >
-      <CardContent sx={{ flexGrow: 1, p: 3 }}>
+      <CardContent sx={{ flexGrow: 1, p: { xs: 2, sm: 2.5, md: 3 } }}>
         <Box
           sx={{
             display: 'flex',
@@ -195,8 +195,18 @@ function StatCard({
               mb: variation ? 1 : 0,
               color: theme.palette.text.primary,
               cursor: showTooltip ? 'help' : 'default',
-              wordBreak: 'break-word',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              fontSize: {
+                xs: fontSize === 'h4' ? '1.25rem' : '1.1rem',
+                sm: fontSize === 'h4' ? '1.4rem' : '1.2rem',
+                md: fontSize === 'h4' ? '1.6rem' : '1.3rem',
+                lg: fontSize === 'h4' ? '1.8rem' : '1.4rem',
+                xl: fontSize === 'h4' ? '2.125rem' : '1.5rem',
+              }
             }}
+
           >
             {formattedValue}
           </Typography>

@@ -42,4 +42,5 @@ class Utilisateur(Base):
     transactions_crees = relationship("Transaction", foreign_keys="[Transaction.id_utilisateur_creation]", back_populates="utilisateur_creation")
     transactions_modifies = relationship("Transaction", foreign_keys="[Transaction.id_utilisateur_modification]", back_populates="utilisateur_modification")
     audits_transactions = relationship("TransactionAudit", back_populates="utilisateur")
+    taches = relationship("Tache", back_populates="utilisateur")
 

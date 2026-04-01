@@ -44,6 +44,8 @@ import ProductionList from './pages/Production/ProductionList';
 import ProductionDashboard from './pages/Production/ProductionDashboard';
 import ChargesList from './pages/Charges/ChargesList';
 import CompteBancaireList from './pages/ComptesBancaires/CompteBancaireList';
+import CalendarView from './pages/Calendar/CalendarView';
+import TasksList from './pages/Tasks/TasksList';
 
 function App() {
   return (
@@ -61,6 +63,26 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calendar"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <CalendarView />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tasks"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <TasksList />
               </AppLayout>
             </ProtectedRoute>
           }

@@ -257,9 +257,9 @@ function Dashboard() {
       </Typography>
       
       {/* Grille des statistiques */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
+      <Grid container spacing={{ xs: 2.5, sm: 3, md: 3 }} sx={{ mb: { xs: 3, sm: 4, md: 5 } }}>
         {/* Solde de la caisse */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={3}>
           <StatCard
             title="Solde de la caisse"
             value={soldeCaisse}
@@ -271,7 +271,7 @@ function Dashboard() {
         </Grid>
         
         {/* Nombre de transactions du mois */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={3}>
           <StatCard
             title="Transactions du mois"
             value={nbTransactionsMois}
@@ -282,7 +282,7 @@ function Dashboard() {
         </Grid>
         
         {/* Total des ventes */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={3}>
           <StatCard
             title="Total des ventes"
             value={totalVentes}
@@ -294,7 +294,7 @@ function Dashboard() {
         </Grid>
         
         {/* Total des achats */}
-        <Grid item xs={12} sm={6} md={2}>
+        <Grid item xs={12} sm={6} md={4} lg={3}>
           <StatCard
             title="Total des achats"
             value={totalAchats}
@@ -306,7 +306,7 @@ function Dashboard() {
         </Grid>
 
         {/* Œufs d'aujourd'hui */}
-        <Grid item xs={12} sm={6} md={2}>
+        <Grid item xs={12} sm={6} md={4} lg={3}>
           <StatCard
             title="Œufs aujourd'hui"
             value={totalOeufsAujourdhui}
@@ -317,7 +317,7 @@ function Dashboard() {
         </Grid>
 
         {/* Cartons d'aujourd'hui */}
-        <Grid item xs={12} sm={6} md={2}>
+        <Grid item xs={12} sm={6} md={4} lg={3}>
           <StatCard
             title="Cartons aujourd'hui"
             value={totalCartonsAujourdhui}
@@ -327,6 +327,7 @@ function Dashboard() {
           />
         </Grid>
       </Grid>
+
       
       {/* Graphique d'évolution des transactions */}
       <Card>

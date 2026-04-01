@@ -44,6 +44,8 @@ import {
   Factory as FactoryIcon,
   MoneyOff as MoneyOffIcon,
   TrendingUp as TrendingUpIcon,
+  CalendarMonth as CalendarMonthIcon,
+  Task as TaskIcon,
 } from '@mui/icons-material';
 import useAuthStore from '../../store/authStore';
 
@@ -59,6 +61,8 @@ const drawerWidth = 240;
  */
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+  { text: 'Calendrier', icon: <CalendarMonthIcon />, path: '/calendar' },
+  { text: 'Tâches', icon: <TaskIcon />, path: '/tasks' },
   { text: 'Stats Production', icon: <TrendingUpIcon />, path: '/production/dashboard' },
   { text: 'Production', icon: <FactoryIcon />, path: '/production' },
   { text: 'Transactions', icon: <ReceiptIcon />, path: '/transactions' },
@@ -86,7 +90,6 @@ function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
-  const effectiveDrawerWidth = !isMobile && sidebarOpen ? drawerWidth : 0;
 
   /**
    * Gère l'ouverture/fermeture du drawer sur mobile.
@@ -140,56 +143,95 @@ function AppLayout({ children }) {
   );
 
   /**
-   * Composant du drawer (sidebar).
+   * Style pour le drawer ouvert (desktop).
    */
-  const drawer = (
-    <Box>
-      <Toolbar
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          px: 2,
-          minHeight: '64px !important',
-        }}
-      >
+  const openedMixin = (theme) => ({
+    width: drawerWidth,
+    transition: theme.transitions.create('width', {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.enteringScreen,
+    }),
+    overflowX: 'hidden',
+  });
+
+  /**
+   * Style pour le drawer fermé/mini (desktop).
+   */
+  const closedMixin = (theme) => ({
+    transition: theme.transitions.create('width', {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.leavingScreen,
+    }),
+    overflowX: 'hidden',
+    width: `calc(${theme.spacing(7)} + 1px)`,
+    [theme.breakpoints.up('sm')]: {
+      width: `calc(${theme.spacing(8)} + 1px)`,
+    },
+  });
+
+  const effectiveDrawerWidth = !isMobile ? (sidebarOpen ? drawerWidth : 64) : 0;
+
+  const drawerHeader = (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: sidebarOpen ? 'space-between' : 'center',
+        px: 2,
+        minHeight: '64px !important',
+      }}
+    >
+      {sidebarOpen && (
         <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
           Comptabilité
         </Typography>
-      </Toolbar>
-      <Divider />
+      )}
+      <IconButton onClick={handleDrawerToggle}>
+        {sidebarOpen ? <MenuIcon /> : <MenuIcon />}
+      </IconButton>
+    </Box>
+  );
+
+  const drawerContent = (
+    <Box>
       <List>
         {filteredMenuItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
-            <ListItem key={item.text} disablePadding>
-              <ListItemButton
-                selected={isActive}
-                onClick={() => handleNavigation(item.path)}
-                sx={{
-                  '&.Mui-selected': {
-                    backgroundColor: theme.palette.primary.main,
-                    color: theme.palette.primary.contrastText,
-                    '&:hover': {
-                      backgroundColor: theme.palette.primary.dark,
-                    },
-                    '& .MuiListItemIcon-root': {
-                      color: theme.palette.primary.contrastText,
-                    },
-                  },
-                }}
-              >
-                <ListItemIcon
+            <ListItem key={item.text} disablePadding sx={{ display: 'block' }}>
+              <Tooltip title={!sidebarOpen ? item.text : ''} placement="right">
+                <ListItemButton
+                  selected={isActive}
+                  onClick={() => handleNavigation(item.path)}
                   sx={{
-                    color: isActive
-                      ? theme.palette.primary.contrastText
-                      : 'inherit',
+                    minHeight: 48,
+                    justifyContent: sidebarOpen ? 'initial' : 'center',
+                    px: 2.5,
+                    '&.Mui-selected': {
+                      backgroundColor: theme.palette.primary.main,
+                      color: theme.palette.primary.contrastText,
+                      '&:hover': {
+                        backgroundColor: theme.palette.primary.dark,
+                      },
+                      '& .MuiListItemIcon-root': {
+                        color: theme.palette.primary.contrastText,
+                      },
+                    },
                   }}
                 >
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText primary={item.text} />
-              </ListItemButton>
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      mr: sidebarOpen ? 3 : 'auto',
+                      justifyContent: 'center',
+                      color: isActive ? theme.palette.primary.contrastText : 'inherit',
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  {sidebarOpen && <ListItemText primary={item.text} />}
+                </ListItemButton>
+              </Tooltip>
             </ListItem>
           );
         })}
@@ -279,10 +321,11 @@ function AppLayout({ children }) {
       <Box
         component="nav"
         sx={{
-          width: { md: sidebarOpen ? `${drawerWidth}px` : 0 },
+          width: { md: effectiveDrawerWidth },
           flexShrink: { md: 0 },
           transition: theme.transitions.create('width', {
-            duration: theme.transitions.duration.shorter,
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
           }),
         }}
         aria-label="navigation menu"
@@ -303,23 +346,29 @@ function AppLayout({ children }) {
             },
           }}
         >
-          {drawer}
+          {drawerHeader}
+          <Divider />
+          {drawerContent}
         </Drawer>
-        {/* Drawer desktop (permanent) */}
+        
+        {/* Drawer desktop (mini-variant) */}
         <Drawer
-          variant="persistent"
+          variant="permanent"
+          open={sidebarOpen}
           sx={{
             display: { xs: 'none', md: 'block' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
-              width: drawerWidth,
+              ...(sidebarOpen ? openedMixin(theme) : closedMixin(theme)),
             },
           }}
-          open={sidebarOpen}
         >
-          {drawer}
+          {drawerHeader}
+          <Divider />
+          {drawerContent}
         </Drawer>
       </Box>
+
 
       {/* Zone de contenu principal */}
       <Box
