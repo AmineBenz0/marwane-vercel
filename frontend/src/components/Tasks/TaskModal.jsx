@@ -168,18 +168,29 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
                         checked={field.value} 
                         onChange={(e) => {
                           const checked = e.target.checked;
-                          field.onChange(checked);
                           
-                          // Reformat dates when toggling
+                          // 1. Get current values
                           const currentDebut = getValues('date_debut');
                           const currentFin = getValues('date_fin');
+                          
+                          // 2. Prepare new values based on the toggle
+                          let newDebut = currentDebut;
+                          let newFin = currentFin;
+
                           if (checked) {
-                            if (currentDebut?.includes('T')) setValue('date_debut', currentDebut.split('T')[0]);
-                            if (currentFin?.includes('T')) setValue('date_fin', currentFin.split('T')[0]);
+                            // If switching to All-Day, strip time
+                            if (currentDebut?.includes('T')) newDebut = currentDebut.split('T')[0];
+                            if (currentFin?.includes('T')) newFin = currentFin.split('T')[0];
                           } else {
-                            if (currentDebut && !currentDebut.includes('T')) setValue('date_debut', `${currentDebut}T09:00`);
-                            if (currentFin && !currentFin.includes('T')) setValue('date_fin', `${currentFin}T10:00`);
+                            // If switching to Timed, add default time
+                            if (currentDebut && !currentDebut.includes('T')) newDebut = `${currentDebut}T09:00`;
+                            if (currentFin && !currentFin.includes('T')) newFin = `${currentFin}T10:00`;
                           }
+                          
+                          // 3. Update date values FIRST or together
+                          setValue('date_debut', newDebut);
+                          setValue('date_fin', newFin);
+                          field.onChange(checked);
                         }}
                       />
                     )}
