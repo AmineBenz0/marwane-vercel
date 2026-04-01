@@ -45,14 +45,16 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
     handleSubmit,
     control,
     reset,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
     watch
   } = useForm({
     defaultValues: {
       titre: '',
       description: '',
-      date_debut: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      date_fin: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      date_debut: '',
+      date_fin: '',
       est_toute_la_journee: false,
       statut: 'en_attente',
       priorite: 'moyenne',
@@ -62,20 +64,58 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
 
   const estTouteLaJournee = watch('est_toute_la_journee');
 
+  // Reformat dates when toggling all-day switch
+  useEffect(() => {
+    const subscription = watch((value, { name }) => {
+      if (name === 'est_toute_la_journee') {
+        const currentDebut = getValues('date_debut');
+        const currentFin = getValues('date_fin');
+        const allDay = value.est_toute_la_journee;
+
+        if (allDay) {
+          // Time -> Date only
+          if (currentDebut?.includes('T')) setValue('date_debut', currentDebut.split('T')[0]);
+          if (currentFin?.includes('T')) setValue('date_fin', currentFin.split('T')[0]);
+        } else {
+          // Date only -> Time
+          if (currentDebut && !currentDebut.includes('T')) setValue('date_debut', `${currentDebut}T09:00`);
+          if (currentFin && !currentFin.includes('T')) setValue('date_fin', `${currentFin}T10:00`);
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, setValue, getValues]);
+
+  // Helper to safely format dates from either ISO string or Date object
+  const formatDateForInput = (dateValue, allDay) => {
+    if (!dateValue) return '';
+    try {
+      const date = typeof dateValue === 'string' ? parseISO(dateValue) : new Date(dateValue);
+      return format(date, allDay ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm");
+    } catch (e) {
+      console.error("Format error", e);
+      return '';
+    }
+  };
+
   useEffect(() => {
     if (open) {
       if (task) {
+        const isAllDay = !!task.est_toute_la_journee;
         reset({
           ...task,
-          date_debut: task.date_debut ? format(new Date(task.date_debut), "yyyy-MM-dd'T'HH:mm") : format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-          date_fin: task.date_fin ? format(new Date(task.date_fin), "yyyy-MM-dd'T'HH:mm") : format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+          date_debut: task.date_debut ? formatDateForInput(task.date_debut, isAllDay) : formatDateForInput(new Date(), isAllDay),
+          date_fin: task.date_fin ? formatDateForInput(task.date_fin, isAllDay) : formatDateForInput(new Date(), isAllDay),
+          statut: task.statut || 'en_attente',
+          priorite: task.priorite || 'moyenne',
+          categorie: task.categorie || 'travail',
         });
       } else {
         reset({
           titre: '',
           description: '',
-          date_debut: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-          date_fin: format(new Date().setHours(new Date().getHours() + 1), "yyyy-MM-dd'T'HH:mm"),
+          date_debut: formatDateForInput(new Date(), false),
+          date_fin: formatDateForInput(new Date(new Date().getTime() + 3600000), false),
           est_toute_la_journee: false,
           statut: 'en_attente',
           priorite: 'moyenne',
