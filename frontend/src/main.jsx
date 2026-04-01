@@ -1,22 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
+import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import App from './App.jsx'
+import theme from './theme'
 import './index.css'
-
-// Création du thème Material-UI
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-})
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
