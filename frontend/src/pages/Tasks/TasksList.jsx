@@ -151,6 +151,7 @@ function TasksList() {
       />
 
       <TaskModal
+        key={selectedTask?.id_tache || 'new'}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         task={selectedTask}

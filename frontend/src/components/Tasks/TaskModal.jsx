@@ -64,28 +64,6 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
 
   const estTouteLaJournee = watch('est_toute_la_journee');
 
-  // Reformat dates when toggling all-day switch
-  useEffect(() => {
-    const subscription = watch((value, { name }) => {
-      if (name === 'est_toute_la_journee') {
-        const currentDebut = getValues('date_debut');
-        const currentFin = getValues('date_fin');
-        const allDay = value.est_toute_la_journee;
-
-        if (allDay) {
-          // Time -> Date only
-          if (currentDebut?.includes('T')) setValue('date_debut', currentDebut.split('T')[0]);
-          if (currentFin?.includes('T')) setValue('date_fin', currentFin.split('T')[0]);
-        } else {
-          // Date only -> Time
-          if (currentDebut && !currentDebut.includes('T')) setValue('date_debut', `${currentDebut}T09:00`);
-          if (currentFin && !currentFin.includes('T')) setValue('date_fin', `${currentFin}T10:00`);
-        }
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [watch, setValue, getValues]);
-
   // Helper to safely format dates from either ISO string or Date object
   const formatDateForInput = (dateValue, allDay) => {
     if (!dateValue) return '';
@@ -185,7 +163,25 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
                     name="est_toute_la_journee"
                     control={control}
                     render={({ field }) => (
-                      <Switch {...field} checked={field.value} />
+                      <Switch 
+                        {...field} 
+                        checked={field.value} 
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          field.onChange(checked);
+                          
+                          // Reformat dates when toggling
+                          const currentDebut = getValues('date_debut');
+                          const currentFin = getValues('date_fin');
+                          if (checked) {
+                            if (currentDebut?.includes('T')) setValue('date_debut', currentDebut.split('T')[0]);
+                            if (currentFin?.includes('T')) setValue('date_fin', currentFin.split('T')[0]);
+                          } else {
+                            if (currentDebut && !currentDebut.includes('T')) setValue('date_debut', `${currentDebut}T09:00`);
+                            if (currentFin && !currentFin.includes('T')) setValue('date_fin', `${currentFin}T10:00`);
+                          }
+                        }}
+                      />
                     )}
                   />
                 }
