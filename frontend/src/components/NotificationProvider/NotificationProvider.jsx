@@ -124,16 +124,16 @@ function NotificationProvider({ children }) {
               width: '100%',
               // Styles personnalisés selon le type
               ...(type === 'success' && {
-                backgroundColor: '#2e7d32',
+                backgroundColor: theme.palette.success.main,
               }),
               ...(type === 'error' && {
-                backgroundColor: '#d32f2f',
+                backgroundColor: theme.palette.error.main,
               }),
               ...(type === 'warning' && {
-                backgroundColor: '#ed6c02',
+                backgroundColor: theme.palette.warning.main,
               }),
               ...(type === 'info' && {
-                backgroundColor: '#0288d1',
+                backgroundColor: theme.palette.info.main,
               }),
             }}
           >
