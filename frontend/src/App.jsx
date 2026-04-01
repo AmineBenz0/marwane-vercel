@@ -35,7 +35,6 @@ import Fournisseurs from './pages/Fournisseurs';
 import FournisseurProfile from './pages/Fournisseurs/FournisseurProfile';
 import Produits from './pages/Produits';
 import Caisse from './pages/Caisse';
-import Audit from './pages/Audit';
 import LettresCreditList from './pages/LettresCredit/LettresCreditList';
 import LettreCreditDetail from './pages/LettresCredit/LettreCreditDetail';
 import LCFormPage from './pages/LettresCredit/LCFormPage';
@@ -258,17 +257,7 @@ function App() {
           }
         />
 
-        {/* Route protégée admin : nécessite le rôle admin */}
-        <Route
-          path="/audit"
-          element={
-            <AdminProtectedRoute>
-              <AppLayout>
-                <Audit />
-              </AppLayout>
-            </AdminProtectedRoute>
-          }
-        />
+
 
         {/* Redirection par défaut : vers /login */}
         <Route path="/" element={<Navigate to="/login" replace />} />

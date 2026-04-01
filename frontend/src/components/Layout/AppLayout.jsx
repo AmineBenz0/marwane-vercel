@@ -74,7 +74,7 @@ const menuItems = [
   { text: 'LC', icon: <CreditCardIcon />, path: '/lettres-credit' },
   { text: 'Banques', icon: <AccountBalanceIcon />, path: '/comptes-bancaires' },
   { text: 'Caisse', icon: <CreditCardIcon />, path: '/caisse' },
-  { text: 'Audit', icon: <SecurityIcon />, path: '/audit', adminOnly: true },
+
 ];
 
 /**

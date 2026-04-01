@@ -31,7 +31,6 @@ import {
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  History as HistoryIcon,
   Add as AddIcon,
   AttachMoney as AttachMoneyIcon,
   TrendingUp as TrendingUpIcon,
@@ -74,7 +73,6 @@ function TransactionDetail() {
   
   // États pour les données
   const [transaction, setTransaction] = useState(null);
-  const [auditHistory, setAuditHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -87,11 +85,6 @@ function TransactionDetail() {
   const [produits, setProduits] = useState([]);
   const [clients, setClients] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
-
-  // État pour la modal d'audit complet
-  const [auditDialogOpen, setAuditDialogOpen] = useState(false);
-  const [fullAuditHistory, setFullAuditHistory] = useState([]);
-  const [loadingFullAudit, setLoadingFullAudit] = useState(false);
 
   // État pour la modal d'ajout/édition de paiement
   const [paiementDialogOpen, setPaiementDialogOpen] = useState(false);
@@ -204,55 +197,20 @@ function TransactionDetail() {
     ]);
   };
 
-  /**
-   * Charge l'historique d'audit récent (5 derniers).
-   */
-  const fetchAuditHistory = async () => {
-    try {
-      const data = await get(`/transactions/${id}/audit`);
-      // Limiter à 5 derniers pour l'affichage initial
-      setAuditHistory(data.slice(0, 5) || []);
-    } catch (err) {
-      console.error('Erreur lors du chargement de l\'historique d\'audit:', err);
-    }
-  };
 
-  /**
-   * Charge l'historique d'audit complet.
-   */
-  const fetchFullAuditHistory = async () => {
-    setLoadingFullAudit(true);
-    try {
-      const data = await get(`/transactions/${id}/audit`);
-      setFullAuditHistory(data || []);
-    } catch (err) {
-      console.error('Erreur lors du chargement de l\'audit complet:', err);
-    } finally {
-      setLoadingFullAudit(false);
-    }
-  };
 
-  /**
-   * Charge toutes les données au montage.
-   */
+
+
   useEffect(() => {
     if (id) {
       fetchReferenceData();
       fetchTransaction();
-      fetchAuditHistory();
       fetchPaiements();
       fetchStatutPaiement();
     }
   }, [id]);
 
-  /**
-   * Charge l'audit complet lorsque la modal s'ouvre.
-   */
-  useEffect(() => {
-    if (auditDialogOpen) {
-      fetchFullAuditHistory();
-    }
-  }, [auditDialogOpen]);
+
 
   /**
    * Formate le montant pour l'affichage (wrapper de l'utilitaire).
@@ -306,19 +264,7 @@ function TransactionDetail() {
     return produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit}`;
   };
 
-  /**
-   * Gère l'ouverture de la modal d'audit complet.
-   */
-  const handleOpenAuditDialog = () => {
-    setAuditDialogOpen(true);
-  };
 
-  /**
-   * Gère la fermeture de la modal d'audit complet.
-   */
-  const handleCloseAuditDialog = () => {
-    setAuditDialogOpen(false);
-  };
 
   /**
    * Configuration du formulaire de paiement avec react-hook-form.
@@ -625,58 +571,6 @@ function TransactionDetail() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-              <Typography 
-                variant="h6" 
-                gutterBottom
-                sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-              >
-                Informations de Traçabilité
-              </Typography>
-              <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
-              <Stack spacing={1.5}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Date de création
-                  </Typography>
-                  <Typography variant="body2">
-                    {formatDateTime(transaction.date_creation)}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Dernière modification
-                  </Typography>
-                  <Typography variant="body2">
-                    {formatDateTime(transaction.date_modification)}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Créée par
-                  </Typography>
-                  <Typography variant="body2">
-                    {transaction.id_utilisateur_creation
-                      ? `Utilisateur #${transaction.id_utilisateur_creation}`
-                      : '-'}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Modifiée par
-                  </Typography>
-                  <Typography variant="body2">
-                    {transaction.id_utilisateur_modification
-                      ? `Utilisateur #${transaction.id_utilisateur_modification}`
-                      : '-'}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
       </Grid>
 
       {/* Détails de la transaction */}
@@ -993,177 +887,9 @@ function TransactionDetail() {
         </Card>
       )}
 
-      {/* Historique d'audit */}
-      <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: { xs: 'column', sm: 'row' },
-            justifyContent: 'space-between', 
-            alignItems: { xs: 'flex-start', sm: 'center' }, 
-            mb: { xs: 1.5, sm: 2 },
-            gap: { xs: 1.5, sm: 0 }
-          }}>
-            <Typography 
-              variant="h6"
-              sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-            >
-              Historique d'Audit {!isMobile && '(5 derniers)'}
-            </Typography>
-            <Button
-              variant="outlined"
-              startIcon={!isMobile && <HistoryIcon />}
-              onClick={handleOpenAuditDialog}
-              size={isMobile ? 'small' : 'medium'}
-              fullWidth={isMobile}
-            >
-              {isMobile ? 'Audit complet' : 'Voir l\'audit complet'}
-            </Button>
-          </Box>
-          <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
-          {auditHistory.length > 0 ? (
-            <Stack spacing={{ xs: 1.5, sm: 2 }}>
-              {auditHistory.map((audit) => (
-                <Paper key={audit.id_audit} variant="outlined" sx={{ p: { xs: 1.5, sm: 2 } }}>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: { xs: 'column', sm: 'row' },
-                    justifyContent: 'space-between', 
-                    alignItems: 'flex-start', 
-                    mb: 1,
-                    gap: { xs: 1, sm: 0 }
-                  }}>
-                    <Box>
-                      <Typography 
-                        variant="subtitle2" 
-                        gutterBottom
-                        sx={{ fontSize: { xs: '0.875rem', sm: '0.875rem' } }}
-                      >
-                        {audit.champ_modifie || 'Champ modifié'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Par: {audit.nom_utilisateur || audit.email_utilisateur || `Utilisateur #${audit.id_utilisateur}`}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Le: {formatDateTime(audit.date_changement)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ 
-                    mt: 1, 
-                    display: 'flex', 
-                    flexDirection: { xs: 'column', sm: 'row' },
-                    gap: { xs: 1.5, sm: 2 } 
-                  }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        Ancienne valeur:
-                      </Typography>
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontFamily: 'monospace',
-                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                          wordBreak: 'break-word'
-                        }}
-                      >
-                        {audit.ancienne_valeur || '-'}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        Nouvelle valeur:
-                      </Typography>
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontFamily: 'monospace',
-                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                          wordBreak: 'break-word'
-                        }}
-                      >
-                        {audit.nouvelle_valeur || '-'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
-              ))}
-            </Stack>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Aucun historique d'audit disponible
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Modal d'audit complet */}
-      <Dialog
-        open={auditDialogOpen}
-        onClose={handleCloseAuditDialog}
-        maxWidth="md"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <HistoryIcon />
-            <Typography variant="h6">Audit Complet de la Transaction #{transaction.id_transaction}</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          {loadingFullAudit ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : fullAuditHistory.length > 0 ? (
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              {fullAuditHistory.map((audit) => (
-                <Paper key={audit.id_audit} variant="outlined" sx={{ p: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                    <Box>
-                      <Typography variant="subtitle2" gutterBottom>
-                        {audit.champ_modifie || 'Champ modifié'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Par: {audit.nom_utilisateur || audit.email_utilisateur || `Utilisateur #${audit.id_utilisateur}`}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Le: {formatDateTime(audit.date_changement)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ mt: 1, display: 'flex', gap: 2 }}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Ancienne valeur:
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                        {audit.ancienne_valeur || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Nouvelle valeur:
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                        {audit.nouvelle_valeur || '-'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
-              ))}
-            </Stack>
-          ) : (
-            <Typography variant="body2" color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
-              Aucun historique d'audit disponible
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseAuditDialog}>Fermer</Button>
-        </DialogActions>
-      </Dialog>
+
+
 
       {/* Modal d'ajout/édition de paiement */}
       <Dialog
