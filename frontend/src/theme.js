@@ -160,7 +160,6 @@ const theme = createTheme({
     // ── MuiCssBaseline — inject Google Font ──────────────────────────────
     MuiCssBaseline: {
       styleOverrides: `
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; overflow-x: hidden; background: ${COLORS.slate50}; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }

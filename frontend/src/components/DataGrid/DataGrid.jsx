@@ -184,10 +184,15 @@ function DataGrid({
               sx={{
                 fontSize: '0.75rem',
                 height: 26,
-                backgroundColor: alpha(theme.palette.primary.main, 0.08),
-                color: 'primary.dark',
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                '& .MuiChip-deleteIcon': { fontSize: 14, color: 'primary.main' },
+                backgroundColor: 'background.paper',
+                color: 'text.secondary',
+                border: '1px solid',
+                borderColor: 'divider',
+                '& .MuiChip-deleteIcon': {
+                  fontSize: 14,
+                  color: 'text.disabled',
+                  '&:hover': { color: 'text.secondary' },
+                },
               }}
             />
           );

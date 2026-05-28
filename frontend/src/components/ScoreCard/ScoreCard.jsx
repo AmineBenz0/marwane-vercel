@@ -11,7 +11,6 @@ import {
   CardContent,
   Box,
   Typography,
-  Chip,
   Grid,
   LinearProgress,
   Tooltip,
@@ -198,16 +197,9 @@ function ScoreCard({ score, loading = false, type = 'client' }) {
                 color={scoreColor}
               />
               <Box sx={{ mt: 2, textAlign: 'center' }}>
-                <Chip
-                  label={label}
-                  color={couleur}
-                  size={isMobile ? 'medium' : 'large'}
-                  sx={{
-                    fontWeight: 'bold',
-                    fontSize: isMobile ? '0.9rem' : '1rem',
-                    px: 2,
-                  }}
-                />
+                <Typography variant="subtitle1" color={`${couleur}.main`} sx={{ fontWeight: 800 }}>
+                  {label}
+                </Typography>
                 <Typography
                   variant="caption"
                   color="text.secondary"
@@ -223,7 +215,7 @@ function ScoreCard({ score, loading = false, type = 'client' }) {
           <Grid item xs={12} md={8}>
             <Box>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                📊 Composition du Score
+                Composition du score
                 <Tooltip title="Cliquez pour voir les détails">
                   <IconButton
                     size="small"

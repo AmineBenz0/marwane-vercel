@@ -26,7 +26,11 @@ const compteBancaireService = {
    */
   createCompte: async (data) => {
     return await post('/comptes-bancaires', data);
-  }
+  },
+
+  createMouvement: async (id, data) => {
+    return await post(`/comptes-bancaires/${id}/mouvements`, data);
+  },
 };
 
 export default compteBancaireService;

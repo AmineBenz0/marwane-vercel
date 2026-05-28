@@ -42,8 +42,19 @@ const api = axios.create({
  * 
  * @returns {string|null} Le token d'accès ou null s'il n'existe pas
  */
+const getPersistedAuthState = () => {
+  try {
+    const raw = localStorage.getItem('auth-storage');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.state || null;
+  } catch {
+    return null;
+  }
+};
+
 const getAccessToken = () => {
-  return localStorage.getItem('access_token');
+  return localStorage.getItem('access_token') || getPersistedAuthState()?.accessToken || null;
 };
 
 /**
@@ -52,7 +63,7 @@ const getAccessToken = () => {
  * @returns {string|null} Le refresh token ou null s'il n'existe pas
  */
 const getRefreshToken = () => {
-  return localStorage.getItem('refresh_token');
+  return localStorage.getItem('refresh_token') || getPersistedAuthState()?.refreshToken || null;
 };
 
 /**
@@ -61,6 +72,20 @@ const getRefreshToken = () => {
 const clearTokens = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
+  try {
+    const authStorage = getPersistedAuthState();
+    if (!authStorage) return;
+    localStorage.setItem('auth-storage', JSON.stringify({
+      state: {
+        ...authStorage,
+        accessToken: null,
+        refreshToken: null,
+      },
+      version: 0,
+    }));
+  } catch {
+    // Ignore local storage sync errors and proceed with logout behavior.
+  }
 };
 
 /**
@@ -72,6 +97,19 @@ const setTokens = (accessToken, refreshToken) => {
   }
   if (refreshToken) {
     localStorage.setItem('refresh_token', refreshToken);
+  }
+  try {
+    const authStorage = getPersistedAuthState() || {};
+    localStorage.setItem('auth-storage', JSON.stringify({
+      state: {
+        ...authStorage,
+        accessToken: accessToken || authStorage.accessToken || null,
+        refreshToken: refreshToken || authStorage.refreshToken || null,
+      },
+      version: 0,
+    }));
+  } catch {
+    // Ignore local storage sync errors and proceed with token updates.
   }
 };
 

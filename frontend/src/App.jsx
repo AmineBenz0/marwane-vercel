@@ -34,13 +34,14 @@ import ClientProfile from './pages/Clients/ClientProfile';
 import Fournisseurs from './pages/Fournisseurs';
 import FournisseurProfile from './pages/Fournisseurs/FournisseurProfile';
 import Produits from './pages/Produits';
+import ProduitDetail from './pages/Produits/ProduitDetail';
 import Caisse from './pages/Caisse';
 import LettresCreditList from './pages/LettresCredit/LettresCreditList';
 import LettreCreditDetail from './pages/LettresCredit/LettreCreditDetail';
 import LCFormPage from './pages/LettresCredit/LCFormPage';
-import CederLCPage from './pages/LettresCredit/CederLCPage';
 import ProductionList from './pages/Production/ProductionList';
 import ProductionDashboard from './pages/Production/ProductionDashboard';
+import BatimentProductionPage from './pages/Production/BatimentProductionPage';
 import ChargesList from './pages/Charges/ChargesList';
 import CompteBancaireList from './pages/ComptesBancaires/CompteBancaireList';
 import CalendarView from './pages/Calendar/CalendarView';
@@ -157,6 +158,16 @@ function App() {
           }
         />
         <Route
+          path="/produits/:id"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ProduitDetail />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/caisse"
           element={
             <ProtectedRoute>
@@ -171,7 +182,7 @@ function App() {
           element={
             <ProtectedRoute>
               <AppLayout>
-                <ProductionList />
+                <ProductionDashboard />
               </AppLayout>
             </ProtectedRoute>
           }
@@ -182,6 +193,16 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <ProductionDashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/production/batiment/:id"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <BatimentProductionPage />
               </AppLayout>
             </ProtectedRoute>
           }
@@ -246,19 +267,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/lettres-credit/:id/ceder"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <CederLCPage />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-
-
-
         {/* Redirection par défaut : vers /login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 
@@ -272,4 +280,3 @@ function App() {
 }
 
 export default App;
-

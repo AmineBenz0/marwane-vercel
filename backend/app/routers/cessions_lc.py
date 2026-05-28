@@ -80,7 +80,7 @@ def create_cession_lc(
     lc.type_detenteur = cession_data.type_cessionnaire
     lc.id_client = cession_data.id_cessionnaire_client
     lc.id_fournisseur = cession_data.id_cessionnaire_fournisseur
-    # On garde le statut active car elle est transférée immédiatement
+    lc.statut = 'utilisee'
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     
     db.add(nouvelle_cession)

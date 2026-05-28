@@ -35,6 +35,7 @@ class ChargeUpdate(BaseModel):
     date_charge: Optional[date] = Field(None)
     categorie: Optional[str] = Field(None, max_length=50)
     notes: Optional[str] = Field(None)
+    id_compte: Optional[int] = Field(None)
 
 
 class ChargeRead(ChargeBase):

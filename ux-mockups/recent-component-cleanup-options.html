@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Options recentes - composants UI simplifies</title>
+  <style>
+    :root {
+      --ink: #17211d;
+      --muted: #64716b;
+      --bg: #f5f2ea;
+      --card: #fff;
+      --line: #e1dbcf;
+      --green: #1f7a55;
+      --red: #b4473c;
+      --blue: #315f85;
+      --gold: #9a6a20;
+      --soft-green: #eef8f2;
+      --soft-red: #fff0ee;
+      --soft-blue: #edf5fb;
+      --soft-gold: #fff7e4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+
+    header {
+      margin-bottom: 22px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(238, 248, 242, .95), rgba(255, 247, 228, .75)), var(--card);
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(30px, 5vw, 52px);
+      line-height: 1;
+      letter-spacing: -.045em;
+    }
+
+    header p {
+      max-width: 820px;
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+
+    nav a {
+      text-decoration: none;
+      color: var(--muted);
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .section {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fbfaf6;
+      overflow: hidden;
+      scroll-margin-top: 20px;
+    }
+
+    .section-head {
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .72);
+    }
+
+    .section-head h2 {
+      font-size: 25px;
+      letter-spacing: -.025em;
+    }
+
+    .section-head p {
+      margin-top: 6px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .option {
+      min-height: 360px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      overflow: hidden;
+    }
+
+    .option.best {
+      border-color: rgba(31, 122, 85, .45);
+      box-shadow: inset 0 0 0 1px rgba(31, 122, 85, .18);
+    }
+
+    .option-title {
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .option-title small {
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .option-title h3 {
+      margin-top: 5px;
+      font-size: 18px;
+    }
+
+    .option-title p {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .mock {
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      flex: 1;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .row strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .row span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      width: max-content;
+      max-width: 100%;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 750;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .badge.fill-green { color: #fff; background: var(--green); border-color: var(--green); }
+    .badge.fill-red { color: #fff; background: var(--red); border-color: var(--red); }
+    .badge.out-green { color: var(--green); border-color: rgba(31, 122, 85, .3); background: var(--soft-green); }
+    .badge.out-red { color: var(--red); border-color: rgba(180, 71, 60, .3); background: var(--soft-red); }
+    .badge.out-gold { color: var(--gold); border-color: rgba(154, 106, 32, .28); background: var(--soft-gold); }
+    .badge.out-blue { color: var(--blue); border-color: rgba(49, 95, 133, .28); background: var(--soft-blue); }
+
+    .button {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      padding: 8px 10px;
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .button.primary {
+      color: #fff;
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .metric {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 19px;
+      letter-spacing: -.02em;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .search {
+      min-width: 160px;
+      flex: 1;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 9px 10px;
+      font-size: 13px;
+    }
+
+    .gauge {
+      width: 116px;
+      height: 116px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      margin: 0 auto;
+      background:
+        radial-gradient(circle at center, #fff 0 48%, transparent 49%),
+        conic-gradient(var(--green) 0 76%, #e6e0d4 76% 100%);
+    }
+
+    .gauge b {
+      font-size: 26px;
+    }
+
+    .note {
+      margin: 0 14px 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 11px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.68);
+      border: 1px dashed var(--line);
+    }
+
+    @media (max-width: 960px) {
+      .options { grid-template-columns: 1fr; }
+      .option { min-height: auto; }
+    }
+
+    @media (max-width: 560px) {
+      .metric-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>Options pour les composants touches recemment.</h1>
+      <p>
+        Ce fichier se limite aux composants et surfaces modifies dans la derniere passe:
+        badges de paiement, badges LC, filtres actifs, DataGrid, FinancialInsights, ScoreCard,
+        StatCardWithGauge, et les petites presentations qui en dependent.
+      </p>
+      <nav>
+        <a href="#payment-status">Paiement</a>
+        <a href="#payment-type">Type paiement</a>
+        <a href="#lc-status">LC status</a>
+        <a href="#filters">Filtres</a>
+        <a href="#financial-insights">Financial insights</a>
+        <a href="#score-cards">Score/gauge</a>
+        <a href="#register-cards">Cartes registre</a>
+      </nav>
+    </header>
+
+    <section class="section" id="payment-status">
+      <div class="section-head">
+        <h2>PaymentStatusBadge</h2>
+        <p>Choisir comment afficher Paye, Partiel, Impaye, En retard sans rendre chaque ligne trop coloree.</p>
+      </div>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Texte simple</h3>
+            <p>Aucun chip sauf retard. Le statut normal devient une simple ligne de texte.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Marche central</strong><span>Paiement: paye</span></div><b>4 800</b></div>
+            <div class="row"><div><strong>Restaurant Atlas</strong><span>Paiement: partiel</span></div><b>1 400</b></div>
+            <div class="row"><div><strong>Hotel Nord</strong><span>Paiement a relancer</span></div><span class="badge fill-red">En retard</span></div>
+          </div>
+          <p class="note">Le plus calme. Bon pour les listes tres chargees.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Badges sobres</h3>
+            <p>Outlined pour etats normaux, rempli seulement quand il faut agir.</p>
+          </div>
+          <div class="mock">
+            <div class="badge-row">
+              <span class="badge out-green">Paye</span>
+              <span class="badge out-gold">Partiel</span>
+              <span class="badge">Impaye</span>
+              <span class="badge fill-red">En retard</span>
+            </div>
+            <div class="row"><div><strong>Marche central</strong><span>Oeufs M - aujourd'hui</span></div><span class="badge out-green">Paye</span></div>
+            <div class="row"><div><strong>Restaurant Atlas</strong><span>Reste 900 MAD</span></div><span class="badge out-gold">Partiel</span></div>
+          </div>
+          <p class="note">Meilleur compromis pour reutilisation globale.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Badges forts</h3>
+            <p>Tous les statuts sont visibles et colores.</p>
+          </div>
+          <div class="mock">
+            <div class="badge-row">
+              <span class="badge fill-green">Paye</span>
+              <span class="badge out-gold">Partiel</span>
+              <span class="badge out-red">Impaye</span>
+              <span class="badge fill-red">En retard</span>
+            </div>
+            <div class="row"><div><strong>Probleme</strong><span>La couleur devient dominante meme quand tout va bien.</span></div></div>
+          </div>
+          <p class="note">A reserver aux pages de controle ou aux alertes.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="payment-type">
+      <div class="section-head">
+        <h2>PaymentTypeBadge</h2>
+        <p>Le type de paiement est utile, mais rarement prioritaire. Il ne doit pas concurrencer montant/statut.</p>
+      </div>
+      <div class="options">
+        <article class="option best">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Badge discret</h3>
+            <p>Contour simple, pas d'icone, bonne lisibilite dans une table.</p>
+          </div>
+          <div class="mock">
+            <div class="badge-row">
+              <span class="badge">Especes</span>
+              <span class="badge">Cheque</span>
+              <span class="badge">Virement</span>
+              <span class="badge">LC</span>
+            </div>
+            <div class="row"><div><strong>Paiement recu</strong><span>13/05/2026</span></div><span class="badge">Virement</span></div>
+          </div>
+          <p class="note">Recommande comme comportement par defaut.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Texte en colonne</h3>
+            <p>Encore plus calme: pas de badge du tout.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>4 800 MAD</strong><span>Mode: virement</span></div><span class="badge out-green">Paye</span></div>
+            <div class="row"><div><strong>2 000 MAD</strong><span>Mode: especes</span></div><span class="badge out-gold">Partiel</span></div>
+          </div>
+          <p class="note">Tres bon dans les details, moins scannable dans les tables.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Icone + couleur</h3>
+            <p>Plus visuel, mais plus bruyant.</p>
+          </div>
+          <div class="mock">
+            <div class="badge-row">
+              <span class="badge out-green">Cash</span>
+              <span class="badge out-blue">Virement</span>
+              <span class="badge out-gold">LC</span>
+            </div>
+          </div>
+          <p class="note">A utiliser seulement si le type est central dans le workflow.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="lc-status">
+      <div class="section-head">
+        <h2>LCStatusBadge</h2>
+        <p>Les lettres de credit ont des statuts importants, mais le vocabulaire doit rester simple.</p>
+      </div>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Statut texte</h3>
+            <p>Statut dans une phrase, pas de badge.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>LC-2026-041</strong><span>Disponible jusqu'au 30/06</span></div><b>80 000</b></div>
+            <div class="row"><div><strong>LC-2026-037</strong><span>Utilisee</span></div><b>0</b></div>
+          </div>
+          <p class="note">Calme, mais les statuts critiques ressortent moins.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Badge simple</h3>
+            <p>Labels courts: Disponible, En attente, Utilisee, Cedee, Expiree.</p>
+          </div>
+          <div class="mock">
+            <div class="badge-row">
+              <span class="badge out-green">Disponible</span>
+              <span class="badge out-blue">En attente</span>
+              <span class="badge">Utilisee</span>
+              <span class="badge out-gold">Cedee</span>
+              <span class="badge fill-red">Expiree</span>
+            </div>
+            <div class="row"><div><strong>LC-2026-041</strong><span>Banque Populaire</span></div><span class="badge out-green">Disponible</span></div>
+          </div>
+          <p class="note">Recommande: clair sans jargon comme "Active (Attente)".</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Badge operationnel</h3>
+            <p>Statut + action suggeree.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>LC-2026-041</strong><span>Peut etre cedee ou utilisee</span></div><span class="button primary">Utiliser</span></div>
+            <div class="row"><div><strong>LC-2026-037</strong><span>Expiree</span></div><span class="badge fill-red">Verifier</span></div>
+          </div>
+          <p class="note">Bon pour la page detail, trop lourd pour une liste.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="filters">
+      <div class="section-head">
+        <h2>FilterChips + DataGrid filters</h2>
+        <p>Les filtres doivent aider a trouver, pas devenir une deuxieme interface au-dessus de la liste.</p>
+      </div>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Aucun chip</h3>
+            <p>Seulement les champs visibles. Le resultat change sans recap.</p>
+          </div>
+          <div class="mock">
+            <div class="filter-bar"><div class="search">Recherche: Marche central</div><span class="button">Filtres</span></div>
+            <div class="row"><div><strong>Marche central</strong><span>3 resultats</span></div></div>
+          </div>
+          <p class="note">Tres calme, mais on perd la trace des filtres caches.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Chips discrets</h3>
+            <p>Petits chips sous les filtres, sans bloc colore ni compteur repete.</p>
+          </div>
+          <div class="mock">
+            <div class="filter-bar"><div class="search">Recherche...</div><span class="button">Filtres</span></div>
+            <div class="badge-row">
+              <span class="badge">Date: 13/05</span>
+              <span class="badge">Client: Marche central</span>
+              <span class="badge">Effacer</span>
+            </div>
+            <div class="row"><div><strong>Resultats</strong><span>La liste reste dominante.</span></div></div>
+          </div>
+          <p class="note">Recommande pour SmartFilterPanel et DataGrid.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Barre de filtres visible</h3>
+            <p>Bloc colore avec tous les filtres actifs et compteur.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Filtres actifs</strong><span>Date, client, statut - 12 sur 128 resultats</span></div><span class="button">Effacer</span></div>
+          </div>
+          <p class="note">Trop present pour l'usage quotidien, utile seulement en mode analyse.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="financial-insights">
+      <div class="section-head">
+        <h2>FinancialInsights</h2>
+        <p>Ce composant peut vite donner une impression "diagnostic technique". Il faut choisir son role.</p>
+      </div>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Cache par defaut</h3>
+            <p>Visible seulement dans un onglet ou un bouton "Analyse".</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Sante financiere</strong><span>Paiement, retards et rythme d'activite</span></div><span class="button">Voir</span></div>
+          </div>
+          <p class="note">Tres bon si les profils doivent rester ultra simples.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Accordion compact</h3>
+            <p>Resume calme ferme, details utiles ouverts.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Sante financiere</strong><span>Paiement, retards et rythme d'activite</span></div><b>82% paye</b></div>
+            <div class="metric-grid">
+              <div class="metric"><b>82%</b><span>Taux paiement</span></div>
+              <div class="metric"><b>18 900</b><span>Impayes</span></div>
+              <div class="metric"><b>22 jours</b><span>Delai moyen</span></div>
+              <div class="metric"><b>12 jours</b><span>Rythme</span></div>
+            </div>
+          </div>
+          <p class="note">Recommande pour les profils client/fournisseur.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Panel analytique</h3>
+            <p>Plus de cartes, couleurs, alertes et tendances.</p>
+          </div>
+          <div class="mock">
+            <div class="metric-grid">
+              <div class="metric"><b>82%</b><span>Score paiement</span></div>
+              <div class="metric"><b>+12%</b><span>Tendance</span></div>
+            </div>
+            <div class="row"><div><strong>Alertes</strong><span>3 transactions en retard</span></div><span class="badge fill-red">Priorite</span></div>
+          </div>
+          <p class="note">A garder pour direction/admin, pas en haut de profil.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="score-cards">
+      <div class="section-head">
+        <h2>ScoreCard + StatCardWithGauge</h2>
+        <p>Les scores sont utiles, mais les labels sous forme de badges donnent vite une impression de notation dure.</p>
+      </div>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Score minimal</h3>
+            <p>Un chiffre et un libelle texte, sans badge.</p>
+          </div>
+          <div class="mock">
+            <div class="gauge"><b>76</b></div>
+            <div class="row"><div><strong>Relation stable</strong><span>Score client</span></div></div>
+          </div>
+          <p class="note">Le plus humain pour non techniques.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Score + metriques</h3>
+            <p>Score visible, composition lisible, details caches.</p>
+          </div>
+          <div class="mock">
+            <div class="gauge"><b>76</b></div>
+            <div class="metric-grid">
+              <div class="metric"><b>82%</b><span>Paiement</span></div>
+              <div class="metric"><b>76%</b><span>Delais</span></div>
+            </div>
+            <div class="row"><div><strong>Composition du score</strong><span>Ouvrir seulement si besoin</span></div><span class="button">Details</span></div>
+          </div>
+          <p class="note">Recommande si le score reste dans les profils.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Score badge</h3>
+            <p>Label colore comme "Excellent", "Risque", "Moyen".</p>
+          </div>
+          <div class="mock">
+            <div class="gauge"><b>76</b></div>
+            <span class="badge out-gold">Moyen</span>
+            <div class="row"><div><strong>Risque</strong><span>Peut etre percu comme trop jugeant.</span></div></div>
+          </div>
+          <p class="note">A eviter par defaut sauf si le metier valide ce vocabulaire.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="register-cards">
+      <div class="section-head">
+        <h2>Cartes impactees par ces composants</h2>
+        <p>Transactions, caisse et produits changent de ressenti selon les composants ci-dessus.</p>
+      </div>
+      <div class="options">
+        <article class="option best">
+          <div class="option-title">
+            <small>Transactions</small>
+            <h3>Registre sans ID</h3>
+            <p>Type, partenaire, produit, montant, alerte uniquement si necessaire.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Vente client</strong><span>Marche central - Oeufs M - 20 x 240</span></div><b style="color:var(--green)">+4 800</b></div>
+            <div class="row"><div><strong>Achat fournisseur</strong><span>Coop Agadir - Aliment pondeuse</span></div><b style="color:var(--red)">-2 100</b></div>
+            <div class="row"><div><strong>Vente client</strong><span>Restaurant Atlas - reste 900 MAD</span></div><span class="badge out-gold">Partiel</span></div>
+          </div>
+          <p class="note">Correspond a la direction prise dans TransactionsList.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Caisse</small>
+            <h3>Mouvements metier</h3>
+            <p>Entree/sortie au lieu de Transaction ID ou labels anglais.</p>
+          </div>
+          <div class="mock">
+            <div class="metric-grid">
+              <div class="metric"><b>142 500</b><span>Disponible</span></div>
+              <div class="metric"><b>18 900</b><span>A encaisser</span></div>
+            </div>
+            <div class="row"><div><strong>Entree</strong><span>13 mai a 10:24</span></div><b style="color:var(--green)">+4 800</b></div>
+            <div class="row"><div><strong>Sortie</strong><span>13 mai a 11:10</span></div><b style="color:var(--red)">-2 100</b></div>
+          </div>
+          <p class="note">Correspond a la direction prise dans Caisse.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Produits</small>
+            <h3>Catalogue sans tags repetes</h3>
+            <p>Pas de "Achat fournisseur" sur chaque carte si la page est deja dediee a ca.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Aliment pondeuse</strong><span>Utilise dans les achats</span></div><span class="button">Modifier</span></div>
+            <div class="row"><div><strong>Plateaux carton</strong><span>Emballage</span></div><span class="button">Modifier</span></div>
+            <div class="row"><div><strong>Ancien produit</strong><span>Masque des prochaines saisies</span></div><span class="button">Reactiver</span></div>
+          </div>
+          <p class="note">Correspond a la direction prise dans ProduitsList.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

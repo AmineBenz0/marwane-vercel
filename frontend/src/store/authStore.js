@@ -12,6 +12,52 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { post } from '../services/api';
 
+const AUTH_STORAGE_KEY = 'auth-storage';
+
+const readPersistedAuthState = () => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    return parsed?.state || null;
+  } catch (error) {
+    console.error('Erreur lors de la lecture du stockage auth:', error);
+    return null;
+  }
+};
+
+const syncAuthStorage = (updates = {}) => {
+  try {
+    const currentState = readPersistedAuthState() || {};
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          ...currentState,
+          ...updates,
+        },
+        version: 0,
+      })
+    );
+  } catch (error) {
+    console.error('Erreur lors de la synchronisation du stockage auth:', error);
+  }
+};
+
+const clearAuthStorage = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (error) {
+    console.error('Erreur lors du nettoyage du stockage auth:', error);
+  }
+};
+
 /**
  * Décode le payload d'un token JWT.
  * Les tokens JWT sont au format: header.payload.signature
@@ -124,6 +170,10 @@ const useAuthStore = create(
           // Mettre à jour le localStorage pour l'API service
           localStorage.setItem('access_token', access_token);
           localStorage.setItem('refresh_token', refresh_token);
+          syncAuthStorage({
+            accessToken: access_token,
+            refreshToken: refresh_token,
+          });
 
           return user;
         } catch (error) {
@@ -147,8 +197,7 @@ const useAuthStore = create(
         });
 
         // Nettoyer le localStorage
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        clearAuthStorage();
       },
 
       /**
@@ -189,6 +238,10 @@ const useAuthStore = create(
 
           // Mettre à jour le localStorage
           localStorage.setItem('access_token', access_token);
+          syncAuthStorage({
+            accessToken: access_token,
+            refreshToken: currentRefreshToken,
+          });
 
           return access_token;
         } catch (error) {
@@ -217,8 +270,9 @@ const useAuthStore = create(
       initialize: async () => {
         // Démarrer en mode non-initialisé pour afficher un loader côté UI
         set({ isInitialized: false });
-        const accessToken = localStorage.getItem('access_token');
-        const refreshToken = localStorage.getItem('refresh_token');
+        const persistedAuthState = readPersistedAuthState();
+        const accessToken = localStorage.getItem('access_token') || persistedAuthState?.accessToken || null;
+        const refreshToken = localStorage.getItem('refresh_token') || persistedAuthState?.refreshToken || null;
 
         try {
           // Si un refresh token existe, tenter un rafraîchissement silencieux
@@ -243,6 +297,10 @@ const useAuthStore = create(
             if (refresh_token) {
               localStorage.setItem('refresh_token', refresh_token);
             }
+            syncAuthStorage({
+              accessToken: access_token,
+              refreshToken: refresh_token || refreshToken,
+            });
             return;
           }
 
@@ -272,13 +330,12 @@ const useAuthStore = create(
           isAuthenticated: false,
           isInitialized: true,
         });
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        clearAuthStorage();
       },
     }),
     {
       // Configuration de la persistance
-      name: 'auth-storage', // Nom de la clé dans localStorage
+      name: AUTH_STORAGE_KEY, // Nom de la clé dans localStorage
       storage: createJSONStorage(() => localStorage),
       // Persister uniquement les tokens (plus isAuthenticated)
       // isAuthenticated sera déterminé uniquement après une action explicite
@@ -310,4 +367,3 @@ if (typeof window !== 'undefined') {
 }
 
 export default useAuthStore;
-

@@ -819,7 +819,7 @@ function TransactionDetail() {
                         {!isMobile && (
                           <TableCell>
                             <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                              {paiement.numero_cheque || paiement.reference_virement || '-'}
+                              {paiement.numero_cheque || paiement.reference_virement || paiement.numero_reference_lc || (paiement.id_lc ? `LC #${paiement.id_lc}` : '-')}
                             </Typography>
                           </TableCell>
                         )}

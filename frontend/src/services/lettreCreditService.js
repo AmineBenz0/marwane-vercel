@@ -43,6 +43,10 @@ const lettreCreditService = {
    * Effectue une cession (transfert).
    */
   ceder: (data) => post('/cessions-lc', data),
+
+  verserBanque: (id, data) => post(`/lettres-credit/${id}/verser-banque`, data),
+
+  payerFournisseur: (id, data) => post(`/lettres-credit/${id}/payer-fournisseur`, data),
 };
 
 export default lettreCreditService;

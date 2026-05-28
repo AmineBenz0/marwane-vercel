@@ -42,6 +42,9 @@ def get_produits(
         Liste des produits (ProduitRead)
     """
     query = db.query(Produit)
+
+    if est_actif is not None:
+        query = query.filter(Produit.est_actif == est_actif)
     
     # Filtre par type_produit si fourni
     if type_produit:
@@ -354,6 +357,9 @@ def get_produits_par_type(
         )
     
     query = db.query(Produit)
+
+    if est_actif is not None:
+        query = query.filter(Produit.est_actif == est_actif)
     
     # Filter by transaction type
     if type_transaction_lower == 'client':

@@ -14,6 +14,8 @@ from app.models.transaction import Transaction
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
+from app.models.batiment import Batiment
+from app.models.cycle_production import CycleProduction
 from app.models.user import Utilisateur
 from app.models.audit import TransactionAudit
 from app.models.caisse import Caisse
@@ -24,8 +26,80 @@ from app.schemas.transaction import (
     TransactionAuditRead
 )
 from app.utils.dependencies import get_current_active_user
+from app.utils.egg_product_sync import parse_sellable_egg_product_name
+from app.utils.production_cycles import require_active_cycle_for_date
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
+
+
+def _validate_source_batiment(
+    *,
+    id_batiment: Optional[int],
+    id_client: Optional[int],
+    produit: Produit,
+    db: Session,
+) -> None:
+    """
+    Validate the optional source building used to decrement egg stock.
+    """
+    if id_batiment is None:
+        return
+
+    if id_client is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le batiment source est reserve aux ventes clients",
+        )
+
+
+def _resolve_transaction_cycle(
+    *,
+    id_cycle: Optional[int],
+    id_batiment: Optional[int],
+    id_client: Optional[int],
+    date_transaction: date,
+    produit: Produit,
+    db: Session,
+) -> Optional[int]:
+    if id_batiment is None or id_client is None:
+        return None
+    if not parse_sellable_egg_product_name(produit.nom_produit):
+        return None
+
+    if id_cycle is not None:
+        cycle = db.query(CycleProduction).filter(CycleProduction.id_cycle == id_cycle).first()
+        if not cycle or cycle.id_batiment != id_batiment:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Lot introuvable pour ce batiment",
+            )
+        if date_transaction < cycle.date_debut or date_transaction > cycle.date_fin_prevue:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La date de vente est en dehors du lot",
+            )
+        return cycle.id_cycle
+
+    cycle = require_active_cycle_for_date(
+        db,
+        id_batiment,
+        date_transaction,
+        action_label="de saisir la vente",
+    )
+    return cycle.id_cycle
+
+    if not parse_sellable_egg_product_name(produit.nom_produit):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le batiment source ne peut etre utilise que pour une vente d'oeufs",
+        )
+
+    batiment = db.query(Batiment).filter(Batiment.id_batiment == id_batiment).first()
+    if not batiment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Batiment avec l'ID {id_batiment} introuvable",
+        )
 
 
 @router.post("/batch", response_model=List[TransactionRead], status_code=status.HTTP_201_CREATED)
@@ -125,6 +199,21 @@ def create_transactions_batch(
                     detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
                 )
             
+            _validate_source_batiment(
+                id_batiment=tx_data.id_batiment,
+                id_client=tx_data.id_client,
+                produit=produit,
+                db=db,
+            )
+            id_cycle = _resolve_transaction_cycle(
+                id_cycle=tx_data.id_cycle,
+                id_batiment=tx_data.id_batiment,
+                id_client=tx_data.id_client,
+                date_transaction=tx_data.date_transaction,
+                produit=produit,
+                db=db,
+            )
+
             # Calculer le montant_total si non fourni
             montant_total = tx_data.montant_total
             if montant_total is None:
@@ -140,6 +229,8 @@ def create_transactions_batch(
                 est_actif=tx_data.est_actif,
                 id_client=tx_data.id_client,
                 id_fournisseur=tx_data.id_fournisseur,
+                id_batiment=tx_data.id_batiment,
+                id_cycle=id_cycle,
                 id_utilisateur_creation=current_user.id_utilisateur if current_user else None
             )
             
@@ -180,6 +271,8 @@ def get_transactions(
     id_client: Optional[int] = None,
     id_fournisseur: Optional[int] = None,
     id_produit: Optional[int] = None,
+    id_batiment: Optional[int] = None,
+    id_cycle: Optional[int] = None,
     montant_min: Optional[Decimal] = None,
     montant_max: Optional[Decimal] = None,
     est_actif: Optional[bool] = None,
@@ -228,6 +321,11 @@ def get_transactions(
     if id_produit is not None:
         query = query.filter(Transaction.id_produit == id_produit)
     
+    if id_batiment is not None:
+        query = query.filter(Transaction.id_batiment == id_batiment)
+    if id_cycle is not None:
+        query = query.filter(Transaction.id_cycle == id_cycle)
+
     # Filtre par montant
     if montant_min is not None:
         query = query.filter(Transaction.montant_total >= montant_min)
@@ -406,6 +504,21 @@ def create_transaction(
             detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
         )
     
+    _validate_source_batiment(
+        id_batiment=transaction_data.id_batiment,
+        id_client=transaction_data.id_client,
+        produit=produit,
+        db=db,
+    )
+    id_cycle = _resolve_transaction_cycle(
+        id_cycle=transaction_data.id_cycle,
+        id_batiment=transaction_data.id_batiment,
+        id_client=transaction_data.id_client,
+        date_transaction=transaction_data.date_transaction,
+        produit=produit,
+        db=db,
+    )
+
     # Calculer le montant_total si non fourni
     montant_total = transaction_data.montant_total
     if montant_total is None:
@@ -421,6 +534,8 @@ def create_transaction(
         est_actif=transaction_data.est_actif,
         id_client=transaction_data.id_client,
         id_fournisseur=transaction_data.id_fournisseur,
+        id_batiment=transaction_data.id_batiment,
+        id_cycle=id_cycle,
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )
     
@@ -471,6 +586,8 @@ def update_transaction(
             detail=f"Transaction avec l'ID {id} introuvable"
         )
     
+    update_data = transaction_data.model_dump(exclude_unset=True)
+
     # Vérifier que le client existe si fourni dans la mise à jour
     if transaction_data.id_client is not None:
         client = db.query(Client).filter(Client.id_client == transaction_data.id_client).first()
@@ -517,10 +634,33 @@ def update_transaction(
             )
     
     # Mettre à jour les champs fournis
-    update_data = transaction_data.model_dump(exclude_unset=True)
+    final_produit = (
+        db.query(Produit).filter(Produit.id_produit == transaction_data.id_produit).first()
+        if transaction_data.id_produit is not None
+        else transaction.produit
+    )
+    final_id_client = update_data.get("id_client", transaction.id_client)
+    final_id_batiment = update_data.get("id_batiment", transaction.id_batiment)
+    final_date_transaction = update_data.get("date_transaction", transaction.date_transaction)
+    final_id_cycle = update_data.get("id_cycle", transaction.id_cycle)
+    _validate_source_batiment(
+        id_batiment=final_id_batiment,
+        id_client=final_id_client,
+        produit=final_produit,
+        db=db,
+    )
+    resolved_cycle_id = _resolve_transaction_cycle(
+        id_cycle=final_id_cycle,
+        id_batiment=final_id_batiment,
+        id_client=final_id_client,
+        date_transaction=final_date_transaction,
+        produit=final_produit,
+        db=db,
+    )
     
     for field, value in update_data.items():
         setattr(transaction, field, value)
+    transaction.id_cycle = resolved_cycle_id
     
     # Recalculer le montant_total si quantite ou prix_unitaire ont changé
     if transaction_data.quantite is not None or transaction_data.prix_unitaire is not None:

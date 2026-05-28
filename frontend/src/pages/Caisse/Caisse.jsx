@@ -1,1029 +1,598 @@
-/**
- * Page Caisse (protégée).
- * 
- * Affiche :
- * - Solde actuel de la caisse (en évidence)
- * - Liste des mouvements récents avec filtres par date
- * - Graphique d'évolution du solde sur 30 derniers jours
- */
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
-  Grid,
-  Typography,
+  Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
-  Alert,
-  useTheme,
-  useMediaQuery,
-  Button,
-  Paper,
+  Divider,
+  InputAdornment,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
-  IconButton,
-  Divider,
+  TextField,
+  Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
-  AccountBalance as AccountBalanceIcon,
-  Refresh as RefreshIcon,
-  FileDownload as FileDownloadIcon,
-  PictureAsPdf as PictureAsPdfIcon,
   AccountBalanceWallet as WalletIcon,
-  AttachMoney as MoneyIcon,
-  TrendingUp as TrendingUpIcon,
+  CreditCard as LcIcon,
+  Download as DownloadIcon,
+  Refresh as RefreshIcon,
+  Search as SearchIcon,
   TrendingDown as TrendingDownIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckIcon,
+  TrendingUp as TrendingUpIcon,
+  WarningAmber as WarningIcon,
 } from '@mui/icons-material';
-import MobileCardList from '../../components/MobileCardList/MobileCardList';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
-import { format, subDays, parseISO } from 'date-fns';
-import fr from 'date-fns/locale/fr';
-import StatCard from '../../components/StatCard/StatCard';
-import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
+import { format, subDays } from 'date-fns';
 import { get } from '../../services/api';
+import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportCaisseReport } from '../../utils/exportToPDF';
-import useNotification from '../../hooks/useNotification';
-import { formatMontant, formatMontantComplet } from '../../utils/formatNumber';
-import { formatMontantForAxis, formatMontantForTooltip } from '../../utils/formatNumberForChart';
+import { formatMontant } from '../../utils/formatNumber';
 
-/**
- * Formate une date pour l'affichage dans le graphique.
- */
-const formatDate = (date) => {
-  try {
-    return format(date, 'dd MMM', { locale: fr });
-  } catch (error) {
-    return format(date, 'dd/MM');
-  }
+const PERIODS = [
+  { value: '30days', label: '30 derniers jours' },
+  { value: 'today', label: "Aujourd'hui" },
+  { value: 'all', label: 'Tout' },
+];
+
+const MOVEMENT_TYPES = [
+  { value: 'all', label: 'Tous' },
+  { value: 'ENTREE', label: 'Entrées' },
+  { value: 'SORTIE', label: 'Sorties' },
+];
+
+const toNumber = (value) => Number(value || 0);
+
+const toDateKey = (date) => format(date, 'yyyy-MM-dd');
+
+const formatDate = (value, withTime = false) => {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+  }).format(new Date(value));
 };
 
-/**
- * Formate un montant en devise.
- */
-const formatCurrency = (value) => {
-  return formatMontant(value, { useCompactNotation: false });
-};
-
-/**
- * Formate un montant pour l'axe Y du graphique (notation compacte sans symbole de devise).
- */
-const formatAxisValue = (value) => {
-  return formatMontantForAxis(value);
-};
-
-/**
- * Calcule l'évolution du solde jour par jour sur 30 jours.
- * 
- * @param {Array} mouvements - Liste des mouvements des 30 derniers jours
- * @param {Date} startDate - Date de début de la période (30 jours avant aujourd'hui)
- * @param {number} soldeActuel - Solde actuel de la caisse
- */
-const calculateBalanceEvolution = (mouvements, startDate, soldeActuel) => {
-  // Créer un tableau pour les 30 derniers jours
-  const last30Days = [];
+const getPeriodParams = (period) => {
   const today = new Date();
-  
-  // Grouper les mouvements par jour
-  const mouvementsParJour = {};
-  let totalEntrees = 0;
-  let totalSorties = 0;
-  
-  mouvements.forEach((mouvement) => {
-    const mouvementDate = parseISO(mouvement.date_mouvement);
-    if (mouvementDate >= startDate && mouvementDate <= today) {
-      const dateKey = format(mouvementDate, 'yyyy-MM-dd');
-      if (!mouvementsParJour[dateKey]) {
-        mouvementsParJour[dateKey] = {
-          entrees: 0,
-          sorties: 0,
-        };
-      }
-      if (mouvement.type_mouvement === 'ENTREE') {
-        const montant = parseFloat(mouvement.montant || 0);
-        mouvementsParJour[dateKey].entrees += montant;
-        totalEntrees += montant;
-      } else {
-        const montant = parseFloat(mouvement.montant || 0);
-        mouvementsParJour[dateKey].sorties += montant;
-        totalSorties += montant;
-      }
-    }
-  });
-  
-  // Calculer le solde initial (solde actuel - variation des 30 derniers jours)
-  const variation30Jours = totalEntrees - totalSorties;
-  const soldeInitial = soldeActuel - variation30Jours;
-  
-  // Construire le tableau jour par jour avec le solde cumulé
-  let soldeCumule = soldeInitial;
-  for (let i = 29; i >= 0; i--) {
-    const date = subDays(today, i);
-    const dateKey = format(date, 'yyyy-MM-dd');
-    const jour = mouvementsParJour[dateKey];
-    
-    if (jour) {
-      soldeCumule += jour.entrees - jour.sorties;
-    }
-    
-    last30Days.push({
-      date: formatDate(date),
-      dateKey: dateKey,
-      solde: soldeCumule,
-    });
+  if (period === 'today') {
+    const key = toDateKey(today);
+    return { date_debut: key, date_fin: key };
   }
-  
-  return last30Days;
+  if (period === '30days') {
+    return {
+      date_debut: toDateKey(subDays(today, 30)),
+      date_fin: toDateKey(today),
+    };
+  }
+  return {};
 };
 
-/**
- * Composant Caisse.
- */
+const getMovementLabel = (movement) => {
+  if (movement.id_charge) return 'Dépense';
+  if (movement.id_paiement) return movement.type_mouvement === 'ENTREE' ? 'Paiement client' : 'Paiement fournisseur';
+  if (movement.id_transaction) return movement.type_mouvement === 'ENTREE' ? 'Vente encaissée' : 'Achat payé';
+  return movement.type_mouvement === 'ENTREE' ? 'Entrée caisse' : 'Sortie caisse';
+};
+
+const getMovementOrigin = (movement) => {
+  if (movement.id_charge) return 'Dépense';
+  if (movement.id_paiement) return `Paiement #${movement.id_paiement}`;
+  if (movement.id_transaction) return `Transaction #${movement.id_transaction}`;
+  return 'Caisse';
+};
+
+const getSignedAmount = (movement) => {
+  const amount = toNumber(movement.montant);
+  return movement.type_mouvement === 'SORTIE' ? -amount : amount;
+};
+
+const formatSignedAmount = (movement) => {
+  const signed = getSignedAmount(movement);
+  const sign = signed > 0 ? '+' : signed < 0 ? '-' : '';
+  return `${sign}${formatMontant(Math.abs(signed), { useCompactNotation: false, maximumFractionDigits: 0 })}`;
+};
+
 function Caisse() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const notification = useNotification();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // États pour les données
-  const [solde, setSolde] = useState(0);
-  const [soldeComplet, setSoldeComplet] = useState(null); // Double vision : théorique + réel
-  const [derniereMaj, setDerniereMaj] = useState(null);
+  const [soldeComplet, setSoldeComplet] = useState(null);
+  const [lettresCreditDisponibles, setLettresCreditDisponibles] = useState([]);
   const [mouvements, setMouvements] = useState([]);
-  const [chartData, setChartData] = useState([]);
-  
-  // États pour les filtres (objet unique)
-  const [filters, setFilters] = useState({
-    dateDebut: '',
-    dateFin: '',
-  });
+  const [period, setPeriod] = useState('30days');
+  const [movementType, setMovementType] = useState('all');
+  const [search, setSearch] = useState('');
 
-  /**
-   * Gestion des filtres.
-   */
-  const handleFilterChange = (filterId, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterId]: value,
-    }));
-  };
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
 
-  const handleClearAllFilters = () => {
-    setFilters({
-      dateDebut: '',
-      dateFin: '',
-    });
-  };
-
-  /**
-   * Définitions des filtres pour SmartFilterPanel.
-   */
-  const filterDefinitions = useMemo(() => [
-    {
-      id: 'dateDebut',
-      label: 'Date début',
-      type: 'date',
-      alwaysInline: true,
-      formatChipValue: (value) => {
-        try {
-          return new Date(value).toLocaleDateString('fr-FR');
-        } catch {
-          return value;
-        }
-      },
-    },
-    {
-      id: 'dateFin',
-      label: 'Date fin',
-      type: 'date',
-      alwaysInline: true,
-      formatChipValue: (value) => {
-        try {
-          return new Date(value).toLocaleDateString('fr-FR');
-        } catch {
-          return value;
-        }
-      },
-    },
-  ], []);
-
-  // Vérifier si des filtres sont appliqués
-  const filtersApplied = filters.dateDebut && filters.dateFin;
-  
-  /**
-   * Charge les données de la caisse.
-   */
-  const loadCaisseData = async (useFilters = false) => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      const now = new Date();
-      const dateDebut30Jours = subDays(now, 30);
-      
-      // Préparer les paramètres pour les mouvements
-      const mouvementsParams = {
-        limit: 1000, // Limite élevée pour récupérer tous les mouvements
+      const movementParams = {
+        limit: 1000,
+        ...getPeriodParams(period),
       };
-      
-      // Si des filtres sont appliqués, les utiliser
-      if (useFilters && filters.dateDebut && filters.dateFin) {
-        mouvementsParams.date_debut = filters.dateDebut;
-        mouvementsParams.date_fin = filters.dateFin;
-      } else {
-        // Sinon, récupérer les 30 derniers jours pour le graphique
-        mouvementsParams.date_debut = format(dateDebut30Jours, 'yyyy-MM-dd');
-        mouvementsParams.date_fin = format(now, 'yyyy-MM-dd');
+
+      if (movementType !== 'all') {
+        movementParams.type_mouvement = movementType;
       }
-      
-      // Charger toutes les données en parallèle
-      const [
-        soldeCompletResponse,
-        mouvementsResponse,
-        mouvements30JoursResponse,
-      ] = await Promise.all([
-        // 1. Solde complet (théorique + réel)
+
+      const [soldeResponse, movementsResponse, lcResponse] = await Promise.all([
         get('/caisse/solde/complet'),
-        
-        // 2. Mouvements récents (avec filtres ou 30 derniers jours)
-        get('/caisse/mouvements', {
-          params: mouvementsParams,
-        }),
-        
-        // 3. Mouvements des 30 derniers jours pour le graphique (toujours)
-        get('/caisse/mouvements', {
-          params: {
-            date_debut: format(dateDebut30Jours, 'yyyy-MM-dd'),
-            date_fin: format(now, 'yyyy-MM-dd'),
-            limit: 1000,
-          },
-        }),
+        get('/caisse/mouvements', { params: movementParams }),
+        get('/lettres-credit/disponibles', { params: { limit: 1000 } }),
       ]);
-      
-      // Traiter le solde complet
-      setSoldeComplet(soldeCompletResponse);
-      setSolde(parseFloat(soldeCompletResponse.solde_theorique || 0)); // Pour la compatibilité avec le graphique
-      setDerniereMaj(soldeCompletResponse.derniere_maj_transaction);
-      
-      // Traiter les mouvements récents
-      const mouvementsData = mouvementsResponse || [];
-      setMouvements(mouvementsData);
-      
-      // Préparer les données pour le graphique
-      const mouvements30Jours = mouvements30JoursResponse || [];
-      const chartDataFormatted = calculateBalanceEvolution(
-        mouvements30Jours,
-        dateDebut30Jours,
-        parseFloat(soldeCompletResponse.solde_theorique || 0)
-      );
-      setChartData(chartDataFormatted);
-      
+
+      setSoldeComplet(soldeResponse);
+      setMouvements(Array.isArray(movementsResponse) ? movementsResponse : []);
+      setLettresCreditDisponibles(Array.isArray(lcResponse) ? lcResponse : []);
     } catch (err) {
-      console.error('Erreur lors du chargement des données de la caisse:', err);
-      const errorMessage = err.message || 'Une erreur est survenue lors du chargement des données.';
-      setError(errorMessage);
-      notification.error(errorMessage);
+      console.error('Erreur chargement caisse:', err);
+      const message = err?.message || 'Erreur lors du chargement de la caisse';
+      setError(message);
+      notification.error(message);
     } finally {
       setLoading(false);
     }
   };
-  
-  /**
-   * Charge les données au montage du composant.
-   */
-  useEffect(() => {
-    loadCaisseData(false);
-  }, []);
 
-  /**
-   * Charge les données quand les filtres changent.
-   */
   useEffect(() => {
-    // Si les deux filtres sont remplis, charger avec filtres
-    if (filters.dateDebut && filters.dateFin) {
-      if (new Date(filters.dateDebut) > new Date(filters.dateFin)) {
-        const errorMessage = 'La date de début doit être antérieure à la date de fin.';
-        setError(errorMessage);
-        notification.warning(errorMessage);
-        return;
-      }
-      loadCaisseData(true);
-    }
-  }, [filters]);
+    loadData();
+  }, [period, movementType]);
 
-  /**
-   * Gère l'export Excel des mouvements de caisse filtrés.
-   */
+  const lcDisponiblesTotal = useMemo(() => {
+    return lettresCreditDisponibles.reduce((sum, lc) => sum + toNumber(lc.montant), 0);
+  }, [lettresCreditDisponibles]);
+
+  const stats = useMemo(() => {
+    const totalDisponible = toNumber(soldeComplet?.solde_reel ?? soldeComplet?.solde_theorique);
+    const cashEnCaisse = totalDisponible - lcDisponiblesTotal;
+    const aEncaisser = Math.max(0, toNumber(soldeComplet?.creances_clients));
+    const aPayer = Math.max(0, toNumber(soldeComplet?.dettes_fournisseurs));
+
+    return {
+      totalDisponible,
+      cashEnCaisse,
+      lcDisponibles: lcDisponiblesTotal,
+      lcCount: lettresCreditDisponibles.length,
+      aEncaisser,
+      aPayer,
+    };
+  }, [lcDisponiblesTotal, lettresCreditDisponibles.length, soldeComplet]);
+
+  const visibleMovements = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    if (!normalizedSearch) return mouvements;
+
+    return mouvements.filter((movement) => (
+      [
+        getMovementLabel(movement),
+        getMovementOrigin(movement),
+        movement.type_mouvement,
+        movement.id_transaction,
+        movement.id_paiement,
+        movement.id_charge,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+    ));
+  }, [mouvements, search]);
+
   const handleExportExcel = () => {
-    try {
-      // Définir les colonnes pour l'export
-      const exportColumns = [
-        {
-          id: 'date_mouvement',
-          label: 'Date',
-        },
-        {
-          id: 'type_mouvement',
-          label: 'Type',
-        },
-        {
-          id: 'montant',
-          label: 'Montant',
-        },
-        {
-          id: 'id_transaction',
-          label: 'Transaction ID',
-        },
-      ];
-
-      const customFormatters = {
-        date_mouvement: (value) => {
-          if (!value) return '-';
-          try {
-            return format(parseISO(value), "dd/MM/yyyy 'à' HH:mm", { locale: fr });
-          } catch {
-            return value;
-          }
-        },
-        montant: (value) => {
-          if (value === null || value === undefined) return '-';
-          return formatCurrency(parseFloat(value || 0));
-        },
-      };
-
-      exportToExcelAdvanced(
-        mouvements,
-        exportColumns,
-        `mouvements_caisse_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
-        'Mouvements Caisse',
-        customFormatters
-      );
-      notification.success('Export Excel généré avec succès');
-    } catch (error) {
-      console.error('Erreur lors de l\'export Excel:', error);
-      const errorMessage = 'Une erreur est survenue lors de l\'export Excel';
-      setError(errorMessage);
-      notification.error(errorMessage);
+    if (visibleMovements.length === 0) {
+      notification.warning('Aucun mouvement à exporter');
+      return;
     }
+
+    exportToExcelAdvanced(
+      visibleMovements.map((movement) => ({
+        date: movement.date_mouvement,
+        operation: getMovementLabel(movement),
+        origine: getMovementOrigin(movement),
+        sens: movement.type_mouvement === 'ENTREE' ? 'Entrée' : 'Sortie',
+        montant: getSignedAmount(movement),
+      })),
+      [
+        { id: 'date', label: 'Date' },
+        { id: 'operation', label: 'Opération' },
+        { id: 'origine', label: 'Origine' },
+        { id: 'sens', label: 'Sens' },
+        { id: 'montant', label: 'Montant' },
+      ],
+      `mouvements_caisse_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
+      'Mouvements caisse',
+      {
+        date: (value) => formatDate(value, true),
+        montant: (value) => Number(value || 0),
+      }
+    );
+    notification.success('Export Excel généré');
   };
 
-  /**
-   * Gère l'export PDF des mouvements de caisse.
-   */
   const handleExportPDF = () => {
     try {
-      exportCaisseReport(mouvements, solde, dateDebut, dateFin);
-      notification.success('Export PDF généré avec succès');
-    } catch (error) {
-      console.error('Erreur lors de l\'export PDF:', error);
-      const errorMessage = 'Une erreur est survenue lors de l\'export PDF';
-      setError(errorMessage);
-      notification.error(errorMessage);
+      const params = getPeriodParams(period);
+      exportCaisseReport(
+        visibleMovements,
+        stats.totalDisponible,
+        params.date_debut || '',
+        params.date_fin || ''
+      );
+      notification.success('Export PDF généré');
+    } catch (err) {
+      console.error('Erreur export PDF caisse:', err);
+      notification.error("Erreur lors de l'export PDF");
     }
   };
-  
-  // Affichage du chargement
-  if (loading && !solde && !mouvements.length) {
+
+  if (loading && !soldeComplet) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '400px',
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
         <CircularProgress />
       </Box>
     );
   }
-  
+
   return (
-    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      {/* Titre de la page */}
-      <Typography 
-        variant="h4" 
-        component="h1" 
-        gutterBottom 
-        sx={{ 
-          mb: { xs: 2, sm: 3, md: 4 },
-          fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
+    <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', md: 'flex-start' }}
+        spacing={2}
+        sx={{ mb: 2.5 }}
+      >
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight={900}>
+            Caisse
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
+            Voir l'argent disponible maintenant, sans répéter les détails déjà présents dans transactions, LC ou comptes bancaires.
+          </Typography>
+        </Box>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+          <Button variant="outlined" startIcon={!isMobile && <RefreshIcon />} onClick={loadData} disabled={loading}>
+            Actualiser
+          </Button>
+          <Button variant="outlined" startIcon={!isMobile && <DownloadIcon />} onClick={handleExportExcel} disabled={visibleMovements.length === 0}>
+            Excel
+          </Button>
+          <Button variant="contained" onClick={handleExportPDF} disabled={visibleMovements.length === 0}>
+            PDF
+          </Button>
+        </Stack>
+      </Stack>
+
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2.5, borderRadius: 3 }}>
+          {error}
+        </Alert>
+      )}
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: '1.35fr 0.9fr 0.9fr' },
+          gap: 2,
+          mb: 2.5,
         }}
       >
-        Gestion de la Caisse
-      </Typography>
-      
-      {/* Affichage de l'erreur */}
-      {error && (
-        <Box sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-          <Alert 
-            severity="error" 
-            onClose={() => setError(null)}
-            action={
-              <IconButton
-                aria-label="refresh"
-                color="inherit"
-                size="small"
-                onClick={() => loadCaisseData(filtersApplied)}
-              >
-                <RefreshIcon fontSize="inherit" />
-              </IconButton>
-            }
-          >
-            {error}
-          </Alert>
-        </Box>
-      )}
-      
-      {/* Double Vision de la Caisse : Théorique vs Réel */}
-      {soldeComplet && (
-        <>
-          {/* Soldes Théorique et Réel */}
-          <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-            {/* Solde Théorique */}
-            <Grid item xs={12} md={6}>
-              <Card 
-                elevation={3}
-                sx={{
-                  height: '100%',
-                  border: '1px solid',
-                  borderColor: 'primary.light'
-                }}
-              >
-                <CardContent>
-                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                    <Box display="flex" alignItems="center">
-                      <WalletIcon color="primary" sx={{ mr: 1, fontSize: { xs: 28, md: 32 } }} />
-                      <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}>
-                        Solde Théorique
-                      </Typography>
-                    </Box>
-                    <Chip 
-                      label="Expected" 
-                      color="primary" 
-                      size="small" 
-                      variant="outlined"
-                    />
-                  </Box>
-                  
-                  <Typography 
-                    variant="h3" 
-                    sx={{ 
-                      color: parseFloat(soldeComplet.solde_theorique) >= 0 ? 'success.main' : 'error.main',
-                      fontWeight: 'bold',
-                      mb: 1,
-                      fontSize: { xs: '1.75rem', sm: '2.25rem', md: '3rem' }
-                    }}
-                  >
-                    {formatCurrency(parseFloat(soldeComplet.solde_theorique))}
-                  </Typography>
-                  
-                  <Typography variant="caption" color="text.secondary" display="block" mb={2}>
-                    Basé sur les transactions enregistrées
-                  </Typography>
-                  
-                  <Divider sx={{ my: 2 }} />
-                  
-                  <Box>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                      <Box display="flex" alignItems="center">
-                        <TrendingUpIcon fontSize="small" sx={{ color: 'success.main', mr: 1 }} />
-                        <Typography variant="body2">Entrées (Ventes)</Typography>
-                      </Box>
-                      <Typography variant="body2" fontWeight="bold">
-                        {formatCurrency(parseFloat(soldeComplet.entrees_theoriques))}
-                      </Typography>
-                    </Box>
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Box display="flex" alignItems="center">
-                        <TrendingDownIcon fontSize="small" sx={{ color: 'error.main', mr: 1 }} />
-                        <Typography variant="body2">Sorties (Achats)</Typography>
-                      </Box>
-                      <Typography variant="body2" fontWeight="bold">
-                        {formatCurrency(parseFloat(soldeComplet.sorties_theoriques))}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+        <MainBalanceCard value={stats.totalDisponible} />
+        <SmallMoneyCard
+          label="Cash en caisse"
+          value={stats.cashEnCaisse}
+          helper="Paiements réellement encaissés, hors LC."
+          tone="success"
+          icon={<WalletIcon />}
+        />
+        <SmallMoneyCard
+          label="LC disponibles"
+          value={stats.lcDisponibles}
+          helper={`${stats.lcCount} LC comptée(s) dans la caisse.`}
+          tone="info"
+          icon={<LcIcon />}
+        />
+      </Box>
 
-            {/* Solde Réel */}
-            <Grid item xs={12} md={6}>
-              <Card 
-                elevation={3}
-                sx={{ 
-                  height: '100%',
-                  border: '3px solid',
-                  borderColor: 'success.main',
-                  backgroundColor: 'rgba(76, 175, 80, 0.05)'
-                }}
-              >
-                <CardContent>
-                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                    <Box display="flex" alignItems="center">
-                      <MoneyIcon color="success" sx={{ mr: 1, fontSize: { xs: 28, md: 32 } }} />
-                      <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}>
-                        Solde Réel
-                      </Typography>
-                    </Box>
-                    <Chip 
-                      label="CASH FLOW" 
-                      color="success" 
-                      size="small"
-                    />
-                  </Box>
-                  
-                  <Typography 
-                    variant="h3" 
-                    sx={{ 
-                      color: parseFloat(soldeComplet.solde_reel) >= 0 ? 'success.main' : 'error.main',
-                      fontWeight: 'bold',
-                      mb: 1,
-                      fontSize: { xs: '1.75rem', sm: '2.25rem', md: '3rem' }
-                    }}
-                  >
-                    {formatCurrency(parseFloat(soldeComplet.solde_reel))}
-                  </Typography>
-                  
-                  <Typography variant="caption" color="text.secondary" display="block" mb={2}>
-                    💵 Argent réellement disponible (paiements encaissés)
-                  </Typography>
-                  
-                  <Divider sx={{ my: 2 }} />
-                  
-                  <Box>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                      <Box display="flex" alignItems="center">
-                        <TrendingUpIcon fontSize="small" sx={{ color: 'success.main', mr: 1 }} />
-                        <Typography variant="body2">Encaissé</Typography>
-                      </Box>
-                      <Typography variant="body2" fontWeight="bold">
-                        {formatCurrency(parseFloat(soldeComplet.entrees_reelles))}
-                      </Typography>
-                    </Box>
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Box display="flex" alignItems="center">
-                        <TrendingDownIcon fontSize="small" sx={{ color: 'error.main', mr: 1 }} />
-                        <Typography variant="body2">Décaissé</Typography>
-                      </Box>
-                      <Typography variant="body2" fontWeight="bold">
-                        {formatCurrency(parseFloat(soldeComplet.sorties_reelles))}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* KPIs - Vue uniforme */}
-          <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-            {/* Écart */}
-            <Grid item xs={12} sm={6} md={4}>
-              <Card 
-                elevation={2}
-                sx={{
-                  borderLeft: '4px solid',
-                  borderLeftColor: 
-                    Math.abs(parseFloat(soldeComplet.ecart) / parseFloat(soldeComplet.solde_theorique || 1)) * 100 < 10 
-                      ? 'success.light' 
-                      : Math.abs(parseFloat(soldeComplet.ecart) / parseFloat(soldeComplet.solde_theorique || 1)) * 100 < 30 
-                        ? 'warning.light' 
-                        : 'error.light'
-                }}
-              >
-                <CardContent>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    📊 Écart
-                  </Typography>
-                  <Typography variant="h3" color="primary.main" gutterBottom>
-                    {formatCurrency(parseFloat(soldeComplet.ecart))}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Théorique - Réel
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Créances Clients */}
-            <Grid item xs={12} sm={6} md={4}>
-              <Card 
-                elevation={2}
-                sx={{
-                  borderLeft: '4px solid',
-                  borderLeftColor: 'warning.light'
-                }}
-              >
-                <CardContent>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    💰 Créances Clients
-                  </Typography>
-                  <Typography variant="h3" color="primary.main" gutterBottom>
-                    {formatCurrency(parseFloat(soldeComplet.creances_clients))}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {parseFloat(soldeComplet.creances_clients) > 0 
-                      ? 'À encaisser auprès des clients'
-                      : 'Tous les clients sont à jour'
-                    }
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Dettes Fournisseurs */}
-            <Grid item xs={12} sm={6} md={4}>
-              <Card 
-                elevation={2}
-                sx={{
-                  borderLeft: '4px solid',
-                  borderLeftColor: 'error.light'
-                }}
-              >
-                <CardContent>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    💸 Dettes Fournisseurs
-                  </Typography>
-                  <Typography variant="h3" color="primary.main" gutterBottom>
-                    {formatCurrency(parseFloat(soldeComplet.dettes_fournisseurs))}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {parseFloat(soldeComplet.dettes_fournisseurs) > 0 
-                      ? 'À payer aux fournisseurs'
-                      : 'Tous les fournisseurs sont payés'
-                    }
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Taux d'Encaissement */}
-            <Grid item xs={12} sm={6} md={4}>
-              <Card 
-                elevation={2}
-                sx={{
-                  borderLeft: '4px solid',
-                  borderLeftColor: 'primary.light'
-                }}
-              >
-                <CardContent>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Taux d'Encaissement
-                  </Typography>
-                  <Typography variant="h3" color="primary.main" gutterBottom>
-                    {parseFloat(soldeComplet.entrees_theoriques) > 0 
-                      ? Math.round((parseFloat(soldeComplet.entrees_reelles) / parseFloat(soldeComplet.entrees_theoriques)) * 100)
-                      : 0
-                    }%
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Paiements encaissés / Ventes totales
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Créances / Ventes */}
-            <Grid item xs={12} sm={6} md={4}>
-              <Card 
-                elevation={2}
-                sx={{
-                  borderLeft: '4px solid',
-                  borderLeftColor: 'primary.light'
-                }}
-              >
-                <CardContent>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Créances / Ventes
-                  </Typography>
-                  <Typography variant="h3" color="primary.main" gutterBottom>
-                    {parseFloat(soldeComplet.entrees_theoriques) > 0 
-                      ? Math.round((parseFloat(soldeComplet.creances_clients) / parseFloat(soldeComplet.entrees_theoriques)) * 100)
-                      : 0
-                    }%
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Part des ventes non encaissées
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Dettes / Achats */}
-            <Grid item xs={12} sm={6} md={4}>
-              <Card 
-                elevation={2}
-                sx={{
-                  borderLeft: '4px solid',
-                  borderLeftColor: 'primary.light'
-                }}
-              >
-                <CardContent>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Dettes / Achats
-                  </Typography>
-                  <Typography variant="h3" color="primary.main" gutterBottom>
-                    {parseFloat(soldeComplet.sorties_theoriques) > 0 
-                      ? Math.round((parseFloat(soldeComplet.dettes_fournisseurs) / parseFloat(soldeComplet.sorties_theoriques)) * 100)
-                      : 0
-                    }%
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Part des achats non payés
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </>
-      )}
-      
-      {/* Filtres avec SmartFilterPanel */}
-      <SmartFilterPanel
-        pageKey="caisse"
-        filterDefinitions={filterDefinitions}
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        onClearAll={handleClearAllFilters}
-        maxInlineFilters={2}
-        resultCount={mouvements.length}
-        totalCount={mouvements.length}
-      />
-      
-      {/* Graphique d'évolution du solde */}
-      <Card sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
-        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-          <Typography 
-            variant="h6" 
-            component="h2" 
-            gutterBottom
-            sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-          >
-            Évolution du solde (30 derniers jours)
-          </Typography>
-          {loading ? (
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: { xs: 300, sm: 350, md: 400 },
-              }}
-            >
-              <CircularProgress />
-            </Box>
-          ) : (
-            <Box sx={{ 
-              width: '100%', 
-              height: { xs: 300, sm: 350, md: 400 }, 
-              mt: { xs: 2, sm: 2.5, md: 3 } 
-            }}>
-              <ResponsiveContainer>
-                <LineChart
-                  data={chartData}
-                  margin={{
-                    top: 5,
-                    right: isMobile ? 10 : 30,
-                    left: isMobile ? 5 : 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: isMobile ? 10 : 12 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis
-                    label={{ 
-                      value: 'Solde (MAD)', 
-                      angle: -90, 
-                      position: 'insideLeft',
-                      style: { fontSize: isMobile ? 10 : 12 }
-                    }}
-                    tickFormatter={(value) => formatAxisValue(value)}
-                    width={isMobile ? 60 : 80}
-                    tick={{ fontSize: isMobile ? 10 : 12 }}
-                  />
-                  <Tooltip
-                    formatter={(value) => formatMontantForTooltip(value)}
-                    labelFormatter={(label) => `Date: ${label}`}
-                  />
-                  <Legend 
-                    wrapperStyle={{ fontSize: isMobile ? '0.75rem' : '0.875rem' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="solde"
-                    stroke={theme.palette.primary.main}
-                    strokeWidth={2}
-                    name="Solde de la caisse"
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </Box>
-          )}
-        </CardContent>
-      </Card>
-      
-      {/* Liste des mouvements récents */}
-      <Card>
-        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: { xs: 'column', sm: 'row' },
-            justifyContent: 'space-between', 
-            alignItems: { xs: 'stretch', sm: 'center' }, 
-            mb: { xs: 1.5, sm: 2 },
-            gap: { xs: 1.5, sm: 0 }
-          }}>
-            <Typography 
-              variant="h6" 
-              component="h2"
-              sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-            >
-              {filtersApplied 
-                ? `Mouvements (${dateDebut} - ${dateFin})`
-                : 'Mouvements récents'
-              }
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 0.78fr) minmax(0, 1.42fr)' },
+          gap: 2,
+          alignItems: 'start',
+        }}
+      >
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+              <WarningIcon color="warning" />
+              <Typography variant="h6" fontWeight={900}>À surveiller</Typography>
+            </Stack>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              Résumé court. Les détails restent dans les fiches clients, fournisseurs et transactions.
             </Typography>
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: { xs: 'column', sm: 'row' },
-              gap: { xs: 1, sm: 1 },
-              width: { xs: '100%', sm: 'auto' }
-            }}>
-              <Button
-                variant="outlined"
-                startIcon={!isMobile && <FileDownloadIcon />}
-                onClick={handleExportExcel}
-                disabled={loading || mouvements.length === 0}
-                size="small"
-                sx={{ width: { xs: '100%', sm: 'auto' } }}
-              >
-                Excel
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={!isMobile && <PictureAsPdfIcon />}
-                onClick={handleExportPDF}
-                disabled={loading || mouvements.length === 0}
-                size="small"
-                sx={{ width: { xs: '100%', sm: 'auto' } }}
-              >
-                PDF
-              </Button>
-            </Box>
-          </Box>
-          {loading ? (
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                minHeight: 200,
-              }}
-            >
-              <CircularProgress />
-            </Box>
-          ) : mouvements.length === 0 ? (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Aucun mouvement trouvé pour la période sélectionnée.
-            </Alert>
-          ) : isMobile ? (
-            <Box sx={{ mt: { xs: 1.5, sm: 2 } }}>
-              <MobileCardList
-                items={mouvements}
-                loading={false}
-                emptyMessage="Aucun mouvement trouvé"
-                renderCard={(mouvement) => (
-                  <Box>
-                    {/* En-tête */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                          {format(parseISO(mouvement.date_mouvement), "dd MMM yyyy 'à' HH:mm", { locale: fr })}
-                        </Typography>
-                        <Typography variant="subtitle1" fontWeight="medium" sx={{ mt: 0.5 }}>
-                          Transaction #{mouvement.id_transaction}
-                        </Typography>
-                      </Box>
-                      <Chip
-                        label={mouvement.type_mouvement}
-                        color={mouvement.type_mouvement === 'ENTREE' ? 'success' : 'error'}
-                        size="small"
-                      />
-                    </Box>
 
-                    <Divider sx={{ my: 1.5 }} />
-
-                    {/* Montant */}
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Montant
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        sx={{
-                          fontWeight: 600,
-                          color: mouvement.type_mouvement === 'ENTREE'
-                            ? theme.palette.success.main
-                            : theme.palette.error.main,
-                          mt: 0.5,
-                        }}
-                      >
-                        {mouvement.type_mouvement === 'ENTREE' ? '+' : '-'}
-                        {formatCurrency(parseFloat(mouvement.montant || 0))}
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
+            <Stack spacing={1.5}>
+              <WatchItem
+                label="À encaisser"
+                helper="Clients qui doivent encore payer."
+                value={stats.aEncaisser}
+                color="warning.main"
               />
-            </Box>
-          ) : (
-            <TableContainer component={Paper} sx={{ mt: { xs: 1.5, sm: 2 }, overflowX: 'auto' }}>
-              <Table size={isMobile ? 'small' : 'medium'}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell><strong>Date</strong></TableCell>
-                    <TableCell><strong>Type</strong></TableCell>
-                    <TableCell align="right"><strong>Montant</strong></TableCell>
-                    <TableCell><strong>Transaction ID</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {mouvements.map((mouvement) => (
-                    <TableRow key={mouvement.id_mouvement} hover>
-                      <TableCell>
-                        {format(
-                          parseISO(mouvement.date_mouvement),
-                          "dd MMM yyyy 'à' HH:mm",
-                          { locale: fr }
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={mouvement.type_mouvement}
-                          color={
-                            mouvement.type_mouvement === 'ENTREE'
-                              ? 'success'
-                              : 'error'
-                          }
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 600,
-                            color:
-                              mouvement.type_mouvement === 'ENTREE'
-                                ? theme.palette.success.main
-                                : theme.palette.error.main,
-                          }}
-                        >
-                          {mouvement.type_mouvement === 'ENTREE' ? '+' : '-'}
-                          {formatCurrency(parseFloat(mouvement.montant || 0))}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>#{mouvement.id_transaction}</TableCell>
+              <WatchItem
+                label="À payer"
+                helper="Fournisseurs pas encore réglés."
+                value={stats.aPayer}
+                color="error.main"
+              />
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" sx={{ borderRadius: 4 }}>
+          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={900}>Mouvements de caisse</Typography>
+                <Typography color="text.secondary">
+                  {visibleMovements.length} mouvement(s) affiché(s)
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+                {PERIODS.map((option) => (
+                  <Chip
+                    key={option.value}
+                    label={option.label}
+                    color={period === option.value ? 'primary' : 'default'}
+                    variant={period === option.value ? 'filled' : 'outlined'}
+                    onClick={() => setPeriod(option.value)}
+                    sx={{ fontWeight: 800 }}
+                  />
+                ))}
+              </Stack>
+            </Stack>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} sx={{ mb: 2 }}>
+              <TextField
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Rechercher opération ou origine"
+                size="small"
+                sx={{ flex: 1 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: { xs: 0.5, md: 0 } }}>
+                {MOVEMENT_TYPES.map((option) => (
+                  <Chip
+                    key={option.value}
+                    label={option.label}
+                    color={movementType === option.value ? 'primary' : 'default'}
+                    variant={movementType === option.value ? 'filled' : 'outlined'}
+                    onClick={() => setMovementType(option.value)}
+                    sx={{ fontWeight: 800, flexShrink: 0 }}
+                  />
+                ))}
+              </Stack>
+            </Stack>
+
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
+            ) : visibleMovements.length === 0 ? (
+              <Alert severity="info" sx={{ borderRadius: 3 }}>
+                Aucun mouvement trouvé pour cette sélection.
+              </Alert>
+            ) : isMobile ? (
+              <Stack spacing={1.25}>
+                {visibleMovements.map((movement) => (
+                  <MovementMobileCard key={movement.id_mouvement} movement={movement} />
+                ))}
+              </Stack>
+            ) : (
+              <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table sx={{ minWidth: 760 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Opération</TableCell>
+                      <TableCell>Origine</TableCell>
+                      <TableCell align="right">Montant</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
+                  </TableHead>
+                  <TableBody>
+                    {visibleMovements.map((movement) => (
+                      <MovementRow key={movement.id_mouvement} movement={movement} />
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
+    </Box>
+  );
+}
+
+function MainBalanceCard({ value }) {
+  const amount = new Intl.NumberFormat('fr-FR', {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(toNumber(value));
+
+  return (
+    <Card
+      sx={{
+        height: '100%',
+        borderRadius: 4,
+        color: 'white',
+        background: 'linear-gradient(135deg, #159d8f, #087568)',
+        boxShadow: '0 22px 52px rgba(8, 117, 104, 0.22)',
+      }}
+    >
+      <CardContent sx={{ p: { xs: 2.5, md: 3.25 }, '&:last-child': { pb: { xs: 2.5, md: 3.25 } } }}>
+        <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.78)', fontWeight: 900, letterSpacing: 1 }}>
+          Total disponible
+        </Typography>
+        <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: { xs: '3.1rem', sm: '3.8rem', md: '4.5rem' },
+              lineHeight: 0.95,
+              fontWeight: 950,
+              letterSpacing: '-0.06em',
+              color: '#ffffff',
+              textShadow: '0 8px 22px rgba(0, 0, 0, 0.16)',
+            }}
+          >
+            {amount}
+          </Typography>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: { xs: '1.15rem', sm: '1.35rem' },
+              fontWeight: 950,
+              color: 'rgba(255, 255, 255, 0.92)',
+            }}
+          >
+            MAD
+          </Typography>
+        </Stack>
+        <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, maxWidth: 560 }}>
+          Argent disponible maintenant: cash en caisse + LC disponibles. C'est le chiffre principal à regarder.
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SmallMoneyCard({ label, value, helper, icon, tone }) {
+  const colors = {
+    success: { bg: '#ecfdf3', color: '#047857' },
+    info: { bg: '#eff6ff', color: '#2563eb' },
+  }[tone] || { bg: '#f8fafc', color: '#475569' };
+
+  return (
+    <Card variant="outlined" sx={{ height: '100%', borderRadius: 4 }}>
+      <CardContent>
+        <Stack direction="row" justifyContent="space-between" spacing={2}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900, letterSpacing: 1 }}>
+              {label}
+            </Typography>
+            <Typography variant="h4" sx={{ fontWeight: 950, mt: 1, letterSpacing: '-0.05em' }}>
+              {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 0 })}
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+              {helper}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 3,
+              display: 'grid',
+              placeItems: 'center',
+              bgcolor: colors.bg,
+              color: colors.color,
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WatchItem({ label, helper, value, color }) {
+  return (
+    <Box sx={{ p: 1.75, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: '#fffdfa' }}>
+      <Stack direction={{ xs: 'column', sm: 'row', lg: 'column', xl: 'row' }} justifyContent="space-between" spacing={1.25}>
+        <Box>
+          <Typography fontWeight={900}>{label}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{helper}</Typography>
+        </Box>
+        <Typography fontWeight={950} color={color} sx={{ whiteSpace: 'nowrap' }}>
+          {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 0 })}
+        </Typography>
+      </Stack>
+    </Box>
+  );
+}
+
+function MovementRow({ movement }) {
+  const isEntry = movement.type_mouvement === 'ENTREE';
+
+  return (
+    <TableRow hover>
+      <TableCell>{formatDate(movement.date_mouvement, true)}</TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={1} alignItems="flex-start">
+          {isEntry ? <TrendingUpIcon color="success" fontSize="small" /> : <TrendingDownIcon color="error" fontSize="small" />}
+          <Box>
+            <Typography fontWeight={900}>{getMovementLabel(movement)}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {isEntry ? 'Entrée' : 'Sortie'}
+            </Typography>
+          </Box>
+        </Stack>
+      </TableCell>
+      <TableCell>{getMovementOrigin(movement)}</TableCell>
+      <TableCell align="right">
+        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>
+          {formatSignedAmount(movement)}
+        </Typography>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function MovementMobileCard({ movement }) {
+  const isEntry = movement.type_mouvement === 'ENTREE';
+
+  return (
+    <Box sx={{ p: 1.75, borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+      <Stack direction="row" justifyContent="space-between" spacing={1.5}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography fontWeight={950}>{getMovementLabel(movement)}</Typography>
+          <Typography color="text.secondary" variant="body2">
+            {formatDate(movement.date_mouvement)} · {getMovementOrigin(movement)}
+          </Typography>
+        </Box>
+        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>
+          {formatSignedAmount(movement)}
+        </Typography>
+      </Stack>
+      <Divider sx={{ mt: 1.5 }} />
     </Box>
   );
 }
 
 export default Caisse;
-

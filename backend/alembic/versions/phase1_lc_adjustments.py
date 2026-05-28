@@ -37,6 +37,7 @@ def upgrade() -> None:
 
     # 3. Update type_paiement check constraint (remove 'traite')
     op.execute("ALTER TABLE paiements DROP CONSTRAINT IF EXISTS check_type_paiement_valide")
+    op.execute("UPDATE paiements SET type_paiement = 'autre' WHERE type_paiement = 'traite'")
     op.execute("""
         ALTER TABLE paiements ADD CONSTRAINT check_type_paiement_valide 
         CHECK (type_paiement IN ('cash', 'cheque', 'virement', 'carte', 'compensation', 'lc', 'autre'))

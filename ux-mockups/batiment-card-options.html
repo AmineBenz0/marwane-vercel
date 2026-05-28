@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Options cartes batiment</title>
+  <style>
+    :root {
+      --ink: #102033;
+      --muted: #65758b;
+      --line: #d9e2ec;
+      --paper: #fffdf7;
+      --cream: #f8efe1;
+      --teal: #159b8f;
+      --teal-soft: #e2f5ef;
+      --orange: #f59e0b;
+      --orange-soft: #fff4dc;
+      --green: #16a34a;
+      --green-soft: #e8f7ed;
+      --blue-soft: #e9f3ff;
+      --red: #ef4444;
+      --shadow: 0 22px 60px rgba(16, 32, 51, 0.12);
+      font-family: "Trebuchet MS", "Aptos", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(21, 155, 143, 0.16), transparent 28rem),
+        linear-gradient(135deg, #f6fbf7 0%, #fff8ec 46%, #f4f7fb 100%);
+    }
+
+    .page {
+      width: min(1480px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 54px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      width: fit-content;
+      padding: 8px 12px;
+      border-radius: 999px;
+      color: #0f766e;
+      background: var(--teal-soft);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 13px;
+    }
+
+    h1 {
+      margin: 14px 0 8px;
+      font-size: clamp(34px, 5vw, 70px);
+      letter-spacing: -0.06em;
+      line-height: 0.95;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 19px;
+      line-height: 1.55;
+      max-width: 760px;
+    }
+
+    .recommendation {
+      max-width: 360px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: var(--shadow);
+    }
+
+    .recommendation strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 18px;
+    }
+
+    .recommendation span {
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .options {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .option-shell {
+      display: grid;
+      gap: 12px;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 4px;
+    }
+
+    .option-label h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.03em;
+    }
+
+    .option-label small {
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 34px;
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card.warning {
+      border-color: rgba(245, 158, 11, 0.55);
+      background:
+        radial-gradient(circle at top right, rgba(245, 158, 11, 0.11), transparent 15rem),
+        rgba(255, 252, 244, 0.92);
+    }
+
+    .card-content {
+      padding: 26px;
+    }
+
+    .topline {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .building {
+      margin: 0;
+      font-size: 30px;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .status-pill,
+    .button,
+    .ghost-button {
+      border: 0;
+      border-radius: 999px;
+      font: inherit;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .status-pill {
+      padding: 10px 14px;
+      color: #7a4300;
+      background: #fff0ce;
+      border: 1px solid rgba(245, 158, 11, 0.42);
+    }
+
+    .button {
+      min-height: 56px;
+      padding: 0 24px;
+      color: white;
+      background: var(--teal);
+      cursor: default;
+      box-shadow: 0 14px 30px rgba(21, 155, 143, 0.24);
+    }
+
+    .button.orange {
+      color: #1b1306;
+      background: var(--orange);
+      box-shadow: 0 14px 30px rgba(245, 158, 11, 0.22);
+    }
+
+    .ghost-button {
+      min-height: 54px;
+      padding: 0 20px;
+      color: var(--ink);
+      background: white;
+      border: 1px solid #cbd8e5;
+    }
+
+    .big-message {
+      margin: 32px 0 24px;
+      font-size: clamp(38px, 5vw, 64px);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+      color: #b86a00;
+      font-weight: 950;
+    }
+
+    .single-number {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: 22px 0;
+      padding: 20px;
+      border-radius: 26px;
+      background: var(--green-soft);
+    }
+
+    .single-number strong {
+      font-size: 46px;
+      letter-spacing: -0.06em;
+    }
+
+    .single-number span {
+      color: #16713c;
+      font-weight: 900;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .mini-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .mini {
+      padding: 14px;
+      border-radius: 22px;
+      background: var(--teal-soft);
+    }
+
+    .mini.warn { background: var(--orange-soft); }
+    .mini.blue { background: var(--blue-soft); }
+
+    .mini span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 950;
+    }
+
+    .mini strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 22px;
+      letter-spacing: -0.04em;
+    }
+
+    .compact-card {
+      display: grid;
+      gap: 18px;
+    }
+
+    .compact-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 18px;
+      border-radius: 26px;
+      background: var(--orange-soft);
+      border: 1px solid rgba(245, 158, 11, 0.36);
+    }
+
+    .compact-main strong {
+      display: block;
+      font-size: 21px;
+      letter-spacing: -0.03em;
+    }
+
+    .compact-main span {
+      display: block;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .balance-line {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .soft-box {
+      padding: 18px;
+      border-radius: 24px;
+      background: #f4f7fb;
+    }
+
+    .soft-box span {
+      color: var(--muted);
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    .soft-box strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 28px;
+      letter-spacing: -0.05em;
+    }
+
+    .two-level-status {
+      margin: 24px 0;
+      padding: 24px;
+      border-radius: 30px;
+      background: linear-gradient(135deg, var(--orange-soft), #fffaf0);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .two-level-status span {
+      color: #a45d00;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 950;
+      font-size: 13px;
+    }
+
+    .two-level-status strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 34px;
+      line-height: 1;
+      letter-spacing: -0.05em;
+    }
+
+    .quiet-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .quiet-meta span {
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: white;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .mobile-zone {
+      margin-top: 32px;
+      padding: 26px;
+      border-radius: 38px;
+      background: rgba(16, 32, 51, 0.06);
+      border: 1px solid rgba(16, 32, 51, 0.08);
+    }
+
+    .mobile-zone h2 {
+      margin: 0 0 16px;
+      font-size: 26px;
+      letter-spacing: -0.04em;
+    }
+
+    .phones {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 360px));
+      gap: 18px;
+    }
+
+    .phone {
+      padding: 10px;
+      border-radius: 34px;
+      background: #101827;
+      box-shadow: var(--shadow);
+    }
+
+    .phone-screen {
+      min-height: 520px;
+      padding: 14px;
+      border-radius: 26px;
+      background: #f7fafc;
+      overflow: hidden;
+    }
+
+    .phone .card-content { padding: 18px; }
+    .phone .building { font-size: 25px; }
+    .phone .sub { font-size: 15px; }
+    .phone .big-message { font-size: 42px; margin: 24px 0 18px; }
+    .phone .actions { grid-template-columns: 1fr; }
+    .phone .mini-strip { grid-template-columns: 1fr; }
+    .phone .balance-line { grid-template-columns: 1fr; }
+
+    @media (max-width: 1120px) {
+      .hero,
+      .options,
+      .phones {
+        grid-template-columns: 1fr;
+      }
+
+      .recommendation {
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        width: min(100% - 18px, 520px);
+        padding-top: 18px;
+      }
+
+      .card-content {
+        padding: 18px;
+      }
+
+      .topline,
+      .compact-main {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .actions,
+      .mini-strip,
+      .balance-line {
+        grid-template-columns: 1fr;
+      }
+
+      .button,
+      .ghost-button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">Production & stock</span>
+        <h1>Options pour les cartes bâtiment</h1>
+        <p>
+          Objectif: montrer moins de chiffres, guider l'utilisateur vers l'action utile,
+          et garder les details dans la page du bâtiment.
+        </p>
+      </div>
+      <aside class="recommendation">
+        <strong>Recommandation: Option 3</strong>
+        <span>Elle garde le bon contexte sans surcharger: statut clair, poules restantes, action principale, puis details disponibles ailleurs.</span>
+      </aside>
+    </section>
+
+    <section class="options">
+      <article class="option-shell">
+        <div class="option-label">
+          <h2>Option 1: Action d'abord</h2>
+          <small>La plus directe</small>
+        </div>
+        <div class="card warning">
+          <div class="card-content">
+            <div class="topline">
+              <div>
+                <h3 class="building">Bâtiment A</h3>
+                <div class="sub">Semaine 1/100</div>
+              </div>
+              <span class="status-pill">A saisir</span>
+            </div>
+
+            <div class="big-message">Production non saisie</div>
+
+            <div class="single-number">
+              <strong>334</strong>
+              <span>poules restantes</span>
+            </div>
+
+            <div class="actions">
+              <button class="button orange">Saisir maintenant</button>
+              <button class="ghost-button">Voir le bâtiment</button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-shell">
+        <div class="option-label">
+          <h2>Option 2: Scan rapide</h2>
+          <small>Pour comparer A/B/C</small>
+        </div>
+        <div class="card">
+          <div class="card-content compact-card">
+            <div class="topline">
+              <div>
+                <h3 class="building">Bâtiment A</h3>
+                <div class="sub">Phase elevage</div>
+              </div>
+              <button class="button orange">Saisir</button>
+            </div>
+
+            <div class="compact-main">
+              <div>
+                <strong>Production à saisir</strong>
+                <span>Aucune saisie aujourd'hui</span>
+              </div>
+              <span class="status-pill">Priorité</span>
+            </div>
+
+            <div class="mini-strip">
+              <div class="mini">
+                <span>Restantes</span>
+                <strong>334</strong>
+              </div>
+              <div class="mini warn">
+                <span>Stock</span>
+                <strong>0 oeuf</strong>
+              </div>
+              <div class="mini blue">
+                <span>Semaine</span>
+                <strong>1/100</strong>
+              </div>
+            </div>
+
+            <button class="ghost-button">Voir le détail</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="option-shell">
+        <div class="option-label">
+          <h2>Option 3: Deux niveaux</h2>
+          <small>Meilleur équilibre</small>
+        </div>
+        <div class="card warning">
+          <div class="card-content">
+            <div class="topline">
+              <div>
+                <h3 class="building">Bâtiment A</h3>
+                <div class="sub">Lot 2026-05-20</div>
+              </div>
+              <span class="status-pill">A saisir</span>
+            </div>
+
+            <div class="two-level-status">
+              <span>Action du jour</span>
+              <strong>Saisir la production</strong>
+              <div class="quiet-meta">
+                <span>334 poules restantes</span>
+                <span>Semaine 1/100</span>
+                <span>Phase elevage</span>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="button orange">Saisir</button>
+              <button class="ghost-button">Voir détails</button>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="mobile-zone">
+      <h2>Aperçu mobile</h2>
+      <div class="phones">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="card warning">
+              <div class="card-content">
+                <div class="topline">
+                  <div>
+                    <h3 class="building">Bâtiment A</h3>
+                    <div class="sub">Semaine 1/100</div>
+                  </div>
+                  <span class="status-pill">A saisir</span>
+                </div>
+                <div class="big-message">Production non saisie</div>
+                <div class="single-number"><strong>334</strong><span>poules restantes</span></div>
+                <div class="actions">
+                  <button class="button orange">Saisir maintenant</button>
+                  <button class="ghost-button">Voir le bâtiment</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="card">
+              <div class="card-content compact-card">
+                <div class="topline">
+                  <div>
+                    <h3 class="building">Bâtiment A</h3>
+                    <div class="sub">Phase elevage</div>
+                  </div>
+                  <button class="button orange">Saisir</button>
+                </div>
+                <div class="compact-main">
+                  <div>
+                    <strong>Production à saisir</strong>
+                    <span>Aucune saisie aujourd'hui</span>
+                  </div>
+                </div>
+                <div class="mini-strip">
+                  <div class="mini"><span>Restantes</span><strong>334</strong></div>
+                  <div class="mini warn"><span>Stock</span><strong>0 oeuf</strong></div>
+                  <div class="mini blue"><span>Semaine</span><strong>1/100</strong></div>
+                </div>
+                <button class="ghost-button">Voir le détail</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="card warning">
+              <div class="card-content">
+                <div class="topline">
+                  <div>
+                    <h3 class="building">Bâtiment A</h3>
+                    <div class="sub">Lot 2026-05-20</div>
+                  </div>
+                  <span class="status-pill">A saisir</span>
+                </div>
+                <div class="two-level-status">
+                  <span>Action du jour</span>
+                  <strong>Saisir la production</strong>
+                  <div class="quiet-meta">
+                    <span>334 poules restantes</span>
+                    <span>Semaine 1/100</span>
+                    <span>Phase elevage</span>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button class="button orange">Saisir</button>
+                  <button class="ghost-button">Voir détails</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

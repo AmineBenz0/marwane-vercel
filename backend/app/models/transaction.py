@@ -45,6 +45,8 @@ class Transaction(Base):
     est_actif = Column(Boolean, default=True, nullable=False)
     id_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True, index=True)
     id_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True, index=True)
+    id_batiment = Column(Integer, ForeignKey("batiments.id_batiment"), nullable=True, index=True)
+    id_cycle = Column(Integer, ForeignKey("cycles_production.id_cycle"), nullable=True, index=True)
     date_echeance = Column(Date, nullable=True, index=True)
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     date_modification = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -66,6 +68,8 @@ class Transaction(Base):
     client = relationship("Client", back_populates="transactions")
     fournisseur = relationship("Fournisseur", back_populates="transactions")
     produit = relationship("Produit", back_populates="transactions")
+    batiment = relationship("Batiment")
+    cycle = relationship("CycleProduction", back_populates="transactions")
     utilisateur_creation = relationship("Utilisateur", foreign_keys=[id_utilisateur_creation], back_populates="transactions_crees")
     utilisateur_modification = relationship("Utilisateur", foreign_keys=[id_utilisateur_modification], back_populates="transactions_modifies")
     mouvements_caisse = relationship("Caisse", back_populates="transaction")
@@ -173,4 +177,3 @@ class Transaction(Base):
             return 0.0
         
         return float((self.montant_paye / Decimal(str(self.montant_total))) * 100)
-

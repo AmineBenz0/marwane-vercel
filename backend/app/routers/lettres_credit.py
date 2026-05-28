@@ -10,9 +10,16 @@ from app.database import get_db
 from app.models.lettre_credit import LettreDeCredit
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
+from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
+from app.models.cession_lc import CessionLC
 from app.models.user import Utilisateur
 from app.schemas.lettre_credit import (
-    LettreCreditCreate, LettreCreditUpdate, LettreCreditRead, LettreCreditSummary
+    LettreCreditCreate,
+    LettreCreditPayerFournisseur,
+    LettreCreditRead,
+    LettreCreditSummary,
+    LettreCreditUpdate,
+    LettreCreditVerserBanque,
 )
 from app.utils.dependencies import get_current_active_user
 
@@ -195,3 +202,84 @@ def delete_lettre_credit(
     db.delete(lc)
     db.commit()
     return None
+
+
+def _get_active_lc_or_400(id: int, db: Session) -> LettreDeCredit:
+    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id).first()
+    if not lc:
+        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+    if lc.statut != 'active':
+        raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
+    if not lc.est_disponible:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
+        )
+    return lc
+
+
+@router.post("/{id}/verser-banque", response_model=LettreCreditRead)
+def verser_lc_banque(
+    id: int,
+    payload: LettreCreditVerserBanque,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """Verse la valeur d'une LC disponible dans un compte bancaire."""
+    lc = _get_active_lc_or_400(id, db)
+    compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == payload.id_compte).first()
+    if not compte:
+        raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
+
+    compte.solde_actuel += lc.montant
+    mouvement = MouvementBancaire(
+        id_compte=compte.id_compte,
+        montant=lc.montant,
+        type_mouvement='ENTREE',
+        source='lc',
+        reference=lc.numero_reference,
+        notes=payload.notes or f"Versement LC {lc.numero_reference}",
+    )
+    lc.statut = 'utilisee'
+    lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+
+    db.add(mouvement)
+    db.commit()
+    db.refresh(lc)
+    return format_lc_read(lc)
+
+
+@router.post("/{id}/payer-fournisseur", response_model=LettreCreditRead)
+def payer_fournisseur_lc(
+    id: int,
+    payload: LettreCreditPayerFournisseur,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """Marque une LC disponible comme utilisee pour payer un fournisseur."""
+    lc = _get_active_lc_or_400(id, db)
+    fournisseur = db.query(Fournisseur).filter(Fournisseur.id_fournisseur == payload.id_fournisseur).first()
+    if not fournisseur:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+
+    cession = CessionLC(
+        id_lc=lc.id_lc,
+        type_cedant=lc.type_detenteur,
+        id_cedant_client=lc.id_client if lc.type_detenteur == 'client' else None,
+        id_cedant_fournisseur=lc.id_fournisseur if lc.type_detenteur == 'fournisseur' else None,
+        type_cessionnaire='fournisseur',
+        id_cessionnaire_fournisseur=fournisseur.id_fournisseur,
+        date_cession=payload.date_cession,
+        motif=payload.notes or f"Paiement fournisseur par LC {lc.numero_reference}",
+        id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
+    )
+    lc.type_detenteur = 'fournisseur'
+    lc.id_client = None
+    lc.id_fournisseur = fournisseur.id_fournisseur
+    lc.statut = 'utilisee'
+    lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+
+    db.add(cession)
+    db.commit()
+    db.refresh(lc)
+    return format_lc_read(lc)

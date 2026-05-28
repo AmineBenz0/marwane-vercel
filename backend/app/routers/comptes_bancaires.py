@@ -8,7 +8,12 @@ from app.database import get_db
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.utils.dependencies import get_current_active_user
 from app.models.user import Utilisateur
-from app.schemas.compte_bancaire import CompteBancaireRead, CompteBancaireCreate, MouvementBancaireRead
+from app.schemas.compte_bancaire import (
+    CompteBancaireCreate,
+    CompteBancaireRead,
+    MouvementBancaireCreate,
+    MouvementBancaireRead,
+)
 
 from sqlalchemy import func, case
 
@@ -96,3 +101,35 @@ def create_compte(
     db.commit()
     db.refresh(new_compte)
     return new_compte
+
+
+@router.post("/{id}/mouvements", response_model=MouvementBancaireRead, status_code=status.HTTP_201_CREATED)
+def create_mouvement(
+    id: int,
+    mouvement_in: MouvementBancaireCreate,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """Ajoute une entree ou une sortie bancaire simple et met a jour le solde."""
+    compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == id).first()
+    if not compte:
+        raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
+
+    mouvement = MouvementBancaire(
+        id_compte=compte.id_compte,
+        montant=mouvement_in.montant,
+        type_mouvement=mouvement_in.type_mouvement,
+        source=mouvement_in.source,
+        reference=mouvement_in.reference,
+        notes=mouvement_in.notes,
+    )
+
+    if mouvement_in.type_mouvement == 'ENTREE':
+        compte.solde_actuel += mouvement_in.montant
+    else:
+        compte.solde_actuel -= mouvement_in.montant
+
+    db.add(mouvement)
+    db.commit()
+    db.refresh(mouvement)
+    return mouvement

@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Propositions UX - Gestion quotidienne</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #18221d;
+      --muted: #69736d;
+      --paper: #fffdf7;
+      --soft: #f3eddf;
+      --line: #ded3bd;
+      --green: #1d6f50;
+      --green-soft: #dff0e7;
+      --clay: #b66b3d;
+      --clay-soft: #f8dfcf;
+      --blue: #315f85;
+      --blue-soft: #dcecf7;
+      --shadow: 0 24px 60px rgba(55, 44, 24, .11);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: Manrope, sans-serif;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(255,255,255,.9), transparent 30%),
+        radial-gradient(circle at 90% 12%, rgba(29,111,80,.12), transparent 26%),
+        linear-gradient(135deg, #faf5ea 0%, #f1eadb 52%, #edf3ec 100%);
+      min-height: 100vh;
+    }
+
+    .page {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 56px 0;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 24px;
+      align-items: stretch;
+      margin-bottom: 24px;
+    }
+
+    .panel {
+      background: rgba(255,253,247,.86);
+      border: 1px solid rgba(222,211,189,.95);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .intro { padding: 34px; }
+
+    .eyebrow {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--green);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    h1, h2, h3 {
+      font-family: Fraunces, serif;
+      margin: 0;
+      letter-spacing: -.03em;
+    }
+
+    h1 {
+      font-size: clamp(38px, 7vw, 72px);
+      line-height: .95;
+      max-width: 760px;
+    }
+
+    p {
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.75;
+      font-size: 16px;
+    }
+
+    .summary {
+      padding: 26px;
+      display: grid;
+      gap: 14px;
+      align-content: center;
+    }
+
+    .summary-card {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 18px;
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .summary-card span {
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .option {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      min-height: 320px;
+      color: inherit;
+      text-decoration: none;
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .option:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 30px 70px rgba(55, 44, 24, .16);
+    }
+
+    .badge {
+      width: max-content;
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+
+    .badge.green { background: var(--green-soft); color: var(--green); }
+    .badge.clay { background: var(--clay-soft); color: var(--clay); }
+    .badge.blue { background: var(--blue-soft); color: var(--blue); }
+
+    .option h2 {
+      font-size: 29px;
+      line-height: 1.05;
+      margin-bottom: 10px;
+    }
+
+    .option ul {
+      margin: 18px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .open {
+      margin-top: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      padding: 13px 16px;
+      background: var(--ink);
+      color: white;
+      font-weight: 800;
+    }
+
+    .recommendation {
+      margin-top: 24px;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: var(--green);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+    }
+
+    @media (max-width: 900px) {
+      .hero, .grid, .recommendation { grid-template-columns: 1fr; }
+      .page { padding: 28px 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <article class="panel intro">
+        <span class="eyebrow">UI/UX propositions</span>
+        <h1>Simplifier sans enlever l'information.</h1>
+        <p>
+          The current app is functional but often feels like accounting software: many menus, many tables,
+          and long forms. These prototypes keep the same information while changing the order of attention:
+          first the daily decision, then the details, then the advanced tools.
+        </p>
+      </article>
+      <aside class="panel summary">
+        <div class="summary-card">
+          <strong>Design principle 1</strong>
+          <span>Put daily actions first: sell, buy, collect production, add payment, record expense.</span>
+        </div>
+        <div class="summary-card">
+          <strong>Design principle 2</strong>
+          <span>Show "what needs attention" before charts and full tables.</span>
+        </div>
+        <div class="summary-card">
+          <strong>Design principle 3</strong>
+          <span>Hide expert controls behind "More filters", "Reports", and "Advanced details".</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="grid" aria-label="Prototype options">
+      <a class="panel option" href="option-a-daily-command-center.html">
+        <span class="badge green">Option A</span>
+        <h2>Daily command center</h2>
+        <p>Best for the home/dashboard and non-technical daily operators.</p>
+        <ul>
+          <li>One-click daily actions</li>
+          <li>Simple alerts and next steps</li>
+          <li>Compact business health summary</li>
+        </ul>
+        <span class="open">Open mockup</span>
+      </a>
+
+      <a class="panel option" href="option-b-simple-registers.html">
+        <span class="badge clay">Option B</span>
+        <h2>Simple registers</h2>
+        <p>Best for list pages: transactions, caisse, clients, fournisseurs, charges, LC.</p>
+        <ul>
+          <li>Readable rows instead of dense tables</li>
+          <li>Quick tabs for common filters</li>
+          <li>Exports and advanced filters stay secondary</li>
+        </ul>
+        <span class="open">Open mockup</span>
+      </a>
+
+      <a class="panel option" href="option-c-guided-entry.html">
+        <span class="badge blue">Option C</span>
+        <h2>Guided entry flow</h2>
+        <p>Best for creating transactions, production entries, expenses, and payments.</p>
+        <ul>
+          <li>Step-by-step forms</li>
+          <li>Plain language labels</li>
+          <li>Always-visible summary before saving</li>
+        </ul>
+        <span class="open">Open mockup</span>
+      </a>
+
+      <a class="panel option" href="production-stock-ux-options.html">
+        <span class="badge green">Production</span>
+        <h2>Production stock board</h2>
+        <p>Best for daily production by building and stock tracking for non-technical users.</p>
+        <ul>
+          <li>Building-first stock cards</li>
+          <li>Produced - sold - lost formula</li>
+          <li>Quick daily entry and missing-entry alerts</li>
+        </ul>
+        <span class="open">Open mockup</span>
+      </a>
+    </section>
+
+    <section class="panel recommendation">
+      <div class="mark">1</div>
+      <div>
+        <h2>Recommended final product direction</h2>
+        <p>
+          I would combine all three: Option A as the default landing page, Option B as the reusable pattern
+          for every list/register page, and Option C as the standard pattern for add/edit flows. That gives
+          non-technical people a calm daily workflow while preserving the full accounting depth for managers.
+        </p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

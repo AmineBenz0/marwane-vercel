@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Options UI - Page Bâtiment</title>
+  <style>
+    :root {
+      --ink: #17211d;
+      --muted: #687770;
+      --line: #dfe8e3;
+      --paper: #fffdf7;
+      --wash: #f5f8f5;
+      --green: #11947f;
+      --green-soft: #e0f3ea;
+      --amber: #b86a18;
+      --amber-soft: #faead0;
+      --red: #b84c3b;
+      --red-soft: #f7dfdb;
+      --blue: #2c668d;
+      --blue-soft: #e0edf5;
+      --shadow: 0 24px 70px rgba(22, 33, 29, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(17, 148, 127, 0.12), transparent 32rem),
+        linear-gradient(135deg, #f8faf6 0%, #eef4f0 100%);
+    }
+
+    main {
+      width: min(1440px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 34px 0 60px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 {
+      max-width: 920px;
+      font-size: clamp(2.2rem, 4.5vw, 5rem);
+      letter-spacing: -0.065em;
+      line-height: 0.95;
+    }
+    .lead {
+      max-width: 780px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+
+    .tag {
+      display: inline-flex;
+      width: fit-content;
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: #0d6b5c;
+      font: 800 0.82rem Verdana, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .option {
+      margin-top: 28px;
+      padding: clamp(18px, 3vw, 32px);
+      border: 1px solid var(--line);
+      border-radius: 36px;
+      background: rgba(255, 253, 247, 0.84);
+      box-shadow: var(--shadow);
+    }
+
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 22px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .option h2 {
+      margin-top: 10px;
+      font-size: clamp(1.55rem, 2.7vw, 2.6rem);
+      letter-spacing: -0.04em;
+    }
+    .option-head p {
+      max-width: 620px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .screen {
+      border: 1px solid #dae4df;
+      border-radius: 28px;
+      background: #f8fbf8;
+      overflow: hidden;
+    }
+    .bar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.84);
+      font-family: Verdana, sans-serif;
+    }
+    .bar strong { font-size: 1.05rem; }
+    .back { color: var(--muted); font-size: 0.9rem; }
+    .content { padding: clamp(14px, 2.5vw, 26px); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 18px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .stack { display: grid; gap: 14px; }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--paper);
+      padding: 18px;
+    }
+    .hero {
+      background:
+        radial-gradient(circle at top right, rgba(17, 148, 127, 0.14), transparent 20rem),
+        #fffdf7;
+    }
+    .warning {
+      background:
+        radial-gradient(circle at top right, rgba(184, 106, 24, 0.15), transparent 15rem),
+        #fffaf0;
+      border-color: #ead2ad;
+    }
+
+    .label {
+      color: var(--muted);
+      font: 800 0.78rem Verdana, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .big {
+      margin-top: 10px;
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1;
+      letter-spacing: -0.06em;
+      font-weight: 900;
+    }
+    .helper { color: var(--muted); line-height: 1.45; margin-top: 7px; }
+
+    .pill {
+      display: inline-flex;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: #0d6b5c;
+      font: 800 0.78rem Verdana, sans-serif;
+      white-space: nowrap;
+    }
+    .pill.warn { background: var(--amber-soft); color: var(--amber); }
+    .pill.red { background: var(--red-soft); color: var(--red); }
+    .pill.blue { background: var(--blue-soft); color: var(--blue); }
+
+    .button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 18px;
+      background: var(--green);
+      color: white;
+      font: 900 0.92rem Verdana, sans-serif;
+      white-space: nowrap;
+    }
+    .button.secondary {
+      background: white;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+
+    .topline {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .progress {
+      height: 12px;
+      border-radius: 999px;
+      background: #e8eee9;
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .progress span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+    .mini {
+      border-radius: 16px;
+      background: #f5f8f5;
+      padding: 13px;
+    }
+    .mini span { display: block; color: var(--muted); font-size: 0.82rem; margin-bottom: 6px; }
+    .mini strong { font-size: 1.3rem; letter-spacing: -0.03em; }
+
+    .entry-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .field {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: white;
+    }
+    .field span { display: block; color: var(--muted); font-size: 0.82rem; margin-bottom: 8px; }
+    .field strong { font-size: 1.35rem; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 20px;
+      background: white;
+      font-family: Verdana, sans-serif;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 13px;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      background: #edf5ef;
+      color: #43544d;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .week-row td {
+      background: #fff1d9;
+      font-weight: 900;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .tab {
+      padding: 10px 13px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: white;
+      font: 900 0.86rem Verdana, sans-serif;
+    }
+    .tab.active { background: var(--green); color: white; border-color: var(--green); }
+
+    .phone {
+      max-width: 430px;
+      margin: 0 auto;
+      border: 10px solid #17211d;
+      border-radius: 38px;
+      overflow: hidden;
+      background: #f8fbf8;
+      box-shadow: var(--shadow);
+    }
+    .phone .content { padding: 14px; }
+
+    @media (max-width: 1050px) {
+      .option-head { flex-direction: column; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 680px) {
+      main { width: min(100% - 18px, 1440px); padding-top: 18px; }
+      .bar { padding: 14px; align-items: flex-start; flex-direction: column; }
+      .grid-3, .grid-4, .entry-grid { grid-template-columns: 1fr; }
+      .actions .button { width: 100%; }
+      .table-wrap { overflow-x: auto; }
+      table { min-width: 720px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="tag">Par bâtiment</span>
+    <h1>Que doit contenir une page bâtiment ?</h1>
+    <p class="lead">
+      Si `Production & stock` devient l'overview, chaque bâtiment doit devenir la page de travail:
+      lot actuel, saisie du jour, stock précis, performance, historique et exports.
+    </p>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 1 - Recommandée</span>
+          <h2>Page bâtiment guidée par priorité</h2>
+        </div>
+        <p>
+          Meilleur UX: le haut explique l'état du lot, puis le bouton principal pousse vers la saisie.
+          Les détails restent visibles mais organisés par blocs simples.
+        </p>
+      </div>
+      <div class="screen">
+        <div class="bar"><span class="back">← Production & stock</span><strong>Bâtiment 1</strong><span class="pill">Lot actif</span></div>
+        <div class="content stack">
+          <div class="grid-2">
+            <article class="card hero">
+              <div class="topline">
+                <div>
+                  <span class="label">Lot actuel</span>
+                  <h2>Lot Hissex - Semaine 47</h2>
+                  <p class="helper">Début 01/07/2025 · Fin prévue 13/01/2027 · Souche Hissex</p>
+                </div>
+                <span class="pill">OK</span>
+              </div>
+              <div class="progress"><span style="width:59%"></span></div>
+              <div class="grid-4" style="margin-top:16px">
+                <div class="mini"><span>Effectif initial</span><strong>11 846</strong></div>
+                <div class="mini"><span>Poules restantes</span><strong>11 420</strong></div>
+                <div class="mini"><span>Âge</span><strong>47 sem.</strong></div>
+                <div class="mini"><span>Ponte moy.</span><strong>88%</strong></div>
+              </div>
+              <div class="actions">
+                <button class="button">Saisir aujourd'hui</button>
+                <button class="button secondary">Modifier le lot</button>
+                <button class="button secondary">Exporter</button>
+              </div>
+            </article>
+
+            <aside class="card warning">
+              <span class="tag">Aujourd'hui</span>
+              <h2 style="margin-top:12px">Production déjà saisie</h2>
+              <p class="helper">Dernière mise à jour à 09:42. Vérifiez seulement si une valeur a changé.</p>
+              <div class="grid-3" style="margin-top:16px">
+                <div class="mini"><span>Oeufs</span><strong>3 240</strong></div>
+                <div class="mini"><span>Morts</span><strong>8</strong></div>
+                <div class="mini"><span>Réforme</span><strong>0</strong></div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="grid-3">
+            <article class="card">
+              <span class="label">Stock bâtiment</span>
+              <div class="big">6 840</div>
+              <p class="helper">Oeufs disponibles, après ventes et pertes.</p>
+              <div class="grid-3" style="margin-top:14px">
+                <div class="mini"><span>Moyen</span><strong>3 200</strong></div>
+                <div class="mini"><span>Gros</span><strong>2 410</strong></div>
+                <div class="mini"><span>Petit</span><strong>1 230</strong></div>
+              </div>
+            </article>
+            <article class="card">
+              <span class="label">Aliment</span>
+              <div class="big">15 000 kg</div>
+              <p class="helper">Formule 36-45 sem · 128 g/poule.</p>
+            </article>
+            <article class="card">
+              <span class="label">Performance</span>
+              <div class="big">88%</div>
+              <p class="helper">Ponte du jour calculée avec l'effectif du début de journée.</p>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="topline">
+              <div>
+                <h2>Table de suivi</h2>
+                <p class="helper">Vue Excel simplifiée avec ligne total/moyenne par semaine.</p>
+              </div>
+              <button class="button secondary">Exporter Excel / PDF</button>
+            </div>
+            <div class="table-wrap" style="margin-top:16px">
+              <table>
+                <thead><tr><th>Date</th><th>Âge</th><th>Mort</th><th>Réforme</th><th>Oeufs</th><th>% ponte</th><th>Formule</th><th>Aliment</th><th>Poids</th></tr></thead>
+                <tbody>
+                  <tr><td>18/05</td><td>47</td><td>8</td><td>0</td><td>3 240</td><td>88%</td><td>36-45 sem</td><td>15 000</td><td>60.4g</td></tr>
+                  <tr><td>19/05</td><td>47</td><td>6</td><td>0</td><td>3 310</td><td>89%</td><td>36-45 sem</td><td>15 000</td><td>60.6g</td></tr>
+                  <tr class="week-row"><td>Total/Moy.</td><td>47</td><td>42</td><td>0</td><td>22 710</td><td>88.7%</td><td>-</td><td>105 000</td><td>60.5g</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 2</span>
+          <h2>Page bâtiment avec onglets simples</h2>
+        </div>
+        <p>
+          Très propre si le bâtiment contient beaucoup de données. L'utilisateur choisit:
+          aujourd'hui, stock, performance ou historique.
+        </p>
+      </div>
+      <div class="screen">
+        <div class="bar"><span class="back">← Production & stock</span><strong>Bâtiment 2</strong><span class="pill warn">À saisir</span></div>
+        <div class="content">
+          <div class="card hero">
+            <div class="topline">
+              <div><span class="label">Lot IK01</span><h2>Semaine 39 · 10 910 poules restantes</h2></div>
+              <button class="button">Saisir aujourd'hui</button>
+            </div>
+          </div>
+          <div class="tabs" style="margin-top:16px">
+            <button class="tab active">Aujourd'hui</button>
+            <button class="tab">Stock</button>
+            <button class="tab">Performance</button>
+            <button class="tab">Historique</button>
+            <button class="tab">Lot</button>
+          </div>
+          <div class="grid-2">
+            <article class="card">
+              <h2>Saisie du jour</h2>
+              <p class="helper">Un formulaire court, sans choisir le cycle manuellement.</p>
+              <div class="entry-grid" style="margin-top:16px">
+                <div class="field"><span>Oeufs produits</span><strong>____</strong></div>
+                <div class="field"><span>Mortalité</span><strong>____</strong></div>
+                <div class="field"><span>Réforme</span><strong>____</strong></div>
+                <div class="field"><span>Aliment kg</span><strong>____</strong></div>
+                <div class="field"><span>Formule</span><strong>36-45 sem</strong></div>
+                <div class="field"><span>Grammage</span><strong>____ g</strong></div>
+              </div>
+            </article>
+            <aside class="card warning">
+              <h2>Pourquoi c'est demandé ?</h2>
+              <p class="helper">Ces champs alimentent automatiquement le stock, la performance, la mortalité et les exports.</p>
+              <div class="actions"><button class="button">Enregistrer</button><button class="button secondary">Annuler</button></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 3</span>
+          <h2>Page bâtiment orientée tableau Excel</h2>
+        </div>
+        <p>
+          Idéal si le client veut retrouver son habitude Excel en priorité. Plus rassurant,
+          mais moins léger pour mobile et moins guidé pour les actions du jour.
+        </p>
+      </div>
+      <div class="screen">
+        <div class="bar"><span class="back">← Production & stock</span><strong>Bâtiment 3</strong><span class="pill red">Attention</span></div>
+        <div class="content stack">
+          <div class="grid-4">
+            <div class="card"><span class="label">Lot</span><div class="big">S62</div><p class="helper">Hissex</p></div>
+            <div class="card"><span class="label">Poules</span><div class="big">9 760</div><p class="helper">Restantes</p></div>
+            <div class="card"><span class="label">Ponte</span><div class="big">76%</div><p class="helper">En baisse</p></div>
+            <div class="card"><span class="label">Stock</span><div class="big">2 120</div><p class="helper">Oeufs</p></div>
+          </div>
+          <article class="card">
+            <div class="topline">
+              <div><h2>Suivi complet du lot</h2><p class="helper">Le tableau devient la pièce principale de la page.</p></div>
+              <div class="actions" style="margin-top:0"><button class="button">Nouvelle saisie</button><button class="button secondary">Exporter</button></div>
+            </div>
+            <div class="table-wrap" style="margin-top:16px">
+              <table>
+                <thead><tr><th>Date</th><th>Âge</th><th>Réforme</th><th>Mort</th><th>% Mort/j</th><th>Oeufs</th><th>% Ponte</th><th>Formule</th><th>Aliment</th><th>g/poule</th><th>g/oeuf</th><th>Poids</th></tr></thead>
+                <tbody>
+                  <tr><td>16/05</td><td>62</td><td>0</td><td>12</td><td>0.12%</td><td>2 880</td><td>77%</td><td>46-55 sem</td><td>15 000</td><td>128</td><td>147</td><td>61.2g</td></tr>
+                  <tr><td>17/05</td><td>62</td><td>0</td><td>14</td><td>0.14%</td><td>2 810</td><td>76%</td><td>46-55 sem</td><td>15 000</td><td>129</td><td>151</td><td>61.4g</td></tr>
+                  <tr class="week-row"><td>Total/Moy.</td><td>62</td><td>0</td><td>82</td><td>0.11%</td><td>19 920</td><td>76.8%</td><td>-</td><td>105 000</td><td>128</td><td>149</td><td>61.3g</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 4</span>
+          <h2>Mobile-first bâtiment</h2>
+        </div>
+        <p>
+          La même logique que l'option 1, mais présentée comme une application téléphone:
+          priorité, saisie, chiffres utiles, puis accès au tableau.
+        </p>
+      </div>
+      <div class="phone">
+        <div class="bar"><strong>Bâtiment 1</strong><span class="pill">OK</span></div>
+        <div class="content stack">
+          <article class="card hero">
+            <span class="label">Lot actuel</span>
+            <h2>Hissex · S47</h2>
+            <p class="helper">11 420 poules restantes</p>
+            <div class="progress"><span style="width:59%"></span></div>
+            <button class="button" style="width:100%;margin-top:16px">Saisir aujourd'hui</button>
+          </article>
+          <div class="grid-3">
+            <div class="mini"><span>Oeufs</span><strong>3 240</strong></div>
+            <div class="mini"><span>Stock</span><strong>6 840</strong></div>
+            <div class="mini"><span>Ponte</span><strong>88%</strong></div>
+          </div>
+          <article class="card">
+            <h3>Saisie rapide</h3>
+            <div class="entry-grid" style="margin-top:12px">
+              <div class="field"><span>Mort</span><strong>8</strong></div>
+              <div class="field"><span>Aliment</span><strong>15t</strong></div>
+              <div class="field"><span>Poids</span><strong>60g</strong></div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="topline"><h3>Table de suivi</h3><button class="button secondary">Ouvrir</button></div>
+            <p class="helper">Le tableau complet reste accessible sans prendre toute la page mobile.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

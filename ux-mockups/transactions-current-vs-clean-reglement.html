@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transactions - Actuel vs Simplifie</title>
+  <style>
+    :root {
+      --ink: #102033;
+      --muted: #64748b;
+      --line: #dbe5ee;
+      --paper: #fffdf7;
+      --soft: #f6f8fb;
+      --green: #12977d;
+      --green-soft: #dff4ec;
+      --blue: #315f85;
+      --blue-soft: #e2eff8;
+      --orange: #c87813;
+      --orange-soft: #fff0d6;
+      --red: #b84235;
+      --red-soft: #fde7e2;
+      --shadow: 0 24px 70px rgba(16, 32, 51, 0.11);
+      font-family: "Aptos", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(18, 151, 125, 0.13), transparent 34rem),
+        linear-gradient(135deg, #f8fbfa 0%, #f1f5f9 48%, #fff7ec 100%);
+      min-height: 100vh;
+    }
+
+    .page {
+      width: min(1500px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 22px;
+    }
+
+    .eyebrow {
+      color: var(--green);
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 4.2rem);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+
+    .hero p {
+      max-width: 840px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 1.08rem;
+      line-height: 1.7;
+    }
+
+    .choice-note {
+      max-width: 420px;
+      padding: 18px;
+      border: 1px solid rgba(18, 151, 125, 0.25);
+      background: rgba(255, 255, 255, 0.74);
+      border-radius: 26px;
+      box-shadow: 0 16px 45px rgba(15, 95, 75, 0.08);
+    }
+
+    .choice-note strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 1.05rem;
+    }
+
+    .choice-note span {
+      display: block;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      margin: 22px 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+      border-radius: 28px;
+      box-shadow: 0 12px 40px rgba(16, 32, 51, 0.06);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      border: 0;
+      cursor: pointer;
+      padding: 12px 16px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: transparent;
+      font-weight: 900;
+      font-size: 0.94rem;
+    }
+
+    .tab.active {
+      color: white;
+      background: var(--ink);
+      box-shadow: 0 10px 28px rgba(16, 32, 51, 0.18);
+    }
+
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      display: inline-block;
+      border-radius: 999px;
+      margin-right: 6px;
+    }
+
+    .views {
+      display: none;
+    }
+
+    .views.active {
+      display: block;
+      animation: rise 320ms ease both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 34px;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      padding: 24px 26px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(237, 245, 239, 0.9));
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 1.35rem;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-header p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .badge.warn { color: #8a4d07; background: var(--orange-soft); }
+    .badge.good { color: #0f694f; background: var(--green-soft); }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 18px 26px;
+      background: var(--soft);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .metric {
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 22px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.28rem;
+      letter-spacing: -0.04em;
+    }
+
+    .filter-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 0 26px 20px;
+      background: var(--soft);
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--muted);
+      padding: 9px 12px;
+      border-radius: 999px;
+      font-weight: 850;
+      font-size: 0.84rem;
+    }
+
+    .pill.active {
+      color: white;
+      border-color: var(--green);
+      background: var(--green);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      padding: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.86rem;
+      min-width: 980px;
+    }
+
+    .current table { min-width: 1320px; }
+    .clean table { min-width: 1060px; }
+
+    th {
+      background: #edf5ef;
+      color: #263d3a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.68rem;
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 13px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+      white-space: nowrap;
+      background: white;
+    }
+
+    .group td {
+      background: #f7ead3;
+      color: #6f3f04;
+      font-weight: 900;
+      border-bottom: 1px solid #e7cfaa;
+    }
+
+    .total td {
+      background: #f2f8f4;
+      font-weight: 900;
+    }
+
+    .type-sale,
+    .type-buy,
+    .paid,
+    .partial,
+    .unpaid,
+    .reg-chip,
+    .tiny-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      font-weight: 900;
+    }
+
+    .type-sale { color: #0f694f; background: var(--green-soft); padding: 6px 10px; }
+    .type-buy { color: #8d342d; background: var(--red-soft); padding: 6px 10px; }
+    .paid { color: #0f694f; background: var(--green-soft); padding: 6px 10px; }
+    .partial { color: #8a4d07; background: var(--orange-soft); padding: 6px 10px; }
+    .unpaid { color: #8d342d; background: var(--red-soft); padding: 6px 10px; }
+
+    .muted { color: var(--muted); }
+    .money-in { color: #0f7b5d; font-weight: 950; }
+    .money-out { color: #b84235; font-weight: 950; }
+    .num { text-align: right; }
+
+    .partner strong,
+    .product strong {
+      display: block;
+      color: var(--ink);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .partner span,
+    .product span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-top: 3px;
+    }
+
+    .reg-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      min-width: 230px;
+    }
+
+    .reg-chip {
+      width: fit-content;
+      max-width: 310px;
+      padding: 8px 11px;
+      background: var(--blue-soft);
+      color: #194b70;
+      border: 1px solid rgba(49, 95, 133, 0.16);
+      white-space: nowrap;
+    }
+
+    .reg-chip.lc {
+      background: #f7ead3;
+      color: #7b4708;
+      border-color: #e7cfaa;
+      box-shadow: inset 0 0 0 1px rgba(200, 120, 19, 0.08);
+    }
+
+    .reg-chip.cash {
+      background: var(--green-soft);
+      color: #0f694f;
+      border-color: rgba(18, 151, 125, 0.18);
+    }
+
+    .reg-chip.missing {
+      background: var(--orange-soft);
+      color: #8a4d07;
+    }
+
+    .reg-chip small {
+      color: inherit;
+      opacity: 0.76;
+      font-weight: 900;
+    }
+
+    .tiny-stack {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      max-width: 260px;
+    }
+
+    .tiny-chip {
+      padding: 5px 8px;
+      background: #e9f1f5;
+      color: #315f85;
+      font-size: 0.75rem;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: white;
+      color: var(--ink);
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      color: white;
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .menu-dot {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: white;
+      font-weight: 950;
+    }
+
+    .mobile-preview {
+      display: grid;
+      grid-template-columns: 390px 390px;
+      gap: 26px;
+      justify-content: center;
+      align-items: start;
+      padding-top: 4px;
+    }
+
+    .phone {
+      border: 12px solid #132035;
+      border-radius: 42px;
+      background: #f6f8fb;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      min-height: 730px;
+    }
+
+    .phone-head {
+      padding: 22px 20px 14px;
+      background: white;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .phone-head h3 {
+      margin: 0;
+      font-size: 1.35rem;
+      letter-spacing: -0.04em;
+    }
+
+    .phone-head p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .phone-body {
+      padding: 14px;
+    }
+
+    .mobile-day {
+      margin-bottom: 14px;
+      padding: 12px;
+      border-radius: 22px;
+      background: #f7ead3;
+      color: #6f3f04;
+      font-weight: 950;
+    }
+
+    .mobile-card {
+      margin-bottom: 12px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: white;
+    }
+
+    .mobile-card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    .mobile-card h4 {
+      margin: 0;
+      font-size: 1.04rem;
+      letter-spacing: -0.02em;
+    }
+
+    .mobile-card p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .mobile-money {
+      font-size: 1.18rem;
+      font-weight: 950;
+      text-align: right;
+    }
+
+    .mobile-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 800;
+    }
+
+    .mobile-line strong { color: var(--ink); }
+
+    .why {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .why-card {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 16px 42px rgba(16, 32, 51, 0.06);
+    }
+
+    .why-card strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 1.02rem;
+    }
+
+    .why-card span {
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1180px) {
+      .hero,
+      .compare-grid,
+      .why {
+        grid-template-columns: 1fr;
+      }
+
+      .choice-note {
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .page {
+        width: min(100% - 18px, 1500px);
+        padding-top: 14px;
+      }
+
+      .toolbar {
+        border-radius: 22px;
+      }
+
+      .metrics {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 14px;
+      }
+
+      .panel-header {
+        padding: 18px;
+        flex-direction: column;
+      }
+
+      .filter-line {
+        padding: 0 14px 16px;
+      }
+
+      .table-wrap {
+        padding: 12px;
+      }
+
+      .mobile-preview {
+        grid-template-columns: 1fr;
+      }
+
+      .phone {
+        width: min(390px, 100%);
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Transactions</div>
+        <h1>Current layout vs clean LC-friendly layout</h1>
+        <p>
+          Objectif: garder le style registre Excel que le client comprend, mais retirer le bruit.
+          La nouvelle version garde la valeur des LC visible directement dans la table.
+        </p>
+      </div>
+      <aside class="choice-note">
+        <strong>Ma recommandation</strong>
+        <span>Une seule colonne <b>Règlement</b>: type + référence + montant. Les LC restent très visibles sans ajouter une colonne de plus.</span>
+      </aside>
+    </section>
+
+    <section class="toolbar">
+      <div class="tabs" role="tablist" aria-label="Choix de vue">
+        <button class="tab active" data-view="desktop">Desktop comparison</button>
+        <button class="tab" data-view="mobile">Mobile comparison</button>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background: var(--green)"></i>Vente</span>
+        <span><i class="dot" style="background: var(--red)"></i>Achat</span>
+        <span><i class="dot" style="background: var(--orange)"></i>LC visible</span>
+      </div>
+    </section>
+
+    <section class="views active" id="desktop">
+      <div class="compare-grid">
+        <article class="panel current">
+          <header class="panel-header">
+            <div>
+              <h2>Version actuelle</h2>
+              <p>Très complète, mais l'utilisateur doit lire deux colonnes pour comprendre le règlement.</p>
+            </div>
+            <span class="badge warn">Plus dense</span>
+          </header>
+
+          <div class="metrics">
+            <div class="metric"><span>Opérations</span><strong>15</strong></div>
+            <div class="metric"><span>Ventes</span><strong>142 783</strong></div>
+            <div class="metric"><span>Achats</span><strong>21 280</strong></div>
+            <div class="metric"><span>À suivre</span><strong>11</strong></div>
+          </div>
+
+          <div class="filter-line">
+            <span class="pill active">Tout (15)</span>
+            <span class="pill">Ventes (11)</span>
+            <span class="pill">Achats (4)</span>
+            <span class="pill">Non payées (11)</span>
+            <span class="pill">Date début</span>
+            <span class="pill">Date fin</span>
+            <span class="pill">Filtres avancés</span>
+          </div>
+
+          <div class="table-wrap">
+            <table aria-label="Version actuelle">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Client / Fournisseur</th>
+                  <th>Produit</th>
+                  <th>Bâtiment</th>
+                  <th class="num">Quantité</th>
+                  <th class="num">Prix</th>
+                  <th class="num">Total</th>
+                  <th class="num">Payé</th>
+                  <th class="num">Reste</th>
+                  <th>Type paiement</th>
+                  <th>Références</th>
+                  <th>Échéance</th>
+                  <th>Statut</th>
+                  <th class="num">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="group"><td>23/11/2025</td><td colspan="14">Journée du 23/11/2025 - 2 opérations</td></tr>
+                <tr>
+                  <td>23/11</td>
+                  <td><span class="type-sale">Vente</span></td>
+                  <td class="partner"><strong>Client Test1</strong><span>Client</span></td>
+                  <td class="product"><strong>Oeufs calibre G</strong><span>Produit vendu</span></td>
+                  <td>-</td>
+                  <td class="num">200</td>
+                  <td class="num">200 MAD</td>
+                  <td class="num money-in">+40 000 MAD</td>
+                  <td class="num">40 000 MAD</td>
+                  <td class="num">0 MAD</td>
+                  <td>
+                    <div class="tiny-stack">
+                      <span class="tiny-chip">Virement - 200 MAD</span>
+                      <span class="tiny-chip">LC - 39 800 MAD</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="tiny-stack">
+                      <span class="tiny-chip">Virement: réf. manquante</span>
+                      <span class="tiny-chip">LC: LC-2026-004</span>
+                    </div>
+                  </td>
+                  <td>-</td>
+                  <td><span class="paid">Payé</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn">Voir détails</button>
+                      <button class="btn">Modifier</button>
+                      <button class="btn">Désactiver</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td>23/11</td>
+                  <td><span class="type-sale">Vente</span></td>
+                  <td class="partner"><strong>Client Atlas</strong><span>Client</span></td>
+                  <td class="product"><strong>Oeufs calibre P</strong><span>Produit vendu</span></td>
+                  <td>Bâtiment A</td>
+                  <td class="num">90</td>
+                  <td class="num">180 MAD</td>
+                  <td class="num money-in">+16 200 MAD</td>
+                  <td class="num">6 200 MAD</td>
+                  <td class="num">10 000 MAD</td>
+                  <td><span class="tiny-chip">Espèce - 6 200 MAD</span></td>
+                  <td>-</td>
+                  <td>30/11</td>
+                  <td><span class="partial">Partiel</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn">Voir détails</button>
+                      <button class="btn">Modifier</button>
+                      <button class="btn">Désactiver</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr class="total">
+                  <td>Total jour</td>
+                  <td colspan="6">Entrées 56 200 MAD | Sorties 0 MAD</td>
+                  <td class="num money-in">+56 200 MAD</td>
+                  <td class="num">46 200 MAD</td>
+                  <td class="num">10 000 MAD</td>
+                  <td colspan="5">1 opération à suivre</td>
+                </tr>
+                <tr class="group"><td>12/11/2025</td><td colspan="14">Journée du 12/11/2025 - 2 opérations</td></tr>
+                <tr>
+                  <td>12/11</td>
+                  <td><span class="type-buy">Achat</span></td>
+                  <td class="partner"><strong>Fournisseur Nord</strong><span>Fournisseur</span></td>
+                  <td class="product"><strong>Aliment poules</strong><span>Achat</span></td>
+                  <td>-</td>
+                  <td class="num">1 000</td>
+                  <td class="num">20 MAD</td>
+                  <td class="num money-out">-20 000 MAD</td>
+                  <td class="num">0 MAD</td>
+                  <td class="num">20 000 MAD</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td><span class="unpaid">Impayé</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn">Voir détails</button>
+                      <button class="btn">Modifier</button>
+                      <button class="btn">Désactiver</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel clean">
+          <header class="panel-header">
+            <div>
+              <h2>Version proposée</h2>
+              <p>Moins de colonnes. La LC affiche toujours sa référence et son montant.</p>
+            </div>
+            <span class="badge good">Plus lisible</span>
+          </header>
+
+          <div class="metrics">
+            <div class="metric"><span>Opérations</span><strong>15</strong></div>
+            <div class="metric"><span>Entrées</span><strong>142 783</strong></div>
+            <div class="metric"><span>Sorties</span><strong>21 280</strong></div>
+            <div class="metric"><span>À suivre</span><strong>11</strong></div>
+          </div>
+
+          <div class="filter-line">
+            <span class="pill active">Tout</span>
+            <span class="pill">Entrées</span>
+            <span class="pill">Sorties</span>
+            <span class="pill">À suivre</span>
+            <span class="pill">Cette semaine</span>
+            <span class="pill">Filtres</span>
+          </div>
+
+          <div class="table-wrap">
+            <table aria-label="Version proposee">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Client / Fournisseur</th>
+                  <th>Produit</th>
+                  <th>Bâtiment</th>
+                  <th class="num">Qté</th>
+                  <th class="num">Total</th>
+                  <th class="num">Payé</th>
+                  <th class="num">Reste</th>
+                  <th>Règlement</th>
+                  <th>Statut</th>
+                  <th class="num">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="group"><td>23/11/2025</td><td colspan="10">Journée du 23/11/2025 - 2 opérations</td></tr>
+                <tr>
+                  <td>23/11</td>
+                  <td><span class="type-sale">Vente</span></td>
+                  <td class="partner"><strong>Client Test1</strong><span>Client</span></td>
+                  <td class="product"><strong>Oeufs calibre G</strong><span>Produit vendu</span></td>
+                  <td><span class="tiny-chip">Bâtiment B</span></td>
+                  <td class="num">200</td>
+                  <td class="num money-in">+40 000 MAD</td>
+                  <td class="num">40 000 MAD</td>
+                  <td class="num">0 MAD</td>
+                  <td>
+                    <div class="reg-stack">
+                      <span class="reg-chip">Virement <small>réf. manquante</small> · 200 MAD</span>
+                      <span class="reg-chip lc">LC LC-2026-004 · 39 800 MAD</span>
+                    </div>
+                  </td>
+                  <td><span class="paid">Payé</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn primary">Voir</button>
+                      <button class="menu-dot">...</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td>23/11</td>
+                  <td><span class="type-sale">Vente</span></td>
+                  <td class="partner"><strong>Client Atlas</strong><span>Client</span></td>
+                  <td class="product"><strong>Oeufs calibre P</strong><span>Produit vendu</span></td>
+                  <td><span class="tiny-chip">Bâtiment A</span></td>
+                  <td class="num">90</td>
+                  <td class="num money-in">+16 200 MAD</td>
+                  <td class="num">6 200 MAD</td>
+                  <td class="num">10 000 MAD</td>
+                  <td><span class="reg-chip cash">Espèce · 6 200 MAD</span></td>
+                  <td><span class="partial">Partiel</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn primary">Voir</button>
+                      <button class="menu-dot">...</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr class="total">
+                  <td>Total jour</td>
+                  <td colspan="5">Entrées 56 200 MAD | Sorties 0 MAD</td>
+                  <td class="num money-in">+56 200 MAD</td>
+                  <td class="num">46 200 MAD</td>
+                  <td class="num">10 000 MAD</td>
+                  <td colspan="3">1 opération à suivre</td>
+                </tr>
+                <tr class="group"><td>12/11/2025</td><td colspan="10">Journée du 12/11/2025 - 2 opérations</td></tr>
+                <tr>
+                  <td>12/11</td>
+                  <td><span class="type-buy">Achat</span></td>
+                  <td class="partner"><strong>Fournisseur Nord</strong><span>Fournisseur</span></td>
+                  <td class="product"><strong>Aliment poules</strong><span>Achat</span></td>
+                  <td class="muted">-</td>
+                  <td class="num">1 000</td>
+                  <td class="num money-out">-20 000 MAD</td>
+                  <td class="num">0 MAD</td>
+                  <td class="num">20 000 MAD</td>
+                  <td><span class="muted">Aucun règlement</span></td>
+                  <td><span class="unpaid">Impayé</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn primary">Voir</button>
+                      <button class="menu-dot">...</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+
+      <div class="why">
+        <div class="why-card">
+          <strong>Ce qu'on gagne</strong>
+          <span>La table répond plus vite: qui, quoi, combien, payé ou non, et avec quel règlement.</span>
+        </div>
+        <div class="why-card">
+          <strong>Ce qu'on garde</strong>
+          <span>Le format Excel par jour, les totaux journaliers, et la valeur exacte de chaque LC.</span>
+        </div>
+        <div class="why-card">
+          <strong>Ce qu'on retire</strong>
+          <span>Les colonnes vides ou secondaires en lecture rapide: bâtiment vide, référence séparée, trop d'actions.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="views" id="mobile">
+      <div class="mobile-preview">
+        <article class="phone">
+          <div class="phone-head">
+            <h3>Actuel mobile</h3>
+            <p>La table reste complète, donc l'utilisateur doit glisser beaucoup horizontalement.</p>
+          </div>
+          <div class="phone-body">
+            <div class="table-wrap" style="padding: 0;">
+              <table aria-label="Mobile actuel" style="min-width: 1120px;">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Type</th><th>Client</th><th>Produit</th><th>Qté</th><th>Total</th><th>Payé</th><th>Type paiement</th><th>Réf.</th><th>Statut</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="group"><td>23/11</td><td colspan="10">Journée du 23/11</td></tr>
+                  <tr>
+                    <td>23/11</td><td><span class="type-sale">Vente</span></td><td>Client Test1</td><td>Oeufs G</td><td>200</td><td>40 000</td><td>40 000</td><td>Virement + LC</td><td>LC-2026-004</td><td><span class="paid">Payé</span></td><td>Voir Modifier Désactiver</td>
+                  </tr>
+                  <tr>
+                    <td>23/11</td><td><span class="type-sale">Vente</span></td><td>Client Atlas</td><td>Oeufs P</td><td>90</td><td>16 200</td><td>6 200</td><td>Espèce</td><td>-</td><td><span class="partial">Partiel</span></td><td>Voir Modifier Désactiver</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
+        <article class="phone">
+          <div class="phone-head">
+            <h3>Proposé mobile</h3>
+            <p>Cartes par journée. La LC affiche son montant sans scroll horizontal.</p>
+          </div>
+          <div class="phone-body">
+            <div class="mobile-day">23/11/2025 · 2 opérations · +56 200 MAD</div>
+
+            <div class="mobile-card">
+              <div class="mobile-card-top">
+                <div>
+                  <h4>Client Test1</h4>
+                  <p>Oeufs calibre G · 200 unités</p>
+                </div>
+                <div class="mobile-money money-in">+40 000 MAD</div>
+              </div>
+              <div class="reg-stack">
+                <span class="reg-chip">Virement · 200 MAD</span>
+                <span class="reg-chip lc">LC LC-2026-004 · 39 800 MAD</span>
+              </div>
+              <div class="mobile-line"><span>Reste</span><strong>0 MAD</strong></div>
+              <div class="mobile-line"><span>Statut</span><strong>Payé</strong></div>
+              <button class="btn primary" style="width: 100%; margin-top: 12px;">Voir la transaction</button>
+            </div>
+
+            <div class="mobile-card">
+              <div class="mobile-card-top">
+                <div>
+                  <h4>Client Atlas</h4>
+                  <p>Oeufs calibre P · Bâtiment A</p>
+                </div>
+                <div class="mobile-money money-in">+16 200 MAD</div>
+              </div>
+              <span class="reg-chip cash">Espèce · 6 200 MAD</span>
+              <div class="mobile-line"><span>Reste</span><strong>10 000 MAD</strong></div>
+              <div class="mobile-line"><span>Statut</span><strong>Partiel</strong></div>
+              <button class="btn primary" style="width: 100%; margin-top: 12px;">Voir la transaction</button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const views = document.querySelectorAll('.views');
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.view;
+        tabs.forEach((item) => item.classList.toggle('active', item === tab));
+        views.forEach((view) => view.classList.toggle('active', view.id === target));
+      });
+    });
+  </script>
+</body>
+</html>

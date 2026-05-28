@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Option C - Guided Entry Flow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #17211d;
+      --muted: #69736d;
+      --bg: #f6efe4;
+      --paper: #fffdf8;
+      --line: #ded2bd;
+      --green: #1d6f50;
+      --green-soft: #e0f1e7;
+      --red: #a84435;
+      --red-soft: #f8ded9;
+      --amber: #a96522;
+      --amber-soft: #f8e8cc;
+      --blue: #315f85;
+      --blue-soft: #dcecf7;
+      --shadow: 0 24px 60px rgba(55, 44, 24, .11);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Manrope, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 0, rgba(255,255,255,.9), transparent 28%),
+        radial-gradient(circle at 92% 10%, rgba(49,95,133,.14), transparent 24%),
+        linear-gradient(145deg, #fbf6ee, var(--bg));
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 54px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+
+    h1, h2, h3 {
+      font-family: Fraunces, serif;
+      margin: 0;
+      letter-spacing: -.03em;
+    }
+
+    h1 { font-size: clamp(38px, 6vw, 64px); line-height: .95; }
+
+    p {
+      margin: 12px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 680px;
+    }
+
+    .ghost {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 16px;
+      padding: 13px 16px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .panel {
+      background: rgba(255,253,248,.92);
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, white, #faf3e7);
+    }
+
+    .step {
+      padding: 18px;
+      border-right: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .step:last-child { border-right: 0; }
+
+    .step strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 3px;
+    }
+
+    .step.active {
+      background: var(--green);
+      color: rgba(255,255,255,.78);
+    }
+
+    .step.active strong { color: white; }
+
+    .form {
+      padding: 24px;
+      display: grid;
+      gap: 22px;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 24px;
+      padding: 20px;
+    }
+
+    .section h2 {
+      font-size: 27px;
+      margin-bottom: 12px;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .choice {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 17px;
+      background: #fffdf8;
+    }
+
+    .choice.active {
+      border-color: var(--green);
+      background: var(--green-soft);
+      box-shadow: inset 0 0 0 1px rgba(29,111,80,.25);
+    }
+
+    .choice strong {
+      display: block;
+      font-size: 16px;
+    }
+
+    .choice span {
+      display: block;
+      color: var(--muted);
+      margin-top: 5px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 13px;
+      margin-top: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 900;
+    }
+
+    .input {
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      border-radius: 16px;
+      padding: 14px;
+      min-height: 49px;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .line {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px;
+      background: #fffaf1;
+      margin-top: 12px;
+    }
+
+    .line-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 7px 10px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .add-line {
+      border: 1px dashed var(--green);
+      color: var(--green);
+      background: var(--green-soft);
+      border-radius: 18px;
+      padding: 14px;
+      font-weight: 900;
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    .summary {
+      position: sticky;
+      top: 18px;
+      padding: 22px;
+    }
+
+    .summary h2 { font-size: 28px; }
+
+    .total {
+      margin: 18px 0;
+      border-radius: 24px;
+      padding: 20px;
+      background: var(--green-soft);
+      border: 1px solid rgba(29,111,80,.22);
+    }
+
+    .total span {
+      display: block;
+      color: var(--green);
+      font-weight: 900;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .total strong {
+      display: block;
+      margin-top: 6px;
+      color: var(--green);
+      font-size: 34px;
+      letter-spacing: -.04em;
+    }
+
+    .checklist {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0 20px;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: start;
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 17px;
+      padding: 13px;
+    }
+
+    .tick {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--green);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    .check strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    .check span {
+      display: block;
+      color: var(--muted);
+      margin-top: 2px;
+      font-size: 12px;
+    }
+
+    .save {
+      border: 0;
+      background: var(--ink);
+      color: white;
+      width: 100%;
+      border-radius: 18px;
+      padding: 15px;
+      font-weight: 900;
+      font-size: 15px;
+    }
+
+    .secondary {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      width: 100%;
+      border-radius: 18px;
+      padding: 14px;
+      font-weight: 900;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 980px) {
+      .header, .layout { grid-template-columns: 1fr; display: grid; }
+      .steps, .choice-grid, .field-grid { grid-template-columns: 1fr; }
+      .summary { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1>Créer une vente</h1>
+        <p>
+          Long modals are risky for non-technical users. This pattern turns the same transaction fields into
+          a guided flow with plain labels, visible totals, and a final check before saving.
+        </p>
+      </div>
+      <button class="ghost">Annuler et revenir</button>
+    </header>
+
+    <section class="layout">
+      <article class="panel">
+        <div class="steps">
+          <div class="step active"><strong>1. Type</strong><span>Vente ou achat</span></div>
+          <div class="step"><strong>2. Partenaire</strong><span>Client/fournisseur</span></div>
+          <div class="step"><strong>3. Produits</strong><span>Quantités/prix</span></div>
+          <div class="step"><strong>4. Paiement</strong><span>Maintenant ou plus tard</span></div>
+        </div>
+
+        <div class="form">
+          <section class="section">
+            <h2>Que se passe-t-il ?</h2>
+            <div class="choice-grid">
+              <div class="choice active">
+                <strong>Je vends à un client</strong>
+                <span>Argent qui entre, créance si non payé.</span>
+              </div>
+              <div class="choice">
+                <strong>J'achète chez un fournisseur</strong>
+                <span>Argent qui sort, dette si non payé.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Informations principales</h2>
+            <div class="field-grid">
+              <div class="field">
+                <label>Date</label>
+                <div class="input">08/05/2026</div>
+              </div>
+              <div class="field">
+                <label>Client</label>
+                <div class="input">Ferme Atlas Distribution</div>
+              </div>
+              <div class="field full">
+                <label>Échéance si non payé</label>
+                <div class="input">15/05/2026 ou laisser vide</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Produits vendus</h2>
+            <div class="line">
+              <div class="line-head">
+                <strong>Ligne 1</strong>
+                <span class="pill">Total: 7 560 MAD</span>
+              </div>
+              <div class="field-grid">
+                <div class="field full">
+                  <label>Produit</label>
+                  <div class="input">Oeufs - Moyen</div>
+                </div>
+                <div class="field">
+                  <label>Quantité</label>
+                  <div class="input">18 cartons</div>
+                </div>
+                <div class="field">
+                  <label>Prix unitaire</label>
+                  <div class="input">420 MAD</div>
+                </div>
+              </div>
+            </div>
+            <button class="add-line">Ajouter un autre produit</button>
+          </section>
+
+          <section class="section">
+            <h2>Paiement</h2>
+            <div class="choice-grid">
+              <div class="choice active">
+                <strong>Payé maintenant</strong>
+                <span>Le mouvement caisse sera créé automatiquement.</span>
+              </div>
+              <div class="choice">
+                <strong>À payer plus tard</strong>
+                <span>Une créance client sera visible dans les alertes.</span>
+              </div>
+            </div>
+            <div class="field-grid">
+              <div class="field">
+                <label>Mode</label>
+                <div class="input">Espèces</div>
+              </div>
+              <div class="field">
+                <label>Montant encaissé</label>
+                <div class="input">7 560 MAD</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+
+      <aside class="panel summary">
+        <h2>Résumé avant validation</h2>
+        <p>Users should never save a complex operation without seeing the business consequence in plain language.</p>
+        <div class="total">
+          <span>Total vente</span>
+          <strong>7 560 MAD</strong>
+        </div>
+        <div class="checklist">
+          <div class="check">
+            <div class="tick">✓</div>
+            <div><strong>Transaction créée</strong><span>Client: Ferme Atlas Distribution.</span></div>
+          </div>
+          <div class="check">
+            <div class="tick">✓</div>
+            <div><strong>Caisse mise à jour</strong><span>Entrée de 7 560 MAD.</span></div>
+          </div>
+          <div class="check">
+            <div class="tick">✓</div>
+            <div><strong>Statut paiement</strong><span>Marqué comme payé.</span></div>
+          </div>
+        </div>
+        <button class="save">Valider la vente</button>
+        <button class="secondary">Enregistrer en brouillon</button>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

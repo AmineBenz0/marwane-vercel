@@ -1,14 +1,3 @@
-/**
- * Composant Badge pour afficher le statut de paiement d'une transaction.
- * 
- * Affiche un badge coloré selon le statut :
- * - 'surpaye' → Bleu "Surpayé"
- * - 'paye' → Vert "Payé"
- * - 'partiel' → Orange "Partiel"
- * - 'impaye' → Gris "Impayé"
- * - 'en_retard' → Rouge "EN RETARD"
- */
-
 import React from 'react';
 import { Chip } from '@mui/material';
 import {
@@ -19,9 +8,6 @@ import {
   TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 
-/**
- * Configuration des statuts de paiement.
- */
 const PAYMENT_STATUS_CONFIG = {
   surpaye: {
     label: 'Surpayé',
@@ -44,36 +30,35 @@ const PAYMENT_STATUS_CONFIG = {
     icon: WarningIcon,
   },
   en_retard: {
-    label: 'EN RETARD',
+    label: 'En retard',
     color: 'error',
     icon: ErrorIcon,
   },
 };
 
-/**
- * Composant PaymentStatusBadge.
- * 
- * @param {Object} props
- * @param {string} props.statut - Statut du paiement (paye, partiel, impaye, en_retard)
- * @param {boolean} [props.showIcon=true] - Afficher l'icône
- * @param {string} [props.size='small'] - Taille du badge (small, medium)
- */
-function PaymentStatusBadge({ statut, showIcon = true, size = 'small' }) {
+function PaymentStatusBadge({
+  statut,
+  showIcon = false,
+  size = 'small',
+  variant,
+}) {
   const config = PAYMENT_STATUS_CONFIG[statut] || PAYMENT_STATUS_CONFIG.impaye;
   const IconComponent = config.icon;
+  const needsAttention = statut === 'en_retard' || statut === 'impaye';
 
   return (
     <Chip
       label={config.label}
       color={config.color}
       size={size}
+      variant={variant || (needsAttention ? 'filled' : 'outlined')}
       icon={showIcon ? <IconComponent /> : undefined}
       sx={{
-        fontWeight: statut === 'en_retard' ? 'bold' : 'medium',
+        fontWeight: needsAttention ? 700 : 500,
+        height: size === 'small' ? 24 : undefined,
       }}
     />
   );
 }
 
 export default PaymentStatusBadge;
-

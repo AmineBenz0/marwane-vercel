@@ -14,6 +14,7 @@ from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.transaction import Transaction
 from app.models.paiement import Paiement
+from app.models.lettre_credit import LettreDeCredit
 from app.schemas.caisse import (
     MouvementCaisseRead,
     SoldeCaisseRead,
@@ -24,6 +25,15 @@ from app.utils.dependencies import get_current_active_user
 from app.models.user import Utilisateur
 
 router = APIRouter(prefix="/caisse", tags=["Caisse"])
+
+
+def _get_lc_disponibles_total(db: Session) -> Decimal:
+    """Valeur des LC actives et utilisables aujourd'hui, comptees comme caisse."""
+    total = db.query(func.coalesce(func.sum(LettreDeCredit.montant), 0)).filter(
+        LettreDeCredit.statut == 'active',
+        LettreDeCredit.date_disponibilite <= date.today()
+    ).scalar() or Decimal('0.00')
+    return Decimal(str(total))
 
 
 @router.get("/mouvements", response_model=List[MouvementCaisseRead], status_code=status.HTTP_200_OK)
@@ -123,8 +133,10 @@ def get_solde(
         Transaction.est_actif == True
     ).scalar() or Decimal('0.00')
     
-    # Calculer le solde théorique
-    solde_theorique = Decimal(str(entrees)) - Decimal(str(sorties))
+    lc_disponibles = _get_lc_disponibles_total(db)
+
+    # Calculer le solde théorique avec les LC disponibles comptées directement.
+    solde_theorique = Decimal(str(entrees)) - Decimal(str(sorties)) + lc_disponibles
     
     # Récupérer la date de la dernière transaction active
     derniere_maj = db.query(func.max(Transaction.date_transaction)).filter(
@@ -181,7 +193,10 @@ def get_solde_complet(
         Transaction.est_actif == True
     ).scalar() or Decimal('0.00')
     
-    solde_theorique = Decimal(str(entrees_theoriques)) - Decimal(str(sorties_theoriques))
+    lc_disponibles = _get_lc_disponibles_total(db)
+    entrees_theoriques = Decimal(str(entrees_theoriques)) + lc_disponibles
+    sorties_theoriques = Decimal(str(sorties_theoriques))
+    solde_theorique = entrees_theoriques - sorties_theoriques
     
     # Date du dernier mouvement (transaction)
     derniere_maj_transaction = db.query(func.max(Transaction.date_transaction)).filter(
@@ -191,7 +206,7 @@ def get_solde_complet(
     # ==================== SOLDE RÉEL ====================
     # Basé sur les mouvements de caisse enregistrés (Paiements effectifs)
     
-    entrees_reelles = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
+    entrees_reelles_mouvements = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
         Caisse.type_mouvement == 'ENTREE',
@@ -208,7 +223,8 @@ def get_solde_complet(
         )
     ).scalar() or Decimal('0.00')
     
-    solde_reel = Decimal(str(entrees_reelles)) - Decimal(str(sorties_reelles))
+    entrees_reelles = Decimal(str(entrees_reelles_mouvements)) + lc_disponibles
+    solde_reel = entrees_reelles - Decimal(str(sorties_reelles))
     
     # Date du dernier paiement/mouvement
     derniere_maj_paiement = db.query(func.max(Caisse.date_mouvement)).scalar()
@@ -218,16 +234,16 @@ def get_solde_complet(
     ecart = solde_theorique - solde_reel
     
     # Créances clients = Transactions clients - Paiements clients
-    creances_clients = Decimal(str(entrees_theoriques)) - Decimal(str(entrees_reelles))
-    
+    creances_clients = entrees_theoriques - entrees_reelles
+
     # Dettes fournisseurs = Transactions fournisseurs - Paiements fournisseurs
-    dettes_fournisseurs = Decimal(str(sorties_theoriques)) - Decimal(str(sorties_reelles))
+    dettes_fournisseurs = sorties_theoriques - Decimal(str(sorties_reelles))
     
     return SoldeCaisseCompletRead(
         # Solde théorique
         solde_theorique=solde_theorique,
-        entrees_theoriques=Decimal(str(entrees_theoriques)),
-        sorties_theoriques=Decimal(str(sorties_theoriques)),
+        entrees_theoriques=entrees_theoriques,
+        sorties_theoriques=sorties_theoriques,
         
         # Solde réel
         solde_reel=solde_reel,

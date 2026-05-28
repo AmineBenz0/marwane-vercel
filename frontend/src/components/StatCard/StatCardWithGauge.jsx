@@ -5,7 +5,7 @@
  * Conçue pour s'intégrer dans la grille des StatCard existantes.
  */
 import React from 'react';
-import { Card, CardContent, Box, Typography, Chip, useTheme, useMediaQuery, CircularProgress } from '@mui/material';
+import { Card, CardContent, Box, Typography, useTheme, useMediaQuery, CircularProgress } from '@mui/material';
 
 const CircularGauge = ({ value, size = 110, strokeWidth = 10, color }) => {
   const normalized = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
@@ -72,12 +72,9 @@ function StatCardWithGauge({ title = 'Score', score = 0, label = '', color = 'pr
             {title}
           </Typography>
           {label ? (
-            <Chip
-              label={label}
-              color={color}
-              size="small"
-              sx={{ height: 22, borderRadius: 1.5, fontWeight: 600 }}
-            />
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+              {label}
+            </Typography>
           ) : null}
         </Box>
 

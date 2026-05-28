@@ -21,3 +21,4 @@ class Batiment(Base):
     
     # Relation avec la production
     productions = relationship("Production", back_populates="batiment", cascade="all, delete-orphan")
+    cycles_production = relationship("CycleProduction", back_populates="batiment")

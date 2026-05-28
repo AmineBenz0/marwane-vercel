@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Snackbar, Alert, IconButton, Button } from '@mui/material';
+import { Snackbar, Alert, IconButton, Button, useTheme } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import useNotificationStore from '../../store/notificationStore';
 
@@ -22,6 +22,7 @@ import useNotificationStore from '../../store/notificationStore';
  * Doit être placé à la racine de l'application (dans App.jsx).
  */
 function NotificationProvider({ children }) {
+  const theme = useTheme();
   const { notifications, removeNotification } = useNotificationStore();
   const [currentNotification, setCurrentNotification] = useState(null);
 

@@ -16,7 +16,9 @@ echo "✅ PostgreSQL is ready!"
 # Run Alembic migrations
 echo ""
 echo "🔄 Running database migrations..."
-alembic upgrade head
+# This repo currently has multiple Alembic heads, so applying all heads keeps
+# container startup aligned with local development until the branches are merged.
+alembic upgrade heads
 echo "✅ Migrations applied successfully!"
 
 # Create admin user if not exists

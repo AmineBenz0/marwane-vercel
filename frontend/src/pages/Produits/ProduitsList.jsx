@@ -1,209 +1,197 @@
-/**
- * Page Liste Produits.
- * 
- * Affiche la liste des produits avec :
- * - DataGrid pour l'affichage tabulaire
- * - Filtres : recherche par nom, est_actif
- * - Actions : créer, éditer, supprimer (soft delete)
- * - Pagination
- */
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
-  Typography,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
+  Card,
+  CardContent,
   Chip,
-  useTheme,
+  CircularProgress,
+  InputAdornment,
+  Stack,
+  TextField,
+  Typography,
   useMediaQuery,
-  Divider,
+  useTheme,
 } from '@mui/material';
-import { Add as AddIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
-import DataGrid from '../../components/DataGrid/DataGrid';
-import MobileCardList from '../../components/MobileCardList/MobileCardList';
-import ProduitForm from './ProduitForm';
-import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
-import { get, post, put, patch, del } from '../../services/api';
-import { exportToExcelAdvanced } from '../../utils/exportToExcel';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  FileDownload as FileDownloadIcon,
+  Search as SearchIcon,
+  Visibility as VisibilityIcon,
+} from '@mui/icons-material';
 import { format } from 'date-fns';
-import useNotification from '../../hooks/useNotification';
+import ProduitForm from './ProduitForm';
+import { get, post, put } from '../../services/api';
+import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 
-/**
- * Composant ProduitsList.
- */
+const formatMoney = (value, maximumFractionDigits = 2) => {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'MAD',
+    maximumFractionDigits,
+  }).format(amount);
+};
+
+const formatDate = (value) => {
+  if (!value) return 'Aucun achat';
+  return new Intl.DateTimeFormat('fr-FR').format(new Date(value));
+};
+
+const pluralize = (count, singular, plural = `${singular}s`) => (
+  count > 1 ? plural : singular
+);
+
 function ProduitsList() {
-  // Hook pour les notifications
-  const notification = useNotification();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // État pour les produits
   const [produits, setProduits] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [fournisseurs, setFournisseurs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [search, setSearch] = useState('');
 
-  // État pour la modal de création/édition
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduit, setEditingProduit] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
-  // État pour la confirmation de suppression
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [produitToDelete, setProduitToDelete] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  // État pour les filtres (objet unique)
-  const [filters, setFilters] = useState({
-    nom: '',
-    estActif: '',
-  });
-
-  /**
-   * Gestion des filtres.
-   */
-  const handleFilterChange = (filterId, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterId]: value,
-    }));
-  };
-
-  const handleClearAllFilters = () => {
-    setFilters({
-      nom: '',
-      estActif: '',
+  const fournisseursMap = useMemo(() => {
+    const map = new Map();
+    fournisseurs.forEach((fournisseur) => {
+      map.set(fournisseur.id_fournisseur, fournisseur.nom_fournisseur);
     });
-  };
+    return map;
+  }, [fournisseurs]);
 
-  /**
-   * Définitions des filtres pour SmartFilterPanel.
-   */
-  const filterDefinitions = useMemo(() => [
-    {
-      id: 'nom',
-      label: 'Rechercher par nom',
-      type: 'search',
-      placeholder: 'Nom du produit...',
-      alwaysInline: true, // Toujours visible
-    },
-    {
-      id: 'estActif',
-      label: 'Statut',
-      type: 'select',
-      alwaysInline: true, // Toujours visible
-      options: [
-        { value: 'true', label: 'Actifs' },
-        { value: 'false', label: 'Inactifs' },
-      ],
-      formatChipValue: (value) => (value === 'true' ? 'Actifs' : 'Inactifs'),
-    },
-  ], []);
+  const productInsights = useMemo(() => {
+    const map = new Map();
 
-  /**
-   * Charge la liste des produits depuis l'API.
-   */
-  const fetchProduits = async () => {
+    transactions
+      .filter((transaction) => transaction.id_fournisseur !== null && transaction.id_fournisseur !== undefined)
+      .forEach((transaction) => {
+        const current = map.get(transaction.id_produit) || {
+          suppliers: new Set(),
+          purchases: 0,
+          quantity: 0,
+          total: 0,
+          lastPurchase: null,
+        };
+
+        current.suppliers.add(transaction.id_fournisseur);
+        current.purchases += 1;
+        current.quantity += Number(transaction.quantite || 0);
+        current.total += Number(transaction.montant_total || 0);
+
+        if (
+          !current.lastPurchase ||
+          new Date(transaction.date_transaction) > new Date(current.lastPurchase.date_transaction)
+        ) {
+          current.lastPurchase = transaction;
+        }
+
+        map.set(transaction.id_produit, current);
+      });
+
+    return map;
+  }, [transactions]);
+
+  const filteredProduits = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    if (!normalizedSearch) return produits;
+
+    return produits.filter((produit) => (
+      produit.nom_produit?.toLowerCase().includes(normalizedSearch)
+    ));
+  }, [produits, search]);
+
+  const fetchData = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      // Construire les paramètres de requête
-      const params = {};
-      if (filters.nom.trim()) {
-        params.recherche = filters.nom.trim();
-      }
-      if (filters.estActif !== '') {
-        params.est_actif = filters.estActif === 'true';
-      }
+      const [produitsData, transactionsData, fournisseursData] = await Promise.all([
+        get('/produits', {
+          params: {
+            type_produit: 'matiere_premiere',
+            est_actif: true,
+            limit: 1000,
+          },
+        }),
+        get('/transactions', {
+          params: {
+            est_actif: true,
+            limit: 5000,
+          },
+        }),
+        get('/fournisseurs', {
+          params: {
+            est_actif: true,
+            limit: 1000,
+          },
+        }),
+      ]);
 
-      // Récupérer tous les produits (on peut augmenter la limite si nécessaire)
-      const data = await get('/produits', {
-        params: {
-          ...params,
-          limit: 1000, // Limite élevée pour récupérer tous les produits
-        },
-      });
-
-      setProduits(data || []);
+      setProduits(produitsData || []);
+      setTransactions(transactionsData || []);
+      setFournisseurs(fournisseursData || []);
     } catch (err) {
       console.error('Erreur lors du chargement des produits:', err);
-      setError(
-        err?.message || 'Une erreur est survenue lors du chargement des produits'
-      );
+      setError(err?.message || 'Une erreur est survenue lors du chargement des produits');
     } finally {
       setLoading(false);
     }
   };
 
-  // Charger les produits au montage et lorsque les filtres changent
   useEffect(() => {
-    fetchProduits();
-  }, [filters]);
+    fetchData();
+  }, []);
 
-  /**
-   * Gère l'ouverture de la modal pour créer un nouveau produit.
-   */
   const handleCreate = () => {
     setEditingProduit(null);
     setFormError(null);
     setModalOpen(true);
   };
 
-  /**
-   * Gère l'ouverture de la modal pour éditer un produit existant.
-   */
   const handleEdit = (produit) => {
     setEditingProduit(produit);
     setFormError(null);
     setModalOpen(true);
   };
 
-  /**
-   * Gère la soumission du formulaire (création ou édition).
-   */
+  const handleViewDetails = (produit) => {
+    navigate(`/produits/${produit.id_produit}`);
+  };
+
   const handleSubmit = async (data) => {
     setFormLoading(true);
     setFormError(null);
 
     try {
       if (editingProduit) {
-        // Mode édition : PUT
         await put(`/produits/${editingProduit.id_produit}`, data);
       } else {
-        // Mode création : POST
         await post('/produits', data);
       }
 
-      // Fermer la modal et rafraîchir la liste
       setModalOpen(false);
       setEditingProduit(null);
-      await fetchProduits();
+      await fetchData();
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
-      // Gérer les erreurs d'unicité du backend
-      if (err?.status === 400 && err?.message?.includes('existe déjà')) {
-        setFormError(err.message);
-      } else {
-        setFormError(
-          err?.message || 'Une erreur est survenue lors de l\'enregistrement'
-        );
-      }
-      throw err; // Re-throw pour que ModalForm puisse gérer les erreurs de validation
+      setFormError(err?.message || "Une erreur est survenue lors de l'enregistrement");
+      throw err;
     } finally {
       setFormLoading(false);
     }
   };
 
-  /**
-   * Gère la fermeture de la modal.
-   */
   const handleCloseModal = () => {
     if (!formLoading) {
       setModalOpen(false);
@@ -212,302 +200,159 @@ function ProduitsList() {
     }
   };
 
-  /**
-   * Gère le clic sur le bouton de suppression.
-   */
-  const handleDeleteClick = (produit) => {
-    setProduitToDelete(produit);
-    setDeleteDialogOpen(true);
-  };
-
-  /**
-   * Gère la confirmation de suppression.
-   */
-  const handleDeleteConfirm = async () => {
-    if (!produitToDelete) return;
-
-    setDeleteLoading(true);
-
-    try {
-      // Appeler l'API pour supprimer (soft delete)
-      await del(`/produits/${produitToDelete.id_produit}`);
-
-      // Fermer le dialogue et rafraîchir la liste
-      setDeleteDialogOpen(false);
-      setProduitToDelete(null);
-      await fetchProduits();
-    } catch (err) {
-      console.error('Erreur lors de la suppression:', err);
-      setError(
-        err?.message || 'Une erreur est survenue lors de la suppression'
-      );
-      setDeleteDialogOpen(false);
-      setProduitToDelete(null);
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  /**
-   * Gère l'annulation de la suppression.
-   */
-  const handleDeleteCancel = () => {
-    setDeleteDialogOpen(false);
-    setProduitToDelete(null);
-  };
-
-  /**
-   * Gère la réactivation d'un produit.
-   */
-  const handleReactivate = async (produit) => {
-    try {
-      // Appeler l'API pour réactiver (PATCH)
-      await patch(`/produits/${produit.id_produit}/reactivate`, {});
-      
-      // Rafraîchir la liste
-      await fetchProduits();
-      
-      // Notification de succès
-      notification.success('Produit réactivé avec succès');
-    } catch (err) {
-      console.error('Erreur lors de la réactivation:', err);
-      setError(err?.message || 'Une erreur est survenue lors de la réactivation');
-    }
-  };
-
-  /**
-   * Gère l'export Excel des produits filtrés.
-   */
   const handleExportExcel = () => {
     try {
-      const customFormatters = {
-        est_actif: (value) => (value ? 'Actif' : 'Inactif'),
-      };
+      const rows = filteredProduits.map((produit) => {
+        const insight = productInsights.get(produit.id_produit);
+        const lastPurchase = insight?.lastPurchase;
+
+        return {
+          nom_produit: produit.nom_produit,
+          fournisseurs: insight?.suppliers.size || 0,
+          dernier_fournisseur: lastPurchase
+            ? fournisseursMap.get(lastPurchase.id_fournisseur) || `Fournisseur #${lastPurchase.id_fournisseur}`
+            : '-',
+          dernier_prix: lastPurchase?.prix_unitaire || '',
+          dernier_achat: lastPurchase?.date_transaction || '',
+          quantite_totale: insight?.quantity || 0,
+          montant_total: insight?.total || 0,
+        };
+      });
 
       exportToExcelAdvanced(
-        produits,
-        columns,
+        rows,
+        [
+          { id: 'nom_produit', label: 'Produit' },
+          { id: 'fournisseurs', label: 'Fournisseurs' },
+          { id: 'dernier_fournisseur', label: 'Dernier fournisseur' },
+          { id: 'dernier_prix', label: 'Dernier prix' },
+          { id: 'dernier_achat', label: 'Dernier achat' },
+          { id: 'quantite_totale', label: 'Quantité totale' },
+          { id: 'montant_total', label: 'Montant total' },
+        ],
         `produits_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
-        'Produits',
-        customFormatters
+        'Produits'
       );
-    } catch (error) {
-      console.error('Erreur lors de l\'export Excel:', error);
-      setError('Une erreur est survenue lors de l\'export Excel');
+    } catch (err) {
+      console.error("Erreur lors de l'export Excel:", err);
+      setError("Une erreur est survenue lors de l'export Excel");
     }
   };
 
-  /**
-   * Configuration des colonnes du DataGrid.
-   */
-  const columns = [
-    {
-      id: 'id_produit',
-      label: 'ID',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      mobilePriority: false,
-    },
-    {
-      id: 'nom_produit',
-      label: 'Nom du produit',
-      sortable: true,
-      filterable: false, // Désactivé car nous avons un filtre dédié au-dessus
-      mobilePriority: true,
-    },
-    {
-      id: 'est_actif',
-      label: 'Statut',
-      sortable: true,
-      filterable: false,
-      mobilePriority: true,
-      format: (value) => (
-        <Chip
-          label={value ? 'Actif' : 'Inactif'}
-          color={value ? 'success' : 'default'}
-          size="small"
-        />
-      ),
-    },
-    {
-      id: 'types_utilisation',
-      label: 'Utilisation',
-      sortable: false,
-      filterable: false,
-      mobilePriority: true,
-      // Colonne virtuelle basée sur pour_clients / pour_fournisseurs
-      // Le DataGrid appelle format(cellValue, row), donc on utilise le second paramètre.
-      format: (_value, row) => {
-        if (!row) return null;
-
-        const chips = [];
-        if (row.pour_clients) {
-          chips.push(
-            <Chip
-              key="client"
-              label="Client"
-              color="primary"
-              size="small"
-              sx={{ mr: 0.5 }}
-            />
-          );
-        }
-        if (row.pour_fournisseurs) {
-          chips.push(
-            <Chip
-              key="fournisseur"
-              label="Fournisseur"
-              color="secondary"
-              size="small"
-            />
-          );
-        }
-
-        // Cas de compatibilité : si aucun flag n'est défini, on n'affiche rien
-        return chips.length > 0 ? <Box sx={{ display: 'flex' }}>{chips}</Box> : null;
-      },
-    },
-  ];
-
   return (
-    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      {/* En-tête */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: { xs: 2, sm: 0 },
-          mb: { xs: 2, sm: 2.5, md: 3 },
-        }}
+    <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', md: 'flex-start' }}
+        spacing={2}
+        sx={{ mb: 2.5 }}
       >
-        <Typography 
-          variant="h4" 
-          component="h1"
-          sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
-        >
-          Liste des Produits
-        </Typography>
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
-          gap: { xs: 1.5, sm: 2 } 
-        }}>
+        <Box>
+          <Typography
+            variant="h4"
+            component="h1"
+            fontWeight={900}
+            sx={{ fontSize: { xs: '1.65rem', sm: '2rem', md: '2.25rem' } }}
+          >
+            Produits achetés
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
+            Catalogue simple des produits achetés chez les fournisseurs. Les œufs restent suivis dans Production.
+          </Typography>
+        </Box>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
           <Button
             variant="outlined"
             startIcon={!isMobile && <FileDownloadIcon />}
             onClick={handleExportExcel}
-            disabled={loading || produits.length === 0}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
+            disabled={loading || filteredProduits.length === 0}
           >
-            {isMobile ? 'Exporter' : 'Exporter (Excel)'}
+            {isMobile ? 'Exporter' : 'Exporter Excel'}
           </Button>
           <Button
             variant="contained"
             startIcon={!isMobile && <AddIcon />}
             onClick={handleCreate}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             {isMobile ? 'Créer' : 'Créer un produit'}
           </Button>
-        </Box>
-      </Box>
+        </Stack>
+      </Stack>
 
-      {/* Message d'erreur global */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
-      {/* Filtres avec SmartFilterPanel */}
-      <SmartFilterPanel
-        pageKey="produits"
-        filterDefinitions={filterDefinitions}
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        onClearAll={handleClearAllFilters}
-        maxInlineFilters={2}
-        resultCount={produits.length}
-        totalCount={produits.length}
-      />
-
-      {/* Affichage conditionnel : Cartes sur mobile, Tableau sur desktop */}
-      {isMobile ? (
-        <MobileCardList
-          items={produits}
-          loading={loading}
-          onEdit={handleEdit}
-          onDelete={handleDeleteClick}
-          onReactivate={handleReactivate}
-          emptyMessage="Aucun produit trouvé"
-          renderCard={(produit) => (
+      <Card variant="outlined" sx={{ borderRadius: 4, mb: 2.5 }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            alignItems={{ xs: 'stretch', md: 'center' }}
+            justifyContent="space-between"
+          >
             <Box>
-              {/* En-tête */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                    Produit #{produit.id_produit}
-                  </Typography>
-                  <Typography variant="subtitle1" fontWeight="medium" sx={{ mt: 0.5 }}>
-                    {produit.nom_produit}
-                  </Typography>
-                </Box>
-                <Chip
-                  label={produit.est_actif ? 'Actif' : 'Inactif'}
-                  color={produit.est_actif ? 'success' : 'default'}
-                  size="small"
-                />
-              </Box>
-
-              <Divider sx={{ my: 1.5 }} />
-
-              {/* Utilisation */}
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Utilisation
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
-                  {produit.pour_clients && (
-                    <Chip
-                      label="Client"
-                      color="primary"
-                      size="small"
-                    />
-                  )}
-                  {produit.pour_fournisseurs && (
-                    <Chip
-                      label="Fournisseur"
-                      color="secondary"
-                      size="small"
-                    />
-                  )}
-                  {!produit.pour_clients && !produit.pour_fournisseurs && (
-                    <Typography variant="body2" color="text.secondary">
-                      Non spécifié
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
+              <Typography fontWeight={900} fontSize="1.15rem">
+                Catalogue des achats
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Un produit reste unique, même s'il est acheté chez plusieurs fournisseurs.
+              </Typography>
             </Box>
-          )}
-        />
+
+            <TextField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Rechercher un produit"
+              size="small"
+              sx={{ minWidth: { xs: '100%', md: 330 } }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      ) : filteredProduits.length === 0 ? (
+        <EmptyProductsState hasSearch={Boolean(search.trim())} onCreate={handleCreate} />
       ) : (
-        <DataGrid
-          rows={produits}
-          columns={columns}
-          onEdit={handleEdit}
-          onDelete={handleDeleteClick}
-          onReactivate={handleReactivate}
-          loading={loading}
-          pageSize={10}
-          showActions={true}
-        />
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'repeat(3, minmax(0, 1fr))',
+            },
+            gap: 2,
+          }}
+        >
+          {filteredProduits.map((produit) => (
+            <ProductCard
+              key={produit.id_produit}
+              produit={produit}
+              insight={productInsights.get(produit.id_produit)}
+              fournisseursMap={fournisseursMap}
+              onView={() => handleViewDetails(produit)}
+              onEdit={() => handleEdit(produit)}
+            />
+          ))}
+        </Box>
       )}
 
-      {/* Modal de création/édition */}
       <ProduitForm
         open={modalOpen}
         onClose={handleCloseModal}
@@ -516,49 +361,122 @@ function ProduitsList() {
         loading={formLoading}
         errorMessage={formError}
       />
-
-      {/* Dialogue de confirmation de suppression */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={handleDeleteCancel}
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-description"
-      >
-        <DialogTitle id="delete-dialog-title">
-          Confirmer la suppression
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-dialog-description">
-            Êtes-vous sûr de vouloir désactiver le produit{' '}
-            <strong>{produitToDelete?.nom_produit}</strong> ?
-            <br />
-            <br />
-            Cette action effectuera une suppression logique (soft delete). Le
-            produit sera marqué comme inactif mais ne sera pas supprimé
-            définitivement de la base de données.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={handleDeleteCancel}
-            disabled={deleteLoading}
-            color="inherit"
-          >
-            Annuler
-          </Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            disabled={deleteLoading}
-            color="error"
-            variant="contained"
-          >
-            {deleteLoading ? 'Suppression...' : 'Supprimer'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
 
-export default ProduitsList;
+function ProductCard({ produit, insight, fournisseursMap, onView, onEdit }) {
+  const supplierCount = insight?.suppliers.size || 0;
+  const lastPurchase = insight?.lastPurchase;
+  const lastSupplier = lastPurchase
+    ? fournisseursMap.get(lastPurchase.id_fournisseur) || `Fournisseur #${lastPurchase.id_fournisseur}`
+    : 'Aucun achat';
 
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        borderRadius: 4,
+        height: '100%',
+        transition: 'transform 160ms ease, box-shadow 160ms ease',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: '0 16px 36px rgba(15, 23, 42, 0.08)',
+        },
+      }}
+    >
+      <CardContent
+        sx={{
+          p: 2.5,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          '&:last-child': { pb: 2.5 },
+        }}
+      >
+        <Box>
+          <Stack direction="row" justifyContent="space-between" spacing={1.5} alignItems="flex-start">
+            <Typography variant="h6" fontWeight={900} lineHeight={1.15}>
+              {produit.nom_produit}
+            </Typography>
+            <Chip
+              size="small"
+              color={supplierCount > 0 ? 'success' : 'default'}
+              label={
+                supplierCount > 0
+                  ? `${supplierCount} ${pluralize(supplierCount, 'fournisseur')}`
+                  : 'Pas encore acheté'
+              }
+              sx={{ fontWeight: 800, flexShrink: 0 }}
+            />
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {supplierCount > 0
+              ? `Dernier fournisseur: ${lastSupplier}`
+              : 'Le produit est prêt pour les prochains achats.'}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+            gap: 1,
+            mt: 'auto',
+          }}
+        >
+          <MiniMetric label="Dernier prix" value={lastPurchase ? formatMoney(lastPurchase.prix_unitaire, 2) : '-'} />
+          <MiniMetric label="Dernier achat" value={formatDate(lastPurchase?.date_transaction)} />
+          <MiniMetric label="Quantité totale" value={(insight?.quantity || 0).toLocaleString('fr-FR')} />
+        </Box>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <Button variant="contained" startIcon={<VisibilityIcon />} onClick={onView} fullWidth>
+            Voir
+          </Button>
+          <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} fullWidth>
+            Modifier
+          </Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniMetric({ label, value }) {
+  return (
+    <Box sx={{ bgcolor: 'grey.50', borderRadius: 2.5, p: 1.25, minHeight: 68 }}>
+      <Typography variant="caption" color="text.secondary" fontWeight={900}>
+        {label}
+      </Typography>
+      <Typography fontWeight={900} sx={{ mt: 0.25, wordBreak: 'break-word' }}>
+        {value}
+      </Typography>
+    </Box>
+  );
+}
+
+function EmptyProductsState({ hasSearch, onCreate }) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 4 }}>
+      <CardContent sx={{ p: { xs: 3, md: 5 }, textAlign: 'center' }}>
+        <Typography variant="h5" fontWeight={900}>
+          {hasSearch ? 'Aucun produit trouvé' : 'Aucun produit acheté pour le moment'}
+        </Typography>
+        <Typography color="text.secondary" sx={{ mt: 1, mb: 3, maxWidth: 520, mx: 'auto' }}>
+          {hasSearch
+            ? 'Essayez un autre nom ou effacez la recherche.'
+            : 'Créez le premier produit acheté chez un fournisseur. Les achats pourront ensuite montrer les fournisseurs et les derniers prix.'}
+        </Typography>
+        {!hasSearch && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
+            Créer le premier produit
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export default ProduitsList;

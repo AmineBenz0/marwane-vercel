@@ -97,3 +97,14 @@ class LettreCreditSummary(BaseModel):
     est_disponible: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LettreCreditVerserBanque(BaseModel):
+    id_compte: int = Field(..., description="Compte bancaire qui recoit la valeur de la LC")
+    notes: Optional[str] = Field(None, description="Notes optionnelles")
+
+
+class LettreCreditPayerFournisseur(BaseModel):
+    id_fournisseur: int = Field(..., description="Fournisseur paye avec la LC")
+    date_cession: date = Field(..., description="Date du paiement fournisseur")
+    notes: Optional[str] = Field(None, description="Notes optionnelles")

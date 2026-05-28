@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Options UI - Transactions Excel</title>
+  <style>
+    :root {
+      --ink: #101c1a;
+      --muted: #65748a;
+      --soft: #f6f8f4;
+      --paper: #fffdf7;
+      --line: #dfe7dd;
+      --line-strong: #cbd8ce;
+      --green: #10725a;
+      --green-soft: #e5f4ed;
+      --red: #b24839;
+      --red-soft: #fae8e3;
+      --amber: #b36a13;
+      --amber-soft: #fff0cf;
+      --blue: #315f85;
+      --blue-soft: #e8f2fa;
+      --teal: #0f9a8b;
+      --shadow: 0 24px 70px rgba(15, 23, 42, 0.10);
+      --radius: 30px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(15, 154, 139, 0.13), transparent 34rem),
+        linear-gradient(135deg, #f8fbf7 0%, #fff8eb 45%, #f3f8f5 100%);
+      color: var(--ink);
+      font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    }
+
+    .page {
+      width: min(1500px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 34px 0 70px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 26px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-size: 13px;
+      font-weight: 950;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 0.98;
+      letter-spacing: -0.06em;
+    }
+
+    .lead {
+      max-width: 780px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.7;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button,
+    .button {
+      min-height: 42px;
+      border: 1px solid var(--line-strong);
+      border-radius: 14px;
+      padding: 10px 14px;
+      background: white;
+      color: #203234;
+      font: inherit;
+      font-weight: 900;
+      text-decoration: none;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .button.primary,
+    button.primary {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: white;
+    }
+
+    .button.soft {
+      background: #fffaf0;
+    }
+
+    .option {
+      margin-top: 28px;
+      border: 1px solid rgba(203, 216, 206, 0.9);
+      border-radius: var(--radius);
+      background: rgba(255, 253, 247, 0.88);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .option-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      padding: 24px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, rgba(229, 244, 237, 0.72), rgba(255, 240, 207, 0.5)),
+        white;
+    }
+
+    .option-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 36px);
+      letter-spacing: -0.04em;
+    }
+
+    .option-note {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .recommend {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .option-body {
+      padding: 24px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .stat {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 16px;
+      background: white;
+    }
+
+    .stat-label,
+    .label {
+      display: block;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    .stat-value {
+      display: block;
+      margin-top: 8px;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+      font-weight: 950;
+    }
+
+    .stat-helper {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(230px, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 16px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 14px;
+      background: white;
+    }
+
+    .filters {
+      display: flex;
+      gap: 9px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 7px 11px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: #fff;
+      color: #314048;
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .chip.active {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: white;
+    }
+
+    .chip.green {
+      border-color: rgba(16, 114, 90, 0.25);
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .chip.red {
+      border-color: rgba(178, 72, 57, 0.23);
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .chip.amber {
+      border-color: rgba(179, 106, 19, 0.24);
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .chip.blue {
+      border-color: rgba(49, 95, 133, 0.22);
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .table-shell {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 22px;
+      background: white;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1200px;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 12px 13px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #edf5ef;
+      color: #253b3a;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th:last-child,
+    td:last-child {
+      border-right: 0;
+    }
+
+    .sticky-date {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: inherit;
+      box-shadow: 1px 0 0 rgba(15, 23, 42, 0.08);
+    }
+
+    th.sticky-date {
+      background: #edf5ef;
+      z-index: 4;
+    }
+
+    .day-row td {
+      background: #e8f2fa;
+      color: #254c6d;
+      font-weight: 950;
+    }
+
+    .subtotal-row td {
+      background: #e5f4ed;
+      color: #0f5f4b;
+      font-weight: 950;
+      border-bottom: 2px solid rgba(16, 114, 90, 0.32);
+    }
+
+    .inactive-row td {
+      color: #7a8795;
+      background: #f8fafc;
+    }
+
+    .amount-in {
+      color: var(--green);
+      font-weight: 950;
+    }
+
+    .amount-out {
+      color: var(--red);
+      font-weight: 950;
+    }
+
+    .amount-neutral {
+      color: var(--amber);
+      font-weight: 950;
+    }
+
+    .hint {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .journal-layout {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    .day-list,
+    .entry-list,
+    .balance-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .day-card,
+    .entry,
+    .balance-row {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: white;
+      padding: 16px;
+    }
+
+    .day-card.active {
+      border-color: rgba(15, 154, 139, 0.45);
+      background: linear-gradient(135deg, #e5f4ed, white);
+      box-shadow: 0 14px 32px rgba(15, 154, 139, 0.12);
+    }
+
+    .day-title,
+    .entry-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 8px;
+    }
+
+    .day-title strong,
+    .entry-title strong {
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+
+    .mini-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .mini {
+      border-radius: 16px;
+      background: #f8fafc;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .mini span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 950;
+    }
+
+    .mini strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 15px;
+    }
+
+    .entry {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) repeat(4, minmax(105px, 0.55fr));
+      gap: 12px;
+      align-items: center;
+    }
+
+    .entry-main {
+      min-width: 0;
+    }
+
+    .entry-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 9px;
+    }
+
+    .balance-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr);
+      gap: 18px;
+    }
+
+    .balance-card {
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      padding: 20px;
+      background: white;
+    }
+
+    .balance-big {
+      margin-top: 10px;
+      font-size: clamp(36px, 6vw, 64px);
+      line-height: 0.95;
+      letter-spacing: -0.08em;
+      font-weight: 950;
+    }
+
+    .balance-row {
+      display: grid;
+      grid-template-columns: 108px minmax(0, 1fr) 140px 140px 140px;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mobile-preview {
+      display: none;
+      margin-top: 18px;
+      border: 1px solid var(--line-strong);
+      border-radius: 24px;
+      background: white;
+      overflow: hidden;
+    }
+
+    .phone-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fbf7;
+      font-weight: 950;
+    }
+
+    .phone-list {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .phone-row {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      background: white;
+    }
+
+    .phone-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 9px;
+    }
+
+    .phone-title {
+      display: block;
+      font-weight: 950;
+    }
+
+    .phone-sub {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1100px) {
+      .hero,
+      .option-head,
+      .toolbar,
+      .journal-layout,
+      .balance-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-actions,
+      .toolbar-actions {
+        justify-content: flex-start;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .entry {
+        grid-template-columns: minmax(0, 1fr) repeat(2, minmax(110px, 0.5fr));
+      }
+
+      .balance-row {
+        grid-template-columns: 96px minmax(0, 1fr) 120px 120px;
+      }
+
+      .balance-row .optional {
+        display: none;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100% - 24px, 1500px);
+        padding-top: 18px;
+      }
+
+      .option-head,
+      .option-body {
+        padding: 16px;
+      }
+
+      .stats,
+      .mini-metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .filters {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 2px;
+      }
+
+      button,
+      .button {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .hero-actions,
+      .toolbar-actions {
+        width: 100%;
+      }
+
+      .entry,
+      .balance-row {
+        grid-template-columns: 1fr;
+      }
+
+      .table-shell {
+        border-radius: 18px;
+      }
+
+      table {
+        min-width: 1060px;
+      }
+
+      .mobile-preview {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Transactions</p>
+        <h1>Trois fa&ccedil;ons de rendre les ventes & achats lisibles.</h1>
+        <p class="lead">
+          Mon avis: le format Excel est le meilleur pour cette section, parce que les utilisateurs veulent verifier vite une date,
+          un client, un montant, un reste a payer et exporter exactement la meme vue.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <span class="button primary">Nouvelle transaction</span>
+        <span class="button">Export Excel</span>
+        <span class="button">Export PDF</span>
+      </div>
+    </section>
+
+    <section class="option" id="option-1">
+      <header class="option-head">
+        <div>
+          <span class="option-kicker">Option 1</span>
+          <h2>Registre Excel simple, groupe par jour</h2>
+          <p class="option-note">
+            C'est l'option que je recommande. Elle ressemble au tableau de performance: entete fixe, date fixe a gauche,
+            lignes quotidiennes, total par jour, et exports qui correspondent a ce qui est affiche.
+          </p>
+        </div>
+        <span class="recommend">Recommande</span>
+      </header>
+
+      <div class="option-body">
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Solde caisse</span>
+            <strong class="stat-value">121 503 MAD</strong>
+            <span class="stat-helper">Montant disponible apres paiements.</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Entrees client</span>
+            <strong class="stat-value amount-in">+18 700</strong>
+            <span class="stat-helper">Ventes encaissees sur la periode.</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Sorties fournisseur</span>
+            <strong class="stat-value amount-out">-7 450</strong>
+            <span class="stat-helper">Achats et depenses fournisseurs.</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">A suivre</span>
+            <strong class="stat-value amount-neutral">4</strong>
+            <span class="stat-helper">Impayees, partielles ou en retard.</span>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="filters">
+            <span class="chip active">Tout (12)</span>
+            <span class="chip green">Ventes (7)</span>
+            <span class="chip red">Achats (5)</span>
+            <span class="chip amber">A suivre (4)</span>
+            <span class="chip blue">Mai 2026</span>
+          </div>
+          <div class="toolbar-actions">
+            <span class="button soft">Filtres</span>
+            <span class="button">Excel</span>
+            <span class="button">PDF</span>
+          </div>
+        </div>
+
+        <div class="table-shell" aria-label="Registre transactions Excel">
+          <table>
+            <thead>
+              <tr>
+                <th class="sticky-date">Date</th>
+                <th>Type</th>
+                <th>Client / Fournisseur</th>
+                <th>Produit</th>
+                <th>Batiment</th>
+                <th>Quantite</th>
+                <th>Prix</th>
+                <th>Total</th>
+                <th>Paye</th>
+                <th>Reste</th>
+                <th>Reglement</th>
+                <th>Ref.</th>
+                <th>Echeance</th>
+                <th>Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="day-row">
+                <td class="sticky-date">20/05/2026</td>
+                <td colspan="13">Journee du 20 mai - 4 operations</td>
+              </tr>
+              <tr>
+                <td class="sticky-date">20/05</td>
+                <td><span class="chip green">Vente</span></td>
+                <td>Epicerie Al Amal</td>
+                <td>Oeufs gros calibre</td>
+                <td>Batiment A</td>
+                <td>1 200 oeufs</td>
+                <td>1,35 MAD</td>
+                <td class="amount-in">+1 620 MAD</td>
+                <td>1 620 MAD</td>
+                <td>0 MAD</td>
+                <td>Espece</td>
+                <td>-</td>
+                <td>-</td>
+                <td><span class="chip green">Paye</span></td>
+              </tr>
+              <tr>
+                <td class="sticky-date">20/05</td>
+                <td><span class="chip green">Vente</span></td>
+                <td>Restaurant Atlas</td>
+                <td>Oeufs moyens</td>
+                <td>Batiment B</td>
+                <td>900 oeufs</td>
+                <td>1,25 MAD</td>
+                <td class="amount-in">+1 125 MAD</td>
+                <td>600 MAD</td>
+                <td>525 MAD</td>
+                <td>Cheque</td>
+                <td>CH-5821</td>
+                <td>27/05/2026</td>
+                <td><span class="chip amber">Partiel</span></td>
+              </tr>
+              <tr>
+                <td class="sticky-date">20/05</td>
+                <td><span class="chip red">Achat</span></td>
+                <td>Fournisseur Aliment Nord</td>
+                <td>Aliment ponte</td>
+                <td>-</td>
+                <td>15 000 kg</td>
+                <td>3,35 MAD</td>
+                <td class="amount-out">-50 250 MAD</td>
+                <td>25 000 MAD</td>
+                <td>25 250 MAD</td>
+                <td>LC</td>
+                <td>LC-2026-014</td>
+                <td>05/06/2026</td>
+                <td><span class="chip amber">Partiel</span></td>
+              </tr>
+              <tr class="inactive-row">
+                <td class="sticky-date">20/05</td>
+                <td><span class="chip red">Depense</span></td>
+                <td>Transport</td>
+                <td>Livraison Casablanca</td>
+                <td>-</td>
+                <td>1</td>
+                <td>450 MAD</td>
+                <td class="amount-out">-450 MAD</td>
+                <td>450 MAD</td>
+                <td>0 MAD</td>
+                <td>Espece</td>
+                <td>-</td>
+                <td>-</td>
+                <td><span class="chip blue">Masquee</span></td>
+              </tr>
+              <tr class="subtotal-row">
+                <td class="sticky-date">Total jour</td>
+                <td colspan="6">20/05/2026</td>
+                <td class="amount-out">-47 955 MAD</td>
+                <td>27 670 MAD</td>
+                <td>25 775 MAD</td>
+                <td colspan="4">2 operations a suivre</td>
+              </tr>
+
+              <tr class="day-row">
+                <td class="sticky-date">19/05/2026</td>
+                <td colspan="13">Journee du 19 mai - 3 operations</td>
+              </tr>
+              <tr>
+                <td class="sticky-date">19/05</td>
+                <td><span class="chip green">Vente</span></td>
+                <td>Superette Yasmine</td>
+                <td>Oeufs calibres mixtes</td>
+                <td>Batiment C</td>
+                <td>2 400 oeufs</td>
+                <td>1,30 MAD</td>
+                <td class="amount-in">+3 120 MAD</td>
+                <td>0 MAD</td>
+                <td>3 120 MAD</td>
+                <td>Virement</td>
+                <td>VIR-9912</td>
+                <td>19/05/2026</td>
+                <td><span class="chip red">En retard</span></td>
+              </tr>
+              <tr>
+                <td class="sticky-date">19/05</td>
+                <td><span class="chip red">Achat</span></td>
+                <td>Plateaux & Emballage</td>
+                <td>Plateaux oeufs</td>
+                <td>-</td>
+                <td>500</td>
+                <td>0,42 MAD</td>
+                <td class="amount-out">-210 MAD</td>
+                <td>210 MAD</td>
+                <td>0 MAD</td>
+                <td>Espece</td>
+                <td>-</td>
+                <td>-</td>
+                <td><span class="chip green">Paye</span></td>
+              </tr>
+              <tr>
+                <td class="sticky-date">19/05</td>
+                <td><span class="chip green">Vente</span></td>
+                <td>Hotel Medina</td>
+                <td>Oeufs gros calibre</td>
+                <td>Batiment A</td>
+                <td>1 800 oeufs</td>
+                <td>1,40 MAD</td>
+                <td class="amount-in">+2 520 MAD</td>
+                <td>2 520 MAD</td>
+                <td>0 MAD</td>
+                <td>LC</td>
+                <td>LC-2026-011</td>
+                <td>-</td>
+                <td><span class="chip green">Utilisee</span></td>
+              </tr>
+              <tr class="subtotal-row">
+                <td class="sticky-date">Total jour</td>
+                <td colspan="6">19/05/2026</td>
+                <td class="amount-in">+5 430 MAD</td>
+                <td>2 730 MAD</td>
+                <td>3 120 MAD</td>
+                <td colspan="4">1 operation a suivre</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">
+          Desktop: tableau large avec date fixe a gauche. Mobile: le tableau reste lisible avec glissement horizontal,
+          et on peut ajouter une mini vue carte pour les utilisateurs qui ne veulent pas lire toutes les colonnes.
+        </p>
+
+        <div class="mobile-preview">
+          <div class="phone-bar">
+            <span>Mobile - transactions du jour</span>
+            <span class="chip active">20/05</span>
+          </div>
+          <div class="phone-list">
+            <div class="phone-row">
+              <div class="phone-top">
+                <span>
+                  <span class="phone-title">Epicerie Al Amal</span>
+                  <span class="phone-sub">Vente - 1 200 oeufs - Espece</span>
+                </span>
+                <strong class="amount-in">+1 620</strong>
+              </div>
+              <span class="chip green">Paye</span>
+            </div>
+            <div class="phone-row">
+              <div class="phone-top">
+                <span>
+                  <span class="phone-title">Fournisseur Aliment Nord</span>
+                  <span class="phone-sub">Achat - Aliment ponte - LC-2026-014</span>
+                </span>
+                <strong class="amount-out">-50 250</strong>
+              </div>
+              <span class="chip amber">25 250 MAD reste</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option" id="option-2">
+      <header class="option-head">
+        <div>
+          <span class="option-kicker">Option 2</span>
+          <h2>Journal par jour, moins Excel</h2>
+          <p class="option-note">
+            Meilleur si le client travaille surtout "jour par jour". On garde un resume clair a gauche, puis les operations
+            du jour sous forme de lignes compactes. C'est plus humain, mais moins puissant pour comparer beaucoup de dates.
+          </p>
+        </div>
+      </header>
+
+      <div class="option-body">
+        <div class="journal-layout">
+          <aside class="day-list">
+            <div class="day-card active">
+              <div class="day-title">
+                <strong>20/05/2026</strong>
+                <span class="chip amber">A suivre</span>
+              </div>
+              <p class="option-note">4 operations, solde jour negatif a cause d'un achat aliment.</p>
+              <div class="mini-metrics">
+                <div class="mini"><span>Entrees</span><strong class="amount-in">2 745</strong></div>
+                <div class="mini"><span>Sorties</span><strong class="amount-out">50 700</strong></div>
+                <div class="mini"><span>Reste</span><strong>25 775</strong></div>
+              </div>
+            </div>
+            <div class="day-card">
+              <div class="day-title">
+                <strong>19/05/2026</strong>
+                <span class="chip red">Retard</span>
+              </div>
+              <p class="option-note">3 operations, une vente client non encaissee.</p>
+            </div>
+            <div class="day-card">
+              <div class="day-title">
+                <strong>18/05/2026</strong>
+                <span class="chip green">OK</span>
+              </div>
+              <p class="option-note">Toutes les operations sont reglees.</p>
+            </div>
+          </aside>
+
+          <div class="entry-list">
+            <div class="entry">
+              <div class="entry-main">
+                <div class="entry-title">
+                  <strong>Epicerie Al Amal</strong>
+                  <span class="chip green">Vente</span>
+                </div>
+                <span class="phone-sub">Oeufs gros calibre - Batiment A</span>
+                <div class="entry-meta">
+                  <span class="chip green">Paye</span>
+                  <span class="chip">Espece</span>
+                </div>
+              </div>
+              <div><span class="label">Quantite</span><strong>1 200 oeufs</strong></div>
+              <div><span class="label">Total</span><strong class="amount-in">1 620 MAD</strong></div>
+              <div><span class="label">Paye</span><strong>1 620 MAD</strong></div>
+              <div><span class="label">Reste</span><strong>0 MAD</strong></div>
+            </div>
+
+            <div class="entry">
+              <div class="entry-main">
+                <div class="entry-title">
+                  <strong>Fournisseur Aliment Nord</strong>
+                  <span class="chip red">Achat</span>
+                </div>
+                <span class="phone-sub">Aliment ponte - reference LC-2026-014</span>
+                <div class="entry-meta">
+                  <span class="chip amber">Partiel</span>
+                  <span class="chip">Echeance 05/06</span>
+                </div>
+              </div>
+              <div><span class="label">Quantite</span><strong>15 000 kg</strong></div>
+              <div><span class="label">Total</span><strong class="amount-out">50 250 MAD</strong></div>
+              <div><span class="label">Paye</span><strong>25 000 MAD</strong></div>
+              <div><span class="label">Reste</span><strong>25 250 MAD</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option" id="option-3">
+      <header class="option-head">
+        <div>
+          <span class="option-kicker">Option 3</span>
+          <h2>Vue caisse, comme un releve bancaire</h2>
+          <p class="option-note">
+            Interessant si l'objectif principal est le suivi d'argent. C'est tres clair pour voir les entrees, sorties et solde,
+            mais moins bon pour les details produit, quantite et batiment.
+          </p>
+        </div>
+      </header>
+
+      <div class="option-body">
+        <div class="balance-grid">
+          <div class="balance-card">
+            <span class="stat-label">Solde actuel</span>
+            <div class="balance-big">121 503 MAD</div>
+            <p class="option-note">La caisse bouge automatiquement selon les paiements clients, fournisseurs et LC utilisees.</p>
+            <div class="mini-metrics">
+              <div class="mini"><span>Ce mois</span><strong class="amount-in">+18 700</strong></div>
+              <div class="mini"><span>Sorties</span><strong class="amount-out">-7 450</strong></div>
+              <div class="mini"><span>A suivre</span><strong>4</strong></div>
+            </div>
+          </div>
+
+          <div class="balance-list">
+            <div class="balance-row">
+              <strong>20/05</strong>
+              <span>Vente - Epicerie Al Amal</span>
+              <span class="amount-in">+1 620</span>
+              <span>121 503</span>
+              <span class="optional"><span class="chip green">Paye</span></span>
+            </div>
+            <div class="balance-row">
+              <strong>20/05</strong>
+              <span>Achat - Fournisseur Aliment Nord</span>
+              <span class="amount-out">-25 000</span>
+              <span>119 883</span>
+              <span class="optional"><span class="chip amber">LC</span></span>
+            </div>
+            <div class="balance-row">
+              <strong>19/05</strong>
+              <span>Vente - Hotel Medina</span>
+              <span class="amount-in">+2 520</span>
+              <span>144 883</span>
+              <span class="optional"><span class="chip green">Paye</span></span>
+            </div>
+            <div class="balance-row">
+              <strong>19/05</strong>
+              <span>Emballage - Plateaux oeufs</span>
+              <span class="amount-out">-210</span>
+              <span>142 363</span>
+              <span class="optional"><span class="chip green">Paye</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

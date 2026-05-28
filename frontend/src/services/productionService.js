@@ -33,6 +33,35 @@ export const productionService = {
    * Récupère les stats quotidiennes.
    */
   getDailyStats: (days = 30) => get('/productions/stats/daily', { params: { days } }),
+
+  /**
+   * Recupere le tableau de stock par batiment pour une journee.
+   */
+  getDailyStock: (dateStock) => get('/productions/stock/daily', {
+    params: dateStock ? { date_stock: dateStock } : {},
+  }),
+
+  getPerformance: (idCycle) => get('/productions/performance', {
+    params: { id_cycle: idCycle },
+  }),
+
+  /**
+   * Recupere la liste des formules d'aliment.
+   */
+  getFormules: () => get('/productions/formules'),
+
+  /**
+   * Recupere les seuils qui deduisent le calibre depuis le grammage.
+   */
+  getCalibreThresholds: () => get('/productions/calibre-thresholds'),
+};
+
+export const cycleProductionService = {
+  getCycles: (params = {}) => get('/cycles-production', { params }),
+  getActiveCycle: (idBatiment) => get(`/cycles-production/active/${idBatiment}`),
+  createCycle: (data) => post('/cycles-production', data),
+  updateCycle: (idCycle, data) => put(`/cycles-production/${idCycle}`, data),
+  terminateCycle: (idCycle, data = {}) => post(`/cycles-production/${idCycle}/terminer`, data),
 };
 
 /**

@@ -8,11 +8,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from datetime import datetime, date
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.database import get_db
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.lettre_credit import LettreDeCredit
+from app.models.cession_lc import CessionLC
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.user import Utilisateur
@@ -23,6 +25,116 @@ from app.schemas.paiement import (
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/paiements", tags=["Paiements"])
+
+
+def _validate_lc_payment(
+    db: Session,
+    paiement_data,
+    transaction: Transaction,
+    current_user: Utilisateur,
+    existing_payment_id: Optional[int] = None,
+) -> Optional[LettreDeCredit]:
+    """
+    Valide l'utilisation d'une LC pour un paiement.
+
+    Une LC doit etre active, disponible, utilisee en totalite, et ne peut pas etre
+    reutilisee par un autre paiement.
+    """
+    payment_type = (paiement_data.type_paiement or '').lower()
+    if payment_type != 'lc':
+        return None
+
+    if not paiement_data.id_lc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'ID de la Lettre de Crédit est requis pour ce type de paiement"
+        )
+
+    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == paiement_data.id_lc).first()
+    if not lc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Lettre de Crédit avec l'ID {paiement_data.id_lc} introuvable"
+        )
+
+    linked_payment = db.query(Paiement).filter(Paiement.id_lc == lc.id_lc).first()
+    is_same_payment = (
+        existing_payment_id is not None
+        and linked_payment is not None
+        and linked_payment.id_paiement == existing_payment_id
+    )
+
+    if linked_payment and not is_same_payment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cette LC est déjà utilisée par un autre paiement"
+        )
+
+    if not is_same_payment:
+        if lc.statut != 'active':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La Lettre de Crédit n'est pas active (Statut: {lc.statut})"
+            )
+
+        if not lc.est_disponible:
+            if lc.date_disponibilite > date.today():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
+                )
+
+    if Decimal(str(paiement_data.montant)) != Decimal(str(lc.montant)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Le montant du paiement ({paiement_data.montant} MAD) doit correspondre "
+                f"au montant total de la LC ({lc.montant} MAD) car elle doit être utilisée en totalité."
+            )
+        )
+
+    if transaction.id_client:
+        if lc.type_detenteur != 'client' or lc.id_client != transaction.id_client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cette LC n'appartient pas au client de cette transaction"
+            )
+
+    if transaction.id_fournisseur and lc.type_detenteur == 'fournisseur' and lc.id_fournisseur != transaction.id_fournisseur:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cette LC n'appartient pas au fournisseur de cette transaction"
+        )
+
+    lc.statut = 'utilisee'
+    lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    return lc
+
+
+def _release_lc_if_unused(
+    db: Session,
+    id_lc: Optional[int],
+    current_user: Utilisateur,
+    exclude_payment_id: Optional[int] = None,
+) -> None:
+    """Remet une LC en active si le paiement qui l'utilisait est retiré."""
+    if not id_lc:
+        return
+
+    query = db.query(Paiement).filter(Paiement.id_lc == id_lc)
+    if exclude_payment_id is not None:
+        query = query.filter(Paiement.id_paiement != exclude_payment_id)
+
+    if query.first():
+        return
+
+    if db.query(CessionLC).filter(CessionLC.id_lc == id_lc).first():
+        return
+
+    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id_lc).first()
+    if lc and lc.statut == 'utilisee':
+        lc.statut = 'active'
+        lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
 
 def _update_caisse_movement(db: Session, paiement: Paiement, transaction: Transaction):
@@ -176,7 +288,7 @@ def get_paiement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Paiement avec l'ID {id} introuvable"
         )
-    
+
     return paiement
 
 
@@ -218,60 +330,7 @@ def create_paiement(
     
     # Note: Les paiements dépassant le montant restant sont autorisés (avances, surpaiements)
     
-    # Logique spécifique pour les Lettres de Crédit (LC)
-    if paiement_data.type_paiement == 'lc':
-        if not paiement_data.id_lc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="L'ID de la Lettre de Crédit est requis pour ce type de paiement"
-            )
-            
-        lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == paiement_data.id_lc).first()
-        if not lc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Lettre de Crédit avec l'ID {paiement_data.id_lc} introuvable"
-            )
-            
-        # 1. Vérifier le statut
-        if lc.statut != 'active':
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"La Lettre de Crédit n'est pas active (Statut: {lc.statut})"
-            )
-            
-        # 2. Vérifier la disponibilité (date)
-        if not lc.est_disponible:
-            from datetime import date
-            if lc.date_disponibilite > date.today():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
-                )
-        
-        # 3. Vérifier le montant (Doit être utilisée en totalité)
-        if paiement_data.montant != lc.montant:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Le montant du paiement ({paiement_data.montant} MAD) doit correspondre "
-                       f"au montant total de la LC ({lc.montant} MAD) car elle doit être utilisée en totalité."
-            )
-            
-        # 4. Vérifier le détenteur (Optionnel mais recommandé)
-        if transaction.id_client and lc.type_detenteur == 'client' and lc.id_client != transaction.id_client:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cette LC n'appartient pas au client de cette transaction"
-            )
-        if transaction.id_fournisseur and lc.type_detenteur == 'fournisseur' and lc.id_fournisseur != transaction.id_fournisseur:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cette LC n'appartient pas au fournisseur de cette transaction"
-            )
-            
-        # Marquer la LC comme utilisée
-        lc.statut = 'utilisee'
-        lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    _validate_lc_payment(db, paiement_data, transaction, current_user)
     
     # Déterminer le statut initial
     statut_initial = 'valide'
@@ -337,16 +396,40 @@ def update_paiement(
             detail=f"Paiement avec l'ID {id} introuvable"
         )
     
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
+    old_lc_id = paiement.id_lc
+
     # Mettre à jour les champs fournis
     update_data = paiement_data.model_dump(exclude_unset=True)
+    if "type_paiement" in update_data and update_data["type_paiement"]:
+        update_data["type_paiement"] = update_data["type_paiement"].lower()
+
+    next_payment = SimpleNamespace(
+        type_paiement=update_data.get("type_paiement", paiement.type_paiement),
+        id_lc=update_data.get("id_lc", paiement.id_lc),
+        montant=update_data.get("montant", paiement.montant),
+    )
+
+    if next_payment.type_paiement == 'lc':
+        if not transaction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Transaction {paiement.id_transaction} introuvable"
+            )
+        _validate_lc_payment(db, next_payment, transaction, current_user, existing_payment_id=id)
+    else:
+        update_data["id_lc"] = None
+
     for field, value in update_data.items():
         setattr(paiement, field, value)
     
     # Mettre à jour l'utilisateur de modification
     paiement.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     
+    if old_lc_id and old_lc_id != paiement.id_lc:
+        _release_lc_if_unused(db, old_lc_id, current_user, exclude_payment_id=id)
+
     # Mettre à jour la caisse si nécessaire (ex: chèque passé à 'encaisse')
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
     if transaction:
         _update_caisse_movement(db, paiement, transaction)
         
@@ -380,6 +463,8 @@ def delete_paiement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Paiement avec l'ID {id} introuvable"
         )
+
+    old_lc_id = paiement.id_lc
     
     # Supprimer les mouvements de caisse associés
     caisse_mouvements = db.query(Caisse).filter(Caisse.id_paiement == id).all()
@@ -387,6 +472,8 @@ def delete_paiement(
         db.delete(mvmt)
         
     db.delete(paiement)
+    db.flush()
+    _release_lc_if_unused(db, old_lc_id, current_user)
     db.commit()
     
     return None
@@ -506,13 +593,7 @@ def create_paiements_batch(
             if not transaction:
                 raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
                 
-            # Logique LC (simplifiée ici, on réutilise la logique de create_paiement)
-            if p_data.type_paiement == 'lc':
-                lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == p_data.id_lc).first()
-                if not lc or lc.statut != 'active':
-                    raise HTTPException(status_code=400, detail=f"LC {p_data.id_lc} non disponible")
-                lc.statut = 'utilisee'
-                lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+            _validate_lc_payment(db, p_data, transaction, current_user)
             
             # Déterminer le statut initial
             statut_initial = 'valide'

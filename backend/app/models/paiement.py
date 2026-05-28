@@ -105,3 +105,10 @@ class Paiement(Base):
         backref="paiements_modifies"
     )
 
+    @property
+    def numero_reference_lc(self):
+        """Reference lisible de la LC associee, utile dans les registres."""
+        if self.lettre_credit:
+            return self.lettre_credit.numero_reference
+        return None
+

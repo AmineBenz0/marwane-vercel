@@ -6,13 +6,11 @@
  * Adapté mobile avec drawer temporaire.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Drawer,
-  AppBar,
-  Toolbar,
   List,
   Typography,
   Divider,
@@ -27,8 +25,6 @@ import {
   Tooltip,
   useTheme,
   useMediaQuery,
-  alpha,
-  Collapse,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -48,10 +44,10 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   KeyboardArrowDown as ArrowDownIcon,
-  NotificationsNoneOutlined as BellIcon,
-  Settings as SettingsIcon,
+  KeyboardArrowRight as ArrowRightIcon,
 } from '@mui/icons-material';
 import useAuthStore from '../../store/authStore';
+import { batimentService } from '../../services/productionService';
 
 const DRAWER_WIDTH = 252;
 const DRAWER_COLLAPSED = 68;
@@ -59,22 +55,22 @@ const DRAWER_COLLAPSED = 68;
 // ─── Navigation structure ─────────────────────────────────────────────────
 const NAV_SECTIONS = [
   {
-    label: 'Vue d\'ensemble',
+    label: 'Aujourd\'hui',
     items: [
-      { text: 'Tableau de bord', icon: <DashboardIcon sx={{ fontSize: 20 }} />, path: '/dashboard' },
+      { text: 'Accueil quotidien', icon: <DashboardIcon sx={{ fontSize: 20 }} />, path: '/dashboard' },
       { text: 'Calendrier', icon: <CalendarMonthIcon sx={{ fontSize: 20 }} />, path: '/calendar' },
       { text: 'Tâches', icon: <TaskIcon sx={{ fontSize: 20 }} />, path: '/tasks' },
     ],
   },
   {
-    label: 'Production',
+    label: 'Travail terrain',
     items: [
-      { text: 'Vue globale', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/production/dashboard' },
-      { text: 'Productions', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production' },
+      { text: 'Production & stock', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/production' },
+      { text: 'Par bâtiment', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/batiment' },
     ],
   },
   {
-    label: 'Commerce',
+    label: 'Ventes & achats',
     items: [
       { text: 'Transactions', icon: <ReceiptIcon sx={{ fontSize: 20 }} />, path: '/transactions' },
       { text: 'Clients', icon: <PeopleIcon sx={{ fontSize: 20 }} />, path: '/clients' },
@@ -83,7 +79,7 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: 'Finances',
+    label: 'Argent',
     items: [
       { text: 'Dépenses', icon: <MoneyOffIcon sx={{ fontSize: 20 }} />, path: '/charges' },
       { text: 'Lettres de crédit', icon: <CreditCardIcon sx={{ fontSize: 20 }} />, path: '/lettres-credit' },
@@ -93,18 +89,22 @@ const NAV_SECTIONS = [
   },
 ];
 
-// Get a friendly page title from the current path
-const getPageTitle = (pathname) => {
-  for (const section of NAV_SECTIONS) {
-    for (const item of section.items) {
-      if (item.path === pathname) return item.text;
-    }
-  }
-  return 'Application';
+const isNavItemActive = (pathname, itemPath) => {
+  if (pathname === itemPath) return true;
+  if (itemPath === '/dashboard') return false;
+  if (itemPath === '/production') return pathname === '/production' || pathname === '/production/dashboard';
+  return pathname.startsWith(`${itemPath}/`);
 };
 
 // ─── Sidebar Content ──────────────────────────────────────────────────────
-function SidebarContent({ collapsed, onNavigate, location }) {
+function SidebarContent({
+  collapsed,
+  onNavigate,
+  location,
+  batiments = [],
+  productionBuildingsOpen,
+  onToggleProductionBuildings,
+}) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', py: 1 }}>
       {NAV_SECTIONS.map((section, sIndex) => (
@@ -133,68 +133,107 @@ function SidebarContent({ collapsed, onNavigate, location }) {
 
           <List dense disablePadding sx={{ px: 1 }}>
             {section.items.map((item) => {
-              const isActive = location.pathname === item.path ||
-                (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+              const isActive = isNavItemActive(location.pathname, item.path);
+              const isProductionBuildings = item.path === '/production/batiment';
               return (
-                <ListItem key={item.text} disablePadding sx={{ mb: 0.25 }}>
-                  <Tooltip
-                    title={collapsed ? item.text : ''}
-                    placement="right"
-                    arrow
-                  >
-                    <ListItemButton
-                      onClick={() => onNavigate(item.path)}
-                      sx={{
-                        minHeight: 40,
-                        borderRadius: 1.5,
-                        px: collapsed ? 1 : 1.5,
-                        justifyContent: collapsed ? 'center' : 'flex-start',
-                        backgroundColor: isActive
-                          ? 'rgba(20, 184, 166, 0.18)'
-                          : 'transparent',
-                        '&:hover': {
-                          backgroundColor: isActive
-                            ? 'rgba(20, 184, 166, 0.22)'
-                            : 'rgba(255,255,255,0.06)',
-                        },
-                        // Left accent bar for active item
-                        position: 'relative',
-                        '&::before': isActive ? {
-                          content: '""',
-                          position: 'absolute',
-                          left: 0,
-                          top: '20%',
-                          height: '60%',
-                          width: 3,
-                          borderRadius: '0 2px 2px 0',
-                          backgroundColor: '#14B8A6',
-                        } : {},
-                      }}
+                <React.Fragment key={item.text}>
+                  <ListItem disablePadding sx={{ mb: 0.25 }}>
+                    <Tooltip
+                      title={collapsed ? item.text : ''}
+                      placement="right"
+                      arrow
                     >
-                      <ListItemIcon
+                      <ListItemButton
+                        onClick={() => isProductionBuildings ? onToggleProductionBuildings() : onNavigate(item.path)}
                         sx={{
-                          minWidth: 0,
-                          mr: collapsed ? 0 : 1.5,
-                          color: isActive ? '#14B8A6' : 'rgba(255,255,255,0.5)',
-                          transition: 'color 0.15s',
+                          minHeight: 40,
+                          borderRadius: 1.5,
+                          px: collapsed ? 1 : 1.5,
+                          pl: collapsed ? 1 : 2,
+                          justifyContent: collapsed ? 'center' : 'flex-start',
+                          backgroundColor: isActive
+                            ? 'rgba(20, 184, 166, 0.18)'
+                            : 'transparent',
+                          overflow: 'hidden',
+                          '&:hover': {
+                            backgroundColor: isActive
+                              ? 'rgba(20, 184, 166, 0.22)'
+                              : 'rgba(255,255,255,0.06)',
+                          },
+                          position: 'relative',
+                          '&::before': isActive ? {
+                            content: '""',
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 4,
+                            borderRadius: '6px 0 0 6px',
+                            backgroundColor: '#14B8A6',
+                          } : {},
                         }}
                       >
-                        {item.icon}
-                      </ListItemIcon>
-                      {!collapsed && (
-                        <ListItemText
-                          primary={item.text}
-                          primaryTypographyProps={{
-                            fontSize: '0.875rem',
-                            fontWeight: isActive ? 600 : 400,
-                            color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.65)',
-                            noWrap: true,
+                        <ListItemIcon
+                          sx={{
+                            minWidth: 0,
+                            mr: collapsed ? 0 : 1.5,
+                            color: isActive ? '#14B8A6' : 'rgba(255,255,255,0.5)',
+                            transition: 'color 0.15s',
                           }}
-                        />
-                      )}
-                    </ListItemButton>
-                  </Tooltip>
-                </ListItem>
+                        >
+                          {item.icon}
+                        </ListItemIcon>
+                        {!collapsed && (
+                          <>
+                            <ListItemText
+                              primary={item.text}
+                              primaryTypographyProps={{
+                                fontSize: '0.875rem',
+                                fontWeight: isActive ? 600 : 400,
+                                color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.65)',
+                                noWrap: true,
+                              }}
+                            />
+                            {isProductionBuildings && (
+                              productionBuildingsOpen
+                                ? <ArrowDownIcon sx={{ fontSize: 18, color: isActive ? '#14B8A6' : 'rgba(255,255,255,0.45)' }} />
+                                : <ArrowRightIcon sx={{ fontSize: 18, color: isActive ? '#14B8A6' : 'rgba(255,255,255,0.45)' }} />
+                            )}
+                          </>
+                        )}
+                      </ListItemButton>
+                    </Tooltip>
+                  </ListItem>
+                  {!collapsed && isProductionBuildings && productionBuildingsOpen && batiments.map((batiment) => {
+                    const childPath = `/production/batiment/${batiment.id_batiment}`;
+                    const childActive = location.pathname === childPath;
+                    return (
+                      <ListItem key={childPath} disablePadding sx={{ mb: 0.25 }}>
+                        <ListItemButton
+                          onClick={() => onNavigate(childPath)}
+                          sx={{
+                            minHeight: 34,
+                            borderRadius: 1.5,
+                            pl: 5.5,
+                            pr: 1.5,
+                            backgroundColor: childActive ? 'rgba(20, 184, 166, 0.14)' : 'transparent',
+                            '&:hover': { backgroundColor: childActive ? 'rgba(20, 184, 166, 0.2)' : 'rgba(255,255,255,0.05)' },
+                          }}
+                        >
+                          <ListItemText
+                            primary={batiment.nom}
+                            primaryTypographyProps={{
+                              fontSize: '0.8125rem',
+                              fontWeight: childActive ? 700 : 400,
+                              color: childActive ? '#FFFFFF' : 'rgba(255,255,255,0.58)',
+                              noWrap: true,
+                            }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
+                </React.Fragment>
               );
             })}
           </List>
@@ -210,7 +249,9 @@ function AppLayout({ children }) {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [productionBuildingsOpen, setProductionBuildingsOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [batiments, setBatiments] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
@@ -232,7 +273,23 @@ function AppLayout({ children }) {
     ? user.email.split('@')[0].slice(0, 2).toUpperCase()
     : 'U';
 
-  const pageTitle = getPageTitle(location.pathname);
+  useEffect(() => {
+    const loadBatiments = async () => {
+      try {
+        const data = await batimentService.getBatiments();
+        setBatiments(data || []);
+      } catch {
+        setBatiments([]);
+      }
+    };
+    loadBatiments();
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/production/batiment')) {
+      setProductionBuildingsOpen(true);
+    }
+  }, [location.pathname]);
 
   // ── Sidebar Header (logo area) ───────────────────────────────────────
   const sidebarHeader = (
@@ -273,7 +330,7 @@ function AppLayout({ children }) {
                 lineHeight: 1.2,
               }}
             >
-              Comptabilité
+              Gestion ferme
             </Typography>
             <Typography
               sx={{
@@ -282,7 +339,7 @@ function AppLayout({ children }) {
                 lineHeight: 1,
               }}
             >
-              Gestion financière
+              Mode quotidien
             </Typography>
           </Box>
         </Box>
@@ -393,6 +450,9 @@ function AppLayout({ children }) {
           collapsed={collapsed && !isMobile}
           onNavigate={handleNavigate}
           location={location}
+          batiments={batiments}
+          productionBuildingsOpen={productionBuildingsOpen}
+          onToggleProductionBuildings={() => setProductionBuildingsOpen((open) => !open)}
         />
       </Box>
       {sidebarFooter}
@@ -402,89 +462,26 @@ function AppLayout({ children }) {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
       {/* ── AppBar ──────────────────────────────────────────────────────── */}
-      <AppBar
-        position="fixed"
+      <IconButton
+        size="medium"
+        onClick={() => setMobileOpen(true)}
         sx={{
-          width: { md: `calc(100% - ${effectiveWidth}px)` },
-          ml: { md: `${effectiveWidth}px` },
-          transition: theme.transitions.create(['width', 'margin'], {
-            duration: theme.transitions.duration.standard,
-          }),
-          zIndex: theme.zIndex.drawer + 1,
+          display: { xs: 'inline-flex', md: 'none' },
+          position: 'fixed',
+          top: 12,
+          left: 12,
+          zIndex: theme.zIndex.drawer - 1,
+          width: 44,
+          height: 44,
+          color: '#FFFFFF',
+          backgroundColor: '#0F172A',
+          boxShadow: '0 14px 34px rgba(15, 23, 42, 0.22)',
+          '&:hover': { backgroundColor: '#111C33' },
         }}
+        aria-label="Ouvrir le menu"
       >
-        <Toolbar sx={{ gap: 1, minHeight: '64px !important', px: { xs: 2, md: 3 } }}>
-          {/* Mobile burger */}
-          <IconButton
-            size="small"
-            onClick={() => setMobileOpen(true)}
-            sx={{
-              display: { md: 'none' },
-              color: 'text.secondary',
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
-            <MenuIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-
-          {/* Page title */}
-          <Box sx={{ flex: 1 }}>
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 600,
-                fontSize: { xs: '1rem', sm: '1.125rem' },
-                color: 'text.primary',
-              }}
-            >
-              {pageTitle}
-            </Typography>
-          </Box>
-
-          {/* Actions */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            {/* User menu */}
-            <Box
-              onClick={(e) => setAnchorEl(e.currentTarget)}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                px: 1.5,
-                py: 0.75,
-                borderRadius: 2,
-                cursor: 'pointer',
-                border: '1px solid',
-                borderColor: 'divider',
-                transition: 'all 0.15s',
-                '&:hover': { borderColor: 'primary.main', backgroundColor: 'grey.50' },
-              }}
-            >
-              <Avatar
-                sx={{
-                  width: 28,
-                  height: 28,
-                  fontSize: '0.6875rem',
-                  fontWeight: 700,
-                  background: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)',
-                }}
-              >
-                {userInitials}
-              </Avatar>
-              <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
-                  {user?.email?.split('@')[0] || 'Utilisateur'}
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
-                  {user?.role || 'utilisateur'}
-                </Typography>
-              </Box>
-              <ArrowDownIcon sx={{ fontSize: 16, color: 'text.secondary', display: { xs: 'none', sm: 'block' } }} />
-            </Box>
-          </Box>
-        </Toolbar>
-      </AppBar>
+        <MenuIcon sx={{ fontSize: 22 }} />
+      </IconButton>
 
       {/* ── User menu ───────────────────────────────────────────────────── */}
       <Menu
@@ -568,8 +565,7 @@ function AppLayout({ children }) {
           }),
         }}
       >
-        <Toolbar sx={{ minHeight: '64px !important' }} />
-        <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, maxWidth: '100%' }}>
+        <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, pt: { xs: 8, md: 3 }, maxWidth: '100%' }}>
           {children}
         </Box>
       </Box>

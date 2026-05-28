@@ -18,6 +18,7 @@ class Production(Base):
     id_production = Column(Integer, primary_key=True, index=True)
     date_production = Column(Date, nullable=False, index=True)
     id_batiment = Column(Integer, ForeignKey("batiments.id_batiment"), nullable=False, index=True)
+    id_cycle = Column(Integer, ForeignKey("cycles_production.id_cycle"), nullable=True, index=True)
     
     # Types d'œufs: normal, double_jaune, casse, blanc, perdu
     type_oeuf = Column(String(50), nullable=False, index=True)
@@ -27,6 +28,9 @@ class Production(Base):
     
     nombre_oeufs = Column(Integer, nullable=False)
     grammage = Column(Numeric(10, 2), nullable=False) # Poids moyen en grammes
+    mortalite = Column(Integer, nullable=True)
+    consommation_aliment_kg = Column(Numeric(10, 2), nullable=True)
+    formule = Column(String(100), nullable=True)
     
     # On stocke le nombre de cartons calculé pour garder une trace historique
     nombre_cartons = Column(Integer, nullable=False)
@@ -44,6 +48,7 @@ class Production(Base):
     
     # Relations
     batiment = relationship("Batiment", back_populates="productions")
+    cycle = relationship("CycleProduction", back_populates="productions")
     utilisateur_creation = relationship("Utilisateur", foreign_keys=[id_utilisateur_creation])
     utilisateur_modification = relationship("Utilisateur", foreign_keys=[id_utilisateur_modification])
 

@@ -14,6 +14,7 @@ from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.audit import TransactionAudit, AuditConnexion
 from app.models.batiment import Batiment
+from app.models.cycle_production import CycleProduction
 from app.models.production import Production
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.charge import Charge
@@ -35,6 +36,7 @@ __all__ = [
     "TransactionAudit",
     "AuditConnexion",
     "Batiment",
+    "CycleProduction",
     "Production",
     "CompteBancaire",
     "MouvementBancaire",

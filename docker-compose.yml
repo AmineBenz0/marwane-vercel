@@ -49,7 +49,7 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./backend:/app
       - ./backend/logs:/app/logs
@@ -93,4 +93,3 @@ volumes:
 networks:
   comptabilite_network:
     driver: bridge
-

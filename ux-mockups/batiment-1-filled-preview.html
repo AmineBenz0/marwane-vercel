@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Batiment A - preview rempli au maximum</title>
+  <style>
+    :root {
+      --ink: #102033;
+      --muted: #66758a;
+      --line: #dbe4ee;
+      --soft: #f5f8fb;
+      --teal: #12968b;
+      --teal-soft: #e3f5f1;
+      --amber: #f59e0b;
+      --amber-soft: #fff4dc;
+      --green: #16834f;
+      --green-soft: #e7f6ed;
+      --red: #c24132;
+      --red-soft: #fdecea;
+      --blue: #27648f;
+      --blue-soft: #e8f3fb;
+      --shadow: 0 24px 70px rgba(16, 32, 51, 0.11);
+      font-family: "Trebuchet MS", "Aptos", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(18, 150, 139, 0.18), transparent 26rem),
+        radial-gradient(circle at 92% 18%, rgba(245, 158, 11, 0.13), transparent 26rem),
+        linear-gradient(135deg, #f8fbf8 0%, #fff8eb 48%, #f4f8fb 100%);
+    }
+
+    .page {
+      width: min(1440px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 60px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .back,
+    .ghost-button,
+    .primary-button {
+      font: inherit;
+      font-weight: 950;
+      cursor: default;
+    }
+
+    .back {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 999px;
+      padding: 10px 16px;
+      color: var(--ink);
+    }
+
+    .date {
+      min-width: 190px;
+      padding: 11px 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+      font-size: 18px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+
+    .title-card,
+    .daily-card,
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: var(--shadow);
+    }
+
+    .title-card {
+      padding: 30px;
+      background:
+        radial-gradient(circle at top right, rgba(18, 150, 139, 0.13), transparent 18rem),
+        rgba(255, 253, 248, 0.92);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(38px, 6vw, 76px);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+      overflow-wrap: anywhere;
+    }
+
+    .subtitle {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.45;
+      max-width: 760px;
+    }
+
+    .lot {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 18px;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .lot strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 23px;
+      letter-spacing: -0.04em;
+      overflow-wrap: anywhere;
+    }
+
+    .progress-wrap {
+      display: grid;
+      gap: 8px;
+      min-width: 190px;
+    }
+
+    .progress {
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #dce8e5;
+    }
+
+    .progress span {
+      display: block;
+      width: 74%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--teal);
+    }
+
+    .daily-card {
+      padding: 28px;
+      background:
+        radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 18rem),
+        white;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .pill {
+      display: inline-flex;
+      width: fit-content;
+      max-width: 100%;
+      padding: 9px 13px;
+      border-radius: 12px;
+      background: var(--amber-soft);
+      color: #9a5800;
+      font-weight: 950;
+      overflow-wrap: anywhere;
+    }
+
+    .daily-card h2 {
+      margin: 14px 0 8px;
+      font-size: clamp(30px, 3vw, 44px);
+      letter-spacing: -0.06em;
+      line-height: 1;
+      overflow-wrap: anywhere;
+    }
+
+    .daily-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.45;
+    }
+
+    .primary-button {
+      border: 0;
+      border-radius: 999px;
+      min-height: 48px;
+      padding: 0 22px;
+      background: var(--teal);
+      color: white;
+      box-shadow: 0 15px 32px rgba(18, 150, 139, 0.25);
+    }
+
+    .alert-stack {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .alert {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      padding: 14px;
+      border-radius: 20px;
+      background: var(--amber-soft);
+      border: 1px solid #f1ca7a;
+    }
+
+    .alert.danger {
+      background: var(--red-soft);
+      border-color: #efb7ae;
+    }
+
+    .alert-icon {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: white;
+      font-weight: 950;
+    }
+
+    .alert strong {
+      display: block;
+      margin-bottom: 3px;
+      overflow-wrap: anywhere;
+    }
+
+    .alert span {
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .quick-facts {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .fact {
+      min-height: 100px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.84);
+    }
+
+    .fact.green { background: var(--green-soft); border-color: #bee6cd; }
+    .fact.amber { background: var(--amber-soft); border-color: #f5d495; }
+    .fact.red { background: var(--red-soft); border-color: #f3c2ba; }
+    .fact.blue { background: var(--blue-soft); border-color: #bcd9ea; }
+
+    .fact span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .fact strong {
+      display: block;
+      margin-top: 8px;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+      overflow-wrap: anywhere;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 410px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .card {
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: -0.04em;
+    }
+
+    .card .hint {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .ghost-button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 15px;
+      background: white;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    .scroll-list {
+      display: grid;
+      gap: 10px;
+      max-height: 520px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .stock-row,
+    .movement-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-radius: 18px;
+      background: var(--soft);
+    }
+
+    .stock-row strong,
+    .movement-row strong {
+      display: block;
+      font-size: 17px;
+      overflow-wrap: anywhere;
+    }
+
+    .stock-row small,
+    .movement-row small {
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .amount {
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: white;
+      color: var(--green);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .amount.red { color: var(--red); }
+    .amount.blue { color: var(--blue); }
+    .amount.amber { color: #9a5800; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: white;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1380px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid #eef2f6;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      background: #f4f7fb;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    tr.week td {
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-weight: 950;
+    }
+
+    tr.total td {
+      background: var(--green-soft);
+      font-weight: 950;
+    }
+
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      max-height: 520px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .history-item {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--soft);
+    }
+
+    .history-item strong {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    .history-item span {
+      display: inline-flex;
+      margin: 3px 4px 3px 0;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: white;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .overflow-note {
+      display: inline-flex;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    @media (max-width: 1120px) {
+      .hero,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 680px) {
+      .page {
+        width: min(100% - 18px, 520px);
+        padding-top: 16px;
+      }
+
+      .topbar,
+      .card-header,
+      .lot,
+      .stock-row,
+      .movement-row {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .date,
+      .ghost-button,
+      .primary-button {
+        width: 100%;
+      }
+
+      .title-card,
+      .daily-card,
+      .card {
+        border-radius: 24px;
+        padding: 18px;
+      }
+
+      .quick-facts,
+      .history-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .fact {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="topbar">
+      <button class="back">Retour vue globale</button>
+      <input class="date" type="date" value="2026-07-31" />
+    </div>
+
+    <section class="hero">
+      <article class="title-card">
+        <h1>Batiment A - Zone longue nord</h1>
+        <p class="subtitle">Preview rempli au maximum: textes longs, gros chiffres, alertes, listes scrollees et tableau tres large.</p>
+
+        <div class="lot">
+          <div>
+            <span class="label">Lot</span>
+            <strong>Lot 2026-05-20 - cycle principal 2026 avec nom volontairement long</strong>
+          </div>
+          <div class="progress-wrap">
+            <span class="label">Semaine 74/100</span>
+            <div class="progress"><span></span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="daily-card">
+        <div>
+          <span class="pill">Journee saisie avec points a verifier</span>
+          <h2>128 480 oeufs saisis</h2>
+          <p>Les pertes du jour sont incluses dans la meme saisie quotidienne. La mortalite est plus haute que d'habitude.</p>
+        </div>
+        <button class="primary-button">Modifier la saisie</button>
+      </article>
+    </section>
+
+    <section class="alert-stack">
+      <div class="alert danger">
+        <div class="alert-icon">!</div>
+        <div>
+          <strong>Mortalite elevee aujourd'hui</strong>
+          <span>47 mortalites enregistrees. Le message doit rester lisible meme quand il devient long et descriptif.</span>
+        </div>
+      </div>
+      <div class="alert">
+        <div class="alert-icon">i</div>
+        <div>
+          <strong>Stock bas sur Normal - Demarrage tres longue categorie de test</strong>
+          <span>Il reste seulement 120 oeufs disponibles apres les ventes et pertes du jour.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="quick-facts">
+      <div class="fact green">
+        <span>Poules restantes</span>
+        <strong>118 462</strong>
+      </div>
+      <div class="fact blue">
+        <span>Grammage moyen</span>
+        <strong>61,47 g</strong>
+      </div>
+      <div class="fact amber">
+        <span>Aliment</span>
+        <strong>15 000 kg</strong>
+      </div>
+      <div class="fact">
+        <span>Formule</span>
+        <strong>Formule speciale ponte 36-45 semaines enrichie tres longue</strong>
+      </div>
+      <div class="fact red">
+        <span>Mortalite / reforme</span>
+        <strong>47 / 1 250</strong>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div>
+        <article class="card">
+          <div class="card-header">
+            <div>
+              <h3>Stock du batiment</h3>
+              <p class="hint">Toutes les categories possibles, avec des valeurs longues et quelques stocks critiques.</p>
+            </div>
+          </div>
+          <div class="scroll-list">
+            <div class="stock-row"><div><strong>Normal - Demarrage tres longue categorie de test</strong><small>Produit 12 000 oeufs - vendu 11 845 - pertes 35</small></div><span class="amount amber">120 oeufs</span></div>
+            <div class="stock-row"><div><strong>Normal - Moyen</strong><small>Produit 88 700 oeufs - vendu 21 200 - pertes 120</small></div><span class="amount">67 380 oeufs</span></div>
+            <div class="stock-row"><div><strong>Normal - Gros</strong><small>Produit 22 980 oeufs - vendu 6 600 - pertes 40</small></div><span class="amount">16 340 oeufs</span></div>
+            <div class="stock-row"><div><strong>Double jaune</strong><small>Produit 8 800 oeufs - vendu 7 900 - pertes 210</small></div><span class="amount">690 oeufs</span></div>
+            <div class="stock-row"><div><strong>Double jaune demarrage</strong><small>Produit 2 480 oeufs - vendu 1 200</small></div><span class="amount">1 280 oeufs</span></div>
+            <div class="stock-row"><div><strong>Blanc</strong><small>Produit 3 900 oeufs - vendu 3 700</small></div><span class="amount">200 oeufs</span></div>
+            <div class="stock-row"><div><strong>Casse</strong><small>Produit 1 900 oeufs - vendu 0 - pertes 1 900</small></div><span class="amount red">0 oeuf</span></div>
+            <div class="stock-row"><div><strong>Perdu</strong><small>Declare dans la saisie quotidienne</small></div><span class="amount red">2 340 oeufs</span></div>
+            <div class="stock-row"><div><strong>Normal - categorie historique archivee avec nom long</strong><small>Ancien format migre - conserve pour verification</small></div><span class="amount">9 999 oeufs</span></div>
+          </div>
+          <span class="overflow-note">La liste est volontairement longue: elle scrolle sans agrandir toute la page.</span>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <div>
+              <h3>Suivi performance type Excel</h3>
+              <p class="hint">Tableau large avec plusieurs semaines, totaux, moyennes et valeurs extremes.</p>
+            </div>
+            <button class="ghost-button">Exporter Excel/PDF</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th><th>Age</th><th>Effectif</th><th>Mort</th><th>Reforme</th><th>% Mort/j</th><th>Oeufs/j</th><th>Oeufs cum/j</th><th>% Ponte</th><th>Formule</th><th>Aliment kg</th><th>g/poule</th><th>g/oeuf</th><th>Calibre</th><th>Commentaire long</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="week"><td>Semaine 27/07 - 02/08</td><td colspan="14"></td></tr>
+                <tr><td>27/07/2026</td><td>74</td><td>119 759</td><td>14</td><td>250</td><td>0,01%</td><td>108 585</td><td>108 585</td><td>90,66%</td><td>36-45 sem</td><td>15 000,00</td><td>125,3</td><td>138,1</td><td>Moyen</td><td>RAS</td></tr>
+                <tr><td>28/07/2026</td><td>74</td><td>119 495</td><td>8</td><td>0</td><td>0,01%</td><td>109 081</td><td>217 666</td><td>91,29%</td><td>36-45 sem</td><td>15 000,00</td><td>125,5</td><td>137,5</td><td>Moyen</td><td>Livraison aliment retardee mais saisie complete</td></tr>
+                <tr><td>29/07/2026</td><td>74</td><td>119 487</td><td>9</td><td>0</td><td>0,01%</td><td>109 030</td><td>326 696</td><td>91,25%</td><td>36-45 sem speciale tres longue</td><td>15 000,00</td><td>125,5</td><td>137,6</td><td>Moyen</td><td>Controle qualite demande</td></tr>
+                <tr><td>30/07/2026</td><td>74</td><td>119 478</td><td>7</td><td>1 000</td><td>0,01%</td><td>108 775</td><td>435 471</td><td>91,04%</td><td>36-45 sem</td><td>15 000,00</td><td>125,5</td><td>137,9</td><td>Gros</td><td>Reforme importante</td></tr>
+                <tr><td>31/07/2026</td><td>74</td><td>118 471</td><td>47</td><td>250</td><td>0,04%</td><td>128 480</td><td>563 951</td><td>108,45%</td><td>Formule speciale ponte 36-45 semaines enrichie tres longue</td><td>15 000,00</td><td>126,6</td><td>116,8</td><td>Moyen</td><td>Cas extreme: ponte anormalement haute a verifier</td></tr>
+                <tr class="total"><td>Total/Moyenne</td><td>74</td><td>119 759</td><td>85</td><td>1 500</td><td>0,07%</td><td>563 951</td><td>563 951</td><td>470,94%</td><td>36-45 sem</td><td>75 000,00</td><td>626,2</td><td>133,0</td><td>Moyen, Gros</td><td>Semaine volontairement dense</td></tr>
+                <tr class="week"><td>Semaine 03/08 - 09/08</td><td colspan="14"></td></tr>
+                <tr><td>03/08/2026</td><td>75</td><td>118 174</td><td>0</td><td>0</td><td>0,00%</td><td>0</td><td>0</td><td>0,00%</td><td>-</td><td>0,00</td><td>0,0</td><td>-</td><td>-</td><td>Jour sans production encore saisi partiellement</td></tr>
+                <tr><td>04/08/2026</td><td>75</td><td>118 174</td><td>120</td><td>0</td><td>0,10%</td><td>104 200</td><td>104 200</td><td>88,18%</td><td>46-55 sem</td><td>14 600,00</td><td>123,6</td><td>140,1</td><td>Gros</td><td>Retour normal</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+
+      <aside>
+        <article class="card">
+          <div class="card-header">
+            <div>
+              <h3>Mouvements du jour</h3>
+              <p class="hint">Liste longue pour verifier que les mouvements ne prennent pas toute la page.</p>
+            </div>
+          </div>
+          <div class="scroll-list">
+            <div class="movement-row"><div><strong>Production saisie</strong><small>06:15 - Normal moyen - grande collecte matinale</small></div><span class="amount">+128 480</span></div>
+            <div class="movement-row"><div><strong>Oeufs perdus</strong><small>Saisie quotidienne</small></div><span class="amount red">-2 340</span></div>
+            <div class="movement-row"><div><strong>Vente client Comptoir principal avec nom tres long</strong><small>07:30 - Normal moyen</small></div><span class="amount blue">-12 000</span></div>
+            <div class="movement-row"><div><strong>Vente client</strong><small>08:45 - Double jaune</small></div><span class="amount blue">-7 900</span></div>
+            <div class="movement-row"><div><strong>Correction stock</strong><small>09:10 - Casse</small></div><span class="amount red">-1 900</span></div>
+            <div class="movement-row"><div><strong>Vente client rapide</strong><small>10:20 - Blanc</small></div><span class="amount blue">-3 700</span></div>
+            <div class="movement-row"><div><strong>Production complementaire</strong><small>11:50 - Normal gros</small></div><span class="amount">+22 980</span></div>
+            <div class="movement-row"><div><strong>Vente exceptionnelle</strong><small>13:15 - Normal demarrage</small></div><span class="amount blue">-11 845</span></div>
+            <div class="movement-row"><div><strong>Perte declaree apres controle</strong><small>15:40 - Normal moyen</small></div><span class="amount red">-120</span></div>
+            <div class="movement-row"><div><strong>Ajustement manuel de test</strong><small>17:05 - Ancienne categorie archivee</small></div><span class="amount amber">+9 999</span></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <div>
+              <h3>Historique recent</h3>
+              <p class="hint">Beaucoup de saisies pour tester la densite.</p>
+            </div>
+          </div>
+          <div class="history-grid">
+            <div class="history-item"><strong>31 juillet 2026</strong><span>128 480 oeufs</span><span>2 340 pertes</span><span>47 morts</span><span>1 250 reforme</span><span>15 000 kg aliment</span></div>
+            <div class="history-item"><strong>30 juillet 2026</strong><span>108 775 oeufs</span><span>40 pertes</span><span>7 morts</span><span>1 000 reforme</span><span>15 000 kg</span></div>
+            <div class="history-item"><strong>29 juillet 2026</strong><span>109 030 oeufs</span><span>0 perte</span><span>9 morts</span><span>0 reforme</span><span>15 000 kg</span></div>
+            <div class="history-item"><strong>28 juillet 2026</strong><span>109 081 oeufs</span><span>210 pertes</span><span>8 morts</span><span>0 reforme</span><span>15 000 kg</span></div>
+            <div class="history-item"><strong>27 juillet 2026</strong><span>108 585 oeufs</span><span>35 pertes</span><span>14 morts</span><span>250 reforme</span><span>15 000 kg</span></div>
+            <div class="history-item"><strong>26 juillet 2026</strong><span>0 oeuf</span><span>0 perte</span><span>0 mort</span><span>jour vide</span></div>
+            <div class="history-item"><strong>25 juillet 2026</strong><span>107 340 oeufs</span><span>15 pertes</span><span>8 morts</span><span>14 800 kg</span></div>
+            <div class="history-item"><strong>24 juillet 2026</strong><span>104 923 oeufs</span><span>300 pertes</span><span>25 morts</span><span>14 900 kg</span></div>
+          </div>
+        </article>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

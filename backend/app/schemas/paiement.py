@@ -126,6 +126,7 @@ class PaiementRead(PaiementBase):
     id_transaction: int = Field(..., description="ID de la transaction associée")
     date_encaissement_effective: Optional[date] = Field(None, description="Date effective d'encaissement")
     motif_rejet: Optional[str] = Field(None, description="Motif du rejet")
+    numero_reference_lc: Optional[str] = Field(None, description="Reference lisible de la Lettre de Credit")
     statut: str = Field(..., description="Statut du paiement")
     date_creation: datetime = Field(..., description="Date de création de l'enregistrement")
     date_modification: datetime = Field(..., description="Date de dernière modification")

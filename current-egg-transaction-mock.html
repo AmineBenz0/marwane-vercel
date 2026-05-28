@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Current Egg Transaction Mock</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --panel: #fffdf8;
+      --panel-strong: #fff7eb;
+      --border: #d7c8b3;
+      --text: #2e2a24;
+      --muted: #776c5f;
+      --primary: #8f5b2e;
+      --primary-soft: #f1dfca;
+      --warning: #b45309;
+      --warning-soft: #fff1dd;
+      --success: #2f6b45;
+      --success-soft: #e7f5eb;
+      --danger: #a63f2b;
+      --shadow: 0 18px 40px rgba(69, 42, 16, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.7), transparent 30%),
+        linear-gradient(180deg, #f8f3ea 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.3fr 0.9fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .hero-card,
+    .screen,
+    .note {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-card {
+      padding: 28px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--primary);
+      background: var(--primary-soft);
+      border-radius: 999px;
+      padding: 8px 12px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 40px;
+      line-height: 1.05;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    .summary {
+      padding: 24px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .summary-box {
+      background: var(--panel-strong);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+    }
+
+    .summary-box strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .summary-box span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .screen {
+      overflow: hidden;
+    }
+
+    .screen-header {
+      padding: 22px 24px 16px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,247,235,0.9), rgba(255,253,248,0.9));
+    }
+
+    .screen-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .screen-title h2 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .screen-subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .screen-body {
+      padding: 20px 24px 24px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .stat {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      background: var(--panel-strong);
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .stat .value {
+      font-size: 30px;
+      font-weight: bold;
+    }
+
+    .table {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .row,
+    .head {
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px;
+      align-items: center;
+    }
+
+    .head {
+      background: #f7f0e5;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .row {
+      border-top: 1px solid #ede2d2;
+      font-size: 14px;
+    }
+
+    .production-grid {
+      grid-template-columns: 1.1fr 1fr 0.8fr 0.8fr 0.8fr;
+    }
+
+    .transaction-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .soft-chip,
+    .status-chip,
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .soft-chip {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    .soft-chip.warn {
+      background: var(--warning-soft);
+      color: var(--warning);
+    }
+
+    .tag {
+      background: #f3eadc;
+      color: var(--primary);
+      border: 1px solid #e3cfb5;
+    }
+
+    .form-section {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      background: #fff;
+      margin-bottom: 16px;
+    }
+
+    .form-section h3 {
+      margin: 0 0 14px;
+      font-size: 17px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    .field label {
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: bold;
+    }
+
+    .input,
+    .radio-box,
+    .line-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fffdfa;
+    }
+
+    .input {
+      padding: 12px 14px;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .radio-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .radio-box {
+      flex: 1;
+      padding: 12px 14px;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    .radio-box.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    .line-card {
+      padding: 14px;
+      background: #fffcf7;
+    }
+
+    .line-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .line-top strong {
+      font-size: 15px;
+    }
+
+    .line-note {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .warning-box {
+      border: 1px dashed #d5a26d;
+      background: var(--warning-soft);
+      color: #7d4d13;
+      padding: 14px;
+      border-radius: 16px;
+      margin-top: 14px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .warning-box strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--warning);
+    }
+
+    .note {
+      margin-top: 24px;
+      padding: 22px 24px;
+    }
+
+    .note h3 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    .note p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    @media (max-width: 1100px) {
+      .hero,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        padding: 20px 14px 40px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .field-grid,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .production-grid,
+      .transaction-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .head {
+        display: none;
+      }
+
+      .row {
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-card">
+        <div class="eyebrow">Current Flow Mock</div>
+        <h1>How the app currently looks around egg production and sales</h1>
+        <p>
+          This mock reflects the current UX shape: egg production is recorded in the Production area,
+          while sales still happen through the generic Transactions form that only knows how to sell
+          catalog products.
+        </p>
+      </div>
+      <div class="summary">
+        <div class="summary-box">
+          <strong>Production is tracked separately</strong>
+          <span>Type d'oeuf, calibre, nombre d'oeufs and cartons are visible in the production screen.</span>
+        </div>
+        <div class="summary-box">
+          <strong>Transactions sell catalog products</strong>
+          <span>The transaction modal loads items from the product catalog dropdown and does not directly show production entries.</span>
+        </div>
+        <div class="summary-box">
+          <strong>The gap users feel</strong>
+          <span>If egg outputs are not represented as products, they feel missing when trying to record a sale.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <article class="screen">
+        <div class="screen-header">
+          <div class="screen-title">
+            <h2>Production</h2>
+            <span class="pill">Daily collection by building</span>
+          </div>
+          <div class="screen-subtitle">
+            Users record what was produced here, but this screen is separate from sales entry.
+          </div>
+        </div>
+        <div class="screen-body">
+          <div class="stats">
+            <div class="stat">
+              <div class="label">Oeufs aujourd'hui</div>
+              <div class="value">1,260</div>
+            </div>
+            <div class="stat">
+              <div class="label">Cartons aujourd'hui</div>
+              <div class="value">49</div>
+            </div>
+          </div>
+
+          <div class="table">
+            <div class="head production-grid">
+              <div>Date / Building</div>
+              <div>Egg Type</div>
+              <div>Calibre</div>
+              <div>Oeufs</div>
+              <div>Cartons</div>
+            </div>
+            <div class="row production-grid">
+              <div>
+                <strong>23/03/2026</strong><br>
+                <span style="color: var(--muted);">Batiment A</span>
+              </div>
+              <div><span class="soft-chip">normal</span></div>
+              <div><span class="tag">moyen</span></div>
+              <div>540</div>
+              <div>20</div>
+            </div>
+            <div class="row production-grid">
+              <div>
+                <strong>23/03/2026</strong><br>
+                <span style="color: var(--muted);">Batiment B</span>
+              </div>
+              <div><span class="soft-chip">normal</span></div>
+              <div><span class="tag">gros</span></div>
+              <div>420</div>
+              <div>16</div>
+            </div>
+            <div class="row production-grid">
+              <div>
+                <strong>23/03/2026</strong><br>
+                <span style="color: var(--muted);">Batiment C</span>
+              </div>
+              <div><span class="soft-chip warn">double_jaune</span></div>
+              <div><span style="color: var(--muted);">n/a</span></div>
+              <div>120</div>
+              <div>9</div>
+            </div>
+            <div class="row production-grid">
+              <div>
+                <strong>23/03/2026</strong><br>
+                <span style="color: var(--muted);">Batiment C</span>
+              </div>
+              <div><span class="soft-chip warn">casse</span></div>
+              <div><span style="color: var(--muted);">n/a</span></div>
+              <div>80</div>
+              <div>4</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="screen">
+        <div class="screen-header">
+          <div class="screen-title">
+            <h2>Create Transaction</h2>
+            <span class="pill">Sales happen here</span>
+          </div>
+          <div class="screen-subtitle">
+            The form asks for a product from the catalog. It does not directly pick from production entries.
+          </div>
+        </div>
+        <div class="screen-body">
+          <div class="form-section">
+            <h3>Transaction details</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label>Date</label>
+                <div class="input">2026-03-23</div>
+              </div>
+              <div class="field">
+                <label>Payment due date</label>
+                <div class="input">Optional</div>
+              </div>
+              <div class="field full">
+                <label>Type d'entite</label>
+                <div class="radio-row">
+                  <div class="radio-box active">Client</div>
+                  <div class="radio-box">Fournisseur</div>
+                </div>
+              </div>
+              <div class="field full">
+                <label>Client</label>
+                <div class="input">Ferme Atlas Distribution</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>Ligne de transaction</h3>
+            <div class="line-card">
+              <div class="line-top">
+                <strong>Ligne 1</strong>
+                <span class="pill">Produit non selectionne</span>
+              </div>
+              <div class="field-grid">
+                <div class="field full">
+                  <label>Produit</label>
+                  <div class="input">
+                    Select from catalog:
+                    <strong> Oeufs - Moyen</strong>,
+                    <strong> Oeufs - Gros</strong>,
+                    <strong> Oeufs - Double jaune</strong>,
+                    <strong> Aliment pondeuse</strong>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Quantite</label>
+                  <div class="input">18</div>
+                </div>
+                <div class="field">
+                  <label>Prix unitaire (MAD)</label>
+                  <div class="input">42.00</div>
+                </div>
+              </div>
+              <div class="line-note">
+                The form is product-driven. It does not reference a specific production batch or available stock.
+              </div>
+            </div>
+
+            <div class="warning-box">
+              <strong>Current limitation shown in the UX</strong>
+              Production rows like <em>normal / moyen / gros / double_jaune</em> live in a different module.
+              Unless those outputs also exist as products in the catalog, a user can feel like eggs cannot be sold here.
+            </div>
+          </div>
+
+          <div class="table">
+            <div class="head transaction-grid">
+              <div>What the user sees</div>
+              <div>What is missing</div>
+            </div>
+            <div class="row transaction-grid">
+              <div>
+                Transactions can be created normally for any product shown in the dropdown.
+              </div>
+              <div>
+                No visible link from production entries to transaction-ready egg products.
+              </div>
+            </div>
+            <div class="row transaction-grid">
+              <div>
+                Egg sales work if the corresponding egg categories already exist as products.
+              </div>
+              <div>
+                No stock-aware validation to stop selling more eggs than produced.
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="note">
+      <h3>What this mock represents</h3>
+      <p>
+        This is the current-state experience, not the improved future flow. It shows why users may think
+        "eggs cannot be sold through a transaction": the sale form is catalog-based, while egg production
+        is recorded in a separate screen with no obvious visual bridge.
+      </p>
+    </section>
+  </div>
+</body>
+</html>

@@ -12,7 +12,7 @@ from app.database import engine, Base
 from app.routers import (
     auth, users, clients, fournisseurs, produits, 
     transactions, caisse, paiements, lettres_credit, cessions_lc,
-    batiments, productions, charges, comptes_bancaires, tasks
+    batiments, productions, cycles_production, charges, comptes_bancaires, tasks
 )
 from app.utils.rate_limit import limiter
 from app.middleware.logging_middleware import LoggingMiddleware
@@ -122,7 +122,7 @@ app.include_router(lettres_credit.router, prefix=settings.API_V1_PREFIX)
 app.include_router(cessions_lc.router, prefix=settings.API_V1_PREFIX)
 app.include_router(batiments.router, prefix=settings.API_V1_PREFIX)
 app.include_router(productions.router, prefix=settings.API_V1_PREFIX)
+app.include_router(cycles_production.router, prefix=settings.API_V1_PREFIX)
 app.include_router(charges.router, prefix=settings.API_V1_PREFIX)
 app.include_router(comptes_bancaires.router, prefix=settings.API_V1_PREFIX)
 app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)
-

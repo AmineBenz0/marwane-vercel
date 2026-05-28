@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Page Profil Fournisseur.
  * 
  * Affiche le profil complet d'un fournisseur avec :
- * - Header : Nom fournisseur, statut, boutons d'action (Éditer, Nouvelle transaction)
+ * - Header : Nom fournisseur, statut, boutons d'action (Ã‰diter, Nouvel achat)
  * - Cartes statistiques (StatCard) : Total achats, Nombre transactions, Montant moyen
- * - Graphique : Évolution des achats (6 derniers mois) avec recharts
+ * - Graphique : Ã‰volution des achats (6 derniers mois) avec recharts
  * - Tableau transactions : Historique complet (DataGrid)
  * - Bouton Export : Exporter l'historique (Excel)
  * 
@@ -17,12 +17,19 @@ import {
   Box,
   Typography,
   Button,
-  Chip,
   Grid,
   Card,
   CardContent,
   CircularProgress,
   Alert,
+  Tabs,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   useTheme,
   useMediaQuery,
   Divider,
@@ -52,15 +59,14 @@ import {
   ComposedChart,
   Bar,
 } from 'recharts';
-import { format, subMonths, startOfMonth } from 'date-fns';
+import { format, startOfMonth, startOfWeek, startOfYear } from 'date-fns';
 import fr from 'date-fns/locale/fr';
 import StatCard from '../../components/StatCard/StatCard';
-import DataGrid from '../../components/DataGrid/DataGrid';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import TransactionForm from '../Transactions/TransactionForm';
-import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import FinancialInsights from '../../components/FinancialInsights/FinancialInsights';
 import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
+import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
 import { get, put, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
@@ -103,30 +109,33 @@ function FournisseurProfile() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
 
-  // États pour les données
+  // Ã‰tats pour les donnÃ©es
   const [fournisseur, setFournisseur] = useState(null);
   const [statistiques, setStatistiques] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [statsMensuelles, setStatsMensuelles] = useState([]);
   const [produits, setProduits] = useState([]);
+  const [batiments, setBatiments] = useState([]);
   const [produitsVendus, setProduitsVendus] = useState(null);
   const [insightsFinanciers, setInsightsFinanciers] = useState(null);
   const [fournisseurScore, setFournisseurScore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // État pour la modal d'édition
+  // Ã‰tat pour la modal d'Ã©dition
   const [modalOpen, setModalOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
-  // État pour la modal de nouvelle transaction
+  // Ã‰tat pour la modal de nouvelle transaction
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [transactionFormLoading, setTransactionFormLoading] = useState(false);
   const [transactionFormError, setTransactionFormError] = useState(null);
+  const [activeTab, setActiveTab] = useState('resume');
+  const [balancePeriod, setBalancePeriod] = useState('month');
 
   /**
-   * Crée une map de lookup pour les produits.
+   * CrÃ©e une map de lookup pour les produits.
    */
   const produitsMap = useMemo(() => {
     const map = new Map();
@@ -136,17 +145,29 @@ function FournisseurProfile() {
     return map;
   }, [produits]);
 
+  const batimentsMap = useMemo(() => {
+    const map = new Map();
+    batiments.forEach((batiment) => {
+      map.set(batiment.id_batiment, batiment.nom);
+    });
+    return map;
+  }, [batiments]);
+
   /**
    * Charge les produits.
    */
   const fetchProduits = async () => {
     try {
-      const produitsData = await get('/produits', {
-        params: { limit: 1000, est_actif: true },
-      });
+      const [produitsData, batimentsData] = await Promise.all([
+        get('/produits', {
+          params: { limit: 1000, est_actif: true },
+        }),
+        get('/batiments'),
+      ]);
       setProduits(produitsData || []);
+      setBatiments(batimentsData || []);
     } catch (err) {
-      console.error('Erreur lors du chargement des produits:', err);
+      console.error('Erreur lors du chargement des données de référence:', err);
     }
   };
 
@@ -231,7 +252,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * Charge les données au montage et lorsque l'ID change.
+   * Charge les donnÃ©es au montage et lorsque l'ID change.
    */
   useEffect(() => {
     if (id) {
@@ -241,7 +262,7 @@ function FournisseurProfile() {
   }, [id]);
 
   /**
-   * Prépare les données pour le graphique.
+   * PrÃ©pare les donnÃ©es pour le graphique.
    */
   const chartData = useMemo(() => {
     if (!statsMensuelles || statsMensuelles.length === 0) {
@@ -258,98 +279,106 @@ function FournisseurProfile() {
     }));
   }, [statsMensuelles]);
 
+  const fournisseurSoldeRows = useMemo(() => {
+    const today = new Date();
+    const periodStart = {
+      week: startOfWeek(today, { weekStartsOn: 1 }),
+      month: startOfMonth(today),
+      year: startOfYear(today),
+    }[balancePeriod];
+
+    return transactions
+      .filter((transaction) => new Date(transaction.date_transaction) >= periodStart)
+      .sort((a, b) => new Date(b.date_transaction) - new Date(a.date_transaction));
+  }, [balancePeriod, transactions]);
+
+  const fournisseurSoldeSummary = useMemo(() => {
+    return fournisseurSoldeRows.reduce(
+      (summary, transaction) => ({
+        total: summary.total + Number(transaction.montant_total || 0),
+        paye: summary.paye + Number(transaction.montant_paye || 0),
+        solde: summary.solde + Number(transaction.montant_restant || 0),
+      }),
+      { total: 0, paye: 0, solde: 0 }
+    );
+  }, [fournisseurSoldeRows]);
+
+  const getPaymentLabel = (transaction) => {
+    const paiement = transaction.paiements?.[0];
+    if (!paiement) return 'Non réglé';
+
+    const labels = {
+      cash: 'Espèces',
+      cheque: 'Chèque',
+      virement: 'Virement',
+      carte: 'Carte',
+      lc: 'LC',
+      compensation: 'Compensation',
+      autre: 'Autre',
+    };
+
+    const reference = paiement.reference_virement
+      || paiement.numero_cheque
+      || paiement.numero_reference_lc
+      || (paiement.id_lc ? `LC #${paiement.id_lc}` : null);
+
+    return reference
+      ? `${labels[paiement.type_paiement] || paiement.type_paiement} - ${reference}`
+      : labels[paiement.type_paiement] || paiement.type_paiement;
+  };
+
   /**
-   * Configuration des colonnes pour le DataGrid des transactions.
-   * Mêmes colonnes que la liste principale des transactions.
+   * Colonnes exportées dans le même ordre que le registre visible.
    */
   const transactionColumns = [
     {
-      id: 'id_transaction',
-      label: 'ID',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-    },
-    {
       id: 'date_transaction',
       label: 'Date',
-      sortable: true,
-      filterable: false,
-      format: (value) => formatDate(value),
+    },
+    {
+      id: 'type_transaction',
+      label: 'Type',
+    },
+    {
+      id: 'client_ou_fournisseur',
+      label: 'Client / Fournisseur',
     },
     {
       id: 'produit',
       label: 'Produit',
-      sortable: false,
-      filterable: false,
-      format: (value, row) => {
-        // Utiliser la map de produits pour afficher le nom
-        return produitsMap.get(row.id_produit) || `Produit #${row.id_produit || '-'}`;
-      },
     },
     {
-      id: 'prix_unitaire',
-      label: 'Prix unitaire',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      format: (value) => {
-        if (value === null || value === undefined) return '-';
-        return formatMontant(value, { useCompactNotation: false });
-      },
+      id: 'batiment',
+      label: 'Bâtiment',
     },
     {
       id: 'quantite',
       label: 'Quantité',
-      sortable: true,
-      filterable: false,
-      align: 'right',
     },
     {
       id: 'montant_total',
-      label: 'Montant total',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      format: (value) => {
-        return (
-          <Typography
-            variant="body2"
-            fontWeight="bold"
-            sx={{ color: 'error.main' }}
-          >
-            {formatMontant(value, { useCompactNotation: false })}
-          </Typography>
-        );
-      },
+      label: 'Total',
+    },
+    {
+      id: 'montant_paye',
+      label: 'Payé',
+    },
+    {
+      id: 'montant_restant',
+      label: 'Reste',
+    },
+    {
+      id: 'reglement',
+      label: 'Règlement',
     },
     {
       id: 'statut_paiement',
-      label: 'Paiement',
-      sortable: false,
-      filterable: false,
-      format: (value, row) => {
-        const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
-        return <PaymentStatusBadge statut={statut} />;
-      },
-    },
-    {
-      id: 'est_actif',
       label: 'Statut',
-      sortable: true,
-      filterable: false,
-      format: (value) => (
-        <Chip
-          label={value ? 'Actif' : 'Inactif'}
-          color={value ? 'success' : 'default'}
-          size="small"
-        />
-      ),
     },
   ];
 
   /**
-   * Gère l'export Excel des transactions.
+   * GÃ¨re l'export Excel des transactions.
    */
   const handleExportExcel = () => {
     try {
@@ -370,15 +399,37 @@ function FournisseurProfile() {
         produit: (value, row) => {
           return produitsMap.get(row.id_produit) || `Produit #${row.id_produit || '-'}`;
         },
-        prix_unitaire: (value) => {
-          if (value === null || value === undefined) return '-';
-          return parseFloat(value).toFixed(2);
+        type_transaction: (value, row) => (
+          row.id_client !== null && row.id_client !== undefined ? 'Vente' : 'Achat'
+        ),
+        client_ou_fournisseur: () => fournisseur?.nom_fournisseur || 'Fournisseur',
+        batiment: (value, row) => (
+          row.id_batiment ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`) : '-'
+        ),
+        montant_total: (value, row) => {
+          const amount = Math.abs(Number(value || 0));
+          const sign = row.id_client !== null && row.id_client !== undefined ? '+' : '-';
+          return `${sign}${formatMontant(amount, { useCompactNotation: false })}`;
         },
-        montant_total: (value) => {
+        montant_paye: (value) => {
           if (value === null || value === undefined) return '-';
-          return parseFloat(value).toFixed(2);
+          return formatMontant(value, { useCompactNotation: false });
         },
-        est_actif: (value) => (value ? 'Actif' : 'Inactif'),
+        montant_restant: (value) => {
+          if (value === null || value === undefined) return '-';
+          return formatMontant(value, { useCompactNotation: false });
+        },
+        reglement: (value, row) => getPaymentReglementSummary(row),
+        statut_paiement: (value, row) => {
+          if (row.est_actif === false) return 'Inactive';
+          const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
+          return {
+            paye: 'Payé',
+            partiel: 'Partiel',
+            impaye: 'Impayé',
+            en_retard: 'En retard',
+          }[statut] || statut;
+        },
       };
 
       exportToExcelAdvanced(
@@ -397,7 +448,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * Schéma de validation Yup pour le formulaire fournisseur.
+   * SchÃ©ma de validation Yup pour le formulaire fournisseur.
    */
   const fournisseurValidationSchema = yup.object().shape({
     nom_fournisseur: yup
@@ -406,7 +457,6 @@ function FournisseurProfile() {
       .min(1, 'Le nom doit contenir au moins 1 caractère')
       .max(255, 'Le nom ne peut pas dépasser 255 caractères')
       .trim(),
-    est_actif: yup.boolean().required('Le statut est requis'),
   });
 
   /**
@@ -417,18 +467,14 @@ function FournisseurProfile() {
       name: 'nom_fournisseur',
       label: 'Nom du fournisseur',
       type: 'text',
-      placeholder: 'Entrez le nom du fournisseur',
+      placeholder: 'Ex. Coop Agadir',
       required: true,
-    },
-    {
-      name: 'est_actif',
-      label: 'Actif',
-      type: 'switch',
+      helperText: "Utilisez le nom que l'équipe reconnaît au quotidien.",
     },
   ];
 
   /**
-   * Gère l'ouverture de la modal d'édition.
+   * GÃ¨re l'ouverture de la modal d'Ã©dition.
    */
   const handleEdit = () => {
     setFormError(null);
@@ -436,35 +482,35 @@ function FournisseurProfile() {
   };
 
   /**
-   * Gère la soumission du formulaire d'édition.
+   * GÃ¨re la soumission du formulaire d'Ã©dition.
    */
   const handleSubmit = async (data) => {
     setFormLoading(true);
     setFormError(null);
 
     try {
-      // Mode édition : PUT
+      // Mode Ã©dition : PUT
       await put(`/fournisseurs/${fournisseur.id_fournisseur}`, data);
 
-      // Fermer la modal et rafraîchir les données
+      // Fermer la modal et rafraÃ®chir les donnÃ©es
       setModalOpen(false);
       await fetchFournisseurProfile();
       
-      // Afficher une notification de succès
+      // Afficher une notification de succÃ¨s
       notification.success('Fournisseur modifié avec succès');
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
       setFormError(errorMessage);
       notification.error(errorMessage);
-      throw err; // Re-throw pour que ModalForm puisse gérer les erreurs de validation
+      throw err; // Re-throw pour que ModalForm puisse gÃ©rer les erreurs de validation
     } finally {
       setFormLoading(false);
     }
   };
 
   /**
-   * Gère la fermeture de la modal.
+   * GÃ¨re la fermeture de la modal.
    */
   const handleCloseModal = () => {
     if (!formLoading) {
@@ -474,7 +520,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * Gère l'ouverture de la modal de nouvelle transaction.
+   * GÃ¨re l'ouverture de la modal de nouvelle transaction.
    */
   const handleNewTransaction = () => {
     setTransactionFormError(null);
@@ -482,35 +528,35 @@ function FournisseurProfile() {
   };
 
   /**
-   * Gère la soumission de la nouvelle transaction.
+   * GÃ¨re la soumission de la nouvelle transaction.
    */
   const handleTransactionSubmit = async (data) => {
     setTransactionFormLoading(true);
     setTransactionFormError(null);
 
     try {
-      // Mode création : POST
+      // Mode crÃ©ation : POST
       await post('/transactions', data);
 
-      // Fermer la modal et rafraîchir les données du profil
+      // Fermer la modal et rafraÃ®chir les donnÃ©es du profil
       setTransactionModalOpen(false);
       await fetchFournisseurProfile();
       
-      // Afficher une notification de succès
+      // Afficher une notification de succÃ¨s
       notification.success('Transaction créée avec succès');
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
       setTransactionFormError(errorMessage);
       notification.error(errorMessage);
-      throw err; // Re-throw pour que le formulaire puisse gérer les erreurs de validation
+      throw err; // Re-throw pour que le formulaire puisse gÃ©rer les erreurs de validation
     } finally {
       setTransactionFormLoading(false);
     }
   };
 
   /**
-   * Gère la fermeture de la modal de nouvelle transaction.
+   * GÃ¨re la fermeture de la modal de nouvelle transaction.
    */
   const handleCloseTransactionModal = () => {
     if (!transactionFormLoading) {
@@ -520,7 +566,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * Gère la navigation vers les détails d'une transaction.
+   * GÃ¨re la navigation vers les dÃ©tails d'une transaction.
    */
   const handleViewTransaction = (transaction) => {
     navigate(`/transactions/${transaction.id_transaction}`);
@@ -575,11 +621,6 @@ function FournisseurProfile() {
           <Typography variant="h4" component="h1">
             {fournisseur.nom_fournisseur}
           </Typography>
-          <Chip
-            label={fournisseur.est_actif ? 'Actif' : 'Inactif'}
-            color={fournisseur.est_actif ? 'success' : 'default'}
-            size="medium"
-          />
         </Box>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button
@@ -594,11 +635,27 @@ function FournisseurProfile() {
             startIcon={<AddIcon />}
             onClick={handleNewTransaction}
           >
-            Nouvelle transaction
+            Nouvel achat
           </Button>
         </Box>
       </Box>
 
+      <Card variant="outlined" sx={{ mb: { xs: 2, sm: 2.5, md: 3 }, borderRadius: 3, overflow: 'hidden' }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => setActiveTab(value)}
+          variant={isMobile ? 'scrollable' : 'fullWidth'}
+          scrollButtons="auto"
+          sx={{ px: { xs: 1, sm: 2 }, '& .MuiTab-root': { minHeight: 58, fontWeight: 800, textTransform: 'none' } }}
+        >
+          <Tab value="resume" label="Résumé" />
+          <Tab value="transactions" label="Transactions" />
+          <Tab value="produits" label="Produits achetés" />
+          <Tab value="analyse" label="Analyse" />
+        </Tabs>
+      </Card>
+
+      <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
       {/* Cartes statistiques */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
@@ -642,6 +699,99 @@ function FournisseurProfile() {
         </Grid>
       </Grid>
 
+      <Card sx={{ mb: 3, borderRadius: 3 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+            <Box>
+              <Typography variant="h6" component="h2" fontWeight={900}>
+                Tableau des soldes
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Achats, règlements et solde restant pour ce fournisseur.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {[
+                { value: 'week', label: 'Semaine' },
+                { value: 'month', label: 'Mois' },
+                { value: 'year', label: 'Année' },
+              ].map((period) => (
+                <Button
+                  key={period.value}
+                  size="small"
+                  variant={balancePeriod === period.value ? 'contained' : 'outlined'}
+                  onClick={() => setBalancePeriod(period.value)}
+                  sx={{ borderRadius: 999 }}
+                >
+                  {period.label}
+                </Button>
+              ))}
+            </Box>
+          </Box>
+
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12} sm={4}>
+              <MiniBalanceCard label="Montant à payer" value={fournisseurSoldeSummary.total} color="error.main" />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <MiniBalanceCard label="Déjà réglé" value={fournisseurSoldeSummary.paye} color="success.main" />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <MiniBalanceCard label="Solde" value={fournisseurSoldeSummary.solde} color="warning.main" />
+            </Grid>
+          </Grid>
+
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 980 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Produit</TableCell>
+                  <TableCell align="right">Quantité</TableCell>
+                  <TableCell align="right">Prix</TableCell>
+                  <TableCell align="right">Montant à payer</TableCell>
+                  <TableCell>Règlement</TableCell>
+                  <TableCell>Échéance</TableCell>
+                  <TableCell align="right">Payé</TableCell>
+                  <TableCell align="right">Solde</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {fournisseurSoldeRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                      Aucun achat fournisseur sur cette période
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  fournisseurSoldeRows.map((transaction) => (
+                    <TableRow key={transaction.id_transaction} hover>
+                      <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
+                      <TableCell>{produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}</TableCell>
+                      <TableCell align="right">{transaction.quantite}</TableCell>
+                      <TableCell align="right">{formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 800 }}>
+                        {formatMontant(transaction.montant_total, { useCompactNotation: false })}
+                      </TableCell>
+                      <TableCell>{getPaymentLabel(transaction)}</TableCell>
+                      <TableCell>{formatDate(transaction.date_echeance)}</TableCell>
+                      <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
+                        {formatMontant(transaction.montant_paye || 0, { useCompactNotation: false })}
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
+                        {formatMontant(transaction.montant_restant || 0, { useCompactNotation: false })}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+      </Box>
+
+      <Box sx={{ display: activeTab === 'analyse' ? 'block' : 'none' }}>
       {/* Insights Financiers */}
       <FinancialInsights 
         insights={insightsFinanciers}
@@ -649,7 +799,7 @@ function FournisseurProfile() {
         type="fournisseur"
       />
 
-      {/* Graphique d'évolution des achats */}
+      {/* Graphique d'Ã©volution des achats */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" component="h2" gutterBottom>
@@ -689,14 +839,14 @@ function FournisseurProfile() {
                   />
                   <Legend verticalAlign="top" height={36}/>
                   
-                  {/* Solde cumulé en arrière-plan (Area) */}
+                  {/* Solde cumulÃ© en arriÃ¨re-plan (Area) */}
                   <Area
                     type="monotone"
                     dataKey="solde"
                     fill={theme.palette.error.main}
                     stroke={theme.palette.error.main}
                     fillOpacity={0.15}
-                    name="Evolution du solde (Dette)"
+                    name="Évolution du solde (dette)"
                     strokeWidth={2}
                   />
                   
@@ -731,7 +881,9 @@ function FournisseurProfile() {
           )}
         </CardContent>
       </Card>
+      </Box>
 
+      <Box sx={{ display: activeTab === 'produits' ? 'block' : 'none' }}>
       {/* Section Produits Vendus */}
       {produitsVendus && produitsVendus.produits && produitsVendus.produits.length > 0 && (
         <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
@@ -745,7 +897,7 @@ function FournisseurProfile() {
                 mb: { xs: 2, sm: 2.5, md: 3 }
               }}
             >
-             Produits Vendus - Inventaire Fournisseur
+             Produits achetés chez ce fournisseur
             </Typography>
 
             {/* KPIs Produits */}
@@ -781,40 +933,36 @@ function FournisseurProfile() {
           </CardContent>
         </Card>
       )}
+      </Box>
 
-      {/* Tableau des transactions */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" component="h2">
-              Historique des transactions
-            </Typography>
-            <Button
-              variant="outlined"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportExcel}
-              disabled={!transactions || transactions.length === 0}
-            >
-              Exporter (Excel)
-            </Button>
-          </Box>
-          <Divider sx={{ mb: 2 }} />
-          {transactions && transactions.length > 0 ? (
-            <DataGrid
-              rows={transactions}
-              columns={transactionColumns}
-              onView={handleViewTransaction}
-              loading={false}
-              pageSize={10}
-              showActions={true}
-            />
-          ) : (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              Aucune transaction disponible
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
+      <Box sx={{ display: activeTab === 'transactions' ? 'block' : 'none' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: { xs: 1.5, sm: 2 } }}>
+          <Button
+            variant="outlined"
+            startIcon={!isMobile && <FileDownloadIcon />}
+            onClick={handleExportExcel}
+            disabled={!transactions || transactions.length === 0}
+            size={isMobile ? 'small' : 'medium'}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            {isMobile ? 'Exporter' : 'Exporter (Excel)'}
+          </Button>
+        </Box>
+        <TransactionsExcelRegister
+          rows={transactions || []}
+          loading={false}
+          getClientOuFournisseur={() => fournisseur?.nom_fournisseur || 'Fournisseur'}
+          produitsMap={produitsMap}
+          batimentsMap={batimentsMap}
+          formatMontant={(value) => formatMontant(value, { useCompactNotation: false })}
+          dailySummaryMode="exits"
+          onView={handleViewTransaction}
+          title="Historique des transactions"
+          description="Achats, règlements et soldes de ce fournisseur."
+          emptyTitle="Aucune transaction disponible"
+          emptyDescription="Ce fournisseur n'a pas encore de transaction."
+        />
+      </Box>
 
       {/* Modal de modification */}
       <ModalForm
@@ -825,7 +973,7 @@ function FournisseurProfile() {
           fournisseur
             ? {
                 nom_fournisseur: fournisseur.nom_fournisseur,
-                est_actif: fournisseur.est_actif,
+                est_actif: true,
               }
             : {
                 nom_fournisseur: '',
@@ -834,8 +982,8 @@ function FournisseurProfile() {
         }
         validationSchema={fournisseurValidationSchema}
         fields={fournisseurFields}
-        title="Modifier le fournisseur"
-        submitLabel="Modifier"
+        title="Modifier ce fournisseur"
+        submitLabel="Enregistrer"
         loading={formLoading}
         errorMessage={formError}
       />
@@ -857,3 +1005,15 @@ function FournisseurProfile() {
 
 export default FournisseurProfile;
 
+function MiniBalanceCard({ label, value, color }) {
+  return (
+    <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+      <Typography variant="caption" color="text.secondary" fontWeight={800}>
+        {label}
+      </Typography>
+      <Typography sx={{ mt: 0.5, fontSize: '1.25rem', fontWeight: 900, color }}>
+        {formatMontant(value, { useCompactNotation: false })}
+      </Typography>
+    </Box>
+  );
+}

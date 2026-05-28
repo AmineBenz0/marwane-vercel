@@ -49,6 +49,14 @@ class TransactionBase(BaseModel):
         None,
         description="ID du fournisseur concerné (exclusion mutuelle avec id_client)"
     )
+    id_batiment: Optional[int] = Field(
+        None,
+        description="ID du batiment source pour les ventes d'oeufs"
+    )
+    id_cycle: Optional[int] = Field(
+        None,
+        description="ID du lot/cycle de production pour les ventes d'oeufs"
+    )
     date_echeance: Optional[date] = Field(
         None,
         description="Date d'échéance du paiement (optionnelle)"
@@ -65,7 +73,14 @@ class TransactionCreate(TransactionBase):
         gt=0,
         description="Montant total (calculé automatiquement si non fourni)"
     )
-    
+    id_batiment: Optional[int] = Field(
+        None,
+        description="ID du batiment source pour les ventes d'oeufs"
+    )
+    id_cycle: Optional[int] = Field(
+        None,
+        description="ID du lot/cycle de production pour les ventes d'oeufs"
+    )
     @field_validator('quantite')
     @classmethod
     def validate_quantite(cls, v: int) -> int:
@@ -146,7 +161,15 @@ class TransactionUpdate(BaseModel):
         None,
         description="ID du fournisseur concerné (exclusion mutuelle avec id_client)"
     )
-    
+    id_batiment: Optional[int] = Field(
+        None,
+        description="ID du batiment source pour les ventes d'oeufs"
+    )
+    id_cycle: Optional[int] = Field(
+        None,
+        description="ID du lot/cycle de production pour les ventes d'oeufs"
+    )
+
     @field_validator('quantite')
     @classmethod
     def validate_quantite(cls, v: Optional[int]) -> Optional[int]:

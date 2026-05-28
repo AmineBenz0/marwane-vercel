@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Option B - Simple Registers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #17211d;
+      --muted: #6b746f;
+      --bg: #f4efe5;
+      --paper: #fffdf8;
+      --line: #ddd2bd;
+      --green: #1d6f50;
+      --green-soft: #e0f1e7;
+      --red: #a84435;
+      --red-soft: #f8ded9;
+      --amber: #a96522;
+      --amber-soft: #f8e8cc;
+      --shadow: 0 24px 58px rgba(55, 44, 24, .11);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Manrope, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 0, rgba(255,255,255,.9), transparent 26%),
+        linear-gradient(145deg, #fbf6ee, var(--bg));
+    }
+
+    .page {
+      width: min(1260px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 54px;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    h1, h2, h3 {
+      font-family: Fraunces, serif;
+      margin: 0;
+      letter-spacing: -.03em;
+    }
+
+    h1 { font-size: clamp(38px, 6vw, 64px); line-height: .95; }
+
+    .subtitle {
+      margin: 12px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 680px;
+    }
+
+    .primary {
+      border: 0;
+      background: var(--green);
+      color: white;
+      border-radius: 18px;
+      padding: 14px 18px;
+      font-weight: 900;
+      box-shadow: 0 18px 36px rgba(29,111,80,.24);
+      white-space: nowrap;
+    }
+
+    .panel {
+      background: rgba(255,253,248,.9);
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .overview {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: white;
+      padding: 18px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 900;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      margin-top: 7px;
+      letter-spacing: -.04em;
+    }
+
+    .toolbar {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,253,248,.95), rgba(250,244,232,.75));
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 13px 15px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .report {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 18px;
+      padding: 12px 14px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 0 18px 18px;
+      flex-wrap: wrap;
+      background: rgba(250,244,232,.75);
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 10px 13px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .tab.active {
+      background: var(--ink);
+      color: white;
+      border-color: var(--ink);
+    }
+
+    .body {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1.2fr .75fr .7fr .6fr auto;
+      gap: 14px;
+      align-items: center;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 16px;
+    }
+
+    .who strong,
+    .cell strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .who span,
+    .cell span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .type {
+      width: max-content;
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .type.in { background: var(--green-soft); color: var(--green); }
+    .type.out { background: var(--red-soft); color: var(--red); }
+    .type.wait { background: var(--amber-soft); color: var(--amber); }
+
+    .amount {
+      font-weight: 900;
+      font-size: 16px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .amount.in { color: var(--green); }
+    .amount.out { color: var(--red); }
+
+    .actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .icon-button {
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      border-radius: 13px;
+      width: 38px;
+      height: 38px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .drawer {
+      display: grid;
+      grid-template-columns: 1fr 310px;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .side-card {
+      padding: 22px;
+    }
+
+    .side-card h2 { font-size: 27px; }
+
+    .side-card p {
+      color: var(--muted);
+      line-height: 1.65;
+      margin: 10px 0 0;
+      font-size: 14px;
+    }
+
+    .filter-list {
+      margin-top: 16px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .filter-item {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .filter-item strong { display: block; font-size: 14px; }
+    .filter-item span { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+    @media (max-width: 980px) {
+      .top { flex-direction: column; }
+      .overview, .drawer { grid-template-columns: 1fr; }
+      .toolbar { grid-template-columns: 1fr; }
+      .row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .amount { text-align: left; }
+      .actions { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <div>
+        <h1>Transactions</h1>
+        <p class="subtitle">
+          A register page should answer: who, what, how much, paid or not, and what action is needed.
+          IDs, dense filters, and exports are still present, but not competing with the daily task.
+        </p>
+      </div>
+      <button class="primary">Créer une transaction</button>
+    </header>
+
+    <section class="overview" aria-label="Résumé">
+      <div class="metric"><span>Ce mois</span><strong>84 opérations</strong></div>
+      <div class="metric"><span>Ventes</span><strong style="color: var(--green)">312 900 MAD</strong></div>
+      <div class="metric"><span>Achats</span><strong style="color: var(--red)">146 200 MAD</strong></div>
+      <div class="metric"><span>En retard</span><strong style="color: var(--amber)">3 paiements</strong></div>
+    </section>
+
+    <section class="drawer">
+      <article class="panel">
+        <div class="toolbar">
+          <div class="search">Rechercher client, fournisseur, produit, montant...</div>
+          <button class="report">Rapports & exports</button>
+        </div>
+        <div class="tabs">
+          <button class="tab active">Tout</button>
+          <button class="tab">Ventes</button>
+          <button class="tab">Achats</button>
+          <button class="tab">Non payé</button>
+          <button class="tab">En retard</button>
+          <button class="tab">Cette semaine</button>
+          <button class="tab">Filtres avancés</button>
+        </div>
+        <div class="body">
+          <div class="row">
+            <div class="who">
+              <strong>Ferme Atlas Distribution</strong>
+              <span>Transaction #1842 - 08/05/2026</span>
+            </div>
+            <div class="cell">
+              <strong>Oeufs moyen</strong>
+              <span>18 cartons x 420 MAD</span>
+            </div>
+            <div><span class="type in">Vente client</span></div>
+            <div class="amount in">+7 560 MAD</div>
+            <div class="actions"><button class="icon-button">Voir</button><button class="icon-button">Payé</button></div>
+          </div>
+          <div class="row">
+            <div class="who">
+              <strong>Fournisseur Aliment Nord</strong>
+              <span>Transaction #1841 - 08/05/2026</span>
+            </div>
+            <div class="cell">
+              <strong>Aliment pondeuse</strong>
+              <span>3 tonnes x 7 000 MAD</span>
+            </div>
+            <div><span class="type out">Achat fournisseur</span></div>
+            <div class="amount out">-21 000 MAD</div>
+            <div class="actions"><button class="icon-button">Voir</button><button class="icon-button">Payer</button></div>
+          </div>
+          <div class="row">
+            <div class="who">
+              <strong>Marché Local Casablanca</strong>
+              <span>Transaction #1838 - 05/05/2026</span>
+            </div>
+            <div class="cell">
+              <strong>Oeufs gros</strong>
+              <span>12 cartons x 470 MAD</span>
+            </div>
+            <div><span class="type wait">Paiement en retard</span></div>
+            <div class="amount in">+5 640 MAD</div>
+            <div class="actions"><button class="icon-button">Voir</button><button class="icon-button">Relance</button></div>
+          </div>
+          <div class="row">
+            <div class="who">
+              <strong>Client Restaurant Oasis</strong>
+              <span>Transaction #1833 - 02/05/2026</span>
+            </div>
+            <div class="cell">
+              <strong>Oeufs double jaune</strong>
+              <span>5 cartons x 650 MAD</span>
+            </div>
+            <div><span class="type in">Payé cash</span></div>
+            <div class="amount in">+3 250 MAD</div>
+            <div class="actions"><button class="icon-button">Voir</button><button class="icon-button">PDF</button></div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="panel side-card">
+        <h2>What changes from the current table?</h2>
+        <p>
+          The current DataGrid is powerful, but non-technical users must decode columns and icons.
+          This register makes each operation readable like a sentence.
+        </p>
+        <div class="filter-list">
+          <div class="filter-item">
+            <strong>Common filters become tabs</strong>
+            <span>Ventes, achats, unpaid, overdue, this week.</span>
+          </div>
+          <div class="filter-item">
+            <strong>Actions are named</strong>
+            <span>Use Voir, Payé, Payer, Relance instead of only icons.</span>
+          </div>
+          <div class="filter-item">
+            <strong>Advanced remains available</strong>
+            <span>ID, status, PDF/Excel, and exact fields live under advanced/report buttons.</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
