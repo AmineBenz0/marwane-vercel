@@ -78,7 +78,7 @@ const getLotOverview = (buildings) => {
     label: isSharedLot ? sharedName : 'Lots avec dates differentes',
     helper: isSharedLot
       ? ''
-      : "A verifier: les batiments n'ont pas tous la meme date de lot.",
+      : "À vérifier : les batiments n'ont pas tous la même date de lot.",
     color: isSharedLot && allBuildingsCovered ? 'success' : 'warning',
     hasActiveLot: true,
     activeBuildingsCount: cycles.length,
@@ -166,7 +166,7 @@ const getActionItems = (buildings, totals) => {
     items.push({
       kind: 'detail',
       id_batiment: lowStock.id_batiment,
-      title: `${lowStock.nom_batiment}: stock a verifier`,
+      title: `${lowStock.nom_batiment}: stock à vérifier`,
       description: `Stock disponible: ${formatEggs(lowStock.available_eggs)}.`,
       buttonLabel: 'Voir',
     });
@@ -430,7 +430,7 @@ function HeroHeader({
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mt: 0.5 }}>
                   <Typography variant="h6" fontWeight={950}>{lotOverview.label}</Typography>
                   {lotOverview.color !== 'success' && (
-                    <Chip label="A verifier" color={lotOverview.color} size="small" sx={{ fontWeight: 900 }} />
+                    <Chip label="À vérifier" color={lotOverview.color} size="small" sx={{ fontWeight: 900 }} />
                   )}
                 </Stack>
                 {lotOverview.helper && (
@@ -483,7 +483,7 @@ function SharedLotDialog({ open, onClose, onSubmit, batiments }) {
 
   const allocations = batiments.map((batiment) => ({
     id_batiment: batiment.id_batiment,
-    nom_batiment: batiment.nom_batiment,
+    nom_batiment: batiment.nom || batiment.nom_batiment,
     effectif_initial: Number(form.allocations[batiment.id_batiment] || 0),
   }));
   const totalEffectif = allocations.reduce((sum, allocation) => sum + allocation.effectif_initial, 0);
@@ -543,7 +543,7 @@ function SharedLotDialog({ open, onClose, onSubmit, batiments }) {
                 {batiments.map((batiment) => (
                   <TextField
                     key={batiment.id_batiment}
-                    label={batiment.nom_batiment}
+                    label={batiment.nom || batiment.nom_batiment}
                     type="number"
                     value={form.allocations[batiment.id_batiment] || ''}
                     onChange={(event) => updateAllocation(batiment.id_batiment, event.target.value)}

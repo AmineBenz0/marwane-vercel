@@ -20,12 +20,6 @@ const produitFields = [
     placeholder: 'Ex. aliment, emballage, médicament...',
     required: true,
   },
-  {
-    name: 'est_actif',
-    label: 'Produit actif',
-    type: 'switch',
-    helperText: "Un produit inactif reste dans l'historique, mais n'apparaît plus dans les nouveaux achats.",
-  },
 ];
 
 function ProduitForm({

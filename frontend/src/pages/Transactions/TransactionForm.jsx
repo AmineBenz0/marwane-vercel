@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Composant TransactionForm.
  * 
  * Formulaire pour crÃ©er et Ã©diter des transactions avec :
@@ -682,14 +682,18 @@ function TransactionForm({
       maxWidth="lg"
       fullWidth
       PaperProps={{
+        component: 'form',
+        onSubmit: handleSubmit(handleFormSubmit),
         sx: {
           minHeight: '640px',
+          maxHeight: '90vh',
           borderRadius: 4,
           overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
         },
       }}
     >
-      <form onSubmit={handleSubmit(handleFormSubmit)}>
         <DialogTitle
           sx={{
             px: { xs: 2, md: 3 },
@@ -1602,7 +1606,6 @@ function TransactionForm({
             {loading ? 'Enregistrement...' : isEditing ? 'Modifier' : 'CrÃ©er'}
           </Button>
         </DialogActions>
-      </form>
     </Dialog>
   );
 }

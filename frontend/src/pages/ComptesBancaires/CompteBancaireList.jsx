@@ -37,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import compteBancaireService from '../../services/compteBancaireService';
+import lettreCreditService from '../../services/lettreCreditService';
 import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
@@ -211,13 +212,20 @@ function CompteBancaireList() {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await compteBancaireService.createMouvement(movementForm.id_compte, {
-        type_mouvement: movementForm.type_mouvement,
-        source: movementForm.source,
-        montant: parseAmount(movementForm.montant),
-        reference: movementForm.reference.trim() || null,
-        notes: movementForm.notes.trim() || null,
-      });
+      if (movementForm.source === 'lc' && movementForm.id_lc) {
+        await lettreCreditService.verserBanque(movementForm.id_lc, {
+          id_compte: Number(movementForm.id_compte),
+          notes: movementForm.notes.trim() || null,
+        });
+      } else {
+        await compteBancaireService.createMouvement(movementForm.id_compte, {
+          type_mouvement: movementForm.type_mouvement,
+          source: movementForm.source,
+          montant: parseAmount(movementForm.montant),
+          reference: movementForm.reference.trim() || null,
+          notes: movementForm.notes.trim() || null,
+        });
+      }
       notification.success('Mouvement bancaire enregistré');
       setOpenMovement(false);
       await fetchData();
@@ -486,6 +494,7 @@ function getInitialMovementForm(idCompte = '') {
     montant: '',
     reference: '',
     notes: '',
+    id_lc: '',
   };
 }
 
@@ -764,6 +773,26 @@ function AddAccountDialog({ open, form, setForm, submitting, onClose, onSubmit }
 }
 
 function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onSubmit }) {
+  const [availableLcs, setAvailableLcs] = useState([]);
+  const [loadingLcs, setLoadingLcs] = useState(false);
+
+  useEffect(() => {
+    if (open && form.source === 'lc') {
+      const fetchLcs = async () => {
+        setLoadingLcs(true);
+        try {
+          const lcs = await lettreCreditService.getAvailable();
+          setAvailableLcs(lcs || []);
+        } catch (error) {
+          console.error('Erreur chargement LC disponibles:', error);
+        } finally {
+          setLoadingLcs(false);
+        }
+      };
+      fetchLcs();
+    }
+  }, [open, form.source]);
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle sx={{ fontWeight: 900 }}>Ajouter un mouvement bancaire</DialogTitle>
@@ -792,6 +821,7 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
                 fullWidth
                 value={form.type_mouvement}
                 onChange={(event) => setForm({ ...form, type_mouvement: event.target.value })}
+                disabled={form.source === 'lc'}
               >
                 <MenuItem value="ENTREE">Entrée</MenuItem>
                 <MenuItem value="SORTIE">Sortie</MenuItem>
@@ -801,7 +831,17 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
                 label="Type"
                 fullWidth
                 value={form.source}
-                onChange={(event) => setForm({ ...form, source: event.target.value })}
+                onChange={(event) => {
+                  const newSource = event.target.value;
+                  const updatedForm = { ...form, source: newSource };
+                  if (newSource === 'lc') {
+                    updatedForm.type_mouvement = 'ENTREE';
+                    updatedForm.reference = '';
+                    updatedForm.id_lc = '';
+                    updatedForm.montant = '';
+                  }
+                  setForm(updatedForm);
+                }}
               >
                 {SOURCE_OPTIONS.map((option) => (
                   <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
@@ -818,14 +858,47 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
                 value={form.montant}
                 onChange={(event) => setForm({ ...form, montant: event.target.value })}
                 inputProps={{ min: 0, step: '0.01' }}
+                disabled={form.source === 'lc'}
+                helperText={form.source === 'lc' ? 'Le montant est défini par la lettre de crédit sélectionnée' : ''}
               />
-              <TextField
-                label="Référence"
-                fullWidth
-                placeholder="N° chèque, virement, LC..."
-                value={form.reference}
-                onChange={(event) => setForm({ ...form, reference: event.target.value })}
-              />
+              {form.source === 'lc' ? (
+                <TextField
+                  select
+                  label="Lettre de crédit"
+                  fullWidth
+                  required
+                  value={form.reference}
+                  onChange={(event) => {
+                    const ref = event.target.value;
+                    const selectedLc = availableLcs.find(lc => lc.numero_reference === ref);
+                    setForm({
+                      ...form,
+                      reference: ref,
+                      id_lc: selectedLc ? selectedLc.id_lc : '',
+                      montant: selectedLc ? String(selectedLc.montant) : '',
+                    });
+                  }}
+                  disabled={loadingLcs}
+                  helperText={loadingLcs ? 'Chargement des LC...' : availableLcs.length === 0 ? 'Aucune LC disponible' : ''}
+                >
+                  <MenuItem value="">
+                    <em>Sélectionner une LC</em>
+                  </MenuItem>
+                  {availableLcs.map((lc) => (
+                    <MenuItem key={lc.id_lc} value={lc.numero_reference}>
+                      {lc.numero_reference} ({formatMontant(parseAmount(lc.montant), { useCompactNotation: false, maximumFractionDigits: 0 })} MAD) {lc.detenteur_nom ? `· ${lc.detenteur_nom}` : ''}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              ) : (
+                <TextField
+                  label="Référence"
+                  fullWidth
+                  placeholder="N° chèque, virement, LC..."
+                  value={form.reference}
+                  onChange={(event) => setForm({ ...form, reference: event.target.value })}
+                />
+              )}
             </Box>
 
             <TextField
@@ -845,7 +918,7 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
           type="submit"
           form="bank-movement-form"
           variant="contained"
-          disabled={submitting || !form.id_compte || !form.montant || Number(form.montant) <= 0}
+          disabled={submitting || !form.id_compte || !form.montant || Number(form.montant) <= 0 || (form.source === 'lc' && !form.reference)}
           startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : null}
         >
           Enregistrer

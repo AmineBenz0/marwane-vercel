@@ -38,7 +38,6 @@ import ProduitDetail from './pages/Produits/ProduitDetail';
 import Caisse from './pages/Caisse';
 import LettresCreditList from './pages/LettresCredit/LettresCreditList';
 import LettreCreditDetail from './pages/LettresCredit/LettreCreditDetail';
-import LCFormPage from './pages/LettresCredit/LCFormPage';
 import ProductionList from './pages/Production/ProductionList';
 import ProductionDashboard from './pages/Production/ProductionDashboard';
 import BatimentProductionPage from './pages/Production/BatimentProductionPage';
@@ -237,16 +236,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/lettres-credit/nouvelle"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <LCFormPage />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+
         <Route
           path="/lettres-credit/:id"
           element={
@@ -257,16 +247,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/lettres-credit/:id/modifier"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <LCFormPage />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
+
         {/* Redirection par défaut : vers /login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 

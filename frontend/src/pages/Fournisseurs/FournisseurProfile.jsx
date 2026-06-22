@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page Profil Fournisseur.
  * 
  * Affiche le profil complet d'un fournisseur avec :
@@ -885,54 +885,71 @@ function FournisseurProfile() {
 
       <Box sx={{ display: activeTab === 'produits' ? 'block' : 'none' }}>
       {/* Section Produits Vendus */}
-      {produitsVendus && produitsVendus.produits && produitsVendus.produits.length > 0 && (
-        <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-          <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-            <Typography 
-              variant="h6" 
-              component="h2" 
-              gutterBottom
-              sx={{ 
-                fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' },
-                mb: { xs: 2, sm: 2.5, md: 3 }
-              }}
-            >
-             Produits achetés chez ce fournisseur
-            </Typography>
+      <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Typography 
+            variant="h6" 
+            component="h2" 
+            gutterBottom
+            sx={{ 
+              fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' },
+              mb: { xs: 2, sm: 2.5, md: 3 }
+            }}
+          >
+           Produits achetés chez ce fournisseur
+          </Typography>
 
-            {/* KPIs Produits */}
-            <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-              <Grid item xs={12} sm={6} md={4}>
-                <StatCard
-                  title="Produits différents"
-                  value={produitsVendus.nombre_produits_differents || 0}
-                  icon={<StoreIcon />}
-                  valueFormat="number"
-                  color="info"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <StatCard
-                  title="Quantité totale"
-                  value={produitsVendus.quantite_totale_tous_produits || 0}
-                  icon={<InventoryIcon />}
-                  valueFormat="number"
-                  color="warning"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <StatCardWithGauge
-                  title="SCORE"
-                  score={fournisseurScore?.score_total || 0}
-                  label={fournisseurScore?.label || ''}
-                  color={fournisseurScore?.couleur || 'primary'}
-                  loading={loading}
-                />
-              </Grid>
+          {/* KPIs Produits */}
+          <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard
+                title="Produits différents"
+                value={produitsVendus?.nombre_produits_differents || 0}
+                icon={<StoreIcon />}
+                valueFormat="number"
+                color="info"
+              />
             </Grid>
-          </CardContent>
-        </Card>
-      )}
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard
+                title="Quantité totale"
+                value={produitsVendus?.quantite_totale_tous_produits || 0}
+                icon={<InventoryIcon />}
+                valueFormat="number"
+                color="warning"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCardWithGauge
+                title="SCORE"
+                score={fournisseurScore?.score_total || 0}
+                label={fournisseurScore?.label || ''}
+                color={fournisseurScore?.couleur || 'primary'}
+                loading={loading}
+              />
+            </Grid>
+          </Grid>
+
+          {(!produitsVendus?.produits || produitsVendus.produits.length === 0) && (
+            <Box sx={{ 
+              textAlign: 'center', 
+              py: 4, 
+              px: 2, 
+              border: '1px dashed', 
+              borderColor: 'divider', 
+              borderRadius: 2, 
+              backgroundColor: 'action.hover' 
+            }}>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                Aucun produit acheté pour le moment
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Les statistiques d'achat s'afficheront dès que des transactions seront créées pour ce fournisseur.
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
       </Box>
 
       <Box sx={{ display: activeTab === 'transactions' ? 'block' : 'none' }}>

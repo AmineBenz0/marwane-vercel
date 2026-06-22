@@ -39,6 +39,7 @@ import { get } from '../../services/api';
 import lettreCreditService from '../../services/lettreCreditService';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
+import LCFormModal from './LCFormModal';
 
 const FILTERS = [
   { value: 'disponibles', label: 'Disponibles' },
@@ -85,6 +86,7 @@ function LettresCreditList() {
   const [targetId, setTargetId] = useState('');
   const [notes, setNotes] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -248,7 +250,7 @@ function LettresCreditList() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => navigate('/lettres-credit/nouvelle')}
+            onClick={() => setIsCreateModalOpen(true)}
           >
             Nouvelle LC
           </Button>
@@ -300,7 +302,7 @@ function LettresCreditList() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Rechercher référence, client ou banque"
-              fullWidth
+              sx={{ flex: 1 }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -310,7 +312,7 @@ function LettresCreditList() {
               }}
             />
 
-            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: { xs: 0.5, lg: 0 } }}>
+            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', flexShrink: 0, pb: { xs: 0.5, lg: 0 } }}>
               {FILTERS.map((filter) => (
                 <Chip
                   key={filter.value}
@@ -363,7 +365,7 @@ function LettresCreditList() {
               <CircularProgress />
             </Box>
           ) : filteredLcs.length === 0 ? (
-            <EmptyLcState activeFilter={activeFilter} onCreate={() => navigate('/lettres-credit/nouvelle')} />
+            <EmptyLcState activeFilter={activeFilter} onCreate={() => setIsCreateModalOpen(true)} />
           ) : (
             <Grid container spacing={2}>
               {filteredLcs.map((lc) => (
@@ -394,6 +396,12 @@ function LettresCreditList() {
         loading={actionLoading}
         onClose={closeActionDialog}
         onConfirm={handleConfirmAction}
+      />
+
+      <LCFormModal
+        open={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={fetchData}
       />
     </Box>
   );
