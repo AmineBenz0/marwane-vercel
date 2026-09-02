@@ -8,7 +8,7 @@
  * - Support pour filtres "forcés" en inline (toujours visibles)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 const TRACKING_PREFIX = 'filter_tracking_';
 const MIN_USAGE_THRESHOLD = 3; // Nombre minimum d'utilisations pour considérer un filtre populaire

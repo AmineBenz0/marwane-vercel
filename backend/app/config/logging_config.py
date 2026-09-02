@@ -35,7 +35,15 @@ class JSONFormatter(logging.Formatter):
         }
         
         # Ajouter les données supplémentaires si présentes (depuis extra ou attributs)
-        extra_fields = ["user_id", "endpoint", "method", "status_code", "duration_ms", "ip_address"]
+        extra_fields = [
+            "user_id",
+            "endpoint",
+            "method",
+            "status_code",
+            "duration_ms",
+            "ip_address",
+            "request_id",
+        ]
         for field in extra_fields:
             value = getattr(record, field, None)
             if value is not None:

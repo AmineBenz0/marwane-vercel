@@ -107,3 +107,15 @@ L'API sera accessible à :
 - `GET /` : Route principale de test
 - `GET /health` : Vérification de santé de l'API
 
+## Vérification du déploiement
+
+Pour une instance Vercel, utilisez les endpoints suivants :
+
+- `GET /api/v1/health/live` : vérifie que la fonction est chargée, sans accès à la base
+- `GET /api/v1/health/ready` : vérifie que la base de données est joignable
+
+Les variables `DATABASE_URL`, `SECRET_KEY`, `DEBUG`, `ENABLE_AUTH` et
+`ENABLE_RATE_LIMITING` doivent être configurées dans l'environnement Vercel.
+L'application refuse automatiquement les valeurs locales ou dangereuses en
+preview et en production.
+

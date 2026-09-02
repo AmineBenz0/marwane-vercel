@@ -230,7 +230,6 @@ const shouldShowNotification = (status) => {
 
 // ----- Gestion du rafraîchissement de token (single-flight) -----
 let isRefreshing = false;
-let refreshPromise = null;
 let pendingRequests = [];
 
 /**
@@ -377,15 +376,13 @@ api.interceptors.response.use(
           // Déclencher le refresh si pas déjà en cours
           if (!isRefreshing) {
             isRefreshing = true;
-            refreshPromise = performTokenRefresh()
+            performTokenRefresh()
               .then((newAccessToken) => {
                 isRefreshing = false;
-                refreshPromise = null;
                 resolvePendingRequests(newAccessToken);
               })
               .catch((refreshErr) => {
                 isRefreshing = false;
-                refreshPromise = null;
                 rejectPendingRequests(refreshErr);
                 redirectToLogin();
               });
@@ -459,12 +456,8 @@ api.interceptors.response.use(
  * const filtered = await api.get('/clients', { params: { search: 'test' } });
  */
 export const get = async (url, config = {}) => {
-  try {
-    const response = await api.get(url, config);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.get(url, config);
+  return response.data;
 };
 
 /**
@@ -479,12 +472,8 @@ export const get = async (url, config = {}) => {
  * const newClient = await api.post('/clients', { nom_client: 'Nouveau Client' });
  */
 export const post = async (url, data = {}, config = {}) => {
-  try {
-    const response = await api.post(url, data, config);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.post(url, data, config);
+  return response.data;
 };
 
 /**
@@ -499,12 +488,8 @@ export const post = async (url, data = {}, config = {}) => {
  * const updated = await api.put('/clients/1', { nom_client: 'Client Modifié' });
  */
 export const put = async (url, data = {}, config = {}) => {
-  try {
-    const response = await api.put(url, data, config);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.put(url, data, config);
+  return response.data;
 };
 
 /**
@@ -519,12 +504,8 @@ export const put = async (url, data = {}, config = {}) => {
  * const patched = await api.patch('/clients/1', { nom_client: 'Client Partiellement Modifié' });
  */
 export const patch = async (url, data = {}, config = {}) => {
-  try {
-    const response = await api.patch(url, data, config);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.patch(url, data, config);
+  return response.data;
 };
 
 /**
@@ -538,12 +519,8 @@ export const patch = async (url, data = {}, config = {}) => {
  * await api.delete('/clients/1');
  */
 export const del = async (url, config = {}) => {
-  try {
-    const response = await api.delete(url, config);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.delete(url, config);
+  return response.data;
 };
 
 /**
@@ -558,12 +535,8 @@ export const del = async (url, config = {}) => {
  * const produitsFournisseur = await getProduitsParType('fournisseur', { est_actif: true });
  */
 export const getProduitsParType = async (typeTransaction, params = {}) => {
-  try {
-    const response = await api.get(`/produits/par-type/${typeTransaction}`, { params });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.get(`/produits/par-type/${typeTransaction}`, { params });
+  return response.data;
 };
 
 /**

@@ -4,6 +4,7 @@ Enregistre automatiquement toutes les requêtes avec leurs métadonnées.
 """
 import time
 import logging
+from uuid import uuid4
 from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -60,6 +61,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         method = request.method
         endpoint = request.url.path
         client_ip = self._get_client_ip(request)
+        request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        request.state.request_id = request_id
         
         # Initialiser les données de log
         user_id = None
@@ -133,6 +136,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 "status_code": status_code,
                 "duration_ms": duration_ms,
                 "ip_address": client_ip,
+                "request_id": request_id,
             }
             
             # Logger selon le niveau
@@ -147,6 +151,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     extra=log_extra
                 )
         
+        if response is not None:
+            response.headers.setdefault("X-Request-ID", request_id)
+
         return response
     
     def _get_client_ip(self, request: Request) -> str:

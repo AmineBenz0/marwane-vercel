@@ -12,6 +12,7 @@ import {
   Divider,
   IconButton,
   Box,
+  Typography,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
@@ -95,6 +96,8 @@ function LCFormModal({ open, onClose, onSuccess }) {
       notification.error(err?.message || 'Erreur lors de l\'enregistrement');
     }
   };
+
+  if (!open) return null;
 
   return (
     <Dialog 

@@ -10,27 +10,6 @@
 import * as XLSX from 'xlsx';
 
 /**
- * Convertit une valeur formatée en valeur brute pour Excel.
- * Gère les composants React (comme les Chips) en extrayant le texte.
- */
-const extractValue = (value, column) => {
-  // Si une fonction de formatage est définie, on doit extraire la valeur brute
-  // Pour l'export, on utilise directement la valeur brute de la ligne
-  if (value === null || value === undefined) {
-    return '';
-  }
-  
-  // Si c'est un objet React (comme un Chip), on essaie d'extraire le texte
-  if (typeof value === 'object' && value !== null) {
-    // Si c'est un Chip ou autre composant React, on retourne la valeur brute
-    // Pour l'export, on préfère utiliser la valeur brute de la ligne originale
-    return String(value);
-  }
-  
-  return value;
-};
-
-/**
  * Exporte les données vers Excel.
  */
 export const exportToExcel = (data, columns, filename = 'export', sheetName = 'Données') => {

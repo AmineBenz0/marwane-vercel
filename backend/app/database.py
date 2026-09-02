@@ -12,11 +12,35 @@ database_url = settings.DATABASE_URL
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(
-    database_url,
-    pool_pre_ping=True,  # Vérifie la connexion avant utilisation
-    echo=settings.DEBUG,  # Affiche les requêtes SQL en mode debug
-)
+if not database_url:
+    raise RuntimeError("DATABASE_URL must be configured")
+
+engine_options = {"echo": settings.DEBUG}
+
+# Vercel peut conserver une instance de fonction entre deux invocations.
+# Pour PostgreSQL, recycle les connexions inactives et limite le nombre de
+# connexions ouvertes par instance. Les tests SQLite n'acceptent pas ces
+# options de pool, d'où la condition explicite.
+if not database_url.startswith("sqlite"):
+    engine_options.update(
+        {
+            "pool_pre_ping": True,
+            "pool_recycle": 300,
+        }
+    )
+
+    if settings.ENVIRONMENT.lower() in {"production", "preview"}:
+        engine_options.update(
+            {
+                "pool_size": 1,
+                "max_overflow": 0,
+                "pool_timeout": 10,
+            }
+        )
+        if "sslmode=" not in database_url.lower():
+            engine_options["connect_args"] = {"sslmode": "require"}
+
+engine = create_engine(database_url, **engine_options)
 
 # Session locale
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -36,6 +60,9 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

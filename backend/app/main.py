@@ -2,17 +2,20 @@
 Point d'entrée principal de l'application FastAPI.
 """
 import logging
-from fastapi import FastAPI
+from uuid import uuid4
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.exc import InterfaceError, OperationalError
 from app.config import settings
 from app.config.logging_config import setup_logging
-from app.database import engine, Base
+from app.database import engine
 from app.routers import (
     auth, users, clients, fournisseurs, produits, 
     transactions, caisse, paiements, lettres_credit, cessions_lc,
-    batiments, productions, cycles_production, charges, comptes_bancaires, tasks
+    batiments, productions, cycles_production, charges, comptes_bancaires, tasks,
+    health,
 )
 from app.utils.rate_limit import limiter
 from app.middleware.logging_middleware import LoggingMiddleware
@@ -27,6 +30,42 @@ app = FastAPI(
 
 # Attacher le limiter à l'application
 app.state.limiter = limiter
+
+
+def _request_id(request: Request) -> str:
+    """Retourne l'identifiant de corrélation fourni ou en crée un."""
+    return request.headers.get("X-Request-ID") or uuid4().hex
+
+
+async def database_error_handler(request: Request, exc: Exception):
+    """Convertit les pannes DB en réponse stable et non sensible."""
+    request_id = _request_id(request)
+    logging.getLogger(__name__).exception(
+        "Database unavailable",
+        exc_info=(type(exc), exc, exc.__traceback__),
+        extra={
+            "endpoint": request.url.path,
+            "method": request.method,
+            "request_id": request_id,
+        },
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Service temporairement indisponible. Réessayez dans quelques instants.",
+            "code": "DATABASE_UNAVAILABLE",
+            "request_id": request_id,
+        },
+        headers={
+            "Cache-Control": "no-store",
+            "Retry-After": "5",
+            "X-Request-ID": request_id,
+        },
+    )
+
+
+app.add_exception_handler(OperationalError, database_error_handler)
+app.add_exception_handler(InterfaceError, database_error_handler)
 
 # Personnaliser le gestionnaire d'erreur pour retourner le format FastAPI standard
 @app.exception_handler(RateLimitExceeded)
@@ -126,3 +165,4 @@ app.include_router(cycles_production.router, prefix=settings.API_V1_PREFIX)
 app.include_router(charges.router, prefix=settings.API_V1_PREFIX)
 app.include_router(comptes_bancaires.router, prefix=settings.API_V1_PREFIX)
 app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)
+app.include_router(health.router, prefix=settings.API_V1_PREFIX)

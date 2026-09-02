@@ -149,13 +149,6 @@ export const exportToPDF = (
       didParseCell: function(data) {
         // Colorer les montants selon le type de transaction
         if (data.column.index === columns.findIndex(c => c.id === 'montant_total') && data.section === 'body') {
-          const row = tableData[data.row.index];
-          const originalRow = data.row.raw;
-          
-          // Vérifier si c'est une entrée (client) ou sortie (fournisseur)
-          const dataRow = tableData[data.row.index];
-          const clientColIndex = columns.findIndex(c => c.id === 'client_ou_fournisseur');
-          
           // Si on peut détecter le type depuis les données originales
           if (options.colorByType) {
             const isEntree = options.colorByType(data.row.index, tableData);
@@ -168,7 +161,7 @@ export const exportToPDF = (
         }
       },
       margin: { top: 35, right: margin, bottom: 20, left: margin },
-      didDrawPage: function(data) {
+      didDrawPage: function() {
         // Pied de page
         const pageCount = doc.internal.pages.length - 1;
         const pageNumber = doc.internal.getCurrentPageInfo().pageNumber;
@@ -226,7 +219,6 @@ export const exportCaisseReport = (mouvements, solde, dateDebut, dateFin) => {
       format: 'a4',
     });
 
-    const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
 
     // Couleurs

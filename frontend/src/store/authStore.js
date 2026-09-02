@@ -4,7 +4,7 @@
  * Gère :
  * - L'utilisateur connecté (id, email, role)
  * - Les tokens (access + refresh)
- * - Les fonctions : login, logout, refreshToken
+ * - Les fonctions : login, logout, refreshAccessToken
  * - La persistance dans localStorage
  */
 
@@ -120,7 +120,7 @@ const extractUserFromToken = (accessToken) => {
  * Actions :
  * - login: Connecte un utilisateur avec email et mot de passe
  * - logout: Déconnecte l'utilisateur et nettoie le store
- * - refreshToken: Rafraîchit le token d'accès en utilisant le refresh token
+ * - refreshAccessToken: Rafraîchit le token d'accès en utilisant le refresh token
  * - setUser: Met à jour les informations utilisateur (utilisé après refresh)
  */
 const useAuthStore = create(
@@ -206,7 +206,7 @@ const useAuthStore = create(
        * @returns {Promise<string>} Le nouveau token d'accès
        * @throws {Error} Si le rafraîchissement échoue
        */
-      refreshToken: async () => {
+      refreshAccessToken: async () => {
         const { refreshToken: currentRefreshToken } = get();
 
         if (!currentRefreshToken) {

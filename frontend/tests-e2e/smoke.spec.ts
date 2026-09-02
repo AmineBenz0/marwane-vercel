@@ -18,6 +18,17 @@ async function login(page: import('@playwright/test').Page) {
 }
 
 test.describe('UI smoke (non-technical user flows)', () => {
+  test('Letters of credit page renders without runtime errors', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await login(page);
+    await page.goto('/lettres-credit');
+
+    await expect(page.getByRole('heading', { name: /lettres de cr[ée]dit/i })).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
   test('Login -> dashboard loads without server error banner', async ({ page }) => {
     await login(page);
     await expect(page.getByRole('heading', { name: /accueil quotidien/i })).toBeVisible();
