@@ -154,7 +154,7 @@ function Dashboard() {
           transactions30JoursResponse,
           productionResponse,
         ] = await Promise.all([
-          get('/caisse/solde'),
+          get('/caisse/solde/complet'),
           get('/transactions', {
             params: {
               date_debut: format(debutMois, 'yyyy-MM-dd'),
@@ -185,7 +185,7 @@ function Dashboard() {
         const ventes = transactionsMois.filter((t) => t.id_client !== null);
         const achats = transactionsMois.filter((t) => t.id_fournisseur !== null);
 
-        setSoldeCaisse(parseFloat(soldeResponse.solde_actuel || 0));
+        setSoldeCaisse(parseFloat(soldeResponse.solde_reel ?? soldeResponse.solde_theorique ?? 0));
         setNbTransactionsMois(transactionsMois.length);
         setTotalVentes(ventes.reduce((sum, t) => sum + parseFloat(t.montant_total || 0), 0));
         setTotalAchats(achats.reduce((sum, t) => sum + parseFloat(t.montant_total || 0), 0));
@@ -429,9 +429,9 @@ function Dashboard() {
           <MetricCard
             label="Argent disponible"
             value={formatMontant(soldeCaisse, { useCompactNotation: false })}
-            helper="Solde de caisse"
+            helper={soldeCaisse < 0 ? 'Solde réel de caisse — à régulariser' : 'Solde réel de caisse'}
             icon={<WalletIcon />}
-            color="#1D6F50"
+            color={soldeCaisse < 0 ? '#A84435' : '#1D6F50'}
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
