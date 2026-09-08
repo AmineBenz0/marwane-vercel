@@ -53,6 +53,21 @@ def test_production_configuration_rejects_shared_or_privileged_database_roles():
         )
 
 
+def test_production_configuration_rejects_unrecognized_database_roles():
+    with pytest.raises(ValueError, match="dedicated app_runtime role"):
+        Settings(
+            ENVIRONMENT="production",
+            DATABASE_URL="postgresql://runtime_user:password@db.example.com:5432/app?sslmode=require",
+            MIGRATION_DATABASE_URL="postgresql://migration_user:password@db.example.com:5432/app?sslmode=require",
+            SECRET_KEY="a" * 64,
+            DEBUG=False,
+            ENABLE_AUTH=True,
+            ENABLE_RATE_LIMITING=True,
+            CRON_SECRET="c" * 64,
+            CORS_ORIGINS="https://app.example.com",
+        )
+
+
 def test_production_configuration_rejects_local_only_cors_origins():
     with pytest.raises(ValueError, match="CORS_ORIGINS"):
         Settings(

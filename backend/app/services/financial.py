@@ -27,6 +27,15 @@ def validate_payment_idempotency(existing, requested) -> None:
         )
 
 
+def validate_payment_date(transaction: Transaction, payment_date: date) -> None:
+    """Reject a payment posted before the transaction it settles."""
+    if payment_date < transaction.date_transaction:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La date du paiement ne peut pas être antérieure à la transaction",
+        )
+
+
 def payment_status(transaction: Transaction, today: Optional[date] = None) -> str:
     """Return the canonical payment status, including the overdue state."""
     status = transaction.statut_paiement

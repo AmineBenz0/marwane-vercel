@@ -40,10 +40,9 @@ Le fichier `.env` est déjà créé avec des valeurs par défaut. Pour la produc
 - `SECRET_KEY` : Générez une clé secrète forte pour JWT
 - `DATABASE_URL` : Connexion runtime Supabase avec pooler adapté à Vercel
 - `MIGRATION_DATABASE_URL` : Connexion de migration séparée et privilégiée
-- `DATABASE_URL` doit utiliser un rôle runtime dédié (par exemple
-  `app_runtime`), jamais `postgres`, `service_role` ou un autre rôle
-  administrateur. `MIGRATION_DATABASE_URL` doit utiliser un rôle différent
-  (par exemple `app_migrator`).
+- `DATABASE_URL` doit utiliser le rôle runtime dédié `app_runtime`, jamais
+  `postgres`, `service_role` ou un autre rôle administrateur.
+  `MIGRATION_DATABASE_URL` doit utiliser le rôle distinct `app_migrator`.
 - `SECRET_KEY`, `CRON_SECRET` : secrets longs, distincts par environnement
 - `CORS_ORIGINS` : origines HTTPS explicites de l'application déployée; les
   origines localhost seules sont refusées en preview et en production.

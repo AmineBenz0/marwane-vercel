@@ -1,5 +1,6 @@
 """Atomic BOM execution and transformation history."""
 
+from datetime import datetime, time, timezone
 from decimal import Decimal
 from typing import List
 
@@ -200,6 +201,11 @@ def create_transformation(
         costs[product_id] = unit_cost
         total_cost += quantity * unit_cost
     output_product_id, output_quantity = outputs[0]
+    movement_date = datetime.combine(
+        payload.date_transformation,
+        time.min,
+        tzinfo=timezone.utc,
+    )
 
     transformation = Transformation(
         id_nomenclature=bom.id_nomenclature if bom else None,
@@ -230,10 +236,10 @@ def create_transformation(
     user_id = current_user.id_utilisateur if current_user else None
     for product_id, quantity in inputs:
         db.add(TransformationLigne(id_transformation=transformation.id_transformation, id_produit=product_id, quantite=quantity, type_ligne="INPUT"))
-        record_movement(db, id_produit=product_id, quantite_delta=-quantity, cout_unitaire=costs[product_id], type_mouvement="transformation_input", source_type="transformation", source_id=transformation.id_transformation, id_utilisateur=user_id)
+        record_movement(db, id_produit=product_id, quantite_delta=-quantity, cout_unitaire=costs[product_id], type_mouvement="transformation_input", source_type="transformation", source_id=transformation.id_transformation, id_utilisateur=user_id, date_mouvement=movement_date)
     db.add(TransformationLigne(id_transformation=transformation.id_transformation, id_produit=output_product_id, quantite=output_quantity, type_ligne="OUTPUT"))
     output_cost = total_cost / output_quantity if output_quantity else Decimal("0")
-    record_movement(db, id_produit=output_product_id, quantite_delta=output_quantity, cout_unitaire=output_cost, type_mouvement="transformation_output", source_type="transformation", source_id=transformation.id_transformation, id_utilisateur=user_id)
+    record_movement(db, id_produit=output_product_id, quantite_delta=output_quantity, cout_unitaire=output_cost, type_mouvement="transformation_output", source_type="transformation", source_id=transformation.id_transformation, id_utilisateur=user_id, date_mouvement=movement_date)
     db.commit()
     db.refresh(transformation)
     return _read_transformation(transformation)

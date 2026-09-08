@@ -13,8 +13,8 @@ the codebase were removed; open items are tracked as release gates below.
 - Receivables and payables endpoints and UI pages.
 - Persistent duplicate-safe overdue alerts and protected scheduled job.
 - Unified search endpoint and backend-calculated monthly report.
-- Frontend and backend dependency gates pass without high or critical
-  advisories.
+- Backend and frontend dependency-audit gates are configured in CI; their
+  release status is recorded only from the corresponding GitHub Actions run.
 
 ## Release gates still required
 
@@ -23,8 +23,9 @@ the codebase were removed; open items are tracked as release gates below.
 - Backfill legacy stock movements and reconcile balances before enabling strict sales stock checks globally.
 - Validate real production totals against the reconciliation script.
 - Complete authenticated desktop/mobile Playwright flows and payment/BOM test data.
-- Only moderate transitive frontend advisories remain and are documented for a
-  later compatible major upgrade.
+- Any remaining moderate transitive frontend advisories must be confirmed by
+  the CI `npm audit` result and documented before release; local audit output
+  is not treated as evidence when the package manager is unavailable.
 - Complete backup restoration drill and controlled Vercel promotion.
 
 ## Explicit product decisions

@@ -13,6 +13,8 @@ DEFAULT_LOCAL_DATABASE_URL = (
     "@127.0.0.1:5432/comptabilite_db"
 )
 DEFAULT_SECRET_KEY = "your-secret-key-change-this-in-production"
+RUNTIME_DATABASE_ROLE = "app_runtime"
+MIGRATION_DATABASE_ROLE = "app_migrator"
 DEFAULT_ENVIRONMENT = (
     os.getenv("VERCEL_ENV")
     or os.getenv("ENVIRONMENT")
@@ -131,6 +133,16 @@ class Settings(BaseSettings):
         ):
             configuration_errors.append(
                 "MIGRATION_DATABASE_URL must use a different database role from DATABASE_URL"
+            )
+
+        if runtime_role != RUNTIME_DATABASE_ROLE:
+            configuration_errors.append(
+                f"DATABASE_URL must use the dedicated {RUNTIME_DATABASE_ROLE} role"
+            )
+
+        if migration_role != MIGRATION_DATABASE_ROLE:
+            configuration_errors.append(
+                f"MIGRATION_DATABASE_URL must use the dedicated {MIGRATION_DATABASE_ROLE} role"
             )
 
         if runtime_role in privileged_runtime_roles:

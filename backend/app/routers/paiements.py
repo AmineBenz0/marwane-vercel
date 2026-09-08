@@ -20,7 +20,7 @@ from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.user import Utilisateur
 from app.services.ledger import record_correction, void_cash_movement
-from app.services.financial import validate_payment_idempotency
+from app.services.financial import validate_payment_date, validate_payment_idempotency
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
     PaiementBatchCreate, StatutPaiementTransaction, PaiementSummary
@@ -185,7 +185,11 @@ def _update_caisse_movement(
         return None
 
     type_mouvement = 'ENTREE' if transaction.id_client is not None else 'SORTIE'
-    expected_date = datetime.combine(paiement.date_paiement, datetime.min.time())
+    expected_date = datetime.combine(
+        paiement.date_paiement,
+        datetime.min.time(),
+        tzinfo=timezone.utc,
+    )
     if existing and (
         existing.montant == paiement.montant
         and existing.type_mouvement == type_mouvement
@@ -376,6 +380,8 @@ def create_paiement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Transaction avec l'ID {paiement_data.id_transaction} introuvable"
         )
+
+    validate_payment_date(transaction, paiement_data.date_paiement)
     
     # Note: Les paiements dépassant le montant restant sont autorisés (avances, surpaiements)
     
@@ -723,6 +729,8 @@ def create_paiements_batch(
             transaction = db.query(Transaction).filter(Transaction.id_transaction == p_data.id_transaction).first()
             if not transaction:
                 raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
+
+            validate_payment_date(transaction, p_data.date_paiement)
                 
             _validate_lc_payment(db, p_data, transaction, current_user)
             

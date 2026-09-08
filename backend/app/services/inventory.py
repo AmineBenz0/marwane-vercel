@@ -5,7 +5,7 @@ movements, which makes corrections auditable and safe to retry.
 """
 
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, time, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
@@ -150,6 +150,11 @@ def record_transaction_movement(
         return None
 
     user_id = current_user.id_utilisateur if current_user else None
+    movement_date = datetime.combine(
+        transaction.date_transaction,
+        time.min,
+        tzinfo=timezone.utc,
+    )
     if transaction.id_fournisseur is not None:
         return record_movement(
             db,
@@ -161,6 +166,7 @@ def record_transaction_movement(
             source_id=transaction.id_transaction,
             id_utilisateur=user_id,
             notes="Entrée de stock liée à un achat",
+            date_mouvement=movement_date,
         )
 
     available = get_stock_quantity(db, produit.id_produit)
@@ -192,6 +198,7 @@ def record_transaction_movement(
         source_id=transaction.id_transaction,
         id_utilisateur=user_id,
         notes="Sortie de stock liée à une vente",
+        date_mouvement=movement_date,
     )
 
 

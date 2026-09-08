@@ -5,6 +5,7 @@ from app.models.alert import Alerte
 from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.financial_correction import CorrectionFinanciere
+from app.models.inventory import MouvementStock
 from app.models.transaction import Transaction
 from app.services.alerts import create_overdue_alerts
 from app.services.financial import remaining_amount_as_of
@@ -154,6 +155,77 @@ def test_receivables_support_due_date_range(client, auth_headers):
     )
     assert sorted_items.status_code == 200, sorted_items.text
     assert sorted_items.json()["items"][0]["montant_total"] == "20.00"
+
+
+def test_payment_and_inventory_dates_respect_source_dates(client, db_session, auth_headers):
+    client_row = client.post(
+        "/api/v1/clients",
+        json={"nom_client": "Client Dates Intégrité"},
+        headers=auth_headers,
+    ).json()
+    product = create_product(client, "Service Dates Intégrité", "service", True, False)
+    transaction_date = date.today() - timedelta(days=2)
+    transaction = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": transaction_date.isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 25,
+            "id_client": client_row["id_client"],
+        },
+        headers=auth_headers,
+    ).json()
+    invalid_payment = client.post(
+        "/api/v1/paiements",
+        json={
+            "id_transaction": transaction["id_transaction"],
+            "date_paiement": (transaction_date - timedelta(days=1)).isoformat(),
+            "montant": 25,
+            "type_paiement": "cash",
+        },
+        headers=auth_headers,
+    )
+    assert invalid_payment.status_code == 400
+
+    supplier = client.post(
+        "/api/v1/fournisseurs",
+        json={"nom_fournisseur": "Fournisseur Dates Intégrité"},
+        headers=auth_headers,
+    ).json()
+    raw = create_product(client, "Matière Dates Intégrité", "matiere_premiere", False, True)
+    purchase = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": transaction_date.isoformat(),
+            "id_produit": raw["id_produit"],
+            "quantite": 3,
+            "prix_unitaire": 2,
+            "id_fournisseur": supplier["id_fournisseur"],
+        },
+        headers=auth_headers,
+    ).json()
+    movement = db_session.query(MouvementStock).filter(
+        MouvementStock.source_type == "transaction",
+        MouvementStock.source_id == purchase["id_transaction"],
+    ).one()
+    assert movement.date_mouvement.date() == transaction_date
+
+    moved_date = date.today() - timedelta(days=1)
+    updated = client.put(
+        f"/api/v1/transactions/{purchase['id_transaction']}",
+        json={"date_transaction": moved_date.isoformat()},
+        headers=auth_headers,
+    )
+    assert updated.status_code == 200, updated.text
+    db_session.expire_all()
+    movements = db_session.query(MouvementStock).filter(
+        MouvementStock.source_type == "transaction",
+        MouvementStock.source_id == purchase["id_transaction"],
+    ).all()
+    assert len(movements) == 2
+    active_movement = next(item for item in movements if item.id_mouvement_inverse is None)
+    assert active_movement.date_mouvement.date() == moved_date
 
 
 def test_overdue_alert_generation_is_idempotent(client, db_session, auth_headers):

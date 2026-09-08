@@ -593,8 +593,15 @@ def update_transaction(
     
     update_data = transaction_data.model_dump(exclude_unset=True)
 
+    final_date_transaction = update_data.get("date_transaction", transaction.date_transaction)
+    if any(payment.date_paiement < final_date_transaction for payment in transaction.paiements):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La date de transaction ne peut pas être postérieure à un paiement existant",
+        )
+
     inventory_changed = any(field in update_data for field in {
-        "id_produit", "quantite", "prix_unitaire", "id_client", "id_fournisseur", "est_actif"
+        "date_transaction", "id_produit", "quantite", "prix_unitaire", "id_client", "id_fournisseur", "est_actif"
     })
     if inventory_changed:
         reverse_source_movements(
@@ -658,7 +665,6 @@ def update_transaction(
     )
     final_id_client = update_data.get("id_client", transaction.id_client)
     final_id_batiment = update_data.get("id_batiment", transaction.id_batiment)
-    final_date_transaction = update_data.get("date_transaction", transaction.date_transaction)
     final_id_cycle = update_data.get("id_cycle", transaction.id_cycle)
     _validate_source_batiment(
         id_batiment=final_id_batiment,
