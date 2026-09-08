@@ -134,6 +134,16 @@ class TestProductUpdateWithTypes:
 
 class TestProductFilteringByType:
     """Tests pour le filtrage des produits par type de transaction."""
+
+    def test_filter_products_with_invalid_product_type_fails(self, client, auth_headers):
+        """Le filtre catalogue applique le même enum que la création produit."""
+        response = client.get(
+            "/api/v1/produits",
+            params={"type_produit": "type-invalide"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     
     @pytest.fixture
     def sample_products(self, client, auth_headers, db_session):

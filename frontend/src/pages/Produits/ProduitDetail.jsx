@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -52,6 +53,12 @@ const formatDate = (value) => {
 
 const formatQuantity = (value) => Number(value || 0).toLocaleString('fr-FR');
 
+const productTypeLabels = {
+  matiere_premiere: 'Matière première',
+  produit_fini: 'Produit fini',
+  service: 'Service',
+};
+
 function ProduitDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -75,7 +82,7 @@ function ProduitDetail() {
     return map;
   }, [fournisseurs]);
 
-  const loadProduit = async () => {
+  const loadProduit = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -104,11 +111,11 @@ function ProduitDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadProduit();
-  }, [id]);
+  }, [loadProduit]);
 
   const insights = useMemo(() => {
     const achats = transactions.filter((transaction) => transaction.id_fournisseur !== null);
@@ -217,7 +224,11 @@ function ProduitDetail() {
     );
   }
 
-  const isEggProduct = produit.pour_clients;
+  // Egg production products are a legacy bridge identified by their
+  // generated name. `pour_clients` is a transaction capability flag and is
+  // true for ordinary finished products as well, so it must not control the
+  // product detail workflow.
+  const isEggProduct = produit.nom_produit?.trim().toLowerCase().startsWith('oeufs -');
   const lastSupplier = insights.lastPurchase
     ? fournisseursMap.get(insights.lastPurchase.id_fournisseur) || `Fournisseur #${insights.lastPurchase.id_fournisseur}`
     : 'Aucun achat';
@@ -239,7 +250,7 @@ function ProduitDetail() {
             />
           </Stack>
           <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-            Un seul produit, même s'il est acheté chez plusieurs fournisseurs.
+            {productTypeLabels[produit.type_produit] || 'Produit'} · référentiel unique et historique auditable.
           </Typography>
         </Box>
 
@@ -263,7 +274,7 @@ function ProduitDetail() {
 
       {isEggProduct && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Les œufs sont suivis dans la section Production. Cette fiche reste accessible pour l'historique, mais elle n'est plus gérée dans le catalogue des produits achetés.
+          Les œufs sont suivis dans la section Production. Cette fiche reste accessible pour l&apos;historique, mais elle n&apos;est plus gérée dans le catalogue des produits achetés.
         </Alert>
       )}
 
@@ -347,14 +358,14 @@ function ProduitDetail() {
           <Card variant="outlined" sx={{ borderRadius: 4 }}>
             <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Typography variant="h6" fontWeight={900} sx={{ mb: 0.5 }}>
-                Ce qu'il faut retenir
+                Ce qu&apos;il faut retenir
               </Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Cette fiche sert à comparer les achats d'un même produit sans créer de doublons.
+                Cette fiche sert à comparer les achats d&apos;un même produit sans créer de doublons.
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <Stack spacing={1.5}>
-                <BusinessLine label="Type" value="Produit acheté fournisseur" />
+                <BusinessLine label="Type" value={productTypeLabels[produit.type_produit] || 'Produit'} />
                 <BusinessLine label="Statut" value={produit.est_actif ? 'Actif' : 'Inactif'} />
                 <BusinessLine label="Dernier fournisseur" value={lastSupplier} />
               </Stack>
@@ -381,7 +392,7 @@ function ProduitDetail() {
         <DialogTitle>Désactiver ce produit ?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Le produit <strong>{produit.nom_produit}</strong> restera dans l'historique, mais ne sera plus proposé dans les nouveaux achats.
+            Le produit <strong>{produit.nom_produit}</strong> restera dans l&apos;historique, mais ne sera plus proposé dans les nouveaux achats.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -412,6 +423,14 @@ function InsightCard({ icon, label, value, detail, tone = 'primary' }) {
   );
 }
 
+InsightCard.propTypes = {
+  icon: PropTypes.node.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.node.isRequired,
+  detail: PropTypes.string.isRequired,
+  tone: PropTypes.string,
+};
+
 function BusinessLine({ label, value }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, p: 1.5, borderRadius: 2, bgcolor: 'grey.50' }}>
@@ -420,5 +439,10 @@ function BusinessLine({ label, value }) {
     </Box>
   );
 }
+
+BusinessLine.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.node,
+};
 
 export default ProduitDetail;

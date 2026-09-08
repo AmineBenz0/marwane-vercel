@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -9,6 +10,7 @@ import {
   Chip,
   CircularProgress,
   InputAdornment,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -45,6 +47,12 @@ const pluralize = (count, singular, plural = `${singular}s`) => (
   count > 1 ? plural : singular
 );
 
+const productTypeLabels = {
+  matiere_premiere: 'Matière première',
+  produit_fini: 'Produit fini',
+  service: 'Service',
+};
+
 function ProduitsList() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -56,6 +64,7 @@ function ProduitsList() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduit, setEditingProduit] = useState(null);
@@ -104,12 +113,13 @@ function ProduitsList() {
 
   const filteredProduits = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    if (!normalizedSearch) return produits;
-
-    return produits.filter((produit) => (
-      produit.nom_produit?.toLowerCase().includes(normalizedSearch)
-    ));
-  }, [produits, search]);
+    return produits.filter((produit) => {
+      const matchesSearch = !normalizedSearch
+        || produit.nom_produit?.toLowerCase().includes(normalizedSearch);
+      const matchesType = !typeFilter || produit.type_produit === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [produits, search, typeFilter]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -303,20 +313,35 @@ function ProduitsList() {
               </Typography>
             </Box>
 
-            <TextField
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Rechercher un produit"
-              size="small"
-              sx={{ minWidth: { xs: '100%', md: 330 } }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ width: { xs: '100%', md: 'auto' } }}>
+              <TextField
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Rechercher un produit"
+                size="small"
+                sx={{ minWidth: { xs: '100%', md: 260 } }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <TextField
+                select
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+                label="Type"
+                size="small"
+                sx={{ minWidth: { xs: '100%', sm: 190 } }}
+              >
+                <MenuItem value="">Tous les types</MenuItem>
+                <MenuItem value="matiere_premiere">Matière première</MenuItem>
+                <MenuItem value="produit_fini">Produit fini</MenuItem>
+                <MenuItem value="service">Service</MenuItem>
+              </TextField>
+            </Stack>
           </Stack>
         </CardContent>
       </Card>
@@ -326,7 +351,7 @@ function ProduitsList() {
           <CircularProgress />
         </Box>
       ) : filteredProduits.length === 0 ? (
-        <EmptyProductsState hasSearch={Boolean(search.trim())} onCreate={handleCreate} />
+        <EmptyProductsState hasFilters={Boolean(search.trim() || typeFilter)} onCreate={handleCreate} />
       ) : (
         <Box
           sx={{
@@ -395,8 +420,8 @@ function ProductCard({ produit, insight, fournisseursMap, onView, onEdit }) {
         }}
       >
         <Box>
-          <Stack direction="row" justifyContent="space-between" spacing={1.5} alignItems="flex-start">
-            <Typography variant="h6" fontWeight={900} lineHeight={1.15}>
+          <Stack direction="row" justifyContent="space-between" spacing={1.5} alignItems="flex-start" flexWrap="wrap" rowGap={0.75}>
+            <Typography variant="h6" fontWeight={900} lineHeight={1.15} sx={{ flex: '1 1 160px', minWidth: 0, wordBreak: 'break-word' }}>
               {produit.nom_produit}
             </Typography>
             <Chip
@@ -412,7 +437,7 @@ function ProductCard({ produit, insight, fournisseursMap, onView, onEdit }) {
             <Chip
               size="small"
               variant="outlined"
-              label={produit.type_produit === 'matiere_premiere' ? 'Matière première' : produit.type_produit === 'service' ? 'Service' : 'Produit fini'}
+              label={productTypeLabels[produit.type_produit] || 'Produit'}
               sx={{ fontWeight: 700, flexShrink: 0, mt: 0.75 }}
             />
           </Stack>
@@ -449,6 +474,26 @@ function ProductCard({ produit, insight, fournisseursMap, onView, onEdit }) {
   );
 }
 
+ProductCard.propTypes = {
+  produit: PropTypes.shape({
+    id_produit: PropTypes.number.isRequired,
+    nom_produit: PropTypes.string.isRequired,
+    type_produit: PropTypes.string,
+  }).isRequired,
+  insight: PropTypes.shape({
+    suppliers: PropTypes.instanceOf(Set),
+    quantity: PropTypes.number,
+    lastPurchase: PropTypes.shape({
+      id_fournisseur: PropTypes.number,
+      prix_unitaire: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+      date_transaction: PropTypes.string,
+    }),
+  }),
+  fournisseursMap: PropTypes.instanceOf(Map).isRequired,
+  onView: PropTypes.func.isRequired,
+  onEdit: PropTypes.func.isRequired,
+};
+
 function MiniMetric({ label, value }) {
   return (
     <Box sx={{ bgcolor: 'grey.50', borderRadius: 2.5, p: 1.25, minHeight: 68 }}>
@@ -462,19 +507,24 @@ function MiniMetric({ label, value }) {
   );
 }
 
-function EmptyProductsState({ hasSearch, onCreate }) {
+MiniMetric.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.node.isRequired,
+};
+
+function EmptyProductsState({ hasFilters, onCreate }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 4 }}>
       <CardContent sx={{ p: { xs: 3, md: 5 }, textAlign: 'center' }}>
         <Typography variant="h5" fontWeight={900}>
-          {hasSearch ? 'Aucun produit trouvé' : 'Aucun produit acheté pour le moment'}
+          {hasFilters ? 'Aucun produit trouvé' : 'Aucun produit acheté pour le moment'}
         </Typography>
         <Typography color="text.secondary" sx={{ mt: 1, mb: 3, maxWidth: 520, mx: 'auto' }}>
-          {hasSearch
+          {hasFilters
             ? 'Essayez un autre nom ou effacez la recherche.'
             : 'Créez le premier produit acheté chez un fournisseur. Les achats pourront ensuite montrer les fournisseurs et les derniers prix.'}
         </Typography>
-        {!hasSearch && (
+        {!hasFilters && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
             Créer le premier produit
           </Button>
@@ -483,5 +533,10 @@ function EmptyProductsState({ hasSearch, onCreate }) {
     </Card>
   );
 }
+
+EmptyProductsState.propTypes = {
+  hasFilters: PropTypes.bool.isRequired,
+  onCreate: PropTypes.func.isRequired,
+};
 
 export default ProduitsList;

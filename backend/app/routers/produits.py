@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.produit import Produit
 from app.models.user import Utilisateur
-from app.schemas.produit import ProduitCreate, ProduitUpdate, ProduitRead
+from app.schemas.produit import ProduitCreate, ProduitUpdate, ProduitRead, ProductType
 from app.utils.dependencies import get_current_active_user
 from app.config import settings
 
@@ -20,7 +20,7 @@ def get_produits(
     skip: int = 0,
     limit: int = 100,
     est_actif: Optional[bool] = None,
-    type_produit: Optional[str] = None,
+    type_produit: Optional[ProductType] = None,
     recherche: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Utilisateur] = Depends(get_current_active_user)
@@ -317,7 +317,7 @@ def get_produits_par_type(
     skip: int = 0,
     limit: int = 100,
     est_actif: Optional[bool] = True,
-    type_produit: Optional[str] = None,
+    type_produit: Optional[ProductType] = None,
     recherche: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Utilisateur] = Depends(get_current_active_user)
