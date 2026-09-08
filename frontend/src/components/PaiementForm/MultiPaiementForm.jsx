@@ -13,7 +13,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Tooltip,
   Collapse,
   Grid,
   Alert,
@@ -26,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import { formatMontant } from '../../utils/formatNumber';
 import { format } from 'date-fns';
+import PropTypes from 'prop-types';
 
 const TYPES_PAIEMENT = [
   { value: 'cash', label: '💵 Espèces' },
@@ -110,13 +110,15 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
           <TableBody>
             {fields.map((item, index) => {
               const type = watch(`paiements.${index}.type_paiement`);
-              const hasError = !!errors?.paiements?.[index];
-
               return (
                 <React.Fragment key={item.id}>
                   <TableRow sx={{ '& > *': { borderBottom: 'unset !important' } }}>
                     <TableCell>
-                      <IconButton size="small" onClick={() => toggleExpand(index)}>
+                        <IconButton
+                          size="small"
+                          onClick={() => toggleExpand(index)}
+                          aria-label={`${expandedRows[index] ? 'Réduire' : 'Développer'} le paiement ${index + 1}`}
+                        >
                         {expandedRows[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
                     </TableCell>
@@ -159,6 +161,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         size="small" 
                         onClick={() => remove(index)}
                         disabled={fields.length === 1}
+                        aria-label={`Supprimer le paiement ${index + 1}`}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -291,5 +294,37 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
     </Box>
   );
 }
+
+const paymentFieldPropType = PropTypes.shape({
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+});
+
+const paymentErrorPropType = PropTypes.shape({
+  date_paiement: PropTypes.object,
+  type_paiement: PropTypes.object,
+  montant: PropTypes.object,
+  id_lc: PropTypes.object,
+});
+
+MultiPaiementForm.propTypes = {
+  transaction: PropTypes.shape({
+    montant_restant: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  }),
+  fields: PropTypes.arrayOf(paymentFieldPropType).isRequired,
+  append: PropTypes.func.isRequired,
+  remove: PropTypes.func.isRequired,
+  register: PropTypes.func.isRequired,
+  errors: PropTypes.shape({
+    paiements: PropTypes.arrayOf(paymentErrorPropType),
+  }).isRequired,
+  watch: PropTypes.func.isRequired,
+  setValue: PropTypes.func.isRequired,
+  availableLcs: PropTypes.arrayOf(PropTypes.shape({
+    id_lc: PropTypes.number,
+    numero_reference: PropTypes.string,
+    montant: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  })).isRequired,
+  loadingLcs: PropTypes.bool.isRequired,
+};
 
 export default MultiPaiementForm;
