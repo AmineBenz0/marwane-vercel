@@ -6,6 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, date, timezone
 from decimal import Decimal
 from types import SimpleNamespace
@@ -161,9 +162,9 @@ def _update_caisse_movement(
     doit_creer_mouvement = False
     
     # 1. Vérifier si on doit créer un mouvement
-    if paiement.type_paiement in types_immediats and paiement.statut == 'valide':
+    if paiement.type_paiement in types_immediats and paiement.est_effectif:
         doit_creer_mouvement = True
-    elif paiement.type_paiement == 'cheque' and paiement.statut != 'annule' and paiement.statut_cheque == 'encaisse':
+    elif paiement.type_paiement == 'cheque' and paiement.est_effectif:
         doit_creer_mouvement = True
         
     existing = db.query(Caisse).filter(
@@ -383,7 +384,9 @@ def create_paiement(
     # Déterminer le statut initial
     statut_initial = 'valide'
     if paiement_data.type_paiement == 'cheque':
-        statut_initial = 'en_attente'  # Les chèques sont en attente par défaut
+        # An encashed cheque is already effective. Pending cheque statuses do
+        # not enter the ledger until the cheque is explicitly encashed.
+        statut_initial = 'valide' if paiement_data.statut_cheque == 'encaisse' else 'en_attente'
     
     # Créer le nouveau paiement
     nouveau_paiement = Paiement(
@@ -404,7 +407,22 @@ def create_paiement(
     )
     
     db.add(nouveau_paiement)
-    db.flush() # Pour obtenir l'ID
+    try:
+        db.flush() # Pour obtenir l'ID
+    except IntegrityError as exc:
+        db.rollback()
+        if paiement_data.cle_idempotence:
+            existing = db.query(Paiement).filter(
+                Paiement.cle_idempotence == paiement_data.cle_idempotence
+            ).first()
+            if existing:
+                validate_payment_idempotency(existing, paiement_data)
+                response.status_code = status.HTTP_200_OK
+                return existing
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le paiement n'a pas pu être enregistré en raison d'un conflit d'intégrité",
+        ) from exc
     
     # Mettre à jour la caisse
     _update_caisse_movement(
@@ -481,6 +499,12 @@ def update_paiement(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="L'annulation d'un paiement doit utiliser l'opération de void avec une raison.",
         )
+
+    # A cheque that transitions to encashed becomes effective in the same
+    # transaction. This keeps the general status and cheque status coherent.
+    if paiement.type_paiement == "cheque" and update_data.get("statut_cheque") == "encaisse":
+        if paiement.statut in {"en_attente", "valide"}:
+            update_data["statut"] = "valide"
 
     next_payment = SimpleNamespace(
         type_paiement=update_data.get("type_paiement", paiement.type_paiement),
@@ -705,7 +729,7 @@ def create_paiements_batch(
             # Déterminer le statut initial
             statut_initial = 'valide'
             if p_data.type_paiement == 'cheque':
-                statut_initial = 'en_attente'
+                statut_initial = 'valide' if p_data.statut_cheque == 'encaisse' else 'en_attente'
                 
             # Créer le paiement
             nouveau_paiement = Paiement(

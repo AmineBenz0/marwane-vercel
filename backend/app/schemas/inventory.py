@@ -24,6 +24,7 @@ class MouvementStockRead(BaseModel):
     type_mouvement: str
     source_type: str
     source_id: Optional[int] = None
+    id_mouvement_inverse: Optional[int] = None
     date_mouvement: datetime
     notes: Optional[str] = None
 
@@ -35,6 +36,7 @@ class StockAdjustmentCreate(BaseModel):
     quantite_delta: Decimal
     cout_unitaire: Decimal = Field(0, ge=0)
     notes: str = Field(..., min_length=3, max_length=500)
+    cle_idempotence: Optional[str] = Field(None, min_length=8, max_length=120)
 
     @field_validator("quantite_delta")
     @classmethod

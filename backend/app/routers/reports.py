@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models.caisse import Caisse
@@ -16,7 +16,7 @@ from app.models.inventory import MouvementStock
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
 from app.schemas.report import BankBalance, MonthlyReport, RankedTotal
-from app.services.financial import query_financial_transactions
+from app.services.financial import payment_total_as_of
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -47,8 +47,14 @@ def monthly_report(
     # Outstanding balances are point-in-time values at month end. The period
     # filters remain appropriate for activity totals above, but excluding
     # prior transactions would understate receivables and payables.
-    receivables = query_financial_transactions(db, direction="receivable", date_fin=date_fin)
-    payables = query_financial_transactions(db, direction="payable", date_fin=date_fin)
+    historical_transactions = db.query(Transaction).options(
+        joinedload(Transaction.paiements),
+    ).filter(
+        Transaction.est_actif.is_(True),
+        Transaction.date_transaction <= date_fin,
+    ).all()
+    receivables = [row for row in historical_transactions if row.id_client is not None]
+    payables = [row for row in historical_transactions if row.id_fournisseur is not None]
     inventory_count, inventory_quantity_delta = db.query(
         func.count(MouvementStock.id_mouvement_stock),
         func.coalesce(func.sum(MouvementStock.quantite_delta), 0),
@@ -108,8 +114,8 @@ def monthly_report(
         banques_entrees=sum((_money(row.montant) for row in bank_rows if row.type_mouvement == "ENTREE"), Decimal("0")),
         banques_sorties=sum((_money(row.montant) for row in bank_rows if row.type_mouvement == "SORTIE"), Decimal("0")),
         soldes_bancaires=bank_balances,
-        creances=sum((_money(row.montant_restant) for row in receivables), Decimal("0")),
-        dettes=sum((_money(row.montant_restant) for row in payables), Decimal("0")),
+        creances=sum((_money(row.montant_total) - payment_total_as_of(row, date_fin) for row in receivables), Decimal("0")),
+        dettes=sum((_money(row.montant_total) - payment_total_as_of(row, date_fin) for row in payables), Decimal("0")),
         top_clients=ranked(sales, "client", "nom_client"),
         top_fournisseurs=ranked(purchases, "fournisseur", "nom_fournisseur"),
         top_produits=ranked(transactions, "produit", "nom_produit"),

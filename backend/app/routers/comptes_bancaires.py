@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 from decimal import Decimal
-from datetime import datetime
 
 from app.database import get_db
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
@@ -112,7 +111,7 @@ def create_mouvement(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Ajoute une entree ou une sortie bancaire simple et met a jour le solde."""
-    compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == id).first()
+    compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == id).with_for_update().first()
     if not compte:
         raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
 

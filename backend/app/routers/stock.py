@@ -38,6 +38,7 @@ def adjust_stock(
         cout_unitaire=Decimal(str(payload.cout_unitaire)),
         current_user=current_user,
         notes=payload.notes,
+        cle_idempotence=payload.cle_idempotence,
     )
     db.commit()
     db.refresh(movement)

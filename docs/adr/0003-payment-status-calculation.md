@@ -8,5 +8,10 @@ amounts, due date, and cancellation state. The canonical statuses are `impaye`,
 paid total, and an overdue status applies only while a positive balance remains
 after the due date.
 
+A cheque contributes only when its general payment status is `valide` and its
+cheque status is `encaisse`. Creating or transitioning an encashed cheque
+normalizes the general status before the cash movement is written, preventing
+pending cheque records from affecting balances.
+
 The backend owns this projection so list pages, summaries, reports, and exports
 cannot diverge through independent frontend calculations.

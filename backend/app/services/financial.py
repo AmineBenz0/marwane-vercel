@@ -37,6 +37,23 @@ def payment_status(transaction: Transaction, today: Optional[date] = None) -> st
     return status
 
 
+def payment_total_as_of(transaction: Transaction, as_of: date) -> Decimal:
+    """Return effective payments posted on or before an accounting date."""
+    return sum(
+        (
+            Decimal(str(payment.montant))
+            for payment in transaction.paiements
+            if payment.date_paiement <= as_of and payment.est_effectif
+        ),
+        Decimal("0"),
+    )
+
+
+def remaining_amount_as_of(transaction: Transaction, as_of: date) -> Decimal:
+    """Return the transaction balance at a historical accounting date."""
+    return Decimal(str(transaction.montant_total)) - payment_total_as_of(transaction, as_of)
+
+
 def query_financial_transactions(
     db: Session,
     *,

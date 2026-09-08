@@ -92,11 +92,7 @@ class Transaction(Base):
         
         total = Decimal('0')
         for paiement in self.paiements:
-            # Pour les paiements non-chèque, on compte si statut est 'valide'
-            if paiement.type_paiement != 'cheque' and paiement.statut == 'valide':
-                total += Decimal(str(paiement.montant))
-            # Pour les chèques, on compte seulement s'ils sont encaissés
-            elif paiement.type_paiement == 'cheque' and paiement.statut != 'annule' and paiement.statut_cheque == 'encaisse':
+            if paiement.est_effectif:
                 total += Decimal(str(paiement.montant))
         
         return total

@@ -22,6 +22,30 @@ from app.utils.egg_product_sync import parse_sellable_egg_product_name
 ZERO = Decimal("0.000")
 
 
+def validate_stock_idempotency(existing: MouvementStock, requested: dict) -> None:
+    """Reject reuse of a stock key for a different ledger movement."""
+    same_identity = (
+        existing.id_produit == requested["id_produit"]
+        and Decimal(str(existing.quantite_delta)) == Decimal(str(requested["quantite_delta"]))
+        and Decimal(str(existing.cout_unitaire)) == Decimal(str(requested["cout_unitaire"]))
+        and existing.type_mouvement == requested["type_mouvement"]
+        and existing.source_type == requested["source_type"]
+        and (
+            existing.source_id == requested["source_id"]
+            or (
+                requested["source_id"] is None
+                and existing.source_type == "manual"
+                and existing.source_id == existing.id_mouvement_stock
+            )
+        )
+    )
+    if not same_identity:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La clé d'idempotence est déjà utilisée pour un autre mouvement de stock",
+        )
+
+
 def is_inventory_tracked(produit: Produit) -> bool:
     """Return whether a product belongs to the general stock ledger."""
     return (
@@ -85,6 +109,14 @@ def record_movement(
             MouvementStock.cle_idempotence == cle_idempotence
         ).first()
         if existing:
+            validate_stock_idempotency(existing, {
+                "id_produit": id_produit,
+                "quantite_delta": delta,
+                "cout_unitaire": cost,
+                "type_mouvement": type_mouvement,
+                "source_type": source_type,
+                "source_id": source_id,
+            })
             return existing
 
     movement = MouvementStock(
@@ -176,7 +208,7 @@ def reverse_source_movements(
         MouvementStock.source_type == source_type,
         MouvementStock.source_id == source_id,
         MouvementStock.id_mouvement_inverse.is_(None),
-    ).all()
+    ).with_for_update().all()
     if not originals:
         return []
 
@@ -246,6 +278,7 @@ def record_adjustment(
     cout_unitaire: Decimal,
     current_user: Optional[Utilisateur],
     notes: str,
+    cle_idempotence: Optional[str] = None,
 ) -> MouvementStock:
     """Record an explicit, auditable stock adjustment."""
     produit = db.query(Produit).filter(Produit.id_produit == id_produit).first()
@@ -262,6 +295,7 @@ def record_adjustment(
         cout_unitaire=cout_unitaire,
         type_mouvement="ajustement",
         source_type="manual",
+        cle_idempotence=cle_idempotence,
         id_utilisateur=current_user.id_utilisateur if current_user else None,
         notes=notes,
     )

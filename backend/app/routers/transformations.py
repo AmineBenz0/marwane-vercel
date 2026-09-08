@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -210,7 +211,22 @@ def create_transformation(
         id_utilisateur=current_user.id_utilisateur if current_user else None,
     )
     db.add(transformation)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        if payload.cle_idempotence:
+            existing = db.query(Transformation).options(
+                joinedload(Transformation.lignes).joinedload(TransformationLigne.produit)
+            ).filter(Transformation.cle_idempotence == payload.cle_idempotence).first()
+            if existing:
+                _validate_transformation_idempotency(existing, payload)
+                response.status_code = status.HTTP_200_OK
+                return _read_transformation(existing)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La transformation n'a pas pu être enregistrée en raison d'un conflit d'intégrité",
+        ) from exc
     user_id = current_user.id_utilisateur if current_user else None
     for product_id, quantity in inputs:
         db.add(TransformationLigne(id_transformation=transformation.id_transformation, id_produit=product_id, quantite=quantity, type_ligne="INPUT"))

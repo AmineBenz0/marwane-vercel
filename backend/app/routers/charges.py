@@ -51,7 +51,7 @@ def _apply_charge_impact(
     movement_date = datetime.combine(charge.date_charge, datetime.min.time())
 
     if charge.id_compte:
-        compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == charge.id_compte).first()
+        compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == charge.id_compte).with_for_update().first()
         if not compte:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -347,6 +347,8 @@ def delete_charge(
             current_user=current_user,
             create_reversal_record=True,
         )
+        from app.routers.paiements import _create_caisse_snapshot
+        _create_caisse_snapshot(db, caisse_mvmt.id_mouvement)
 
     charge.statut = "annule"
     charge.motif_annulation = raison[:1000]

@@ -109,6 +109,15 @@ class Paiement(Base):
     )
 
     @property
+    def est_effectif(self) -> bool:
+        """Return whether this payment contributes to the financial ledger."""
+        if self.statut != "valide":
+            return False
+        if self.type_paiement == "cheque":
+            return self.statut_cheque == "encaisse"
+        return True
+
+    @property
     def numero_reference_lc(self):
         """Reference lisible de la LC associee, utile dans les registres."""
         if self.lettre_credit:

@@ -82,11 +82,44 @@ def test_receivables_payment_summary_and_void_are_auditable(client, db_session, 
     }, headers=auth_headers)
     assert cheque.status_code == 201, cheque.text
     cheque_id = cheque.json()["id_paiement"]
+    assert cheque.json()["statut"] == "valide"
     assert client.get(f"/api/v1/transactions/{transaction_id}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "paye"
     assert client.delete(f"/api/v1/paiements/{cheque_id}", headers=auth_headers).status_code == 204
     assert client.get(f"/api/v1/transactions/{transaction_id}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "en_retard"
     assert db_session.query(Caisse).filter(Caisse.id_paiement == cheque_id, Caisse.statut == "active").count() == 0
     assert db_session.query(Alerte).count() == 0
+
+
+def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_headers):
+    client_row = client.post("/api/v1/clients", json={"nom_client": "Client Chèque"}, headers=auth_headers).json()
+    product = create_product(client, "Service Chèque", "service", True, False)
+    transaction = client.post("/api/v1/transactions", json={
+        "date_transaction": date.today().isoformat(),
+        "date_echeance": date.today().isoformat(),
+        "id_produit": product["id_produit"],
+        "quantite": 1,
+        "prix_unitaire": 100,
+        "id_client": client_row["id_client"],
+    }, headers=auth_headers).json()
+    cheque = client.post("/api/v1/paiements", json={
+        "id_transaction": transaction["id_transaction"],
+        "date_paiement": date.today().isoformat(),
+        "montant": 100,
+        "type_paiement": "cheque",
+        "statut_cheque": "a_encaisser",
+    }, headers=auth_headers)
+    assert cheque.status_code == 201, cheque.text
+    assert cheque.json()["statut"] == "en_attente"
+    assert client.get(f"/api/v1/transactions/{transaction['id_transaction']}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "impaye"
+
+    encashed = client.put(
+        f"/api/v1/paiements/{cheque.json()['id_paiement']}",
+        json={"statut_cheque": "encaisse"},
+        headers=auth_headers,
+    )
+    assert encashed.status_code == 200, encashed.text
+    assert encashed.json()["statut"] == "valide"
+    assert client.get(f"/api/v1/transactions/{transaction['id_transaction']}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "paye"
 
 
 def test_receivables_support_due_date_range(client, auth_headers):
@@ -198,6 +231,7 @@ def test_bom_transformation_updates_stock_and_is_idempotent(client, auth_headers
     adjustment = client.post("/api/v1/stock/adjustments", json={
         "id_produit": finished["id_produit"], "quantite_delta": 2,
         "cout_unitaire": 5, "notes": "Correction de comptage",
+        "cle_idempotence": "stock-adjustment-idempotency-001",
     }, headers=auth_headers)
     assert adjustment.status_code == 201, adjustment.text
     adjustment_id = adjustment.json()["id_mouvement_stock"]
@@ -236,6 +270,11 @@ def test_search_and_monthly_report_are_available(client, db_session, auth_header
         "montant": 25, "type_paiement": "cash",
     }, headers=auth_headers)
     assert payment.status_code == 201, payment.text
+    prior_payment = client.post("/api/v1/paiements", json={
+        "id_transaction": prior_transaction.json()["id_transaction"], "date_paiement": date.today().isoformat(),
+        "montant": 50, "type_paiement": "cash",
+    }, headers=auth_headers)
+    assert prior_payment.status_code == 201, prior_payment.text
     account = CompteBancaire(nom_banque="Banque Rapport", numero_compte="REPORT-001")
     db_session.add(account)
     db_session.flush()
@@ -248,11 +287,14 @@ def test_search_and_monthly_report_are_available(client, db_session, auth_header
     search = client.get("/api/v1/search", params={"q": "Rapport"}, headers=auth_headers)
     assert search.status_code == 200
     assert any(item["kind"] == "produit" for item in search.json()["results"])
+    prior_report = client.get("/api/v1/reports/monthly", params={"month": prior_month_date.strftime("%Y-%m")}, headers=auth_headers)
+    assert prior_report.status_code == 200, prior_report.text
+    assert prior_report.json()["creances"] == "50.00"
     report = client.get("/api/v1/reports/monthly", params={"month": date.today().strftime("%Y-%m")}, headers=auth_headers)
     assert report.status_code == 200, report.text
     assert report.json()["ventes"] == "125.00"
-    assert report.json()["creances"] == "150.00"
-    assert report.json()["solde_caisse"] == "25.00"
+    assert report.json()["creances"] == "100.00"
+    assert report.json()["solde_caisse"] == "75.00"
     assert report.json()["soldes_bancaires"][0]["solde"] == "80.00"
     assert isinstance(report.json()["inventory_movements"], int)
     assert "inventory_quantity_delta" in report.json()

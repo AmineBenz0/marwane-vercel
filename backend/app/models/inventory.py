@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Index,
     Numeric,
     String,
     Text,
@@ -73,5 +74,15 @@ class MouvementStock(Base):
             "id_produit",
             "id_mouvement_inverse",
             name="uq_stock_source_movement",
+        ),
+        Index(
+            "uq_stock_source_movement_active",
+            "source_type",
+            "source_id",
+            "type_mouvement",
+            "id_produit",
+            unique=True,
+            postgresql_where=id_mouvement_inverse.is_(None),
+            sqlite_where=id_mouvement_inverse.is_(None),
         ),
     )

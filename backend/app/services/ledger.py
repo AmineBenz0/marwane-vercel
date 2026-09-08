@@ -113,7 +113,7 @@ def void_bank_movement(
     if not movement or movement.statut != "active":
         return None
 
-    account = db.query(CompteBancaire).filter(CompteBancaire.id_compte == movement.id_compte).first()
+    account = db.query(CompteBancaire).filter(CompteBancaire.id_compte == movement.id_compte).with_for_update().first()
     if account:
         amount = _money(movement.montant)
         account.solde_actuel = _money(account.solde_actuel) + (
