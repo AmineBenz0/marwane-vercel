@@ -2,6 +2,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from inspect import signature
 
+import pytest
+
 from app.models.alert import Alerte
 from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
@@ -528,6 +530,30 @@ def test_payment_alert_job_records_audited_execution(client, db_session, auth_he
     assert execution.statut == "succeeded"
     assert execution.created_count == 1
     assert execution.completed_at is not None
+
+
+def test_payment_alert_job_marks_the_same_execution_failed(db_session, monkeypatch):
+    from app.config import settings
+    from app.routers import jobs
+
+    secret = "cron-test-secret-value-with-at-least-32-chars"
+    monkeypatch.setattr(settings, "CRON_SECRET", secret)
+
+    def fail(_db):
+        raise RuntimeError("simulated scheduled-job failure")
+
+    monkeypatch.setattr(jobs, "create_overdue_alerts", fail)
+    with pytest.raises(RuntimeError, match="simulated scheduled-job failure"):
+        jobs.run_payment_alert_job(
+            authorization=f"Bearer {secret}",
+            db=db_session,
+        )
+
+    executions = db_session.query(JobExecution).all()
+    assert len(executions) == 1
+    assert executions[0].statut == "failed"
+    assert executions[0].failure_type == "RuntimeError"
+    assert executions[0].completed_at is not None
 
 
 def test_bom_transformation_updates_stock_and_is_idempotent(client, auth_headers):

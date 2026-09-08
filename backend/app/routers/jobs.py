@@ -43,13 +43,12 @@ def run_payment_alert_job(
         }
     except Exception as exc:
         db.rollback()
-        failed_execution = JobExecution(
-            job_name="payment-alerts",
-            statut="failed",
-            completed_at=datetime.now(timezone.utc),
-            failure_type=type(exc).__name__,
-            failure_message="Le job planifié a échoué. Consultez les logs structurés pour le détail.",
-        )
-        db.add(failed_execution)
+        failed_execution = db.query(JobExecution).filter(
+            JobExecution.id_execution == execution.id_execution,
+        ).one()
+        failed_execution.statut = "failed"
+        failed_execution.completed_at = datetime.now(timezone.utc)
+        failed_execution.failure_type = type(exc).__name__
+        failed_execution.failure_message = "Le job planifié a échoué. Consultez les logs structurés pour le détail."
         db.commit()
         raise
