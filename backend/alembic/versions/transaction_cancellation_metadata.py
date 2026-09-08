@@ -4,7 +4,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "transaction_cancellation_metadata"
+revision = "tx_cancellation_metadata"
 down_revision = "production_soft_delete"
 branch_labels = None
 depends_on = None

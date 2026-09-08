@@ -4,7 +4,7 @@ from alembic import op
 
 
 revision = "append_only_runtime_grants"
-down_revision = "transaction_cancellation_metadata"
+down_revision = "tx_cancellation_metadata"
 branch_labels = None
 depends_on = None
 
