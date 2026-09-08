@@ -46,6 +46,8 @@ class MouvementBancaire(Base):
     reference = Column(String(100), nullable=True)
     notes = Column(String(255), nullable=True)
     statut = Column(String(20), nullable=False, default="active", index=True)
+    cle_idempotence = Column(String(120), nullable=True, unique=True, index=True)
+    id_utilisateur_creation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True, index=True)
     motif_annulation = Column(Text, nullable=True)
     date_annulation = Column(DateTime(timezone=True), nullable=True)
     id_utilisateur_annulation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
@@ -59,6 +61,11 @@ class MouvementBancaire(Base):
     compte = relationship("CompteBancaire", back_populates="mouvements")
     paiement = relationship("Paiement")
     charge = relationship("Charge")
+    utilisateur_creation = relationship(
+        "Utilisateur",
+        foreign_keys=[id_utilisateur_creation],
+        backref="mouvements_bancaires_crees",
+    )
 
     __table_args__ = (
         CheckConstraint("montant > 0", name="check_mouvement_bancaire_montant_positif"),

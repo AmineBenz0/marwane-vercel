@@ -46,6 +46,93 @@ def _same_datetime(left: Optional[datetime], right: datetime) -> bool:
     return left == right
 
 
+def validate_bank_idempotency(existing: MouvementBancaire, requested: dict) -> None:
+    """Reject reuse of a bank idempotency key for another movement."""
+    same_identity = (
+        existing.id_compte == requested["id_compte"]
+        and _money(existing.montant) == _money(requested["montant"])
+        and existing.type_mouvement == requested["type_mouvement"]
+        and existing.source == requested["source"]
+        and existing.reference == requested.get("reference")
+        and existing.id_paiement == requested.get("id_paiement")
+        and existing.id_charge == requested.get("id_charge")
+    )
+    if not same_identity:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La clé d'idempotence est déjà utilisée pour un autre mouvement bancaire",
+        )
+
+
+def record_bank_movement(
+    db: Session,
+    *,
+    id_compte: int,
+    montant: Decimal,
+    type_mouvement: str,
+    source: str,
+    reference: Optional[str] = None,
+    notes: Optional[str] = None,
+    id_paiement: Optional[int] = None,
+    id_charge: Optional[int] = None,
+    cle_idempotence: Optional[str] = None,
+    current_user: Optional[Utilisateur] = None,
+    date_mouvement: Optional[datetime] = None,
+) -> MouvementBancaire:
+    """Append a bank movement and update its account atomically.
+
+    All callers use this operation so account locking, Decimal arithmetic and
+    replay protection are applied consistently.
+    """
+    amount = _money(montant)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Le montant bancaire doit être supérieur à zéro")
+    if type_mouvement not in {"ENTREE", "SORTIE"}:
+        raise HTTPException(status_code=400, detail="type_mouvement doit être 'ENTREE' ou 'SORTIE'")
+
+    account = db.query(CompteBancaire).filter(
+        CompteBancaire.id_compte == id_compte,
+    ).with_for_update().first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
+
+    if cle_idempotence:
+        existing = db.query(MouvementBancaire).filter(
+            MouvementBancaire.cle_idempotence == cle_idempotence,
+        ).first()
+        if existing:
+            validate_bank_idempotency(existing, {
+                "id_compte": id_compte,
+                "montant": amount,
+                "type_mouvement": type_mouvement,
+                "source": source,
+                "reference": reference,
+                "id_paiement": id_paiement,
+                "id_charge": id_charge,
+            })
+            return existing
+
+    movement = MouvementBancaire(
+        id_compte=account.id_compte,
+        montant=amount,
+        type_mouvement=type_mouvement,
+        source=source,
+        reference=reference,
+        notes=notes,
+        id_paiement=id_paiement,
+        id_charge=id_charge,
+        cle_idempotence=cle_idempotence,
+        id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
+        date_mouvement=date_mouvement,
+    )
+    account.solde_actuel = _money(account.solde_actuel) + (
+        amount if type_mouvement == "ENTREE" else -amount
+    )
+    db.add(movement)
+    db.flush()
+    return movement
+
+
 def create_cash_snapshot(db: Session, movement_id: int) -> CaisseSoldeHistorique:
     """Append a point-in-time cash balance snapshot after a cash change."""
     balance = db.query(
@@ -198,6 +285,7 @@ def apply_charge_impact(
                 id_mouvement_original=original_id,
                 details={"original_table": "caisse", "replacement_table": "mouvements_bancaires"},
             )
+            create_cash_snapshot(db, original_id)
 
         if active_bank and (
             active_bank.id_compte == charge.id_compte

@@ -2,12 +2,12 @@
 Router FastAPI pour la gestion des Lettres de Crédit (LC).
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.lettre_credit import LettreDeCredit
 from app.models.fournisseur import Fournisseur
-from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
+from app.models.compte_bancaire import MouvementBancaire
 from app.models.cession_lc import CessionLC
 from app.models.user import Utilisateur
 from app.schemas.lettre_credit import (
@@ -19,6 +19,7 @@ from app.schemas.lettre_credit import (
     LettreCreditVerserBanque,
 )
 from app.utils.dependencies import get_current_active_user
+from app.services.financial_ledger import record_bank_movement, validate_bank_idempotency
 from app.utils.business_date import business_date
 
 router = APIRouter(prefix="/lettres-credit", tags=["Lettres de Crédit"])
@@ -203,7 +204,7 @@ def delete_lettre_credit(
 
 
 def _get_active_lc_or_400(id: int, db: Session) -> LettreDeCredit:
-    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id).first()
+    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id).with_for_update().first()
     if not lc:
         raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
     if lc.statut != 'active':
@@ -220,28 +221,55 @@ def _get_active_lc_or_400(id: int, db: Session) -> LettreDeCredit:
 def verser_lc_banque(
     id: int,
     payload: LettreCreditVerserBanque,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Verse la valeur d'une LC disponible dans un compte bancaire."""
-    lc = _get_active_lc_or_400(id, db)
-    compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == payload.id_compte).first()
-    if not compte:
-        raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
+    idempotency_key = f"lc-bank-deposit-{id}"
+    lc = db.query(LettreDeCredit).filter(
+        LettreDeCredit.id_lc == id,
+    ).with_for_update().first()
+    if not lc:
+        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
 
-    compte.solde_actuel += lc.montant
-    mouvement = MouvementBancaire(
-        id_compte=compte.id_compte,
+    existing = db.query(MouvementBancaire).filter(
+        MouvementBancaire.cle_idempotence == idempotency_key,
+    ).first()
+    if existing:
+        validate_bank_idempotency(existing, {
+            "id_compte": payload.id_compte,
+            "montant": lc.montant,
+            "type_mouvement": "ENTREE",
+            "source": "lc",
+            "reference": lc.numero_reference,
+            "id_paiement": None,
+            "id_charge": None,
+        })
+        response.status_code = status.HTTP_200_OK
+        return format_lc_read(lc)
+
+    if lc.statut != "active":
+        raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
+    if not lc.est_disponible:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}",
+        )
+    record_bank_movement(
+        db,
+        id_compte=payload.id_compte,
         montant=lc.montant,
         type_mouvement='ENTREE',
         source='lc',
         reference=lc.numero_reference,
         notes=payload.notes or f"Versement LC {lc.numero_reference}",
+        cle_idempotence=idempotency_key,
+        current_user=current_user,
     )
     lc.statut = 'utilisee'
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
-    db.add(mouvement)
     db.commit()
     db.refresh(lc)
     return format_lc_read(lc)

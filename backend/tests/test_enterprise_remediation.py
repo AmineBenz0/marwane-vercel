@@ -660,3 +660,52 @@ def test_charge_bank_edit_restores_old_account_and_preserves_bank_history(
     account_row.solde_actuel = Decimal("1.00")
     db_session.flush()
     assert any(issue["code"] == "BANK_BALANCE_MISMATCH" for issue in run_integrity_check(db_session))
+
+
+def test_manual_bank_movement_uses_shared_ledger_and_is_idempotent(
+    client, db_session, auth_headers
+):
+    account = client.post(
+        "/api/v1/comptes-bancaires",
+        json={
+            "nom_banque": "Banque Ledger",
+            "numero_compte": "LEDGER-001",
+            "solde_initial": 100,
+        },
+        headers=auth_headers,
+    )
+    assert account.status_code == 201, account.text
+    account_id = account.json()["id_compte"]
+    payload = {
+        "montant": 25,
+        "type_mouvement": "ENTREE",
+        "source": "autre",
+        "reference": "DEPOT-001",
+        "cle_idempotence": "bank-movement-ledger-001",
+    }
+
+    first = client.post(
+        f"/api/v1/comptes-bancaires/{account_id}/mouvements",
+        json=payload,
+        headers=auth_headers,
+    )
+    second = client.post(
+        f"/api/v1/comptes-bancaires/{account_id}/mouvements",
+        json=payload,
+        headers=auth_headers,
+    )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["id_mouvement"] == first.json()["id_mouvement"]
+    account_row = db_session.query(CompteBancaire).filter(
+        CompteBancaire.id_compte == account_id,
+    ).one()
+    assert account_row.solde_actuel == Decimal("125.00")
+    assert db_session.query(MouvementBancaire).filter(
+        MouvementBancaire.cle_idempotence == payload["cle_idempotence"],
+    ).count() == 1
+    assert not any(
+        issue["code"] == "BANK_BALANCE_MISMATCH"
+        for issue in run_integrity_check(db_session)
+    )

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from typing import List
 from decimal import Decimal
@@ -6,6 +6,7 @@ from decimal import Decimal
 from app.database import get_db
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.utils.dependencies import get_current_active_user
+from app.services.financial_ledger import record_bank_movement, validate_bank_idempotency
 from app.models.user import Utilisateur
 from app.schemas.compte_bancaire import (
     CompteBancaireCreate,
@@ -15,6 +16,7 @@ from app.schemas.compte_bancaire import (
 )
 
 from sqlalchemy import func, case
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/comptes-bancaires", tags=["Comptes Bancaires"])
 
@@ -82,21 +84,23 @@ def create_compte(
     new_compte = CompteBancaire(
         nom_banque=compte_in.nom_banque,
         numero_compte=compte_in.numero_compte,
-        solde_actuel=compte_in.solde_initial
+        solde_actuel=Decimal("0.00"),
     )
     db.add(new_compte)
     db.flush()
     
     # Créer le mouvement initial si solde != 0
     if compte_in.solde_initial != 0:
-        mouv = MouvementBancaire(
+        record_bank_movement(
+            db,
             id_compte=new_compte.id_compte,
             montant=abs(compte_in.solde_initial),
             type_mouvement='ENTREE' if compte_in.solde_initial > 0 else 'SORTIE',
             source='initial',
-            notes='Solde initial'
+            notes='Solde initial',
+            cle_idempotence=f"bank-opening-{new_compte.id_compte}",
+            current_user=current_user,
         )
-        db.add(mouv)
         
     db.commit()
     db.refresh(new_compte)
@@ -107,29 +111,56 @@ def create_compte(
 def create_mouvement(
     id: int,
     mouvement_in: MouvementBancaireCreate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Ajoute une entree ou une sortie bancaire simple et met a jour le solde."""
-    compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == id).with_for_update().first()
-    if not compte:
-        raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
-
-    mouvement = MouvementBancaire(
-        id_compte=compte.id_compte,
-        montant=mouvement_in.montant,
-        type_mouvement=mouvement_in.type_mouvement,
-        source=mouvement_in.source,
-        reference=mouvement_in.reference,
-        notes=mouvement_in.notes,
+    replay = bool(
+        mouvement_in.cle_idempotence
+        and db.query(MouvementBancaire).filter(
+            MouvementBancaire.cle_idempotence == mouvement_in.cle_idempotence,
+        ).first()
     )
-
-    if mouvement_in.type_mouvement == 'ENTREE':
-        compte.solde_actuel += mouvement_in.montant
-    else:
-        compte.solde_actuel -= mouvement_in.montant
-
-    db.add(mouvement)
+    try:
+        mouvement = record_bank_movement(
+            db,
+            id_compte=id,
+            montant=mouvement_in.montant,
+            type_mouvement=mouvement_in.type_mouvement,
+            source=mouvement_in.source,
+            reference=mouvement_in.reference,
+            notes=mouvement_in.notes,
+            cle_idempotence=mouvement_in.cle_idempotence,
+            current_user=current_user,
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        if movement_key := mouvement_in.cle_idempotence:
+            existing = db.query(MouvementBancaire).filter(
+                MouvementBancaire.cle_idempotence == movement_key,
+            ).first()
+            if existing:
+                validate_bank_idempotency(existing, {
+                    "id_compte": id,
+                    "montant": mouvement_in.montant,
+                    "type_mouvement": mouvement_in.type_mouvement,
+                    "source": mouvement_in.source,
+                    "reference": mouvement_in.reference,
+                    "id_paiement": None,
+                    "id_charge": None,
+                })
+                response.status_code = status.HTTP_200_OK
+                return existing
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le mouvement bancaire n'a pas pu être enregistré en raison d'un conflit d'intégrité",
+        ) from exc
     db.commit()
     db.refresh(mouvement)
+    if replay:
+        response.status_code = status.HTTP_200_OK
     return mouvement

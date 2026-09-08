@@ -19,6 +19,7 @@ class MouvementBancaireCreate(BaseModel):
     source: Literal['virement', 'cheque', 'lc', 'autre']
     reference: Optional[str] = None
     notes: Optional[str] = None
+    cle_idempotence: Optional[str] = Field(None, min_length=8, max_length=120)
 
     @field_validator('reference', 'notes')
     @classmethod
@@ -47,6 +48,8 @@ class MouvementBancaireRead(BaseModel):
     reference: Optional[str] = None
     notes: Optional[str] = None
     statut: str = "active"
+    cle_idempotence: Optional[str] = None
+    id_utilisateur_creation: Optional[int] = None
     id_paiement: Optional[int] = None
     id_charge: Optional[int] = None
     motif_annulation: Optional[str] = None
