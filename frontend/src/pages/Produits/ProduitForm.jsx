@@ -10,15 +10,27 @@ const produitValidationSchema = yup.object().shape({
     .max(255, 'Le nom ne peut pas dépasser 255 caractères')
     .trim(),
   est_actif: yup.boolean().required('Le statut est requis'),
+  type_produit: yup.string().oneOf(['matiere_premiere', 'produit_fini', 'service']).required('Le type est requis'),
 });
 
 const produitFields = [
   {
     name: 'nom_produit',
-    label: 'Nom du produit acheté',
+    label: 'Nom du produit',
     type: 'text',
     placeholder: 'Ex. aliment, emballage, médicament...',
     required: true,
+  },
+  {
+    name: 'type_produit',
+    label: 'Type de produit',
+    type: 'select',
+    required: true,
+    options: [
+      { value: 'matiere_premiere', label: 'Matière première' },
+      { value: 'produit_fini', label: 'Produit fini' },
+      { value: 'service', label: 'Service' },
+    ],
   },
 ];
 
@@ -37,18 +49,21 @@ function ProduitForm({
         nom_produit: initialValues.nom_produit || '',
         est_actif:
           initialValues.est_actif !== undefined ? initialValues.est_actif : true,
+        type_produit: initialValues.type_produit || 'matiere_premiere',
       }
     : {
         nom_produit: '',
         est_actif: true,
+        type_produit: 'matiere_premiere',
       };
 
   const handleSubmit = async (data) => {
+    const type = data.type_produit || 'matiere_premiere';
     await onSubmit({
       ...data,
-      type_produit: 'matiere_premiere',
-      pour_clients: false,
-      pour_fournisseurs: true,
+      type_produit: type,
+      pour_clients: type !== 'matiere_premiere',
+      pour_fournisseurs: type !== 'produit_fini',
     });
   };
 
@@ -60,7 +75,7 @@ function ProduitForm({
       initialValues={defaultInitialValues}
       validationSchema={produitValidationSchema}
       fields={produitFields}
-      title={isEditing ? 'Modifier le produit acheté' : 'Créer un produit acheté'}
+      title={isEditing ? 'Modifier le produit' : 'Créer un produit'}
       submitLabel={isEditing ? 'Modifier' : 'Créer'}
       loading={loading}
       errorMessage={errorMessage}

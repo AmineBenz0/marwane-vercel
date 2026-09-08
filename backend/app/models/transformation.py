@@ -1,7 +1,7 @@
 """
 Modèles SQLAlchemy pour les Transformations de produits (BOM / Composition).
 """
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, ForeignKey, Date
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, ForeignKey, Date, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -16,8 +16,12 @@ class Transformation(Base):
     __tablename__ = "transformations"
     
     id_transformation = Column(Integer, primary_key=True, index=True)
+    id_nomenclature = Column(Integer, ForeignKey("nomenclatures.id_nomenclature"), nullable=True, index=True)
     date_transformation = Column(Date, nullable=False, default=func.current_date())
     notes = Column(String(500), nullable=True)
+    quantite_sortie = Column(Numeric(15, 3), nullable=True)
+    cout_total = Column(Numeric(15, 2), nullable=True)
+    cle_idempotence = Column(String(120), nullable=True, unique=True, index=True)
     
     # Audit
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -25,7 +29,12 @@ class Transformation(Base):
     
     # Relations
     lignes = relationship("TransformationLigne", back_populates="transformation", cascade="all, delete-orphan")
+    nomenclature = relationship("Nomenclature", backref="transformations")
     utilisateur = relationship("Utilisateur")
+
+    __table_args__ = (
+        CheckConstraint("quantite_sortie IS NULL OR quantite_sortie > 0", name="check_transformation_output_positive"),
+    )
 
 
 class TransformationLigne(Base):
@@ -46,3 +55,8 @@ class TransformationLigne(Base):
     # Relations
     transformation = relationship("Transformation", back_populates="lignes")
     produit = relationship("Produit")
+
+    __table_args__ = (
+        CheckConstraint("quantite > 0", name="check_transformation_line_positive"),
+        CheckConstraint("type_ligne IN ('INPUT', 'OUTPUT')", name="check_transformation_line_type"),
+    )

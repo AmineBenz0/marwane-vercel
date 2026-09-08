@@ -19,6 +19,10 @@ from app.models.production import Production
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.charge import Charge
 from app.models.transformation import Transformation, TransformationLigne
+from app.models.nomenclature import Nomenclature, NomenclatureLigne
+from app.models.inventory import MouvementStock
+from app.models.alert import Alerte
+from app.models.financial_correction import CorrectionFinanciere
 from app.models.task import Tache
 
 # Export de tous les modèles pour faciliter les imports
@@ -43,5 +47,10 @@ __all__ = [
     "Charge",
     "Transformation",
     "TransformationLigne",
+    "Nomenclature",
+    "NomenclatureLigne",
+    "MouvementStock",
+    "Alerte",
+    "CorrectionFinanciere",
     "Tache",
 ]

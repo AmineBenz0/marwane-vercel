@@ -4,9 +4,8 @@ Vérifie que toutes les fonctions de sécurité fonctionnent correctement.
 """
 import pytest
 from datetime import datetime, timedelta
-from jose import JWTError
-
 from app.utils.security import (
+    JWTError,
     hash_password,
     verify_password,
     create_access_token,

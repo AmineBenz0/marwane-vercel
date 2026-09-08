@@ -66,6 +66,9 @@ class Paiement(Base):
     
     # Informations générales
     notes = Column(Text, nullable=True)
+    motif_annulation = Column(Text, nullable=True)
+    date_annulation = Column(DateTime(timezone=True), nullable=True)
+    cle_idempotence = Column(String(120), nullable=True, unique=True, index=True)
     statut = Column(String(20), nullable=False, default='valide')  # valide, en_attente, rejete, annule
     
     # Métadonnées de traçabilité

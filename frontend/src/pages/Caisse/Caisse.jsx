@@ -193,13 +193,13 @@ function Caisse() {
     ));
   }, [mouvements, search]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (visibleMovements.length === 0) {
       notification.warning('Aucun mouvement à exporter');
       return;
     }
 
-    exportToExcelAdvanced(
+    await exportToExcelAdvanced(
       visibleMovements.map((movement) => ({
         date: movement.date_mouvement,
         operation: getMovementLabel(movement),

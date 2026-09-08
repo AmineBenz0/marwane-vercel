@@ -47,8 +47,7 @@ print_urls() {
     echo -e "${CYAN}╠══════════════════════════════════════════════╣${NC}"
     echo -e "${CYAN}║${WHITE}   Login Credentials                           ${CYAN}║${NC}"
     echo -e "${CYAN}╠══════════════════════════════════════════════╣${NC}"
-    echo -e "${CYAN}║${NC}  Email:    ${YELLOW}admin@example.com${NC}                ${CYAN}║${NC}"
-    echo -e "${CYAN}║${NC}  Password: ${YELLOW}Admin@123${NC}                        ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  Use ADMIN_EMAIL and ADMIN_PASSWORD from .env ${CYAN}║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
     echo ""
 }

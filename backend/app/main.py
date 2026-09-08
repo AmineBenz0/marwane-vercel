@@ -15,7 +15,7 @@ from app.routers import (
     auth, users, clients, fournisseurs, produits, 
     transactions, caisse, paiements, lettres_credit, cessions_lc,
     batiments, productions, cycles_production, charges, comptes_bancaires, tasks,
-    health,
+    health, financials, alerts, jobs, product_boms, transformations, stock, search, reports,
 )
 from app.utils.rate_limit import limiter
 from app.middleware.logging_middleware import LoggingMiddleware
@@ -154,8 +154,16 @@ app.include_router(users.router, prefix=settings.API_V1_PREFIX)
 app.include_router(clients.router, prefix=settings.API_V1_PREFIX)
 app.include_router(fournisseurs.router, prefix=settings.API_V1_PREFIX)
 app.include_router(produits.router, prefix=settings.API_V1_PREFIX)
+app.include_router(financials.router, prefix=settings.API_V1_PREFIX)
 app.include_router(transactions.router, prefix=settings.API_V1_PREFIX)
 app.include_router(paiements.router, prefix=settings.API_V1_PREFIX)
+app.include_router(alerts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(jobs.router, prefix=settings.API_V1_PREFIX)
+app.include_router(product_boms.router, prefix=settings.API_V1_PREFIX)
+app.include_router(transformations.router, prefix=settings.API_V1_PREFIX)
+app.include_router(stock.router, prefix=settings.API_V1_PREFIX)
+app.include_router(search.router, prefix=settings.API_V1_PREFIX)
+app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
 app.include_router(caisse.router, prefix=settings.API_V1_PREFIX)
 app.include_router(lettres_credit.router, prefix=settings.API_V1_PREFIX)
 app.include_router(cessions_lc.router, prefix=settings.API_V1_PREFIX)

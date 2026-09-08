@@ -4,7 +4,8 @@ Utilitaires de sécurité pour l'authentification JWT et le hashage des mots de 
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from passlib.context import CryptContext
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError as JWTError
 from app.config import settings
 
 # Configuration du contexte de hashage bcrypt

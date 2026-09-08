@@ -37,7 +37,8 @@ def get_mouvements(
 ):
     """Récupère l'historique des mouvements pour un compte."""
     return db.query(MouvementBancaire).filter(
-        MouvementBancaire.id_compte == id
+        MouvementBancaire.id_compte == id,
+        MouvementBancaire.statut == "active",
     ).order_by(MouvementBancaire.date_mouvement.desc()).offset(skip).limit(limit).all()
 
 @router.get("/{id}/solde-calcule")
@@ -62,7 +63,7 @@ def get_solde_calcule(
                 else_=-MouvementBancaire.montant
             )
         )
-    ).filter(MouvementBancaire.id_compte == id).scalar() or Decimal('0.00')
+    ).filter(MouvementBancaire.id_compte == id, MouvementBancaire.statut == "active").scalar() or Decimal('0.00')
     
     return {
         "id_compte": id,

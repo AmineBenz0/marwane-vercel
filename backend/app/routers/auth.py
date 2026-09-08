@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.user import Utilisateur
 from app.models.audit import AuditConnexion
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshTokenRequest, RefreshTokenResponse
-from app.utils.security import verify_password, create_access_token, create_refresh_token, decode_token
+from app.utils.security import JWTError, verify_password, create_access_token, create_refresh_token, decode_token
 from app.utils.rate_limit import conditional_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -162,8 +162,6 @@ async def refresh_token(
     Raises:
         HTTPException 401: Si le refresh token est invalide, expiré ou n'est pas de type "refresh"
     """
-    from jose import JWTError
-    
     try:
         # Décoder et valider le refresh token
         payload = decode_token(refresh_data.refresh_token)

@@ -5,7 +5,6 @@ Gère les endpoints CRUD pour les transactions.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
 from datetime import date
 from decimal import Decimal
 
@@ -18,7 +17,6 @@ from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
 from app.models.user import Utilisateur
 from app.models.audit import TransactionAudit
-from app.models.caisse import Caisse
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionUpdate,
@@ -28,6 +26,7 @@ from app.schemas.transaction import (
 from app.utils.dependencies import get_current_active_user
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.utils.production_cycles import require_active_cycle_for_date
+from app.services.inventory import record_transaction_movement, reverse_source_movements
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
@@ -231,11 +230,13 @@ def create_transactions_batch(
                 id_fournisseur=tx_data.id_fournisseur,
                 id_batiment=tx_data.id_batiment,
                 id_cycle=id_cycle,
+                date_echeance=tx_data.date_echeance,
                 id_utilisateur_creation=current_user.id_utilisateur if current_user else None
             )
             
             db.add(new_transaction)
             db.flush()  # Pour obtenir l'ID
+            record_transaction_movement(db, new_transaction, current_user)
             
             # Création du mouvement de caisse supprimée ici. 
             # Les mouvements sont désormains créés lors de l'enregistrement des paiements.
@@ -536,11 +537,13 @@ def create_transaction(
         id_fournisseur=transaction_data.id_fournisseur,
         id_batiment=transaction_data.id_batiment,
         id_cycle=id_cycle,
+        date_echeance=transaction_data.date_echeance,
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )
     
     db.add(new_transaction)
     db.flush()  # Pour obtenir l'ID de la transaction
+    record_transaction_movement(db, new_transaction, current_user)
     
     # Création du mouvement de caisse supprimée ici. 
     # Les mouvements sont désormais créés lors de l'enregistrement des paiements.
@@ -587,6 +590,18 @@ def update_transaction(
         )
     
     update_data = transaction_data.model_dump(exclude_unset=True)
+
+    inventory_changed = any(field in update_data for field in {
+        "id_produit", "quantite", "prix_unitaire", "id_client", "id_fournisseur", "est_actif"
+    })
+    if inventory_changed:
+        reverse_source_movements(
+            db,
+            source_type="transaction",
+            source_id=transaction.id_transaction,
+            current_user=current_user,
+            reason=f"Correction de la transaction #{transaction.id_transaction}",
+        )
 
     # Vérifier que le client existe si fourni dans la mise à jour
     if transaction_data.id_client is not None:
@@ -660,7 +675,12 @@ def update_transaction(
     
     for field, value in update_data.items():
         setattr(transaction, field, value)
+    if "id_client" in update_data and "id_fournisseur" not in update_data:
+        transaction.id_fournisseur = None
+    if "id_fournisseur" in update_data and "id_client" not in update_data:
+        transaction.id_client = None
     transaction.id_cycle = resolved_cycle_id
+    transaction.produit = final_produit
     
     # Recalculer le montant_total si quantite ou prix_unitaire ont changé
     if transaction_data.quantite is not None or transaction_data.prix_unitaire is not None:
@@ -669,6 +689,9 @@ def update_transaction(
     # Enregistrer l'utilisateur qui a modifié (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
+
+    if inventory_changed and transaction.est_actif:
+        record_transaction_movement(db, transaction, current_user)
     
     db.commit()
     db.refresh(transaction)
@@ -715,6 +738,13 @@ def delete_transaction(
     
     # Soft delete : mettre est_actif à False
     transaction.est_actif = False
+    reverse_source_movements(
+        db,
+        source_type="transaction",
+        source_id=transaction.id_transaction,
+        current_user=current_user,
+        reason=f"Annulation de la transaction #{transaction.id_transaction}",
+    )
     # Enregistrer l'utilisateur qui a modifié (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
@@ -765,6 +795,7 @@ def reactivate_transaction(
     
     # Réactiver : mettre est_actif à True
     transaction.est_actif = True
+    record_transaction_movement(db, transaction, current_user)
     # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur

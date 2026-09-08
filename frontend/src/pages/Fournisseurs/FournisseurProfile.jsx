@@ -380,7 +380,7 @@ function FournisseurProfile() {
   /**
    * GÃ¨re l'export Excel des transactions.
    */
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       if (!transactions || transactions.length === 0) {
         notification.warning('Aucune transaction à exporter');
@@ -432,7 +432,7 @@ function FournisseurProfile() {
         },
       };
 
-      exportToExcelAdvanced(
+      await exportToExcelAdvanced(
         transactions,
         transactionColumns,
         `transactions_fournisseur_${fournisseur?.nom_fournisseur?.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,

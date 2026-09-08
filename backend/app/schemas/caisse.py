@@ -33,6 +33,7 @@ class MouvementCaisseBase(BaseModel):
         None,
         description="ID du paiement associé"
     )
+    statut: Literal['active', 'annule'] = 'active'
 
 
 class MouvementCaisseCreate(MouvementCaisseBase):
@@ -63,6 +64,10 @@ class MouvementCaisseRead(MouvementCaisseBase):
     """
     id_mouvement: int = Field(..., description="Identifiant unique du mouvement de caisse")
     date_mouvement: datetime = Field(..., description="Date et heure du mouvement")
+    motif_annulation: str | None = None
+    date_annulation: datetime | None = None
+    id_utilisateur_annulation: int | None = None
+    id_mouvement_inverse: int | None = None
 
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 

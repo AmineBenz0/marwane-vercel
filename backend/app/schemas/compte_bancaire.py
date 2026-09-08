@@ -47,7 +47,13 @@ class MouvementBancaireRead(BaseModel):
     source: str
     reference: Optional[str] = None
     notes: Optional[str] = None
+    statut: str = "active"
     id_paiement: Optional[int] = None
+    id_charge: Optional[int] = None
+    motif_annulation: Optional[str] = None
+    date_annulation: Optional[datetime] = None
+    id_utilisateur_annulation: Optional[int] = None
+    id_mouvement_inverse: Optional[int] = None
 
     class Config:
         from_attributes = True

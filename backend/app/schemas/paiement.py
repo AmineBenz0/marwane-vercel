@@ -36,6 +36,7 @@ class PaiementBase(BaseModel):
     
     # Informations générales
     notes: Optional[str] = Field(None, description="Notes ou commentaires")
+    cle_idempotence: Optional[str] = Field(None, max_length=120, description="Clé unique de rejeu idempotent")
     
     @field_validator('type_paiement')
     @classmethod
@@ -102,6 +103,7 @@ class PaiementUpdate(BaseModel):
     id_lc: Optional[int] = Field(None, description="ID de la Lettre de Crédit")
     notes: Optional[str] = Field(None, description="Notes ou commentaires")
     statut: Optional[str] = Field(None, description="Statut du paiement (valide, en_attente, rejete, annule)")
+    raison: Optional[str] = Field(None, max_length=1000, description="Raison de la correction opérationnelle")
     
     @field_validator('statut')
     @classmethod
@@ -126,6 +128,8 @@ class PaiementRead(PaiementBase):
     id_transaction: int = Field(..., description="ID de la transaction associée")
     date_encaissement_effective: Optional[date] = Field(None, description="Date effective d'encaissement")
     motif_rejet: Optional[str] = Field(None, description="Motif du rejet")
+    motif_annulation: Optional[str] = Field(None, max_length=1000, description="Motif de l'annulation")
+    date_annulation: Optional[datetime] = Field(None, description="Date de l'annulation")
     numero_reference_lc: Optional[str] = Field(None, description="Reference lisible de la Lettre de Credit")
     statut: str = Field(..., description="Statut du paiement")
     date_creation: datetime = Field(..., description="Date de création de l'enregistrement")

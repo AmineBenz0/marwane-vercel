@@ -181,13 +181,13 @@ function BatimentProductionPage() {
     ? Math.min(100, Math.max(0, (Number(activeCycle.semaine_cycle || 0) / Number(activeCycle.duree_semaines || 1)) * 100))
     : 0;
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (performanceRows.length === 0) {
       notification.warning('Aucune ligne de performance a exporter');
       return;
     }
 
-    exportToExcelAdvanced(
+    await exportToExcelAdvanced(
       performanceRows,
       PERFORMANCE_COLUMNS,
       `suivi_performance_${batiment?.nom || 'batiment'}`,

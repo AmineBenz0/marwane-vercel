@@ -5,7 +5,8 @@ This file is the practical QA checklist for the app. It focuses on what a non-te
 ## How To Use
 
 - Run the app with backend and frontend started.
-- Login with the local admin account from `local-admin-credentials.txt`.
+- Login with the dedicated staging credentials supplied through `E2E_EMAIL` and
+  `E2E_PASSWORD`; credentials are never stored in the repository.
 - Use clearly named test data, for example `E2E Client 2026-05-27`.
 - For finance/LC checks, you can also run:
 

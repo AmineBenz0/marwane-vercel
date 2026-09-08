@@ -22,7 +22,7 @@ class Produit(Base):
     id_produit = Column(Integer, primary_key=True, index=True)
     nom_produit = Column(String(255), unique=True, nullable=False)
     
-    # 'produit_fini' ou 'matiere_premiere'
+    # produit_fini, matiere_premiere, or service
     type_produit = Column(String(20), nullable=False, default='produit_fini', index=True)
     
     est_actif = Column(Boolean, default=True, nullable=False)
@@ -35,6 +35,10 @@ class Produit(Base):
         CheckConstraint(
             'pour_clients = true OR pour_fournisseurs = true',
             name='check_au_moins_un_type'
+        ),
+        CheckConstraint(
+            "type_produit IN ('matiere_premiere', 'produit_fini', 'service')",
+            name='check_type_produit_valide'
         ),
     )
     

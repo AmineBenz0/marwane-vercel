@@ -104,7 +104,7 @@ def client(db_session):
     # On le fait ici pour éviter de modifier l'app globale au niveau du module
     try:
         from tests.test_dependencies import test_router
-        if not any(r.path == "/test/current-user" for r in app.routes):
+        if not any(getattr(r, "path", None) == "/test/current-user" for r in app.routes):
             app.include_router(test_router)
     except ImportError:
         pass

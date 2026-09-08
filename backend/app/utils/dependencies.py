@@ -6,10 +6,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from jose import JWTError
 from app.database import get_db
 from app.models.user import Utilisateur
-from app.utils.security import decode_token
+from app.utils.security import JWTError, decode_token
 from app.config import settings
 
 # Configuration du schéma OAuth2 pour l'extraction du token depuis l'en-tête Authorization

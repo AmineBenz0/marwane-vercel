@@ -5,8 +5,8 @@ from sqlalchemy import Column, Integer, Date, Numeric, Boolean, DateTime, Foreig
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from decimal import Decimal
-from datetime import date
 from app.database import Base
+from app.utils.business_date import business_date
 
 
 class Transaction(Base):
@@ -96,7 +96,7 @@ class Transaction(Base):
             if paiement.type_paiement != 'cheque' and paiement.statut == 'valide':
                 total += Decimal(str(paiement.montant))
             # Pour les chèques, on compte seulement s'ils sont encaissés
-            elif paiement.type_paiement == 'cheque' and paiement.statut_cheque == 'encaisse':
+            elif paiement.type_paiement == 'cheque' and paiement.statut != 'annule' and paiement.statut_cheque == 'encaisse':
                 total += Decimal(str(paiement.montant))
         
         return total
@@ -163,7 +163,7 @@ class Transaction(Base):
             return False
         
         # Vérifier si la date d'échéance est dépassée
-        return date.today() > self.date_echeance
+        return business_date() > self.date_echeance
     
     @property
     def pourcentage_paye(self) -> float:

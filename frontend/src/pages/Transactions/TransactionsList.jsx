@@ -579,7 +579,7 @@ function TransactionsList() {
   /**
    * GÃ¨re l'export Excel des transactions filtrÃ©es.
    */
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       const columnsForExport = columns.filter((col) => col.id !== 'est_actif');
       const totalMontant = rowsForExport.reduce(
@@ -672,7 +672,7 @@ function TransactionsList() {
         },
       };
 
-      exportToExcelAdvanced(
+      await exportToExcelAdvanced(
         dataForExcel,
         columnsForExport,
         `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,

@@ -237,13 +237,13 @@ function CompteBancaireList() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (visibleMovements.length === 0) {
       notification.warning('Aucun mouvement à exporter');
       return;
     }
 
-    exportToExcelAdvanced(
+    await exportToExcelAdvanced(
       visibleMovements.map((movement) => ({
         date: movement.date_mouvement,
         compte: movement.compte_nom || comptesMap.get(movement.id_compte)?.nom_banque || '-',

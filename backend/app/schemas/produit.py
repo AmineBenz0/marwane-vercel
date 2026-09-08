@@ -2,7 +2,9 @@
 Schémas Pydantic pour la validation des données produits.
 """
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional
+from typing import Literal, Optional
+
+ProductType = Literal['matiere_premiere', 'produit_fini', 'service']
 
 
 class ProduitBase(BaseModel):
@@ -28,9 +30,9 @@ class ProduitBase(BaseModel):
         True,
         description="Indique si le produit peut être utilisé pour des transactions fournisseurs"
     )
-    type_produit: Optional[str] = Field(
+    type_produit: ProductType = Field(
         'produit_fini',
-        description="Type de produit ('produit_fini' ou 'matiere_premiere')"
+        description="Type de produit"
     )
     
     @model_validator(mode='after')
@@ -69,9 +71,9 @@ class ProduitUpdate(BaseModel):
         max_length=255,
         description="Nom du produit (doit être unique)"
     )
-    type_produit: Optional[str] = Field(
+    type_produit: Optional[ProductType] = Field(
         None,
-        description="Type de produit ('produit_fini' ou 'matiere_premiere')"
+        description="Type de produit"
     )
     est_actif: Optional[bool] = Field(
         None,

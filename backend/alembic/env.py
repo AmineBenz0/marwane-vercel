@@ -19,8 +19,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override sqlalchemy.url with the one from settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Override sqlalchemy.url with the migration-only credential when provided.
+# Runtime application credentials must never be used for schema changes.
+config.set_main_option(
+    "sqlalchemy.url",
+    settings.MIGRATION_DATABASE_URL or settings.DATABASE_URL,
+)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

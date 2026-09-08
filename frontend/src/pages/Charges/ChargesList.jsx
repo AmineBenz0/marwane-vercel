@@ -264,7 +264,7 @@ function ChargesList() {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const rows = visibleCharges.map((charge) => ({
       date_charge: charge.date_charge,
       libelle: charge.libelle,
@@ -274,7 +274,7 @@ function ChargesList() {
       montant: Number(charge.montant || 0),
     }));
 
-    exportToExcelAdvanced(
+    await exportToExcelAdvanced(
       rows,
       [
         { id: 'date_charge', label: 'Date' },

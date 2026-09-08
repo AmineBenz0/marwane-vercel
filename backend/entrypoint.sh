@@ -16,16 +16,14 @@ echo "✅ PostgreSQL is ready!"
 # Run Alembic migrations
 echo ""
 echo "🔄 Running database migrations..."
-# This repo currently has multiple Alembic heads, so applying all heads keeps
-# container startup aligned with local development until the branches are merged.
-alembic upgrade heads
+alembic upgrade head
 echo "✅ Migrations applied successfully!"
 
 # Create admin user if not exists
 echo ""
 echo "👤 Checking admin user..."
-ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-Admin@123}"
+: "${ADMIN_EMAIL:?ADMIN_EMAIL must be provided explicitly}"
+: "${ADMIN_PASSWORD:?ADMIN_PASSWORD must be provided explicitly}"
 
 python -c "
 import os
@@ -34,8 +32,8 @@ from app.database import SessionLocal
 from app.utils.security import hash_password
 
 db = SessionLocal()
-admin_email = os.environ.get('ADMIN_EMAIL', 'admin@example.com')
-admin_password = os.environ.get('ADMIN_PASSWORD', 'Admin@123')
+admin_email = os.environ['ADMIN_EMAIL']
+admin_password = os.environ['ADMIN_PASSWORD']
 
 try:
     result = db.execute(text(\"SELECT COUNT(*) FROM utilisateurs WHERE email = :email\"), {'email': admin_email})

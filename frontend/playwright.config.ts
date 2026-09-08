@@ -16,6 +16,10 @@ export default defineConfig({
     video: 'off',
   },
   projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
     // Use locally installed browsers to avoid Playwright downloads in corp/TLS environments.
     {
       name: 'chrome',
@@ -24,6 +28,10 @@ export default defineConfig({
     {
       name: 'edge',
       use: { ...devices['Desktop Edge'], channel: 'msedge' },
+    },
+    {
+      name: 'mobile',
+      use: { ...devices['iPhone 13'] },
     },
   ],
 });

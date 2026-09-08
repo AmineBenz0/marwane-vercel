@@ -57,6 +57,7 @@ class TransactionBase(BaseModel):
         None,
         description="ID du lot/cycle de production pour les ventes d'oeufs"
     )
+    date_echeance: Optional[date] = Field(None, description="Date d'échéance du paiement")
     date_echeance: Optional[date] = Field(
         None,
         description="Date d'échéance du paiement (optionnelle)"

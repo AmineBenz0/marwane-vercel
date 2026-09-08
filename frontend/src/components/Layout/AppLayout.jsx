@@ -48,6 +48,8 @@ import {
 } from '@mui/icons-material';
 import useAuthStore from '../../store/authStore';
 import { batimentService } from '../../services/productionService';
+import AlertCenter from '../AlertCenter';
+import UnifiedSearch from '../UnifiedSearch';
 
 const DRAWER_WIDTH = 252;
 const DRAWER_COLLAPSED = 68;
@@ -66,6 +68,7 @@ const NAV_SECTIONS = [
     label: 'Travail terrain',
     items: [
       { text: 'Production & stock', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/production' },
+      { text: 'BOM & transformations', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/boms' },
       { text: 'Par bâtiment', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/batiment' },
     ],
   },
@@ -73,6 +76,8 @@ const NAV_SECTIONS = [
     label: 'Ventes & achats',
     items: [
       { text: 'Transactions', icon: <ReceiptIcon sx={{ fontSize: 20 }} />, path: '/transactions' },
+      { text: 'Créances clients', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/creances' },
+      { text: 'Dettes fournisseurs', icon: <MoneyOffIcon sx={{ fontSize: 20 }} />, path: '/dettes' },
       { text: 'Clients', icon: <PeopleIcon sx={{ fontSize: 20 }} />, path: '/clients' },
       { text: 'Fournisseurs', icon: <BusinessIcon sx={{ fontSize: 20 }} />, path: '/fournisseurs' },
       { text: 'Produits', icon: <InventoryIcon sx={{ fontSize: 20 }} />, path: '/produits' },
@@ -85,6 +90,7 @@ const NAV_SECTIONS = [
       { text: 'Lettres de crédit', icon: <CreditCardIcon sx={{ fontSize: 20 }} />, path: '/lettres-credit' },
       { text: 'Comptes bancaires', icon: <AccountBalanceIcon sx={{ fontSize: 20 }} />, path: '/comptes-bancaires' },
       { text: 'Caisse', icon: <CreditCardIcon sx={{ fontSize: 20 }} />, path: '/caisse' },
+      { text: 'Rapport mensuel', icon: <ReceiptIcon sx={{ fontSize: 20 }} />, path: '/rapports/mensuel' },
     ],
   },
 ];
@@ -565,6 +571,10 @@ function AppLayout({ children }) {
           }),
         }}
       >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: { xs: 2, md: 3 }, pt: { xs: 1, md: 2 }, minHeight: 56, color: 'text.secondary' }}>
+          <UnifiedSearch />
+          <AlertCenter />
+        </Box>
         <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, pt: { xs: 8, md: 3 }, maxWidth: '100%' }}>
           {children}
         </Box>

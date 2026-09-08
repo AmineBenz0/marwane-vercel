@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour les Comptes Bancaires.
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -45,6 +45,11 @@ class MouvementBancaire(Base):
     source = Column(String(50), nullable=False) # virement, cheque, frais, initial
     reference = Column(String(100), nullable=True)
     notes = Column(String(255), nullable=True)
+    statut = Column(String(20), nullable=False, default="active", index=True)
+    motif_annulation = Column(Text, nullable=True)
+    date_annulation = Column(DateTime(timezone=True), nullable=True)
+    id_utilisateur_annulation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
+    id_mouvement_inverse = Column(Integer, ForeignKey("mouvements_bancaires.id_mouvement"), nullable=True, index=True)
     
     # Lien optionnel vers un paiement ou une charge
     id_paiement = Column(Integer, ForeignKey("paiements.id_paiement"), nullable=True)
@@ -54,3 +59,9 @@ class MouvementBancaire(Base):
     compte = relationship("CompteBancaire", back_populates="mouvements")
     paiement = relationship("Paiement")
     charge = relationship("Charge")
+
+    __table_args__ = (
+        CheckConstraint("montant > 0", name="check_mouvement_bancaire_montant_positif"),
+        CheckConstraint("type_mouvement IN ('ENTREE', 'SORTIE')", name="check_type_mouvement_bancaire_valide"),
+        CheckConstraint("statut IN ('active', 'annule')", name="check_statut_mouvement_bancaire_valide"),
+    )

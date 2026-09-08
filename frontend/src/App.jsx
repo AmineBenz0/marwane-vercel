@@ -45,6 +45,9 @@ import ChargesList from './pages/Charges/ChargesList';
 import CompteBancaireList from './pages/ComptesBancaires/CompteBancaireList';
 import CalendarView from './pages/Calendar/CalendarView';
 import TasksList from './pages/Tasks/TasksList';
+import { ReceivablesPage, PayablesPage } from './pages/Finance/FinancialLedgerPage';
+import ProductBomsPage from './pages/Production/ProductBomsPage';
+import MonthlyReportPage from './pages/Reports/MonthlyReportPage';
 
 function App() {
   return (
@@ -93,6 +96,22 @@ function App() {
               <AppLayout>
                 <Transactions />
               </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/creances"
+          element={
+            <ProtectedRoute>
+              <AppLayout><ReceivablesPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dettes"
+          element={
+            <ProtectedRoute>
+              <AppLayout><PayablesPage /></AppLayout>
             </ProtectedRoute>
           }
         />
@@ -197,6 +216,14 @@ function App() {
           }
         />
         <Route
+          path="/production/boms"
+          element={
+            <ProtectedRoute>
+              <AppLayout><ProductBomsPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/production/batiment/:id"
           element={
             <ProtectedRoute>
@@ -223,6 +250,14 @@ function App() {
               <AppLayout>
                 <CompteBancaireList />
               </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/rapports/mensuel"
+          element={
+            <ProtectedRoute>
+              <AppLayout><MonthlyReportPage /></AppLayout>
             </ProtectedRoute>
           }
         />

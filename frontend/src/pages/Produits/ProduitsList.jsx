@@ -119,7 +119,6 @@ function ProduitsList() {
       const [produitsData, transactionsData, fournisseursData] = await Promise.all([
         get('/produits', {
           params: {
-            type_produit: 'matiere_premiere',
             est_actif: true,
             limit: 1000,
           },
@@ -200,7 +199,7 @@ function ProduitsList() {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       const rows = filteredProduits.map((produit) => {
         const insight = productInsights.get(produit.id_produit);
@@ -219,7 +218,7 @@ function ProduitsList() {
         };
       });
 
-      exportToExcelAdvanced(
+      await exportToExcelAdvanced(
         rows,
         [
           { id: 'nom_produit', label: 'Produit' },
@@ -299,8 +298,8 @@ function ProduitsList() {
               <Typography fontWeight={900} fontSize="1.15rem">
                 Catalogue des achats
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Un produit reste unique, même s'il est acheté chez plusieurs fournisseurs.
+                <Typography variant="body2" color="text.secondary">
+                Matières premières, produits finis et services dans un référentiel unique.
               </Typography>
             </Box>
 
@@ -409,6 +408,12 @@ function ProductCard({ produit, insight, fournisseursMap, onView, onEdit }) {
                   : 'Pas encore acheté'
               }
               sx={{ fontWeight: 800, flexShrink: 0 }}
+            />
+            <Chip
+              size="small"
+              variant="outlined"
+              label={produit.type_produit === 'matiere_premiere' ? 'Matière première' : produit.type_produit === 'service' ? 'Service' : 'Produit fini'}
+              sx={{ fontWeight: 700, flexShrink: 0, mt: 0.75 }}
             />
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>

@@ -2,25 +2,12 @@
 
 ## Configuration de l'environnement
 
-### Méthode rapide (recommandée)
+### Méthode rapide
 
-**Sur Windows (PowerShell) :**
-```powershell
-cd backend
-.\setup.ps1
-```
-
-**Sur Linux/Mac :**
-```bash
-cd backend
-./setup.sh
-```
-
-Le script va automatiquement :
-- ✅ Créer l'environnement virtuel Python
-- ✅ Activer l'environnement virtuel
-- ✅ Installer toutes les dépendances
-- ✅ Créer le fichier `.env` depuis `.env.example` si nécessaire
+Installez les dépendances dans un environnement virtuel local, puis copiez
+`.env.example` vers `.env`. La production utilise Supabase et Vercel; les
+scripts Docker présents dans le dépôt sont uniquement un secours pour un
+PostgreSQL local et ne font pas partie du chemin de déploiement.
 
 ### Méthode manuelle
 
@@ -42,6 +29,8 @@ source venv/bin/activate
 
 ```bash
 pip install -r requirements.txt
+# For local quality gates, also install the pinned developer tooling:
+pip install -r requirements-dev.txt
 ```
 
 #### 3. Configurer les variables d'environnement
@@ -49,17 +38,16 @@ pip install -r requirements.txt
 Le fichier `.env` est déjà créé avec des valeurs par défaut. Pour la production, modifiez les valeurs suivantes :
 
 - `SECRET_KEY` : Générez une clé secrète forte pour JWT
-- `POSTGRES_PASSWORD` : Changez le mot de passe de la base de données
-- `DATABASE_URL` : Ajustez selon votre configuration
+- `DATABASE_URL` : Connexion runtime Supabase avec pooler adapté à Vercel
+- `MIGRATION_DATABASE_URL` : Connexion de migration séparée et privilégiée
+- `SECRET_KEY`, `CRON_SECRET` : secrets longs, distincts par environnement
 
 **Note :** Le fichier `.env` n'est pas versionné dans Git pour des raisons de sécurité. Utilisez `.env.example` comme référence.
 
-#### 4. Démarrer la base de données PostgreSQL
+#### 4. Vérifier la base de données
 
-Depuis la racine du projet :
-```bash
-docker-compose up -d postgres
-```
+Les migrations de preview/staging sont appliquées avec Alembic depuis un job
+contrôlé. Ne lancez jamais `Base.metadata.create_all()` contre Supabase.
 
 ## Structure du projet
 
@@ -102,20 +90,20 @@ L'API sera accessible à :
 - **Documentation Swagger** : http://localhost:8000/docs
 - **Documentation ReDoc** : http://localhost:8000/redoc
 
-## Routes de test
+## Vérification locale et Vercel
 
-- `GET /` : Route principale de test
-- `GET /health` : Vérification de santé de l'API
-
-## Vérification du déploiement
+- `GET /api/v1/health/live` : la fonction est chargée, sans accès DB
+- `GET /api/v1/health/ready` : la base de données est joignable
+- `GET /docs` : documentation OpenAPI (à protéger ou désactiver selon la politique de production)
 
 Pour une instance Vercel, utilisez les endpoints suivants :
 
 - `GET /api/v1/health/live` : vérifie que la fonction est chargée, sans accès à la base
 - `GET /api/v1/health/ready` : vérifie que la base de données est joignable
 
-Les variables `DATABASE_URL`, `SECRET_KEY`, `DEBUG`, `ENABLE_AUTH` et
-`ENABLE_RATE_LIMITING` doivent être configurées dans l'environnement Vercel.
+Les variables `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SECRET_KEY`,
+`CRON_SECRET`, `DEBUG`, `ENABLE_AUTH` et `ENABLE_RATE_LIMITING` doivent être
+configurées dans l'environnement Vercel.
 L'application refuse automatiquement les valeurs locales ou dangereuses en
 preview et en production.
 

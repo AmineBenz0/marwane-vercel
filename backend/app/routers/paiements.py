@@ -3,7 +3,7 @@ Router FastAPI pour la gestion des paiements.
 Gère les endpoints pour créer, lire, modifier et supprimer des paiements.
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from datetime import datetime, date
@@ -18,6 +18,7 @@ from app.models.cession_lc import CessionLC
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.user import Utilisateur
+from app.services.ledger import record_correction, void_cash_movement
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
     PaiementBatchCreate, StatutPaiementTransaction, PaiementSummary
@@ -57,7 +58,10 @@ def _validate_lc_payment(
             detail=f"Lettre de Crédit avec l'ID {paiement_data.id_lc} introuvable"
         )
 
-    linked_payment = db.query(Paiement).filter(Paiement.id_lc == lc.id_lc).first()
+    linked_payment = db.query(Paiement).filter(
+        Paiement.id_lc == lc.id_lc,
+        Paiement.statut != "annule",
+    ).first()
     is_same_payment = (
         existing_payment_id is not None
         and linked_payment is not None
@@ -121,7 +125,7 @@ def _release_lc_if_unused(
     if not id_lc:
         return
 
-    query = db.query(Paiement).filter(Paiement.id_lc == id_lc)
+    query = db.query(Paiement).filter(Paiement.id_lc == id_lc, Paiement.statut != "annule")
     if exclude_payment_id is not None:
         query = query.filter(Paiement.id_paiement != exclude_payment_id)
 
@@ -137,9 +141,18 @@ def _release_lc_if_unused(
         lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
 
-def _update_caisse_movement(db: Session, paiement: Paiement, transaction: Transaction):
-    """
-    Helper pour créer/mettre à jour un mouvement de caisse lié à un paiement.
+def _update_caisse_movement(
+    db: Session,
+    paiement: Paiement,
+    transaction: Transaction,
+    current_user: Optional[Utilisateur] = None,
+    reason: str = "Synchronisation du mouvement de caisse",
+):
+    """Synchronise la caisse sans modifier ni supprimer un mouvement historique.
+
+    A changed movement is voided and replaced by a new row linked to the
+    original. A movement that is no longer applicable is voided with an
+    explicit inverse audit row.
     """
     # Types qui affectent immédiatement la caisse
     types_immediats = ['cash', 'virement', 'lc', 'carte', 'compensation', 'autre']
@@ -149,48 +162,74 @@ def _update_caisse_movement(db: Session, paiement: Paiement, transaction: Transa
     # 1. Vérifier si on doit créer un mouvement
     if paiement.type_paiement in types_immediats and paiement.statut == 'valide':
         doit_creer_mouvement = True
-    elif paiement.type_paiement == 'cheque' and paiement.statut_cheque == 'encaisse':
+    elif paiement.type_paiement == 'cheque' and paiement.statut != 'annule' and paiement.statut_cheque == 'encaisse':
         doit_creer_mouvement = True
         
-    if doit_creer_mouvement:
-        # Vérifier si un mouvement existe déjà pour ce paiement
-        existing = db.query(Caisse).filter(Caisse.id_paiement == paiement.id_paiement).first()
-        if existing:
-            # Mettre à jour le montant si nécessaire
-            if existing.montant != paiement.montant:
-                existing.montant = paiement.montant
-            return existing
+    existing = db.query(Caisse).filter(
+        Caisse.id_paiement == paiement.id_paiement,
+        Caisse.statut == "active",
+    ).first()
 
-        # Déterminer le type de mouvement (ENTRÉE pour client, SORTIE pour fournisseur)
-        type_mouvement = 'ENTREE' if transaction.id_client is not None else 'SORTIE'
-        
-        # Créer le nouveau mouvement
-        new_mouvement = Caisse(
-            montant=paiement.montant,
-            type_mouvement=type_mouvement,
-            id_transaction=transaction.id_transaction,
-            id_paiement=paiement.id_paiement,
-            # On utilise la date du paiement pour le mouvement de caisse
-            date_mouvement=datetime.combine(paiement.date_paiement, datetime.min.time())
-        )
-        db.add(new_mouvement)
-        db.flush() # Pour obtenir id_mouvement
-        
-        # Mettre à jour l'historique de solde (Snapshot)
-        _create_caisse_snapshot(db, new_mouvement.id_mouvement)
-        
-        return new_mouvement
-    else:
-        # Si on ne doit pas avoir de mouvement, mais qu'il en existe un (ex: statut changé), on le supprime
-        existing = db.query(Caisse).filter(Caisse.id_paiement == paiement.id_paiement).first()
+    if not doit_creer_mouvement:
         if existing:
-            # Avant de supprimer, on pourrait vouloir marquer le snapshot ? 
-            # Pour simplifier, on supprime juste le mouvement. 
-            # Les snapshots suivants recalculeront le solde correctement.
-            db.delete(existing)
-            db.flush()
-            
-    return None
+            void_cash_movement(
+                db,
+                existing,
+                raison=reason,
+                current_user=current_user,
+                create_reversal_record=True,
+            )
+            _create_caisse_snapshot(db, existing.id_mouvement)
+        return None
+
+    type_mouvement = 'ENTREE' if transaction.id_client is not None else 'SORTIE'
+    expected_date = datetime.combine(paiement.date_paiement, datetime.min.time())
+    if existing and (
+        existing.montant == paiement.montant
+        and existing.type_mouvement == type_mouvement
+        and existing.date_mouvement == expected_date
+    ):
+        return existing
+
+    if existing:
+        original_id = existing.id_mouvement
+        void_cash_movement(
+            db,
+            existing,
+            raison=reason,
+            current_user=current_user,
+            create_reversal_record=False,
+        )
+    else:
+        original_id = None
+
+    new_mouvement = Caisse(
+        montant=paiement.montant,
+        type_mouvement=type_mouvement,
+        id_transaction=transaction.id_transaction,
+        id_paiement=paiement.id_paiement,
+        date_mouvement=expected_date,
+    )
+    db.add(new_mouvement)
+    db.flush()
+    if original_id is not None:
+        original = db.query(Caisse).filter(Caisse.id_mouvement == original_id).first()
+        if original:
+            original.id_mouvement_inverse = new_mouvement.id_mouvement
+            new_mouvement.id_mouvement_inverse = original.id_mouvement
+        record_correction(
+            db,
+            type_entite="paiement",
+            id_entite=paiement.id_paiement,
+            action="remplacement_mouvement",
+            raison=reason,
+            current_user=current_user,
+            id_mouvement_original=original_id,
+            id_mouvement_inverse=new_mouvement.id_mouvement,
+            details={"table": "caisse"},
+        )
+    _create_caisse_snapshot(db, new_mouvement.id_mouvement)
+    return new_mouvement
 
 
 def _create_caisse_snapshot(db: Session, id_mouvement: int):
@@ -204,7 +243,7 @@ def _create_caisse_snapshot(db: Session, id_mouvement: int):
                 else_=-Caisse.montant
             )
         )
-    ).scalar() or Decimal('0.00')
+    ).filter(Caisse.statut == "active").scalar() or Decimal('0.00')
     
     new_history = CaisseSoldeHistorique(
         solde=solde_actuel,
@@ -295,6 +334,7 @@ def get_paiement(
 @router.post("", response_model=PaiementRead, status_code=status.HTTP_201_CREATED)
 def create_paiement(
     paiement_data: PaiementCreate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -317,6 +357,12 @@ def create_paiement(
         HTTPException 400: Si la transaction n'existe pas ou si le montant est invalide
         HTTPException 404: Si la transaction n'existe pas
     """
+    if paiement_data.cle_idempotence:
+        existing = db.query(Paiement).filter(Paiement.cle_idempotence == paiement_data.cle_idempotence).first()
+        if existing:
+            response.status_code = status.HTTP_200_OK
+            return existing
+
     # Vérifier que la transaction existe
     transaction = db.query(Transaction).filter(
         Transaction.id_transaction == paiement_data.id_transaction
@@ -350,6 +396,7 @@ def create_paiement(
         reference_virement=paiement_data.reference_virement,
         id_lc=paiement_data.id_lc if paiement_data.type_paiement == 'lc' else None,
         notes=paiement_data.notes,
+        cle_idempotence=paiement_data.cle_idempotence,
         statut=statut_initial,
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )
@@ -358,7 +405,13 @@ def create_paiement(
     db.flush() # Pour obtenir l'ID
     
     # Mettre à jour la caisse
-    _update_caisse_movement(db, nouveau_paiement, transaction)
+    _update_caisse_movement(
+        db,
+        nouveau_paiement,
+        transaction,
+        current_user=current_user,
+        reason="Création du paiement",
+    )
     
     db.commit()
     db.refresh(nouveau_paiement)
@@ -395,14 +448,37 @@ def update_paiement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Paiement avec l'ID {id} introuvable"
         )
+
+    if paiement.statut == "annule":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un paiement annulé est immuable")
     
     transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
     old_lc_id = paiement.id_lc
-
-    # Mettre à jour les champs fournis
     update_data = paiement_data.model_dump(exclude_unset=True)
     if "type_paiement" in update_data and update_data["type_paiement"]:
         update_data["type_paiement"] = update_data["type_paiement"].lower()
+
+    immutable_fields = {"date_paiement", "montant", "type_paiement", "id_lc"}
+    changed_immutable = [
+        field for field in immutable_fields
+        if field in update_data and update_data[field] != getattr(paiement, field)
+    ]
+    if changed_immutable:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Les attributs financiers d'un paiement sont immuables. "
+                "Annulez le paiement avec une raison puis créez un nouveau paiement."
+            ),
+        )
+
+    reason = update_data.pop("raison", None) or "Correction opérationnelle du paiement"
+    changed_fields = list(update_data)
+    if update_data.get("statut") == "annule":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'annulation d'un paiement doit utiliser l'opération de void avec une raison.",
+        )
 
     next_payment = SimpleNamespace(
         type_paiement=update_data.get("type_paiement", paiement.type_paiement),
@@ -431,7 +507,24 @@ def update_paiement(
 
     # Mettre à jour la caisse si nécessaire (ex: chèque passé à 'encaisse')
     if transaction:
-        _update_caisse_movement(db, paiement, transaction)
+        _update_caisse_movement(
+            db,
+            paiement,
+            transaction,
+            current_user=current_user,
+            reason=reason,
+        )
+
+    if changed_fields:
+        record_correction(
+            db,
+            type_entite="paiement",
+            id_entite=paiement.id_paiement,
+            action="modification",
+            raison=reason,
+            current_user=current_user,
+            details={"champs": changed_fields},
+        )
         
     db.commit()
     db.refresh(paiement)
@@ -442,6 +535,7 @@ def update_paiement(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_paiement(
     id: int,
+    raison: str = "Annulation demandée par l'utilisateur",
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -464,16 +558,20 @@ def delete_paiement(
             detail=f"Paiement avec l'ID {id} introuvable"
         )
 
-    old_lc_id = paiement.id_lc
-    
-    # Supprimer les mouvements de caisse associés
-    caisse_mouvements = db.query(Caisse).filter(Caisse.id_paiement == id).all()
-    for mvmt in caisse_mouvements:
-        db.delete(mvmt)
-        
-    db.delete(paiement)
-    db.flush()
-    _release_lc_if_unused(db, old_lc_id, current_user)
+    if paiement.statut == "annule":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le paiement est déjà annulé")
+    paiement.statut = "annule"
+    paiement.motif_annulation = raison[:1000]
+    paiement.date_annulation = datetime.now()
+    paiement.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    _update_caisse_movement(
+        db,
+        paiement,
+        paiement.transaction,
+        current_user=current_user,
+        reason=raison,
+    )
+    _release_lc_if_unused(db, paiement.id_lc, current_user, exclude_payment_id=id)
     db.commit()
     
     return None
@@ -588,6 +686,12 @@ def create_paiements_batch(
     
     try:
         for p_data in batch_data.paiements:
+            if p_data.cle_idempotence:
+                existing = db.query(Paiement).filter(Paiement.cle_idempotence == p_data.cle_idempotence).first()
+                if existing:
+                    created_paiements.append(existing)
+                    continue
+
             # Récupérer la transaction
             transaction = db.query(Transaction).filter(Transaction.id_transaction == p_data.id_transaction).first()
             if not transaction:
@@ -610,7 +714,13 @@ def create_paiements_batch(
             db.flush()
             
             # Mouvement de caisse
-            _update_caisse_movement(db, nouveau_paiement, transaction)
+            _update_caisse_movement(
+                db,
+                nouveau_paiement,
+                transaction,
+                current_user=current_user,
+                reason="Création du paiement en lot",
+            )
             created_paiements.append(nouveau_paiement)
             
         db.commit()

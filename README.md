@@ -34,8 +34,10 @@ Ce projet vise à digitaliser et automatiser le processus comptable actuel basé
 - **Charts** : Recharts
 
 ### Infrastructure
-- **Containerisation** : Docker & Docker Compose
-- **Base de données** : PostgreSQL (via Docker)
+- **Application** : Vercel (frontend and serverless API)
+- **Base de données** : Supabase PostgreSQL
+- **Migrations** : Alembic through the dedicated migration database role
+- **Operations** : Vercel deployments, Supabase backups/PITR, GitHub Actions gates
 
 ## 📁 Structure du Projet
 
@@ -50,7 +52,8 @@ projet/
 │   ├── src/
 │   └── package.json
 ├── docs/             # Documentation
-├── docker-compose.yml
+├── .github/workflows/     # CI and release gates
+├── docker-compose.yml     # Optional legacy local PostgreSQL setup
 ├── .env.example
 └── README.md
 ```
@@ -59,10 +62,10 @@ projet/
 
 ### Prérequis
 
-- Python 3.10+
-- Node.js (LTS)
-- Docker & Docker Compose
+- Python 3.12+
+- Node.js 22.12+
 - Git
+- A Supabase project for preview/production verification
 
 ### Installation
 
@@ -72,13 +75,11 @@ projet/
    cd marwane
    ```
 
-2. **Configurer PostgreSQL avec Docker**
+2. **Configurer l'environnement**
    ```bash
-   # Copier le fichier d'environnement
    cp .env.example .env
-   
-   # Lancer PostgreSQL
-   docker-compose up -d postgres
+   # Pour un environnement local, définir DATABASE_URL vers PostgreSQL ou SQLite.
+   # Pour Vercel/Supabase, configurer les variables dans les environnements Vercel.
    ```
 
 3. **Configurer le Backend**
@@ -109,18 +110,18 @@ cd frontend
 npm run dev
 ```
 
-**Base de données**
-```bash
-docker-compose up -d postgres
-```
+Les migrations de staging et de production sont exécutées avec Alembic et une
+variable `MIGRATION_DATABASE_URL` séparée de la connexion runtime.
 
 ## 📚 Documentation
 
 - [Documentation Complète](./Documentation.md) - Architecture détaillée et spécifications
-- [Backlog du Projet](./BACKLOG.md) - Suivi des tâches et progression
-- [Guide de Développement](./DEVELOPMENT_WORKFLOW.md) - Workflow complet local/production
+- [Backlog du Projet](./backlog.md) - Suivi historique et état des vagues
+- [Guide de Développement historique](./DEVELOPMENT_WORKFLOW.md) - Ancien workflow Docker/Azure
 - [Guide Rapide de Développement](./QUICK_DEV_GUIDE.md) - Démarrage rapide
-- [Guide de Déploiement Azure](./DEPLOYMENT_AZURE_GUIDE.md) - Déploiement sur Azure VM
+- [Checklist opérationnelle Vercel/Supabase](./TODO_IMMEDIAT.md) - Déploiement, sécurité et exploitation
+- [Checklist d'acceptation enterprise](./docs/enterprise-acceptance-checklist.md) - Gates avant promotion
+- [Décisions d'architecture](./docs/adr/) - Ledger, stock, paiements et autorisation
 
 ## 🔐 Sécurité
 
@@ -135,11 +136,16 @@ docker-compose up -d postgres
 ```bash
 # Backend
 cd backend
-pytest
+pytest -q --no-cov
 
-# Frontend
+# Frontend lint, unit coverage, and production build
 cd frontend
-npm test
+npm run lint
+npm run test:unit:coverage
+npm run build
+
+# Authenticated end-to-end smoke tests when credentials are configured
+npm run test:e2e
 ```
 
 ## 📝 License
@@ -152,6 +158,6 @@ Projet développé pour la digitalisation du processus comptable.
 
 ---
 
-**Statut du projet** : 🟡 En développement  
-**Version** : 0.1.0 (Phase 0 - Préparation)
+**Statut du projet** : 🟡 Remédiation enterprise en cours — promotion contrôlée
+**Version** : 0.1.0
 

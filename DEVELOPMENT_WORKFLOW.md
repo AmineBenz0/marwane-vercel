@@ -562,3 +562,9 @@ Avant chaque déploiement en production :
 **🎉 Bon développement !**
 
 
+# ARCHIVE NOTICE
+
+This document describes the former Docker/Azure deployment path and is kept
+for historical reference only. The supported path is Vercel + Supabase; use
+[`TODO_IMMEDIAT.md`](./TODO_IMMEDIAT.md) and the enterprise acceptance checklist
+for current development, migration, and release operations.

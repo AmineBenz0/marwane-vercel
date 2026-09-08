@@ -5,7 +5,7 @@ Gère les endpoints pour les mouvements, le solde et l'historique de la caisse.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case, or_, and_
+from sqlalchemy import func, or_
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -13,7 +13,6 @@ from app.database import get_db
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.transaction import Transaction
-from app.models.paiement import Paiement
 from app.models.lettre_credit import LettreDeCredit
 from app.schemas.caisse import (
     MouvementCaisseRead,
@@ -70,8 +69,9 @@ def get_mouvements(
     query = db.query(Caisse).outerjoin(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
+        Caisse.statut == "active",
         or_(
-            Transaction.est_actif == True,
+            Transaction.est_actif,
             Caisse.id_transaction.is_(None)
         )
     )
@@ -125,12 +125,12 @@ def get_solde(
     # Calculer le solde théorique : somme des transactions clients - somme des transactions fournisseurs
     entrees = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
         Transaction.id_client.isnot(None),
-        Transaction.est_actif == True
+        Transaction.est_actif
     ).scalar() or Decimal('0.00')
     
     sorties = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
         Transaction.id_fournisseur.isnot(None),
-        Transaction.est_actif == True
+        Transaction.est_actif
     ).scalar() or Decimal('0.00')
     
     lc_disponibles = _get_lc_disponibles_total(db)
@@ -140,7 +140,7 @@ def get_solde(
     
     # Récupérer la date de la dernière transaction active
     derniere_maj = db.query(func.max(Transaction.date_transaction)).filter(
-        Transaction.est_actif == True
+        Transaction.est_actif
     ).scalar()
     
     if not derniere_maj:
@@ -185,12 +185,12 @@ def get_solde_complet(
     
     entrees_theoriques = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
         Transaction.id_client.isnot(None),
-        Transaction.est_actif == True
+        Transaction.est_actif
     ).scalar() or Decimal('0.00')
     
     sorties_theoriques = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
         Transaction.id_fournisseur.isnot(None),
-        Transaction.est_actif == True
+        Transaction.est_actif
     ).scalar() or Decimal('0.00')
     
     lc_disponibles = _get_lc_disponibles_total(db)
@@ -200,7 +200,7 @@ def get_solde_complet(
     
     # Date du dernier mouvement (transaction)
     derniere_maj_transaction = db.query(func.max(Transaction.date_transaction)).filter(
-        Transaction.est_actif == True
+        Transaction.est_actif
     ).scalar()
     
     # ==================== SOLDE RÉEL ====================
@@ -210,15 +210,17 @@ def get_solde_complet(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
         Caisse.type_mouvement == 'ENTREE',
-        Transaction.est_actif == True
+        Caisse.statut == 'active',
+        Transaction.est_actif
     ).scalar() or Decimal('0.00')
     
     sorties_reelles = db.query(func.coalesce(func.sum(Caisse.montant), 0)).outerjoin(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
         Caisse.type_mouvement == 'SORTIE',
+        Caisse.statut == 'active',
         or_(
-            Transaction.est_actif == True,
+            Transaction.est_actif,
             Caisse.id_transaction.is_(None)
         )
     ).scalar() or Decimal('0.00')

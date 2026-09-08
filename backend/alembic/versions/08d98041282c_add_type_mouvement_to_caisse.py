@@ -8,6 +8,7 @@ Create Date: 2025-11-10 17:00:56.493543
 from typing import Sequence, Union
 
 from alembic import op
+from alembic import context
 import sqlalchemy as sa
 
 
@@ -19,6 +20,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # The initial migration already carries this column on a clean install.
+    # Avoid metadata introspection in Alembic's offline SQL generation mode.
+    if context.is_offline_mode():
+        return
     # Check if column exists before adding it
     # This migration is safe to run even if the column already exists
     connection = op.get_bind()
@@ -59,6 +64,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if context.is_offline_mode():
+        return
     # Drop the constraint if it exists
     op.execute("ALTER TABLE caisse DROP CONSTRAINT IF EXISTS check_type_mouvement")
     

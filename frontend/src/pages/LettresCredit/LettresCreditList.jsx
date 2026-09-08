@@ -194,13 +194,13 @@ function LettresCreditList() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (filteredLcs.length === 0) {
       notification.warning('Aucune LC à exporter');
       return;
     }
 
-    exportToExcelAdvanced(
+    await exportToExcelAdvanced(
       filteredLcs,
       [
         { id: 'numero_reference', label: 'Référence' },

@@ -239,3 +239,9 @@ Pour plus de détails, voir :
 **Difficulté : Moyenne** 🟡  
 **Coût Azure : ~40-80€/mois** 💰
 
+# ARCHIVE NOTICE
+
+This historical Azure/Docker quickstart is not a supported deployment path.
+Use [`TODO_IMMEDIAT.md`](./TODO_IMMEDIAT.md) for Vercel + Supabase operations
+and [`docs/enterprise-acceptance-checklist.md`](./docs/enterprise-acceptance-checklist.md)
+for release gates.

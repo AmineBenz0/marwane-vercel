@@ -1,5 +1,9 @@
 # Environment variables
 .env
+.env.*
+local-admin-credentials.txt
+*.credentials
+*.secrets
 .env.local
 .env.*.local
 *.env
@@ -27,6 +31,7 @@ frontend/dist-ssr/
 frontend/.vite/
 frontend/.cache/
 frontend/.parcel-cache/
+frontend/coverage-audit/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

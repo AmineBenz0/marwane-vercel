@@ -46,11 +46,23 @@ vi.mock('@mui/material', () => ({
   CardContent: ({ children, ...props }) => <div data-testid="card-content" {...props}>{children}</div>,
   CircularProgress: () => <div data-testid="circular-progress">Loading...</div>,
   Alert: ({ children, ...props }) => <div data-testid="alert" {...props}>{children}</div>,
+  Tabs: ({ children, ...props }) => <div data-testid="tabs" {...props}>{children}</div>,
+  Tab: ({ label, ...props }) => <button data-testid="tab" {...props}>{label}</button>,
+  Table: ({ children, ...props }) => <table data-testid="table" {...props}>{children}</table>,
+  TableBody: ({ children, ...props }) => <tbody data-testid="table-body" {...props}>{children}</tbody>,
+  TableCell: ({ children, ...props }) => <td data-testid="table-cell" {...props}>{children}</td>,
+  TableContainer: ({ children, ...props }) => <div data-testid="table-container" {...props}>{children}</div>,
+  TableHead: ({ children, ...props }) => <thead data-testid="table-head" {...props}>{children}</thead>,
+  TableRow: ({ children, ...props }) => <tr data-testid="table-row" {...props}>{children}</tr>,
   useTheme: () => ({
     palette: {
       primary: { main: '#1976d2' },
+      error: { main: '#d32f2f' },
+      success: { main: '#2e7d32' },
     },
+    breakpoints: { down: () => false },
   }),
+  useMediaQuery: () => false,
   Divider: () => <hr data-testid="divider" />,
 }));
 
@@ -62,6 +74,13 @@ vi.mock('@mui/icons-material', () => ({
   AttachMoney: () => <span data-testid="attach-money-icon">💰</span>,
   Receipt: () => <span data-testid="receipt-icon">🧾</span>,
   TrendingUp: () => <span data-testid="trending-up-icon">📈</span>,
+  CheckCircle: () => <span data-testid="check-circle-icon">✓</span>,
+  HourglassEmpty: () => <span data-testid="hourglass-icon">⌛</span>,
+  Warning: () => <span data-testid="warning-icon">!</span>,
+  Error: () => <span data-testid="error-icon">×</span>,
+  Inventory: () => <span data-testid="inventory-icon">▣</span>,
+  Store: () => <span data-testid="store-icon">▤</span>,
+  AccountBalance: () => <span data-testid="account-balance-icon">▥</span>,
 }));
 
 vi.mock('recharts', () => ({
@@ -73,6 +92,9 @@ vi.mock('recharts', () => ({
   Tooltip: () => null,
   Legend: () => null,
   ResponsiveContainer: ({ children }) => <div data-testid="responsive-container">{children}</div>,
+  Area: () => null,
+  ComposedChart: ({ children }) => <div data-testid="composed-chart">{children}</div>,
+  Bar: () => null,
 }));
 
 vi.mock('../../components/StatCard/StatCard', () => ({
@@ -93,7 +115,41 @@ vi.mock('../../components/DataGrid/DataGrid', () => ({
   ),
 }));
 
+vi.mock('../../components/ModalForm/ModalForm', () => ({
+  default: () => null,
+}));
+
+vi.mock('../Transactions/TransactionForm', () => ({
+  default: () => null,
+}));
+
+vi.mock('../../components/FinancialInsights/FinancialInsights', () => ({
+  default: () => null,
+}));
+
+vi.mock('../../components/StatCard/StatCardWithGauge', () => ({
+  default: () => null,
+}));
+
+vi.mock('../../components/TransactionsExcelRegister', () => ({
+  default: () => <div data-testid="transactions-register" />,
+  getPaymentReglementSummary: () => '',
+}));
+
 describe('FournisseurProfile', () => {
+  const configureProfileApi = (profile, monthlyStats = { data: [] }) => {
+    get.mockImplementation((url) => {
+      if (url === '/produits') return Promise.resolve([]);
+      if (url === '/batiments') return Promise.resolve([]);
+      if (url.includes('/profile')) return Promise.resolve(profile);
+      if (url.includes('/stats-mensuelles')) return Promise.resolve(monthlyStats);
+      if (url.includes('/produits-vendus')) return Promise.resolve(null);
+      if (url.includes('/insights-financiers')) return Promise.resolve(null);
+      if (url.includes('/score')) return Promise.resolve(null);
+      return Promise.resolve(null);
+    });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -138,9 +194,7 @@ describe('FournisseurProfile', () => {
       ],
     };
 
-    get
-      .mockResolvedValueOnce(mockProfileData)
-      .mockResolvedValueOnce(mockStatsMensuelles);
+    configureProfileApi(mockProfileData, mockStatsMensuelles);
 
     render(
       <BrowserRouter>
@@ -177,9 +231,7 @@ describe('FournisseurProfile', () => {
       data: [],
     };
 
-    get
-      .mockResolvedValueOnce(mockProfileData)
-      .mockResolvedValueOnce(mockStatsMensuelles);
+    configureProfileApi(mockProfileData, mockStatsMensuelles);
 
     render(
       <BrowserRouter>
@@ -211,9 +263,7 @@ describe('FournisseurProfile', () => {
       data: [],
     };
 
-    get
-      .mockResolvedValueOnce(mockProfileData)
-      .mockResolvedValueOnce(mockStatsMensuelles);
+    configureProfileApi(mockProfileData, mockStatsMensuelles);
 
     render(
       <BrowserRouter>
@@ -228,7 +278,11 @@ describe('FournisseurProfile', () => {
   });
 
   it('devrait afficher un message d\'erreur en cas d\'échec', async () => {
-    get.mockRejectedValueOnce(new Error('Erreur API'));
+    get.mockImplementation((url) => (
+      url.includes('/profile')
+        ? Promise.reject(new Error('Erreur API'))
+        : Promise.resolve(url.includes('/produits') || url === '/batiments' ? [] : null)
+    ));
 
     render(
       <BrowserRouter>
@@ -242,7 +296,7 @@ describe('FournisseurProfile', () => {
   });
 
   it('devrait afficher un message si le fournisseur n\'existe pas', async () => {
-    get.mockResolvedValueOnce({
+    configureProfileApi({
       fournisseur: null,
       statistiques: null,
       transactions: [],

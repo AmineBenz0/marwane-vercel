@@ -4,7 +4,7 @@ Gère les variables d'environnement et les paramètres de configuration.
 """
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, model_validator
-from typing import List
+from typing import List, Optional
 import os
 from urllib.parse import urlparse
 
@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # La valeur locale est conservée pour le développement uniquement.
     # En production, le validateur ci-dessous refuse toute valeur d'exemple.
     DATABASE_URL: str = DEFAULT_LOCAL_DATABASE_URL
+    # Optional migration-only credential. Alembic uses this value when set;
+    # the running API never reads from it.
+    MIGRATION_DATABASE_URL: Optional[str] = None
     
     # PostgreSQL Connection (for docker-compose)
     POSTGRES_DB: str = "comptabilite_db"
@@ -66,6 +69,9 @@ class Settings(BaseSettings):
     # IMPORTANT: En production, mettre ENABLE_AUTH=True et ENABLE_RATE_LIMITING=True
     ENABLE_AUTH: bool = DEFAULT_ENVIRONMENT.lower() in {"production", "preview"}
     ENABLE_RATE_LIMITING: bool = DEFAULT_ENVIRONMENT.lower() in {"production", "preview"}
+
+    # Secret utilisé exclusivement par les routes de tâches planifiées.
+    CRON_SECRET: str = ""
     
     model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
     
@@ -96,6 +102,9 @@ class Settings(BaseSettings):
 
         if not self.ENABLE_RATE_LIMITING:
             configuration_errors.append("ENABLE_RATE_LIMITING must be true outside development")
+
+        if not self.CRON_SECRET or len(self.CRON_SECRET) < 32:
+            configuration_errors.append("CRON_SECRET must be a unique value of at least 32 characters")
 
         if configuration_errors:
             raise ValueError("Invalid deployment configuration: " + "; ".join(configuration_errors))

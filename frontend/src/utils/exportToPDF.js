@@ -8,8 +8,8 @@
  * @param {Object} options - Options supplémentaires (formatters personnalisés, etc.)
  */
 
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import fr from 'date-fns/locale/fr';
 
@@ -106,7 +106,7 @@ export const exportToPDF = (
     });
 
     // Utiliser autoTable pour un rendu professionnel
-    doc.autoTable({
+    autoTable(doc, {
       startY: 35,
       head: [headers],
       body: tableData,
@@ -269,7 +269,7 @@ export const exportCaisseReport = (mouvements, solde, dateDebut, dateFin) => {
         `#${mouvement.id_transaction}`,
       ]);
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: 70,
         head: [headers],
         body: tableData,

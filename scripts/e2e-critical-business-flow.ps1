@@ -1,10 +1,14 @@
 param(
     [string]$BaseUrl = 'http://127.0.0.1:8001/api/v1',
-    [string]$Email = 'admin.marwane@example.com',
-    [string]$Password = 'MarwaneLocalAdmin!2026'
+    [string]$Email = '',
+    [string]$Password = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($Email) -or [string]::IsNullOrWhiteSpace($Password)) {
+    throw 'Provide -Email and -Password explicitly; credentials are never supplied by source defaults.'
+}
 
 function To-JsonBody($obj) {
     $obj | ConvertTo-Json -Depth 12

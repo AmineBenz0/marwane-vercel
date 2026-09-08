@@ -374,7 +374,7 @@ function ClientProfile() {
   /**
    * GÃ¨re l'export Excel des transactions.
    */
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       if (!transactions || transactions.length === 0) {
         notification.warning('Aucune transaction à exporter');
@@ -426,7 +426,7 @@ function ClientProfile() {
         },
       };
 
-      exportToExcelAdvanced(
+      await exportToExcelAdvanced(
         transactions,
         transactionColumns,
         `transactions_client_${client?.nom_client?.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,

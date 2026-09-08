@@ -3,6 +3,12 @@
   "buildCommand": "cd frontend && npm ci && npm run lint && npm run build",
   "outputDirectory": "frontend/dist",
   "framework": "vite",
+  "crons": [
+    {
+      "path": "/api/v1/internal/jobs/payment-alerts",
+      "schedule": "0 7 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

@@ -2,7 +2,25 @@ Voici le backlog qu'on a créé, qu'en penses-tu ? et aurais-tu des suggestions 
 
 > **Document de suivi de progression** - Mise à jour régulière recommandée  
 > **Date de création** : 2024  
-> **Statut global** : 🟡 En cours - Phase 1 Backend
+> **Statut global** : 🟡 Remédiation enterprise en cours — source of truth: `docs/enterprise-acceptance-checklist.md`
+
+> Les estimations et pourcentages historiques ci-dessous sont conservés pour
+> référence. Les fonctionnalités réellement livrées sont suivies par les
+> vagues de remise à niveau et les gates CI, pas par ces anciennes estimations.
+
+## Enterprise remediation status — 2026-09-07
+
+| Wave | Scope | Status |
+|---|---|---|
+| 1 | Ledger, reversals, reconciliation, migration, RLS baseline | 🟡 Implemented in branch; staging/security review required |
+| 2 | Créances, dettes, payment summary, in-app overdue alerts | 🟡 Implemented in branch; E2E and production data validation required |
+| 3 | Product types, BOM, inventory ledger, atomic transformations | 🟡 Implemented in branch; migration/backfill and costing validation required |
+| 4 | Unified search and canonical monthly report API | 🟡 Implemented in branch; export and data reconciliation validation required |
+| 5 | CI, E2E, operations, backup drill, controlled promotion | ⚪ Release gate |
+
+> The detailed phase and sprint sections below are archived planning history.
+> They are not a status source of truth and must not be used for deployment
+> decisions. Use `docs/enterprise-acceptance-checklist.md` and the table above.
 
 ---
 

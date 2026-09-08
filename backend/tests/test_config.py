@@ -27,6 +27,7 @@ def test_production_configuration_accepts_managed_database_and_secure_flags():
         DEBUG=False,
         ENABLE_AUTH=True,
         ENABLE_RATE_LIMITING=True,
+        CRON_SECRET="c" * 64,
     )
 
     assert configured.ENVIRONMENT == "production"

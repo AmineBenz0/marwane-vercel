@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Charges (Dépenses standalone).
 """
-from sqlalchemy import Column, Integer, String, Date, Numeric, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, Numeric, DateTime, ForeignKey, Text, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -23,6 +23,9 @@ class Charge(Base):
     categorie = Column(String(50), nullable=False, index=True)
     
     notes = Column(Text, nullable=True)
+    motif_annulation = Column(Text, nullable=True)
+    date_annulation = Column(DateTime(timezone=True), nullable=True)
+    statut = Column(String(20), nullable=False, default="active", index=True)
     
     # Métadonnées de traçabilité
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -48,3 +51,8 @@ class Charge(Base):
     
     # Lien avec la caisse (une charge génère toujours une sortie de caisse)
     mouvements_caisse = relationship("Caisse", back_populates="charge", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint("montant > 0", name="check_charge_montant_positif"),
+        CheckConstraint("statut IN ('active', 'annule')", name="check_statut_charge_valide"),
+    )

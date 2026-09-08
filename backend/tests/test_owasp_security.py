@@ -18,7 +18,7 @@ import pytest
 import json
 from datetime import datetime, timedelta
 from fastapi import status
-from jose import jwt
+import jwt
 from app.config import settings
 from app.utils.security import create_access_token, create_refresh_token, decode_token
 

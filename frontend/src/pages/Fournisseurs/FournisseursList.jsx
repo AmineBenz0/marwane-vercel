@@ -155,9 +155,9 @@ function FournisseursList() {
     navigate(`/fournisseurs/${fournisseur.id_fournisseur}/profile`);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      exportToExcelAdvanced(
+      await exportToExcelAdvanced(
         fournisseurs,
         [
           { id: 'nom_fournisseur', label: 'Nom du fournisseur' },

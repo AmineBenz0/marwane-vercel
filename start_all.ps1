@@ -53,8 +53,7 @@ Write-Host "  Backend API:  http://localhost:8000" -ForegroundColor White
 Write-Host "  Frontend:     http://localhost:3000" -ForegroundColor White
 Write-Host ""
 Write-Host "Login Credentials:" -ForegroundColor Cyan
-Write-Host "  Email:    admin@example.com" -ForegroundColor White
-Write-Host "  Password: Admin@123" -ForegroundColor White
+Write-Host "  Use the ADMIN_EMAIL and ADMIN_PASSWORD values from your ignored local .env file." -ForegroundColor White
 Write-Host ""
 Write-Host "To start the frontend:" -ForegroundColor Yellow
 Write-Host "  cd frontend" -ForegroundColor Gray

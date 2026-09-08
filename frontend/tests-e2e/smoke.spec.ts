@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const EMAIL = process.env.E2E_EMAIL || 'admin.marwane@example.com';
-const PASSWORD = process.env.E2E_PASSWORD || 'MarwaneLocalAdmin!2026';
+const EMAIL = process.env.E2E_EMAIL;
+const PASSWORD = process.env.E2E_PASSWORD;
 
 async function login(page: import('@playwright/test').Page) {
   await page.goto('/login');
@@ -18,6 +18,10 @@ async function login(page: import('@playwright/test').Page) {
 }
 
 test.describe('UI smoke (non-technical user flows)', () => {
+  test.beforeEach(async ({}, testInfo) => {
+    testInfo.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL and E2E_PASSWORD must be configured for authenticated smoke tests');
+  });
+
   test('Letters of credit page renders without runtime errors', async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -86,6 +90,23 @@ test.describe('UI smoke (non-technical user flows)', () => {
     await page.goto('/caisse');
     await expect(page.getByRole('heading', { name: 'Caisse', exact: true })).toBeVisible();
     await expect(page.getByText(/total disponible/i)).toBeVisible();
+    await expect(page.getByText(/impossible de contacter le serveur/i)).toHaveCount(0);
+  });
+
+  test('Navigate: enterprise finance, production, and reporting pages render', async ({ page }) => {
+    await login(page);
+
+    await page.goto('/creances');
+    await expect(page.getByRole('heading', { name: /créances clients/i })).toBeVisible();
+
+    await page.goto('/dettes');
+    await expect(page.getByRole('heading', { name: /dettes fournisseurs/i })).toBeVisible();
+
+    await page.goto('/production/boms');
+    await expect(page.getByRole('heading', { name: /bom & transformations/i })).toBeVisible();
+
+    await page.goto('/rapports/mensuel');
+    await expect(page.getByRole('heading', { name: /rapport mensuel/i })).toBeVisible();
     await expect(page.getByText(/impossible de contacter le serveur/i)).toHaveCount(0);
   });
 });

@@ -19,6 +19,7 @@ import {
   Collapse,
 } from '@mui/material';
 import { formatMontant } from '../../utils/formatNumber';
+import { get } from '../../services/api';
 
 /**
  * Types de paiement disponibles.
@@ -70,7 +71,6 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
       const fetchLcs = async () => {
         setLoadingLcs(true);
         try {
-          const { get } = await import('../../services/api');
           const params = {};
           if (transaction?.id_client) params.id_client = transaction.id_client;
           if (transaction?.id_fournisseur) params.id_fournisseur = transaction.id_fournisseur;

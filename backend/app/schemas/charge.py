@@ -36,6 +36,7 @@ class ChargeUpdate(BaseModel):
     categorie: Optional[str] = Field(None, max_length=50)
     notes: Optional[str] = Field(None)
     id_compte: Optional[int] = Field(None)
+    raison: Optional[str] = Field(None, max_length=1000, description="Raison de la correction opérationnelle")
 
 
 class ChargeRead(ChargeBase):
@@ -47,6 +48,9 @@ class ChargeRead(ChargeBase):
     date_modification: datetime
     id_utilisateur_creation: Optional[int]
     id_utilisateur_modification: Optional[int]
+    motif_annulation: Optional[str] = Field(None, max_length=1000)
+    date_annulation: Optional[datetime] = None
+    statut: str = Field(..., pattern="^(active|annule)$")
 
     model_config = ConfigDict(from_attributes=True)
 

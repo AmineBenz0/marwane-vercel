@@ -155,9 +155,9 @@ function ClientsList() {
     navigate(`/clients/${client.id_client}/profile`);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      exportToExcelAdvanced(
+      await exportToExcelAdvanced(
         clients,
         [
           { id: 'nom_client', label: 'Nom du client' },

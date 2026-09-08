@@ -43,9 +43,9 @@ The frontend will be accessible at `http://localhost:3000`
 
 ## Login Credentials
 
-- **Email:** `admin@example.com`
-- **Password:** `Admin@123`
-- **Role:** admin
+Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your ignored local `.env` file before
+starting the backend. Bootstrap credentials are intentionally not documented in
+the repository.
 
 ## Troubleshooting
 

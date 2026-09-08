@@ -37,6 +37,11 @@ const api = axios.create({
   timeout: 30000, // 30 secondes
 });
 
+const createRequestId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+};
+
 /**
  * Récupère le token d'accès depuis le localStorage.
  * 
@@ -298,6 +303,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.headers['X-Request-ID'] = config.headers['X-Request-ID'] || createRequestId();
     
     return config;
   },
@@ -337,6 +343,7 @@ api.interceptors.response.use(
         status,
         message: errorMessage,
         data: data,
+        requestId: data?.request_id || error.response.headers?.['x-request-id'],
         originalError: error,
       };
       
