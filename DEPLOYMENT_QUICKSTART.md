@@ -42,6 +42,11 @@ read by the running API.
 
 ## 3. Validate before promotion
 
+The Vercel build runs a configuration preflight before installing frontend
+dependencies. A missing or incorrectly scoped runtime/migration credential,
+secret, or deployed CORS origin fails the build with the variable name only;
+secret values are never printed.
+
 For the candidate deployment, verify:
 
 - `/api/v1/health/live` returns 200 without requiring the database.
