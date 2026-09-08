@@ -1,12 +1,30 @@
 """Shared financial projections for receivables and payables."""
 
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.transaction import Transaction
 from app.utils.business_date import business_date
+
+
+def validate_payment_idempotency(existing, requested) -> None:
+    """Reject reuse of a payment key with a different financial identity."""
+    same_identity = (
+        existing.id_transaction == requested.id_transaction
+        and existing.date_paiement == requested.date_paiement
+        and Decimal(str(existing.montant)) == Decimal(str(requested.montant))
+        and existing.type_paiement == requested.type_paiement.lower()
+        and existing.id_lc == requested.id_lc
+    )
+    if not same_identity:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La clé d'idempotence est déjà utilisée pour un autre paiement",
+        )
 
 
 def payment_status(transaction: Transaction, today: Optional[date] = None) -> str:

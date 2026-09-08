@@ -41,6 +41,33 @@ def _read_transformation(transformation: Transformation) -> TransformationRead:
     )
 
 
+def _validate_transformation_idempotency(existing: Transformation, requested: TransformationCreate) -> None:
+    """Reject reuse of a transformation key with a different operation."""
+    same_identity = (
+        existing.id_nomenclature == requested.id_nomenclature
+        and existing.date_transformation == requested.date_transformation
+        and (
+            requested.quantite_sortie is None
+            or Decimal(str(existing.quantite_sortie)) == Decimal(str(requested.quantite_sortie))
+        )
+    )
+    if same_identity and existing.id_nomenclature is None:
+        requested_lines = sorted(
+            (line.id_produit, line.type_ligne.upper(), Decimal(str(line.quantite)))
+            for line in requested.lignes
+        )
+        existing_lines = sorted(
+            (line.id_produit, line.type_ligne.upper(), Decimal(str(line.quantite)))
+            for line in existing.lignes
+        )
+        same_identity = requested_lines == existing_lines
+    if not same_identity:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La clé d'idempotence est déjà utilisée pour une autre transformation",
+        )
+
+
 def _resolve_lines(db: Session, payload: TransformationCreate):
     if payload.id_nomenclature:
         bom = db.query(Nomenclature).options(joinedload(Nomenclature.lignes)).filter(
@@ -151,6 +178,7 @@ def create_transformation(
             Transformation.cle_idempotence == payload.cle_idempotence
         ).first()
         if existing:
+            _validate_transformation_idempotency(existing, payload)
             response.status_code = status.HTTP_200_OK
             return _read_transformation(existing)
 

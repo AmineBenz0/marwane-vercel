@@ -25,8 +25,10 @@ function MonthlyReportPage() {
     { indicateur: 'Dettes', valeur: report.dettes, type: 'money' },
     { indicateur: 'Entrées caisse', valeur: report.caisse_entrees, type: 'money' },
     { indicateur: 'Sorties caisse', valeur: report.caisse_sorties, type: 'money' },
+    { indicateur: 'Solde caisse', valeur: report.solde_caisse, type: 'money' },
     { indicateur: 'Entrées banques', valeur: report.banques_entrees, type: 'money' },
     { indicateur: 'Sorties banques', valeur: report.banques_sorties, type: 'money' },
+    ...(report.soldes_bancaires || []).map((account) => ({ indicateur: `Solde ${account.nom_banque}`, valeur: account.solde, type: 'money' })),
     { indicateur: 'Mouvements stock', valeur: report.inventory_movements, type: 'count' },
     { indicateur: 'Variation nette stock', valeur: report.inventory_quantity_delta, type: 'quantity' },
   ] : [], [report]);

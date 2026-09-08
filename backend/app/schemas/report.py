@@ -10,6 +10,13 @@ class RankedTotal(BaseModel):
     total: Decimal
 
 
+class BankBalance(BaseModel):
+    id_compte: int
+    nom_banque: str
+    numero_compte: str
+    solde: Decimal
+
+
 class MonthlyReport(BaseModel):
     month: str
     date_debut: date
@@ -19,8 +26,10 @@ class MonthlyReport(BaseModel):
     charges: Decimal
     caisse_entrees: Decimal
     caisse_sorties: Decimal
+    solde_caisse: Decimal
     banques_entrees: Decimal
     banques_sorties: Decimal
+    soldes_bancaires: List[BankBalance]
     creances: Decimal
     dettes: Decimal
     top_clients: List[RankedTotal]

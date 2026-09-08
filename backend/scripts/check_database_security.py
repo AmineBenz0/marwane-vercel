@@ -103,6 +103,11 @@ def main() -> int:
     policy_tables = {row["tablename"] for row in policies}
     policy_gaps = [row["tablename"] for row in tables if row["tablename"] not in policy_tables]
     missing_roles = [role for role in ("app_runtime", "app_migrator") if role not in {row["rolname"] for row in roles}]
+    unsafe_runtime_roles = [
+        row["rolname"]
+        for row in roles
+        if row["rolname"] == "app_runtime" and (row["rolsuper"] or row["rolbypassrls"])
+    ]
     insecure_views = [row["viewname"] for row in views if not row["security_invoker"]]
     unsafe_grants = [
         row for row in grants if row["grantee"] in {"PUBLIC", "anon"}
@@ -111,7 +116,7 @@ def main() -> int:
         row for row in grants if row["grantee"] == "authenticated"
     ]
     result = {
-        "ok": not rls_gaps and not unsafe_grants and not direct_supabase_auth_grants and not policy_gaps and not missing_roles and not insecure_views and not security_definer_functions,
+        "ok": not rls_gaps and not unsafe_grants and not direct_supabase_auth_grants and not policy_gaps and not missing_roles and not unsafe_runtime_roles and not insecure_views and not security_definer_functions,
         "tables": tables,
         "rls_disabled_tables": rls_gaps,
         "policyless_tables": policy_gaps,
@@ -124,6 +129,7 @@ def main() -> int:
         "security_definer_functions": security_definer_functions,
         "roles": roles,
         "missing_required_roles": missing_roles,
+        "unsafe_runtime_roles": unsafe_runtime_roles,
         "connections": connections,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))

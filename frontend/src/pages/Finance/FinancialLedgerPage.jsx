@@ -178,29 +178,51 @@ function FinancialLedgerPage({ direction }) {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [data, setData] = useState({ items: [], summary: {} });
-  const [filters, setFilters] = useState({ recherche: '', statut: '', echeance_debut: '', echeance_fin: '', overdue_only: false, sort_by: 'date_echeance', sort_order: 'asc' });
+  const [filters, setFilters] = useState({ id_tiers: '', recherche: '', statut: '', echeance_debut: '', echeance_fin: '', overdue_only: false, sort_by: 'date_echeance', sort_order: 'asc' });
   const [page, setPage] = useState(0);
   const pageSize = 50;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [parties, setParties] = useState([]);
+  const [partiesLoading, setPartiesLoading] = useState(false);
 
   const endpoint = isReceivable ? '/transactions/creances' : '/transactions/dettes';
   const title = isReceivable ? 'Créances clients' : 'Dettes fournisseurs';
   const partyLabel = isReceivable ? 'Client' : 'Fournisseur';
+  const partyEndpoint = isReceivable ? '/clients' : '/fournisseurs';
+
+  useEffect(() => {
+    let cancelled = false;
+    setPartiesLoading(true);
+    get(partyEndpoint, { params: { limit: 1000, est_actif: true } })
+      .then((result) => {
+        if (cancelled) return;
+        setParties(Array.isArray(result) ? result : result?.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setParties([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPartiesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [partyEndpoint]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await get(endpoint, { params: { ...filters, overdue_only: filters.overdue_only || undefined, skip: page * pageSize, limit: pageSize } });
+      const tierParam = isReceivable ? 'id_client' : 'id_fournisseur';
+      const { id_tiers: selectedParty, ...queryFilters } = filters;
+      const result = await get(endpoint, { params: { ...queryFilters, [tierParam]: selectedParty || undefined, overdue_only: filters.overdue_only || undefined, skip: page * pageSize, limit: pageSize } });
       setData(result || { items: [], summary: {} });
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Impossible de charger les données.');
     } finally {
       setLoading(false);
     }
-  }, [endpoint, filters, page]);
+  }, [endpoint, filters, isReceivable, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -232,6 +254,10 @@ function FinancialLedgerPage({ direction }) {
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
           <TextField label="Rechercher" value={filters.recherche} onChange={(event) => updateFilter('recherche', event.target.value)} size="small" fullWidth />
+          <TextField label={partyLabel} select value={filters.id_tiers} onChange={(event) => updateFilter('id_tiers', event.target.value)} size="small" sx={{ minWidth: { md: 220 } }} disabled={partiesLoading}>
+            <MenuItem value="">Tous</MenuItem>
+            {parties.map((party) => <MenuItem key={isReceivable ? party.id_client : party.id_fournisseur} value={isReceivable ? party.id_client : party.id_fournisseur}>{isReceivable ? party.nom_client : party.nom_fournisseur}</MenuItem>)}
+          </TextField>
           <TextField label="Statut" select value={filters.statut} onChange={(event) => updateFilter('statut', event.target.value)} size="small" sx={{ minWidth: { md: 180 } }}>
             <MenuItem value="">Tous</MenuItem>
             {Object.entries(statusLabel).map(([value, label]) => <MenuItem value={value} key={value}>{label}</MenuItem>)}

@@ -19,6 +19,7 @@ from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.user import Utilisateur
 from app.services.ledger import record_correction, void_cash_movement
+from app.services.financial import validate_payment_idempotency
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
     PaiementBatchCreate, StatutPaiementTransaction, PaiementSummary
@@ -360,6 +361,7 @@ def create_paiement(
     if paiement_data.cle_idempotence:
         existing = db.query(Paiement).filter(Paiement.cle_idempotence == paiement_data.cle_idempotence).first()
         if existing:
+            validate_payment_idempotency(existing, paiement_data)
             response.status_code = status.HTTP_200_OK
             return existing
 
@@ -689,6 +691,7 @@ def create_paiements_batch(
             if p_data.cle_idempotence:
                 existing = db.query(Paiement).filter(Paiement.cle_idempotence == p_data.cle_idempotence).first()
                 if existing:
+                    validate_payment_idempotency(existing, p_data)
                     created_paiements.append(existing)
                     continue
 

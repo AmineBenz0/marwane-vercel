@@ -8,12 +8,14 @@ import { get, post } from '../../services/api';
 vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn() }));
 
 describe('FinancialLedgerPage', () => {
+  const financialResponse = {
+    items: [{ id_transaction: 12, client_nom: 'Client Test', produit_nom: 'Service', date_echeance: '2026-09-01', montant_total: '100.00', montant_restant: '100.00', statut_paiement: 'en_retard', est_en_retard: true }],
+    summary: { total: '100.00', paye: '0.00', reste: '100.00', overdue_count: 1 },
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    get.mockResolvedValue({
-      items: [{ id_transaction: 12, client_nom: 'Client Test', produit_nom: 'Service', date_echeance: '2026-09-01', montant_total: '100.00', montant_restant: '100.00', statut_paiement: 'en_retard', est_en_retard: true }],
-      summary: { total: '100.00', paye: '0.00', reste: '100.00', overdue_count: 1 },
-    });
+    get.mockImplementation((path) => path === '/clients' ? Promise.resolve([{ id_client: 7, nom_client: 'Client Test' }]) : Promise.resolve(financialResponse));
     post.mockResolvedValue({});
     vi.stubGlobal('confirm', vi.fn(() => true));
   });
@@ -28,7 +30,7 @@ describe('FinancialLedgerPage', () => {
   });
 
   it('shows the empty state when no receivables match', async () => {
-    get.mockResolvedValueOnce({ items: [], summary: {} });
+    get.mockImplementation((path) => path === '/clients' ? Promise.resolve([]) : Promise.resolve({ items: [], summary: {} }));
     render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
     expect(await screen.findByText('Aucune créance ne correspond aux filtres.')).toBeVisible();
   });

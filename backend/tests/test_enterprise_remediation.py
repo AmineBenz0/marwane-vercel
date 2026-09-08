@@ -58,6 +58,14 @@ def test_receivables_payment_summary_and_void_are_auditable(client, db_session, 
     }, headers=auth_headers)
     assert repeated.status_code == 200
     assert repeated.json()["id_paiement"] == payment_id
+    idempotency_conflict = client.post("/api/v1/paiements", json={
+        "id_transaction": transaction_id,
+        "date_paiement": date.today().isoformat(),
+        "montant": 101,
+        "type_paiement": "cash",
+        "cle_idempotence": "payment-test-idempotence-001",
+    }, headers=auth_headers)
+    assert idempotency_conflict.status_code == 409
     assert client.get(f"/api/v1/transactions/{transaction_id}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "paye"
 
     voided = client.delete(f"/api/v1/paiements/{payment_id}", headers=auth_headers)
@@ -161,6 +169,11 @@ def test_bom_transformation_updates_stock_and_is_idempotent(client, auth_headers
     }, headers=auth_headers)
     assert repeated.status_code == 200
     assert repeated.json()["id_transformation"] == transformation.json()["id_transformation"]
+    idempotency_conflict = client.post("/api/v1/transformations", json={
+        "date_transformation": date.today().isoformat(), "id_nomenclature": bom_id,
+        "quantite_sortie": 2, "cle_idempotence": "bom-test-idempotence-001",
+    }, headers=auth_headers)
+    assert idempotency_conflict.status_code == 409
     stock = client.get("/api/v1/stock", headers=auth_headers)
     assert stock.status_code == 200
     balances = {item["id_produit"]: item["quantite_disponible"] for item in stock.json()}
@@ -182,15 +195,55 @@ def test_bom_transformation_updates_stock_and_is_idempotent(client, auth_headers
     assert balances_after_reversal[raw["id_produit"]] == "10.000"
     assert balances_after_reversal[finished["id_produit"]] in {"0", "0.000"}
 
+    adjustment = client.post("/api/v1/stock/adjustments", json={
+        "id_produit": finished["id_produit"], "quantite_delta": 2,
+        "cout_unitaire": 5, "notes": "Correction de comptage",
+    }, headers=auth_headers)
+    assert adjustment.status_code == 201, adjustment.text
+    adjustment_id = adjustment.json()["id_mouvement_stock"]
+    adjustment_reversal = client.post(
+        f"/api/v1/stock/{adjustment_id}/reverse",
+        json={"raison": "Annulation de la correction de comptage"},
+        headers=auth_headers,
+    )
+    assert adjustment_reversal.status_code == 200, adjustment_reversal.text
+    repeated_adjustment_reversal = client.post(
+        f"/api/v1/stock/{adjustment_id}/reverse",
+        json={"raison": "Seconde tentative"},
+        headers=auth_headers,
+    )
+    assert repeated_adjustment_reversal.status_code == 409
 
-def test_search_and_monthly_report_are_available(client, auth_headers):
+
+def test_search_and_monthly_report_are_available(client, db_session, auth_headers):
     client_response = client.post("/api/v1/clients", json={"nom_client": "Client Recherche"}, headers=auth_headers)
     product = create_product(client, "Produit Rapport", "service", True, False)
+    prior_month_date = date.today().replace(day=1) - timedelta(days=1)
+    prior_transaction = client.post("/api/v1/transactions", json={
+        "date_transaction": prior_month_date.isoformat(), "date_echeance": prior_month_date.isoformat(),
+        "id_produit": product["id_produit"], "quantite": 1, "prix_unitaire": 50,
+        "id_client": client_response.json()["id_client"],
+    }, headers=auth_headers)
+    assert prior_transaction.status_code == 201, prior_transaction.text
     response = client.post("/api/v1/transactions", json={
         "date_transaction": date.today().isoformat(), "id_produit": product["id_produit"], "quantite": 1,
         "prix_unitaire": 125, "id_client": client_response.json()["id_client"],
     }, headers=auth_headers)
     assert response.status_code == 201, response.text
+
+    payment = client.post("/api/v1/paiements", json={
+        "id_transaction": response.json()["id_transaction"], "date_paiement": date.today().isoformat(),
+        "montant": 25, "type_paiement": "cash",
+    }, headers=auth_headers)
+    assert payment.status_code == 201, payment.text
+    account = CompteBancaire(nom_banque="Banque Rapport", numero_compte="REPORT-001")
+    db_session.add(account)
+    db_session.flush()
+    db_session.add(MouvementBancaire(
+        id_compte=account.id_compte, montant=Decimal("80.00"), type_mouvement="ENTREE",
+        source="initial", statut="active",
+    ))
+    db_session.commit()
 
     search = client.get("/api/v1/search", params={"q": "Rapport"}, headers=auth_headers)
     assert search.status_code == 200
@@ -198,6 +251,9 @@ def test_search_and_monthly_report_are_available(client, auth_headers):
     report = client.get("/api/v1/reports/monthly", params={"month": date.today().strftime("%Y-%m")}, headers=auth_headers)
     assert report.status_code == 200, report.text
     assert report.json()["ventes"] == "125.00"
+    assert report.json()["creances"] == "150.00"
+    assert report.json()["solde_caisse"] == "25.00"
+    assert report.json()["soldes_bancaires"][0]["solde"] == "80.00"
     assert isinstance(report.json()["inventory_movements"], int)
     assert "inventory_quantity_delta" in report.json()
 

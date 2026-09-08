@@ -42,3 +42,7 @@ class StockAdjustmentCreate(BaseModel):
         if value == 0:
             raise ValueError("La variation de stock ne peut pas être nulle")
         return value
+
+
+class StockReversalCreate(BaseModel):
+    raison: str = Field(..., min_length=3, max_length=500)

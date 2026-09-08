@@ -177,6 +177,24 @@ def reverse_source_movements(
         MouvementStock.source_id == source_id,
         MouvementStock.id_mouvement_inverse.is_(None),
     ).all()
+    if not originals:
+        return []
+
+    # A reversal must preserve the non-negative inventory invariant. Validate
+    # the complete source before appending any inverse movement so a rejected
+    # correction remains atomic for all products in the source.
+    for original in originals:
+        current_quantity = get_stock_quantity(db, original.id_produit)
+        resulting_quantity = current_quantity - Decimal(str(original.quantite_delta))
+        if resulting_quantity < 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"La reversal du mouvement #{original.id_mouvement_stock} "
+                    "ferait passer le stock sous zéro"
+                ),
+            )
+
     user_id = current_user.id_utilisateur if current_user else None
     reversals = []
     for original in originals:
@@ -237,7 +255,7 @@ def record_adjustment(
         raise HTTPException(status_code=400, detail="Ce produit n'est pas suivi en stock général")
     if Decimal(str(quantite_delta)) < 0 and get_stock_quantity(db, id_produit) < abs(Decimal(str(quantite_delta))):
         raise HTTPException(status_code=409, detail="L'ajustement ferait passer le stock sous zéro")
-    return record_movement(
+    movement = record_movement(
         db,
         id_produit=id_produit,
         quantite_delta=quantite_delta,
@@ -247,3 +265,8 @@ def record_adjustment(
         id_utilisateur=current_user.id_utilisateur if current_user else None,
         notes=notes,
     )
+    # Bind the adjustment to its own source id so it can be reversed without
+    # grouping unrelated manual corrections that happened in the same period.
+    movement.source_id = movement.id_mouvement_stock
+    db.flush()
+    return movement

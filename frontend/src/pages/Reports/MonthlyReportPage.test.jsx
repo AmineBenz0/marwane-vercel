@@ -21,8 +21,10 @@ describe('MonthlyReportPage', () => {
       dettes: '15.00',
       caisse_entrees: '80.00',
       caisse_sorties: '30.00',
+      solde_caisse: '250.00',
       banques_entrees: '20.00',
       banques_sorties: '5.00',
+      soldes_bancaires: [{ id_compte: 1, nom_banque: 'Banque Test', numero_compte: '123', solde: '500.00' }],
       inventory_movements: 3,
       inventory_quantity_delta: '7.500',
       top_clients: [],
@@ -43,6 +45,7 @@ describe('MonthlyReportPage', () => {
     await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ indicateur: 'Entrées banques' }),
+        expect.objectContaining({ indicateur: 'Solde Banque Test' }),
         expect.objectContaining({ indicateur: 'Mouvements stock', valeur: '3' }),
         expect.objectContaining({ indicateur: 'Variation nette stock' }),
       ]),
