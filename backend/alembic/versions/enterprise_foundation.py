@@ -146,7 +146,7 @@ def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS ix_fournisseurs_nom_unaccent_trgm ON fournisseurs USING gin (public.immutable_unaccent(nom_fournisseur) gin_trgm_ops)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_produits_nom_unaccent_trgm ON produits USING gin (public.immutable_unaccent(nom_produit) gin_trgm_ops)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_charges_libelle_unaccent_trgm ON charges USING gin (public.immutable_unaccent(libelle) gin_trgm_ops)")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_lc_reference_unaccent_trgm ON lettres_de_credit USING gin (public.immutable_unaccent(numero_reference) gin_trgm_ops)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_lc_reference_unaccent_trgm ON lettres_credit USING gin (public.immutable_unaccent(numero_reference) gin_trgm_ops)")
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_caisse_active_payment ON caisse (id_paiement) WHERE id_paiement IS NOT NULL AND statut = 'active'")
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_caisse_active_charge ON caisse (id_charge) WHERE id_charge IS NOT NULL AND statut = 'active'")
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_bank_active_payment ON mouvements_bancaires (id_paiement) WHERE id_paiement IS NOT NULL AND statut = 'active'")

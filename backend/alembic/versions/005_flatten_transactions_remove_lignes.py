@@ -95,7 +95,7 @@ def upgrade():
         
         if len(lignes) == 0:
             # Transaction without lines: keep as is (will be handled later if needed)
-            print(f"  ⚠️  Transaction #{tx_id} has no lines, keeping as is")
+            print(f"  WARNING: Transaction #{tx_id} has no lines, keeping as is")
             continue
         elif len(lignes) == 1:
             # Transaction with 1 line: update in place
@@ -113,7 +113,7 @@ def upgrade():
                 'quantite': ligne['quantite'],
                 'prix_unitaire': ligne['prix_unitaire']
             })
-            print(f"  ✓ Transaction #{tx_id}: updated with 1 line")
+            print(f"  OK: Transaction #{tx_id}: updated with 1 line")
         else:
             # Transaction with multiple lines: keep first line in place, create new transactions for others
             transactions_to_delete.append(tx_id)
@@ -148,7 +148,7 @@ def upgrade():
                         'montant': montant
                     })
                     
-                    print(f"  ✓ Transaction #{tx_id}: updated with line 1/{len(lignes)}")
+                    print(f"  OK: Transaction #{tx_id}: updated with line 1/{len(lignes)}")
                 else:
                     # Create new transaction for additional lines
                     new_tx = {
@@ -169,7 +169,7 @@ def upgrade():
     
     # Insert new transactions
     if new_transactions:
-        print(f"  ➕ Creating {len(new_transactions)} new transactions from multi-line transactions...")
+        print(f"  Creating {len(new_transactions)} new transactions from multi-line transactions...")
         for new_tx in new_transactions:
             result = connection.execute(text("""
                 INSERT INTO transactions (
@@ -197,7 +197,7 @@ def upgrade():
                 'id_transaction': new_id
             })
             
-            print(f"    ✓ Created transaction #{new_id}")
+            print(f"    OK: Created transaction #{new_id}")
     
     # Step 3: Make new columns NOT NULL (after data migration)
     print("Step 3: Making new columns NOT NULL...")
@@ -235,7 +235,7 @@ def upgrade():
     print("Step 6: Dropping lignes_transaction table...")
     op.drop_table('lignes_transaction')
     
-    print("✅ Migration completed successfully!")
+    print("Migration completed successfully!")
 
 
 def downgrade():
