@@ -50,6 +50,19 @@ def _validate_source_batiment(
             detail="Le batiment source est reserve aux ventes clients",
         )
 
+    if not parse_sellable_egg_product_name(produit.nom_produit):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le batiment source ne peut etre utilise que pour une vente d'oeufs",
+        )
+
+    batiment = db.query(Batiment).filter(Batiment.id_batiment == id_batiment).first()
+    if not batiment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Batiment avec l'ID {id_batiment} introuvable",
+        )
+
 
 def _resolve_transaction_cycle(
     *,
@@ -86,19 +99,6 @@ def _resolve_transaction_cycle(
         action_label="de saisir la vente",
     )
     return cycle.id_cycle
-
-    if not parse_sellable_egg_product_name(produit.nom_produit):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le batiment source ne peut etre utilise que pour une vente d'oeufs",
-        )
-
-    batiment = db.query(Batiment).filter(Batiment.id_batiment == id_batiment).first()
-    if not batiment:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Batiment avec l'ID {id_batiment} introuvable",
-        )
 
 
 @router.post("/batch", response_model=List[TransactionRead], status_code=status.HTTP_201_CREATED)
@@ -236,7 +236,8 @@ def create_transactions_batch(
             
             db.add(new_transaction)
             db.flush()  # Pour obtenir l'ID
-            record_transaction_movement(db, new_transaction, current_user)
+            if new_transaction.est_actif:
+                record_transaction_movement(db, new_transaction, current_user)
             
             # Création du mouvement de caisse supprimée ici. 
             # Les mouvements sont désormains créés lors de l'enregistrement des paiements.
@@ -543,7 +544,8 @@ def create_transaction(
     
     db.add(new_transaction)
     db.flush()  # Pour obtenir l'ID de la transaction
-    record_transaction_movement(db, new_transaction, current_user)
+    if new_transaction.est_actif:
+        record_transaction_movement(db, new_transaction, current_user)
     
     # Création du mouvement de caisse supprimée ici. 
     # Les mouvements sont désormais créés lors de l'enregistrement des paiements.

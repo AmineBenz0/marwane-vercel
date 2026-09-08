@@ -10,7 +10,6 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import InterfaceError, OperationalError
 from app.config import settings
 from app.config.logging_config import setup_logging
-from app.database import engine
 from app.routers import (
     auth, users, clients, fournisseurs, produits, 
     transactions, caisse, paiements, lettres_credit, cessions_lc,

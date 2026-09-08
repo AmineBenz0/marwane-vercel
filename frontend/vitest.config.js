@@ -13,7 +13,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['src/components/AlertCenter.jsx', 'src/components/UnifiedSearch.jsx', 'src/pages/Finance/FinancialLedgerPage.jsx'],
+      include: ['src/components/AlertCenter.jsx', 'src/components/UnifiedSearch.jsx', 'src/pages/Finance/FinancialLedgerPage.jsx', 'src/pages/Reports/MonthlyReportPage.jsx'],
       thresholds: { lines: 60, functions: 60, branches: 50, statements: 60 },
     },
   },

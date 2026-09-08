@@ -46,6 +46,12 @@ def monthly_report(
     bank_rows = db.query(MouvementBancaire).filter(MouvementBancaire.statut == "active", func.date(MouvementBancaire.date_mouvement).between(date_debut, date_fin)).all()
     receivables = query_financial_transactions(db, direction="receivable", date_debut=date_debut, date_fin=date_fin)
     payables = query_financial_transactions(db, direction="payable", date_debut=date_debut, date_fin=date_fin)
+    inventory_count, inventory_quantity_delta = db.query(
+        func.count(MouvementStock.id_mouvement_stock),
+        func.coalesce(func.sum(MouvementStock.quantite_delta), 0),
+    ).filter(
+        func.date(MouvementStock.date_mouvement).between(date_debut, date_fin)
+    ).one()
 
     def ranked(rows, relation, label):
         totals = {}
@@ -75,5 +81,6 @@ def monthly_report(
         top_clients=ranked(sales, "client", "nom_client"),
         top_fournisseurs=ranked(purchases, "fournisseur", "nom_fournisseur"),
         top_produits=ranked(transactions, "produit", "nom_produit"),
-        inventory_movements=_money(db.query(func.sum(MouvementStock.quantite_delta)).filter(func.date(MouvementStock.date_mouvement).between(date_debut, date_fin)).scalar()),
+        inventory_movements=int(inventory_count or 0),
+        inventory_quantity_delta=_money(inventory_quantity_delta),
     )

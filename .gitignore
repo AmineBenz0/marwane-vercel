@@ -32,6 +32,7 @@ frontend/.vite/
 frontend/.cache/
 frontend/.parcel-cache/
 frontend/coverage-audit/
+frontend/coverage-audit-current/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

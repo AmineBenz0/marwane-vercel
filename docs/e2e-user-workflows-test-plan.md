@@ -149,3 +149,11 @@ The script `scripts/e2e-critical-business-flow.ps1` covers:
 - Supplier LC payment creates cession/history.
 - Main CORS header is present for frontend origin.
 
+The Playwright suite also contains a staging-only browser-to-API release flow
+in `frontend/tests-e2e/release-business-flows.spec.ts`. It creates unique
+client, supplier, product, payment, charge, BOM, and transformation records,
+then verifies the receivables, payables, production, and reporting screens.
+It runs only when `E2E_MUTATION_TESTS=true` is explicitly configured against a
+disposable staging target, because it intentionally creates auditable business
+data. The same suite checks horizontal overflow on desktop and mobile projects.
+

@@ -41,11 +41,14 @@ const statusLabel = {
   impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
 };
 
+const createIdempotencyKey = () => window.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 function PaymentDialog({ item, open, onClose, onSaved }) {
   const [amount, setAmount] = useState(Number(item?.montant_restant || 0).toFixed(2));
   const [type, setType] = useState('cash');
   const [date, setDate] = useState(getBusinessDateInput);
   const [notes, setNotes] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState(createIdempotencyKey);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -55,6 +58,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
       setType('cash');
       setDate(getBusinessDateInput());
       setNotes('');
+      setIdempotencyKey(createIdempotencyKey());
       setError(null);
     }
   }, [open, item]);
@@ -76,6 +80,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
         montant: Number(amount),
         type_paiement: type,
         notes: notes || null,
+        cle_idempotence: idempotencyKey,
       });
       onSaved();
       onClose();

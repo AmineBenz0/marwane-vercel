@@ -115,3 +115,17 @@ preview et en production, notamment l'absence de rôle de migration distinct,
 l'utilisation d'un rôle PostgreSQL privilégié par le runtime, ou une
 configuration CORS locale uniquement.
 
+## Tests et exploitation
+
+Depuis la racine du dépôt, le gate backend utilisé par CI est :
+
+```powershell
+cd backend
+pytest --override-ini addopts='' --cov=app.services --cov-report=term-missing --cov-fail-under=70 -q
+```
+
+Avant une promotion, exécutez aussi le
+[runbook de sauvegarde/restauration](../docs/backup-restore-runbook.md) et
+conservez les rapports JSON de réconciliation et de sécurité avec le ticket
+de release.
+

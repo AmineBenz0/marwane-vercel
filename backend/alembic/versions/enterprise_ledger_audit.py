@@ -68,11 +68,8 @@ def upgrade() -> None:
             END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
                 REVOKE ALL ON TABLE public.corrections_financieres FROM authenticated;
-                GRANT SELECT ON TABLE public.corrections_financieres TO authenticated;
                 DROP POLICY IF EXISTS app_authenticated_access ON public.corrections_financieres;
                 DROP POLICY IF EXISTS app_authenticated_read ON public.corrections_financieres;
-                CREATE POLICY app_authenticated_read ON public.corrections_financieres
-                    FOR SELECT TO authenticated USING (true);
             END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
                 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.corrections_financieres TO app_runtime;

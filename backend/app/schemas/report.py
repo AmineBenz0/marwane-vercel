@@ -26,5 +26,5 @@ class MonthlyReport(BaseModel):
     top_clients: List[RankedTotal]
     top_fournisseurs: List[RankedTotal]
     top_produits: List[RankedTotal]
-    inventory_movements: Decimal
-
+    inventory_movements: int
+    inventory_quantity_delta: Decimal

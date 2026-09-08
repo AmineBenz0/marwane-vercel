@@ -4,9 +4,9 @@ Usage from ``backend/``::
 
     python scripts/check_database_security.py
 
-The command inventories public tables, RLS state, public/anonymous grants,
-views, security-definer functions, roles, and current connections. It does
-not change database state.
+The command inventories public tables, RLS state, public/anonymous/
+authenticated grants, views, security-definer functions, roles, and current
+connections. It does not change database state.
 """
 
 import json
@@ -107,13 +107,17 @@ def main() -> int:
     unsafe_grants = [
         row for row in grants if row["grantee"] in {"PUBLIC", "anon"}
     ]
+    direct_supabase_auth_grants = [
+        row for row in grants if row["grantee"] == "authenticated"
+    ]
     result = {
-        "ok": not rls_gaps and not unsafe_grants and not policy_gaps and not missing_roles and not insecure_views and not security_definer_functions,
+        "ok": not rls_gaps and not unsafe_grants and not direct_supabase_auth_grants and not policy_gaps and not missing_roles and not insecure_views and not security_definer_functions,
         "tables": tables,
         "rls_disabled_tables": rls_gaps,
         "policyless_tables": policy_gaps,
         "grants": grants,
         "public_or_anon_grants": unsafe_grants,
+        "direct_supabase_auth_grants": direct_supabase_auth_grants,
         "policies": policies,
         "views": views,
         "insecure_views": insecure_views,

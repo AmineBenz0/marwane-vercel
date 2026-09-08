@@ -35,14 +35,14 @@ def upgrade() -> None:
                     EXECUTE format('REVOKE ALL ON TABLE public.%I FROM anon', table_name);
                 END IF;
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-                    EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON TABLE public.%I FROM authenticated', table_name);
-                    EXECUTE format('GRANT SELECT ON TABLE public.%I TO authenticated', table_name);
+                    -- This application authenticates at FastAPI/JWT level and
+                    -- does not expose Supabase REST directly to browsers.
+                    -- Keep the Supabase API role deny-by-default so a future
+                    -- client cannot read financial or credential-bearing data
+                    -- without an explicit, reviewed policy.
+                    EXECUTE format('REVOKE ALL ON TABLE public.%I FROM authenticated', table_name);
                     EXECUTE format('DROP POLICY IF EXISTS app_authenticated_access ON public.%I', table_name);
                     EXECUTE format('DROP POLICY IF EXISTS app_authenticated_read ON public.%I', table_name);
-                    EXECUTE format(
-                        'CREATE POLICY app_authenticated_read ON public.%I FOR SELECT TO authenticated USING (true)',
-                        table_name
-                    );
                 END IF;
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
                     EXECUTE format(
@@ -57,7 +57,7 @@ def upgrade() -> None:
                 END IF;
             END LOOP;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+                REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM authenticated;
             END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
                 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
@@ -74,7 +74,7 @@ def upgrade() -> None:
                         REVOKE ALL ON TABLE public.vue_solde_caisse FROM anon;
                     END IF;
                     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-                        GRANT SELECT ON TABLE public.vue_solde_caisse TO authenticated;
+                        REVOKE ALL ON TABLE public.vue_solde_caisse FROM authenticated;
                     END IF;
                     ALTER VIEW public.vue_solde_caisse SET (security_invoker = true);
                 EXCEPTION WHEN undefined_object OR feature_not_supported THEN

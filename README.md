@@ -122,6 +122,7 @@ variable `MIGRATION_DATABASE_URL` séparée de la connexion runtime.
 - [Checklist opérationnelle Vercel/Supabase](./TODO_IMMEDIAT.md) - Déploiement, sécurité et exploitation
 - [Checklist d'acceptation enterprise](./docs/enterprise-acceptance-checklist.md) - Gates avant promotion
 - [Décisions d'architecture](./docs/adr/) - Ledger, stock, paiements et autorisation
+- [Runbook sauvegarde/restauration](./docs/backup-restore-runbook.md) - Drill PITR et reprise contrôlée
 
 ## 🔐 Sécurité
 
@@ -136,7 +137,7 @@ variable `MIGRATION_DATABASE_URL` séparée de la connexion runtime.
 ```bash
 # Backend
 cd backend
-pytest -q --no-cov
+pytest --override-ini addopts='' --cov=app.services --cov-report=term-missing --cov-fail-under=70 -q
 
 # Frontend lint, unit coverage, and production build
 cd frontend

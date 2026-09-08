@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -248,7 +248,7 @@ def _create_caisse_snapshot(db: Session, id_mouvement: int):
     new_history = CaisseSoldeHistorique(
         solde=solde_actuel,
         id_mouvement=id_mouvement,
-        date_snapshot=datetime.now()
+        date_snapshot=datetime.now(timezone.utc)
     )
     db.add(new_history)
 
@@ -562,7 +562,7 @@ def delete_paiement(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le paiement est déjà annulé")
     paiement.statut = "annule"
     paiement.motif_annulation = raison[:1000]
-    paiement.date_annulation = datetime.now()
+    paiement.date_annulation = datetime.now(timezone.utc)
     paiement.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     _update_caisse_movement(
         db,

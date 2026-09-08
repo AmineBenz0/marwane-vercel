@@ -198,6 +198,51 @@ def test_search_and_monthly_report_are_available(client, auth_headers):
     report = client.get("/api/v1/reports/monthly", params={"month": date.today().strftime("%Y-%m")}, headers=auth_headers)
     assert report.status_code == 200, report.text
     assert report.json()["ventes"] == "125.00"
+    assert isinstance(report.json()["inventory_movements"], int)
+    assert "inventory_quantity_delta" in report.json()
+
+
+def test_inactive_transactions_do_not_create_inventory_movements(client, db_session, auth_headers):
+    supplier = client.post(
+        "/api/v1/fournisseurs", json={"nom_fournisseur": "Fournisseur Inactif"}, headers=auth_headers
+    ).json()
+    product = create_product(client, "Matière Inactive", "matiere_premiere", False, True)
+    transaction = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": date.today().isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 5,
+            "prix_unitaire": 2,
+            "id_fournisseur": supplier["id_fournisseur"],
+            "est_actif": False,
+        },
+        headers=auth_headers,
+    )
+    assert transaction.status_code == 201, transaction.text
+    stock = client.get("/api/v1/stock", headers=auth_headers).json()
+    assert Decimal(next(item for item in stock if item["id_produit"] == product["id_produit"])["quantite_disponible"]) == Decimal("0")
+
+
+def test_building_source_is_validated_for_egg_sales(client, auth_headers):
+    client_row = client.post(
+        "/api/v1/clients", json={"nom_client": "Client Source Batiment"}, headers=auth_headers
+    ).json()
+    product = create_product(client, "Service Avec Source", "service", True, False)
+    response = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": date.today().isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 10,
+            "id_client": client_row["id_client"],
+            "id_batiment": 999999,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "vente d'oeufs" in response.json()["detail"]
 
 
 def test_payment_financial_fields_are_immutable_and_cash_history_is_preserved(

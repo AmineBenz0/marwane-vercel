@@ -17,7 +17,8 @@ the current architecture.
 - [ ] Back up production and verify PITR retention.
 - [ ] Apply Alembic migrations with the migration role, never with an application credential.
 - [ ] Verify RLS is enabled on every public application table.
-- [ ] Verify anonymous grants are revoked and authenticated policies are present.
+- [ ] Verify anonymous and direct Supabase `authenticated` grants are revoked;
+      FastAPI JWT remains the browser authorization boundary in this release.
 - [ ] Run Security Advisor and attach the result to the release record.
 - [ ] Run `python backend/scripts/check_integrity.py` and resolve all high findings.
 - [ ] Run `python backend/scripts/check_database_security.py` and attach the table/RLS/role/grant inventory.

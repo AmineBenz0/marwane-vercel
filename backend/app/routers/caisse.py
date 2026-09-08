@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 
 from app.database import get_db
@@ -144,7 +144,7 @@ def get_solde(
     ).scalar()
     
     if not derniere_maj:
-        derniere_maj = datetime.now()
+        derniere_maj = datetime.now(timezone.utc)
     
     return SoldeCaisseRead(
         solde_actuel=solde_theorique,

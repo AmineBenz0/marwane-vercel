@@ -17,44 +17,50 @@
  * Redirection par défaut : /login
  */
 
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Box, CircularProgress } from '@mui/material';
 import ProtectedRoute from './components/ProtectedRoute';
-import AdminProtectedRoute from './components/AdminProtectedRoute';
 import AppLayout from './components/Layout/AppLayout';
 import NotificationProvider from './components/NotificationProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Pages
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Transactions from './pages/Transactions';
-import TransactionDetail from './pages/Transactions/TransactionDetail';
-import Clients from './pages/Clients';
-import ClientProfile from './pages/Clients/ClientProfile';
-import Fournisseurs from './pages/Fournisseurs';
-import FournisseurProfile from './pages/Fournisseurs/FournisseurProfile';
-import Produits from './pages/Produits';
-import ProduitDetail from './pages/Produits/ProduitDetail';
-import Caisse from './pages/Caisse';
-import LettresCreditList from './pages/LettresCredit/LettresCreditList';
-import LettreCreditDetail from './pages/LettresCredit/LettreCreditDetail';
-import ProductionList from './pages/Production/ProductionList';
-import ProductionDashboard from './pages/Production/ProductionDashboard';
-import BatimentProductionPage from './pages/Production/BatimentProductionPage';
-import ChargesList from './pages/Charges/ChargesList';
-import CompteBancaireList from './pages/ComptesBancaires/CompteBancaireList';
-import CalendarView from './pages/Calendar/CalendarView';
-import TasksList from './pages/Tasks/TasksList';
-import { ReceivablesPage, PayablesPage } from './pages/Finance/FinancialLedgerPage';
-import ProductBomsPage from './pages/Production/ProductBomsPage';
-import MonthlyReportPage from './pages/Reports/MonthlyReportPage';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Transactions = lazy(() => import('./pages/Transactions'));
+const TransactionDetail = lazy(() => import('./pages/Transactions/TransactionDetail'));
+const Clients = lazy(() => import('./pages/Clients'));
+const ClientProfile = lazy(() => import('./pages/Clients/ClientProfile'));
+const Fournisseurs = lazy(() => import('./pages/Fournisseurs'));
+const FournisseurProfile = lazy(() => import('./pages/Fournisseurs/FournisseurProfile'));
+const Produits = lazy(() => import('./pages/Produits'));
+const ProduitDetail = lazy(() => import('./pages/Produits/ProduitDetail'));
+const Caisse = lazy(() => import('./pages/Caisse'));
+const LettresCreditList = lazy(() => import('./pages/LettresCredit/LettresCreditList'));
+const LettreCreditDetail = lazy(() => import('./pages/LettresCredit/LettreCreditDetail'));
+const ProductionDashboard = lazy(() => import('./pages/Production/ProductionDashboard'));
+const BatimentProductionPage = lazy(() => import('./pages/Production/BatimentProductionPage'));
+const ChargesList = lazy(() => import('./pages/Charges/ChargesList'));
+const CompteBancaireList = lazy(() => import('./pages/ComptesBancaires/CompteBancaireList'));
+const CalendarView = lazy(() => import('./pages/Calendar/CalendarView'));
+const TasksList = lazy(() => import('./pages/Tasks/TasksList'));
+const ReceivablesPage = lazy(() => import('./pages/Finance/FinancialLedgerPage').then((module) => ({ default: module.ReceivablesPage })));
+const PayablesPage = lazy(() => import('./pages/Finance/FinancialLedgerPage').then((module) => ({ default: module.PayablesPage })));
+const ProductBomsPage = lazy(() => import('./pages/Production/ProductBomsPage'));
+const MonthlyReportPage = lazy(() => import('./pages/Reports/MonthlyReportPage'));
+
+function PageLoading() {
+  return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}><CircularProgress aria-label="Chargement de la page" /></Box>;
+}
 
 function App() {
   return (
     <ErrorBoundary>
       <NotificationProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Routes>
+          <Suspense fallback={<PageLoading />}>
+            <Routes>
         {/* Route publique : Login */}
         <Route path="/login" element={<Login />} />
 
@@ -288,7 +294,8 @@ function App() {
 
         {/* Route catch-all : redirige vers /login pour les routes inconnues */}
         <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </NotificationProvider>
     </ErrorBoundary>

@@ -11,7 +11,8 @@ attached to the release record.
 - [ ] Alembic has one head and the complete migration chain succeeds on a staging clone.
 - [ ] Every exposed public table has RLS enabled.
 - [ ] Anonymous grants are revoked unless explicitly required.
-- [ ] Authenticated/admin policies are reviewed for the single-tenant model.
+- [ ] Direct Supabase `authenticated` grants are revoked; FastAPI JWT policies
+      are reviewed for the single-tenant model.
 - [ ] Security Advisor has no unresolved high or critical findings.
 - [ ] Secrets are absent from tracked files and Git history; rotated credentials are recorded.
 - [ ] Any credential previously present in `local-admin-credentials.txt` or Git history has been revoked and replaced.

@@ -1,7 +1,7 @@
 """
 Router FastAPI pour la gestion des Charges / Dépenses.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 
@@ -350,7 +350,7 @@ def delete_charge(
 
     charge.statut = "annule"
     charge.motif_annulation = raison[:1000]
-    charge.date_annulation = datetime.now()
+    charge.date_annulation = datetime.now(timezone.utc)
     charge.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     record_correction(
         db,

@@ -3,7 +3,6 @@ Middleware FastAPI pour le logging structuré de toutes les requêtes.
 Enregistre automatiquement toutes les requêtes avec leurs métadonnées.
 """
 import time
-import logging
 from uuid import uuid4
 from typing import Callable
 from fastapi import Request, Response
@@ -50,9 +49,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         Returns:
             Response: Réponse HTTP
         """
-        # Ignorer les routes de santé et de documentation
+        request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        request.state.request_id = request_id
+
+        # Ignorer les routes de santé et de documentation dans les logs, tout
+        # en conservant la corrélation de bout en bout dans la réponse.
         if request.url.path in ["/health", "/", "/docs", "/openapi.json", "/redoc"]:
-            return await call_next(request)
+            response = await call_next(request)
+            response.headers.setdefault("X-Request-ID", request_id)
+            return response
         
         # Démarrer le chronomètre
         start_time = time.time()
@@ -61,9 +66,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         method = request.method
         endpoint = request.url.path
         client_ip = self._get_client_ip(request)
-        request_id = request.headers.get("X-Request-ID") or uuid4().hex
-        request.state.request_id = request_id
-        
         # Initialiser les données de log
         user_id = None
         
@@ -106,7 +108,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             if status_code >= 400:
                 error_occurred = True
                 
-        except Exception as e:
+        except Exception:
             # Capturer les exceptions non gérées
             error_occurred = True
             status_code = 500
