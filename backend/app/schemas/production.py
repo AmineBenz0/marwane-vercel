@@ -49,6 +49,10 @@ class ProductionUpdate(BaseModel):
 class ProductionRead(ProductionBase):
     id_production: int
     nombre_cartons: int
+    est_actif: bool
+    date_annulation: Optional[datetime] = None
+    motif_annulation: Optional[str] = None
+    id_utilisateur_annulation: Optional[int] = None
     date_creation: datetime
     date_modification: datetime
     id_utilisateur_creation: Optional[int]

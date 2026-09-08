@@ -124,7 +124,7 @@ def sync_sellable_egg_products_from_productions(db: Session) -> list[Produit]:
     categories = db.query(
         Production.type_oeuf,
         Production.calibre,
-    ).distinct().all()
+    ).filter(Production.est_actif.is_(True)).distinct().all()
 
     for type_oeuf, calibre in categories:
         product_name = build_sellable_egg_product_name(type_oeuf, calibre)

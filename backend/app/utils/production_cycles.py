@@ -95,7 +95,10 @@ def calculate_cycle_effectif(db: Session, cycle: CycleProduction, through_date: 
 
     query = db.query(
         func.coalesce(func.sum(func.coalesce(Production.mortalite, 0)), 0)
-    ).filter(Production.id_cycle == cycle.id_cycle)
+    ).filter(
+        Production.id_cycle == cycle.id_cycle,
+        Production.est_actif.is_(True),
+    )
 
     if through_date:
         query = query.filter(Production.date_production <= through_date)

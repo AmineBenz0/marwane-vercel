@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from app.database import get_db
@@ -132,7 +132,7 @@ def get_productions(
     ).outerjoin(
         CycleProduction,
         Production.id_cycle == CycleProduction.id_cycle,
-    )
+    ).filter(Production.est_actif.is_(True))
     
     if date_debut:
         query = query.filter(Production.date_production >= date_debut)
@@ -246,6 +246,7 @@ def get_daily_stats(
         Production.type_oeuf,
         func.sum(Production.nombre_oeufs).label("total")
     ).filter(
+        Production.est_actif.is_(True),
         Production.date_production >= date_debut
     ).group_by(
         Production.date_production, Production.type_oeuf
@@ -257,6 +258,7 @@ def get_daily_stats(
         Batiment.nom.label("nom_batiment"),
         func.sum(Production.nombre_oeufs).label("total")
     ).join(Batiment).filter(
+        Production.est_actif.is_(True),
         Production.date_production >= date_debut
     ).group_by(
         Production.date_production, Batiment.nom
@@ -268,6 +270,7 @@ def get_daily_stats(
         func.sum(Production.nombre_oeufs).label("total_oeufs"),
         func.sum(Production.nombre_cartons).label("total_cartons")
     ).filter(
+        Production.est_actif.is_(True),
         Production.date_production >= date_debut
     ).group_by(
         Production.date_production
@@ -318,13 +321,16 @@ def get_daily_stock(
     fix them instead of silently hiding inaccurate stock.
     """
     target_date = date_stock or date.today()
-    batiments = db.query(Batiment).filter(Batiment.est_actif == True).order_by(Batiment.nom).all()
+    batiments = db.query(Batiment).filter(Batiment.est_actif.is_(True)).order_by(Batiment.nom).all()
     cycles_by_batiment = {
         batiment.id_batiment: find_active_cycle(db, batiment.id_batiment, target_date)
         for batiment in batiments
     }
     db.flush()
-    productions = db.query(Production).filter(Production.date_production == target_date).all()
+    productions = db.query(Production).filter(
+        Production.date_production == target_date,
+        Production.est_actif.is_(True),
+    ).all()
 
     stock_by_batiment = {
         batiment.id_batiment: {
@@ -411,7 +417,7 @@ def get_daily_stock(
         Transaction.id_batiment == Batiment.id_batiment,
     ).filter(
         Transaction.date_transaction == target_date,
-        Transaction.est_actif == True,
+        Transaction.est_actif.is_(True),
         Transaction.id_client.isnot(None),
     ).all()
 
@@ -542,6 +548,7 @@ def get_cycle_performance(
     refresh_cycle_status(db, cycle)
     productions = db.query(Production).filter(
         Production.id_cycle == id_cycle,
+        Production.est_actif.is_(True),
     ).order_by(Production.date_production.asc(), Production.id_production.asc()).all()
 
     daily = {}
@@ -687,7 +694,10 @@ def get_production(
     ).outerjoin(
         CycleProduction,
         Production.id_cycle == CycleProduction.id_cycle,
-    ).filter(Production.id_production == id).first()
+    ).filter(
+        Production.id_production == id,
+        Production.est_actif.is_(True),
+    ).first()
     if not result:
         raise HTTPException(status_code=404, detail="Production introuvable")
     
@@ -708,7 +718,10 @@ def update_production(
     """
     Met à jour une production existante et recalcule les cartons si besoin.
     """
-    prod = db.query(Production).filter(Production.id_production == id).first()
+    prod = db.query(Production).filter(
+        Production.id_production == id,
+        Production.est_actif.is_(True),
+    ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
     
@@ -758,16 +771,31 @@ def update_production(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_production(
     id: int,
+    raison: str = Query(
+        default="Correction de la saisie de production",
+        min_length=1,
+        max_length=1000,
+    ),
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Supprime une production.
+    Désactive une production sans supprimer son historique.
+
+    La ligne reste conservée pour audit et ne participe plus aux calculs de
+    stock actif. Une correction conserve l'utilisateur, la date et le motif.
     """
-    prod = db.query(Production).filter(Production.id_production == id).first()
+    prod = db.query(Production).filter(
+        Production.id_production == id,
+        Production.est_actif.is_(True),
+    ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
     
-    db.delete(prod)
+    prod.est_actif = False
+    prod.date_annulation = datetime.now(timezone.utc)
+    prod.motif_annulation = raison.strip()
+    prod.id_utilisateur_annulation = current_user.id_utilisateur if current_user else None
+    prod.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     db.commit()
     return None

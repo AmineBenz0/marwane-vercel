@@ -30,12 +30,15 @@ jobs:
           app/routers/charges.py app/routers/financials.py app/routers/paiements.py
           app/routers/alerts.py app/routers/jobs.py app/routers/product_boms.py
           app/routers/stock.py app/routers/search.py app/routers/reports.py
-          app/routers/transformations.py app/routers/batiments.py
+          app/routers/transformations.py app/routers/productions.py
+          app/routers/batiments.py
           app/models/financial_correction.py
-          app/models/inventory.py app/models/nomenclature.py app/schemas/batiment.py
+          app/models/inventory.py app/models/nomenclature.py app/models/production.py
+          app/schemas/batiment.py
           app/schemas/compte_bancaire.py app/schemas/cycle_production.py
-          app/schemas/production.py app/utils/security.py tests/test_config.py
-          tests/test_enterprise_remediation.py
+          app/schemas/production.py app/utils/egg_product_sync.py
+          app/utils/production_cycles.py app/utils/security.py tests/test_config.py
+          tests/test_production_stock.py tests/test_enterprise_remediation.py
           scripts/check_database_security.py
           scripts/backfill_inventory.py
       - run: >-

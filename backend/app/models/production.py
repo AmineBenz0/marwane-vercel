@@ -1,11 +1,10 @@
 """
 Modèle SQLAlchemy pour la table Productions.
 """
-from sqlalchemy import Column, Integer, Date, Numeric, String, ForeignKey, DateTime, CheckConstraint
+from sqlalchemy import Boolean, Column, Integer, Date, Numeric, String, ForeignKey, DateTime, Text, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
-from decimal import Decimal
 import math
 
 
@@ -34,6 +33,17 @@ class Production(Base):
     
     # On stocke le nombre de cartons calculé pour garder une trace historique
     nombre_cartons = Column(Integer, nullable=False)
+
+    # Production rows feed the legacy egg-stock calculation. Keep historical
+    # rows and deactivate corrections instead of physically deleting them.
+    est_actif = Column(Boolean, default=True, nullable=False, index=True)
+    date_annulation = Column(DateTime(timezone=True), nullable=True)
+    motif_annulation = Column(Text, nullable=True)
+    id_utilisateur_annulation = Column(
+        Integer,
+        ForeignKey("utilisateurs.id_utilisateur"),
+        nullable=True,
+    )
     
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     date_modification = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -51,6 +61,7 @@ class Production(Base):
     cycle = relationship("CycleProduction", back_populates="productions")
     utilisateur_creation = relationship("Utilisateur", foreign_keys=[id_utilisateur_creation])
     utilisateur_modification = relationship("Utilisateur", foreign_keys=[id_utilisateur_modification])
+    utilisateur_annulation = relationship("Utilisateur", foreign_keys=[id_utilisateur_annulation])
 
     @staticmethod
     def calculer_cartons(nombre_oeufs: int, type_oeuf: str) -> int:
