@@ -7,7 +7,7 @@
  * - Signaler le problème (optionnel)
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Container,
@@ -16,7 +16,6 @@ import {
   Button,
   Alert,
   Collapse,
-  IconButton,
   Divider,
 } from '@mui/material';
 import {

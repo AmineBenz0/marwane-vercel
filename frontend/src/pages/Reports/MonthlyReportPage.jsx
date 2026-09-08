@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Grid, Paper, Stack, Typography } from '@mui/material';
 import { FileDownload as DownloadIcon, PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { get } from '../../services/api';

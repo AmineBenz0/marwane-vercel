@@ -38,7 +38,7 @@ class ErrorBoundary extends React.Component {
    * @param {Object} errorInfo - Informations supplémentaires sur l'erreur
    * @returns {Object} Nouvel état avec hasError à true
    */
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     // Met à jour l'état pour que le prochain rendu affiche la page d'erreur
     return { hasError: true };
   }
@@ -75,8 +75,6 @@ class ErrorBoundary extends React.Component {
     try {
       // Récupérer les informations utilisateur si disponibles
       const userEmail = localStorage.getItem('user_email') || 'unknown';
-      const accessToken = localStorage.getItem('access_token');
-
       // Préparer les données d'erreur
       const errorData = {
         message: error.message,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Badge, Box, Button, Divider, IconButton, List, ListItem, ListItemText, Popover, Tooltip, Typography } from '@mui/material';
 import { NotificationsNone as NotificationsIcon } from '@mui/icons-material';
 import { get, patch } from '../services/api';

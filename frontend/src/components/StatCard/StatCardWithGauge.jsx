@@ -4,7 +4,6 @@
  * Carte KPI compacte affichant un score avec une jauge circulaire + label.
  * Conçue pour s'intégrer dans la grille des StatCard existantes.
  */
-import React from 'react';
 import { Card, CardContent, Box, Typography, useTheme, useMediaQuery, CircularProgress } from '@mui/material';
 
 const CircularGauge = ({ value, size = 110, strokeWidth = 10, color }) => {

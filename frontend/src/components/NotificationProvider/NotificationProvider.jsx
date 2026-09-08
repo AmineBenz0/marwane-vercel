@@ -11,7 +11,7 @@
  * - Supporte les actions personnalisées
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Snackbar, Alert, IconButton, Button, useTheme } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import useNotificationStore from '../../store/notificationStore';

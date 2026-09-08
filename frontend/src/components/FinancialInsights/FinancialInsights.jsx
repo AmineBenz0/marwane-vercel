@@ -82,11 +82,9 @@ const InsightCard = ({ icon, label, value, subValue, color = 'primary', alert = 
 
 function FinancialInsights({
   insights,
-  loading = false,
   type = 'client',
 }) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [expanded, setExpanded] = useState(false);
 
   if (!insights) return null;

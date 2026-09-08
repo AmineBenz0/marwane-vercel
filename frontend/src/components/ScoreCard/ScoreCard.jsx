@@ -142,7 +142,7 @@ const ScoreMetric = ({ label, value, max, icon, color }) => {
 /**
  * Composant ScoreCard principal
  */
-function ScoreCard({ score, loading = false, type = 'client' }) {
+function ScoreCard({ score, type = 'client' }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [expanded, setExpanded] = useState(false);
@@ -155,7 +155,6 @@ function ScoreCard({ score, loading = false, type = 'client' }) {
     score_delais = 0,
     score_regularite = 0,
     score_anciennete = 0,
-    categorie = 'moyen',
     label = 'Moyen',
     couleur = 'warning',
     taux_paiement = 0,

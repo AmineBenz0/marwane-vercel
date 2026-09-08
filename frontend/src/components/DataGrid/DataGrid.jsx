@@ -6,7 +6,7 @@
  * Adapté mobile avec colonnes prioritaires et cartes condensées.
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Table,
   TableBody,

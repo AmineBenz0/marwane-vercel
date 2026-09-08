@@ -11,7 +11,7 @@
  * Route : /fournisseurs/:id/profile
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -47,7 +47,6 @@ import {
   AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -70,7 +69,7 @@ import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../com
 import { get, put, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
-import { formatMontant, formatMontantComplet } from '../../utils/formatNumber';
+import { formatMontant } from '../../utils/formatNumber';
 import { formatMontantForAxis, formatMontantForTooltip } from '../../utils/formatNumberForChart';
 import * as yup from 'yup';
 

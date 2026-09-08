@@ -41,12 +41,6 @@ import {
   Radio,
   FormHelperText,
   IconButton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Select,
   MenuItem,
@@ -67,7 +61,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   Payment as PaymentIcon,
 } from '@mui/icons-material';
-import { get, getProduitsParType, post, put } from '../../services/api';
+import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 
 /**
@@ -283,13 +277,11 @@ function TransactionForm({
   const [loadingData, setLoadingData] = useState(false);
   
   // Ã‰tat pour gÃ©rer les paiements par ligne (tableau de booleans)
-  const [paiementsParLigne, setPaiementsParLigne] = useState([false]);
-  
   // Ã‰tat pour gÃ©rer l'expansion des accordions (premiÃ¨re ligne expanded par dÃ©faut)
   const [expandedAccordion, setExpandedAccordion] = useState(0);
 
   // Ã‰tat pour stocker les paiements existants (en mode Ã©dition)
-  const [paiementsExistants, setPaiementsExistants] = useState([]);
+  const [, setPaiementsExistants] = useState([]);
 
   // Initialiser react-hook-form avec le resolver Yup
   const {
@@ -396,9 +388,6 @@ function TransactionForm({
           const paiements = await fetchPaiementsExistants(initialValues.id_transaction);
           
           // VÃ©rifier s'il y a au moins un paiement
-          const hasPaiement = paiements && paiements.length > 0;
-          const premierPaiement = hasPaiement ? paiements[0] : null;
-          
           reset({
             date_transaction: initialValues.date_transaction
               ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
@@ -414,7 +403,7 @@ function TransactionForm({
               id_batiment: initialValues.id_batiment || '',
               quantite: initialValues.quantite || undefined,
               prix_unitaire: initialValues.prix_unitaire || undefined,
-              ajouter_paiement: hasPaiement,
+              ajouter_paiement: paiements.length > 0,
               paiements: paiements.map(p => ({
                 date: new Date(p.date_paiement).toISOString().split('T')[0],
                 montant: parseFloat(p.montant),

@@ -14,6 +14,13 @@ module.exports = {
   rules: {
     'no-undef': 'error',
     'react/jsx-no-undef': 'error',
+    // API response shapes are validated at the FastAPI/Pydantic boundary.
+    // The frontend remains JavaScript during the current architecture wave;
+    // TypeScript migration is tracked separately from the release gate.
+    'react/prop-types': 'off',
+    // French UI copy contains normal contractions and intentional nbsp spacing.
+    'react/no-unescaped-entities': 'off',
+    'no-irregular-whitespace': 'off',
     'react-refresh/only-export-components': [
       'warn',
       { allowConstantExport: true },

@@ -83,7 +83,6 @@ function TransactionsList() {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [produits, setProduits] = useState([]);
   const [batiments, setBatiments] = useState([]);
-  const [loadingReferenceData, setLoadingReferenceData] = useState(false);
 
   // Ã‰tat pour la modal de crÃ©ation/Ã©dition
   const [modalOpen, setModalOpen] = useState(false);
@@ -259,7 +258,6 @@ function TransactionsList() {
    * Charge la liste des clients, fournisseurs et produits.
    */
   const fetchReferenceData = async () => {
-    setLoadingReferenceData(true);
     try {
       const [clientsData, fournisseursData, produitsData, batimentsData] = await Promise.all([
         get('/clients', { params: { limit: 1000, est_actif: true } }),
@@ -273,8 +271,6 @@ function TransactionsList() {
       setBatiments(batimentsData || []);
     } catch (err) {
       console.error('Erreur lors du chargement des donnÃ©es de rÃ©fÃ©rence:', err);
-    } finally {
-      setLoadingReferenceData(false);
     }
   };
 
@@ -401,7 +397,8 @@ function TransactionsList() {
       if (editingTransaction) {
         // Mode Ã©dition : PUT (une seule transaction)
         // Extraire les donnÃ©es de paiement si prÃ©sentes
-        const { paiement, ...transactionData } = data;
+        const transactionData = { ...data };
+        delete transactionData.paiement;
         
         result = await put(`/transactions/${editingTransaction.id_transaction}`, transactionData);
         
@@ -764,7 +761,7 @@ function TransactionsList() {
         'rapport_transactions',
         { 
           customFormatters,
-          colorByType: (rowIndex, tableData) => {
+          colorByType: (rowIndex) => {
             // Retourne true si c'est une entrÃ©e (client), false si sortie (fournisseur)
             const transaction = rowsForExport[rowIndex];
             if (!transaction) return null;

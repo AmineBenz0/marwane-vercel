@@ -1,4 +1,3 @@
-import React from 'react';
 import { Chip } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,

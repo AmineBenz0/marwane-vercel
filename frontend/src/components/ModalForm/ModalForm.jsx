@@ -6,7 +6,7 @@
  * boutons distincts, messages d'erreur proches des champs.
  */
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
@@ -25,11 +25,9 @@ import {
   Checkbox,
   Select,
   MenuItem,
-  InputLabel,
   FormControl,
   FormHelperText,
   IconButton,
-  Divider,
   alpha,
   useTheme,
   useMediaQuery,
@@ -132,7 +130,6 @@ function ModalForm({
       multiline = false,
       rows = 3,
       disabled = false,
-      fullWidth = true,
       options = [],
       render,
       helperText: fieldHelperText,

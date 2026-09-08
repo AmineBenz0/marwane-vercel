@@ -5,7 +5,6 @@
  * avec différentes configurations.
  */
 
-import React from 'react';
 import { Box, Grid } from '@mui/material';
 import StatCard from './StatCard';
 import {

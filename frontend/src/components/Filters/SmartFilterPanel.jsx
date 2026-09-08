@@ -9,7 +9,7 @@
  * - Affichage des filtres actifs en chips
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Box,
   TextField,

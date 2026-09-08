@@ -5,7 +5,7 @@
  * logo avec dégradé teal, champs épurés, bouton moderne.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -20,7 +20,6 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
-  Divider,
 } from '@mui/material';
 import {
   EmailOutlined as EmailIcon,

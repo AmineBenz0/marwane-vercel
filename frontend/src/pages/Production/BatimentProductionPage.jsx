@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -7,7 +7,6 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Divider,
   IconButton,
   LinearProgress,
   Table,
@@ -26,10 +25,6 @@ import {
   Delete as DeleteIcon,
   FileDownload as FileDownloadIcon,
   Edit as EditIcon,
-  Inventory as InventoryIcon,
-  Egg as EggIcon,
-  LocalShipping as LocalShippingIcon,
-  TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -143,10 +138,6 @@ function BatimentProductionPage() {
     [stockData, selectedBatimentId],
   );
 
-  const productionMovements = buildingMovements.filter((movement) => movement.type === 'production');
-  const saleMovements = buildingMovements.filter((movement) => movement.type === 'sale');
-  const lossMovements = buildingMovements.filter((movement) => movement.type === 'loss');
-
   const todayStats = useMemo(() => ({
     produced: Number(buildingStock?.produced_eggs || 0),
     sold: Number(buildingStock?.sold_eggs || 0),
@@ -160,7 +151,6 @@ function BatimentProductionPage() {
   );
 
   const todayProductionEntries = selectedDateProductions.filter((production) => production.type_oeuf !== 'perdu');
-  const todayLossEntries = selectedDateProductions.filter((production) => production.type_oeuf === 'perdu');
   const latestTodayEntry = todayProductionEntries[0] || selectedDateProductions[0] || null;
 
   const totalStats = useMemo(() => ({
@@ -752,221 +742,6 @@ function SummaryHistoryCard({ totalStats }) {
           <Fact label="Cartons" value={totalStats.cartons} />
           <Fact label="Saisies" value={totalStats.saisies} />
         </Box>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TodayStatusCard({
-  selectedDateLabel,
-  activeCycle,
-  latestEntry,
-  todayStats,
-  productionEntriesCount,
-  lossEntriesCount,
-  onAddProduction,
-  onGoToOverview,
-}) {
-  const hasProduction = productionEntriesCount > 0;
-  const primaryAction = activeCycle ? onAddProduction : onGoToOverview;
-
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        borderRadius: 4,
-        height: '100%',
-        background: hasProduction
-          ? 'linear-gradient(135deg, #ffffff 0%, #f4fbf7 100%)'
-          : 'radial-gradient(circle at top right, rgba(184, 106, 24, 0.14), transparent 18rem), #fffaf0',
-      }}
-    >
-      <CardContent sx={{ p: { xs: 2, md: 2.75 } }}>
-        <Stack spacing={2} sx={{ height: '100%' }}>
-          <Box>
-            <Chip
-              label={hasProduction ? 'Journee saisie' : activeCycle ? 'A saisir' : 'Lot requis'}
-              color={hasProduction ? 'success' : 'warning'}
-              sx={{ mb: 1.25, fontWeight: 900 }}
-            />
-            <Typography variant="h5" fontWeight={950} sx={{ textTransform: 'capitalize' }}>
-              {selectedDateLabel}
-            </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-              {hasProduction
-                ? 'La production du jour est enregistree. Les pertes se corrigent dans la meme saisie.'
-                : activeCycle
-                  ? 'Aucune production enregistree pour cette date. La saisie inclut aussi les pertes du jour.'
-                  : 'Le lot commun doit etre commence depuis Production & stock.'}
-            </Typography>
-          </Box>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.25 }}>
-            <Fact label="Oeufs jour" value={`${formatNumber(todayStats.produced)} oeufs`} />
-            <Fact label="Stock" value={`${formatNumber(todayStats.available)} oeufs`} />
-            <Fact label="Saisies" value={productionEntriesCount} />
-            <Fact label="Pertes" value={lossEntriesCount} />
-          </Box>
-
-          {latestEntry && (
-            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'grey.50' }}>
-              <Typography variant="caption" color="text.secondary" fontWeight={900}>
-                Derniere saisie
-              </Typography>
-              <Typography fontWeight={900}>
-                {formatNumber(latestEntry.nombre_oeufs)} oeufs
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Mortalite {latestEntry.mortalite ?? '-'} · Grammage {latestEntry.grammage ?? '-'} g
-              </Typography>
-            </Box>
-          )}
-
-          <Stack spacing={1} sx={{ mt: 'auto' }}>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={primaryAction}
-              sx={{ borderRadius: 999, minHeight: 46 }}
-            >
-              {activeCycle ? (hasProduction ? 'Ajouter / corriger' : "Saisir aujourd'hui") : 'Retour a Production & stock'}
-            </Button>
-          </Stack>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CycleCurrentCard({
-  activeCycle,
-}) {
-  const progress = activeCycle
-    ? Math.min(100, Math.max(0, (Number(activeCycle.semaine_cycle || 0) / Number(activeCycle.duree_semaines || 1)) * 100))
-    : 0;
-
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        borderRadius: 4,
-        overflow: 'hidden',
-        height: '100%',
-        background: activeCycle
-          ? 'radial-gradient(circle at top right, rgba(17, 148, 127, 0.14), transparent 24rem), #fffdf7'
-          : 'radial-gradient(circle at top right, rgba(184, 106, 24, 0.16), transparent 20rem), #fffaf0',
-      }}
-    >
-      <CardContent sx={{ p: { xs: 2, md: 2.75 } }}>
-        <Typography variant="h5" fontWeight={950}>
-          {activeCycle?.nom_cycle || 'Aucun lot actif'}
-        </Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-          {activeCycle
-            ? `Semaine ${activeCycle.semaine_cycle}/${activeCycle.duree_semaines}`
-            : 'Commencez le lot commun depuis Production & stock. Cette page gardera ensuite le detail de ce batiment.'}
-        </Typography>
-
-        {activeCycle && (
-          <Box sx={{ mt: 2 }}>
-            <LinearProgress variant="determinate" value={progress} sx={{ height: 10, borderRadius: 999 }} />
-          </Box>
-        )}
-
-        {activeCycle ? (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' }, gap: 1.25, mt: 2.5 }}>
-            <Fact label="Poussins entrants" value={activeCycle.effectif_initial ? formatNumber(activeCycle.effectif_initial) : '-'} />
-            <Fact label="Animaux restants" value={activeCycle.effectif_actuel ? formatNumber(activeCycle.effectif_actuel) : '-'} />
-            <Fact label="Age actuel" value={`${activeCycle.age_semaines || 0} semaines`} />
-            <Fact label="Fin prevue" value={format(new Date(activeCycle.date_fin_prevue), 'dd/MM/yyyy')} />
-          </Box>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function MetricCard({ icon, label, value, helper }) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 3, height: '100%' }}>
-      <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
-        <Stack direction="row" spacing={1.25} alignItems="center">
-          <Box
-            sx={{
-              width: 42,
-              height: 42,
-              borderRadius: 2.5,
-              bgcolor: 'primary.50',
-              color: 'primary.main',
-              display: { xs: 'none', sm: 'grid' },
-              placeItems: 'center',
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
-          <Box>
-            <Typography variant="caption" color="text.secondary" fontWeight={800}>{label}</Typography>
-            <Typography variant="h5" fontWeight={950} sx={{ lineHeight: 1.05 }}>{value}</Typography>
-            {helper && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-                {helper}
-              </Typography>
-            )}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function DetailSection({ title, subtitle, total, color, rows, emptyLabel }) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4 }}>
-      <CardContent>
-        <Typography variant="h6" fontWeight={900}>{title}</Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>
-        <Typography sx={{ mt: 1.5, mb: 2, fontSize: '2rem', lineHeight: 1, fontWeight: 950, color }}>
-          {total}
-        </Typography>
-
-        <Stack spacing={1}>
-          {rows.length === 0 ? (
-            <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: 'grey.50' }}>
-              <Typography color="text.secondary">{emptyLabel}</Typography>
-            </Box>
-          ) : (
-            rows.map((row, index) => (
-              <Box
-                key={`${title}-${row.time}-${index}`}
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto 1fr auto',
-                  gap: 1.25,
-                  alignItems: 'center',
-                  p: 1.25,
-                  borderRadius: 2.5,
-                  bgcolor: 'grey.50',
-                }}
-              >
-                <Typography variant="caption" color="text.secondary" fontWeight={900}>
-                  {row.time || '--:--'}
-                </Typography>
-                <Box>
-                  <Typography fontWeight={900}>{row.label}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {row.detail || 'Sans detail'}
-                  </Typography>
-                </Box>
-                <Chip
-                  size="small"
-                  label={`${formatNumber(row.quantity)} oeufs`}
-                  sx={{ fontWeight: 900 }}
-                />
-              </Box>
-            ))
-          )}
-        </Stack>
       </CardContent>
     </Card>
   );

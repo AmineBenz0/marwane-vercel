@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -7,14 +7,13 @@ import {
   Grid,
   Divider,
   Alert,
-  CircularProgress,
 } from '@mui/material';
 import { get } from '../../services/api';
 
 /**
  * Formulaire de cession d'une Lettre de Crédit.
  */
-function CessionLCForm({ register, errors, watch, setValue, lc }) {
+function CessionLCForm({ register, errors, watch, lc }) {
   const [clients, setClients] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [loading, setLoading] = useState(false);

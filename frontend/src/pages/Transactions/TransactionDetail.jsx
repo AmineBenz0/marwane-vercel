@@ -7,12 +7,11 @@
  * - Bouton pour voir l'audit complet
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
-  Paper,
   Button,
   Alert,
   CircularProgress,
@@ -32,9 +31,6 @@ import {
 import {
   ArrowBack as ArrowBackIcon,
   Add as AddIcon,
-  AttachMoney as AttachMoneyIcon,
-  TrendingUp as TrendingUpIcon,
-  AccountBalance as AccountBalanceIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
@@ -234,15 +230,6 @@ function TransactionDetail() {
   /**
    * Formate une date/heure pour l'affichage.
    */
-  const formatDateTime = (dateValue) => {
-    if (!dateValue) return '-';
-    try {
-      return format(new Date(dateValue), 'dd/MM/yyyy HH:mm:ss', { locale: fr });
-    } catch {
-      return dateValue;
-    }
-  };
-
   /**
    * Obtient le nom du client ou fournisseur pour la transaction.
    */

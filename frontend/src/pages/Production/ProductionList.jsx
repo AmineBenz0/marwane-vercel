@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -22,14 +22,12 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   Factory as FactoryIcon,
-  Egg as EggIcon,
   Inventory as InventoryIcon,
 } from '@mui/icons-material';
 import { productionService, batimentService } from '../../services/productionService';
 import useNotification from '../../hooks/useNotification';
 import ProductionForm from './ProductionForm';
 import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
 
 function ProductionList() {
   const [productions, setProductions] = useState([]);

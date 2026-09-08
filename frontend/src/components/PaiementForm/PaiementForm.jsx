@@ -8,7 +8,7 @@
  * - Validation du montant (ne doit pas dépasser le montant restant)
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   TextField,

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -15,8 +15,6 @@ import {
   Stack,
   TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -176,8 +174,6 @@ const getActionItems = (buildings, totals) => {
 };
 
 function ProductionDashboard() {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const notification = useNotification();
 
@@ -329,7 +325,6 @@ function ProductionDashboard() {
           <BuildingStockCard
             key={batiment.id_batiment}
             batiment={batiment}
-            compact={isMobile}
             canStartSharedLot={!lotOverview.hasActiveLot}
             onAddProduction={() => handleOpenProduction(batiment.id_batiment)}
             onOpenLotForm={() => setOpenLotForm(true)}
@@ -614,7 +609,7 @@ function SummaryCard({ icon, label, value, tone }) {
   );
 }
 
-function BuildingStockCard({ batiment, compact, canStartSharedLot, onAddProduction, onOpenLotForm, onOpenDetail }) {
+function BuildingStockCard({ batiment, canStartSharedLot, onAddProduction, onOpenLotForm, onOpenDetail }) {
   const status = STATUS_CONFIG[batiment.status] || STATUS_CONFIG.ok;
   const showEmpty = batiment.entries_count === 0;
   const cycle = batiment.cycle;
@@ -694,20 +689,6 @@ function BuildingStockCard({ batiment, compact, canStartSharedLot, onAddProducti
         </Stack>
       </CardContent>
     </Card>
-  );
-}
-
-function FormulaMini({ label, value, negative = false, suffix = ' oeufs' }) {
-  const isNumber = typeof value === 'number';
-  return (
-    <Box sx={{ p: 1.25, borderRadius: 2.5, bgcolor: negative ? 'rgba(239, 68, 68, 0.08)' : 'rgba(20, 184, 166, 0.08)' }}>
-      <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
-        {label}
-      </Typography>
-      <Typography fontWeight={900} color={negative ? 'error.main' : 'success.main'}>
-        {negative && isNumber && value > 0 ? '-' : ''}{isNumber ? formatNumber(value) : value}{suffix}
-      </Typography>
-    </Box>
   );
 }
 

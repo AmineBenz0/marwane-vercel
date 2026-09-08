@@ -5,7 +5,6 @@
  * indicateur de tendance clair, hover avec élévation subtile.
  */
 
-import React from 'react';
 import {
   Card,
   CardContent,
@@ -13,7 +12,6 @@ import {
   Typography,
   Tooltip,
   alpha,
-  useTheme,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
@@ -27,7 +25,6 @@ import {
   formatMontantComplet,
   formatNumberComplet,
   needsCompactNotation,
-  getRecommendedFontSize,
 } from '../../utils/formatNumber';
 
 // ─── Color map ──────────────────────────────────────────────────────────────
@@ -71,7 +68,6 @@ function StatCard({
   useCompactNotation = true,
   subtitle = null,
 }) {
-  const theme = useTheme();
   const colors = COLOR_MAP[color] || COLOR_MAP.primary;
 
   const formattedValue = formatValue(value, valueFormat, currency, useCompactNotation);
