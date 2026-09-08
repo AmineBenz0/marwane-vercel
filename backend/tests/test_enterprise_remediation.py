@@ -28,7 +28,7 @@ def test_receivables_payment_summary_and_void_are_auditable(client, db_session, 
     client_id = client_response.json()["id_client"]
     product = create_product(client, "Service Recouvrement", "service", True, False)
     transaction = client.post("/api/v1/transactions", json={
-        "date_transaction": date.today().isoformat(),
+        "date_transaction": (date.today() - timedelta(days=10)).isoformat(),
         "date_echeance": (date.today() - timedelta(days=2)).isoformat(),
         "id_produit": product["id_produit"],
         "quantite": 1,
@@ -93,6 +93,49 @@ def test_receivables_payment_summary_and_void_are_auditable(client, db_session, 
     assert db_session.query(Alerte).count() == 0
 
 
+def test_client_letter_of_credit_cannot_pay_supplier_transaction(client, auth_headers):
+    """A client-owned LC must never be accepted for a supplier payable."""
+    client_row = client.post(
+        "/api/v1/clients",
+        json={"nom_client": "Client LC propriétaire"},
+        headers=auth_headers,
+    ).json()
+    supplier_row = client.post(
+        "/api/v1/fournisseurs",
+        json={"nom_fournisseur": "Fournisseur LC bénéficiaire"},
+        headers=auth_headers,
+    ).json()
+    product = create_product(client, "Service LC fournisseur", "service", False, True)
+    transaction = client.post("/api/v1/transactions", json={
+        "date_transaction": date.today().isoformat(),
+        "date_echeance": date.today().isoformat(),
+        "id_produit": product["id_produit"],
+        "quantite": 1,
+        "prix_unitaire": 100,
+        "id_fournisseur": supplier_row["id_fournisseur"],
+    }, headers=auth_headers)
+    assert transaction.status_code == 201, transaction.text
+
+    lc = client.post("/api/v1/lettres-credit", json={
+        "numero_reference": "LC-CLIENT-SUPPLIER-MISMATCH",
+        "montant": 100,
+        "date_emission": date.today().isoformat(),
+        "date_disponibilite": date.today().isoformat(),
+        "id_client": client_row["id_client"],
+    }, headers=auth_headers)
+    assert lc.status_code == 201, lc.text
+
+    payment = client.post("/api/v1/paiements", json={
+        "id_transaction": transaction.json()["id_transaction"],
+        "date_paiement": date.today().isoformat(),
+        "montant": 100,
+        "type_paiement": "lc",
+        "id_lc": lc.json()["id_lc"],
+    }, headers=auth_headers)
+    assert payment.status_code == 400
+    assert "fournisseur" in payment.json()["detail"].lower()
+
+
 def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_headers):
     client_row = client.post("/api/v1/clients", json={"nom_client": "Client Chèque"}, headers=auth_headers).json()
     product = create_product(client, "Service Chèque", "service", True, False)
@@ -128,9 +171,10 @@ def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_header
 def test_receivables_support_due_date_range(client, auth_headers):
     client_response = client.post("/api/v1/clients", json={"nom_client": "Client Dates"}, headers=auth_headers)
     product = create_product(client, "Service Dates", "service", True, False)
+    transaction_date = date.today() - timedelta(days=10)
     for due_date, amount in ((date.today() - timedelta(days=5), 10), (date.today() + timedelta(days=5), 20)):
         response = client.post("/api/v1/transactions", json={
-            "date_transaction": date.today().isoformat(),
+            "date_transaction": transaction_date.isoformat(),
             "date_echeance": due_date.isoformat(),
             "id_produit": product["id_produit"],
             "quantite": 1,
@@ -142,7 +186,7 @@ def test_receivables_support_due_date_range(client, auth_headers):
     filtered = client.get("/api/v1/transactions/creances", params={
         "echeance_debut": date.today().isoformat(),
         "echeance_fin": (date.today() + timedelta(days=5)).isoformat(),
-        "date_debut": date.today().isoformat(),
+        "date_debut": transaction_date.isoformat(),
         "recherche": "Dates",
     }, headers=auth_headers)
     assert filtered.status_code == 200, filtered.text
@@ -226,6 +270,78 @@ def test_payment_and_inventory_dates_respect_source_dates(client, db_session, au
     assert len(movements) == 2
     active_movement = next(item for item in movements if item.id_mouvement_inverse is None)
     assert active_movement.date_mouvement.date() == moved_date
+
+
+def test_transaction_update_keeps_party_constraint_and_due_date_valid(client, auth_headers):
+    client_row = client.post(
+        "/api/v1/clients", json={"nom_client": "Client Contraintes"}, headers=auth_headers
+    ).json()
+    product = create_product(client, "Service Contraintes", "service", True, False)
+    invalid_due_date = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": date.today().isoformat(),
+            "date_echeance": (date.today() - timedelta(days=1)).isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 10,
+            "id_client": client_row["id_client"],
+        },
+        headers=auth_headers,
+    )
+    assert invalid_due_date.status_code == 422
+
+    transaction = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": date.today().isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 10,
+            "id_client": client_row["id_client"],
+        },
+        headers=auth_headers,
+    ).json()
+    cleared_party = client.put(
+        f"/api/v1/transactions/{transaction['id_transaction']}",
+        json={"id_client": None},
+        headers=auth_headers,
+    )
+    assert cleared_party.status_code == 400
+
+
+def test_financial_ledger_sync_does_not_duplicate_on_repeat_update(client, db_session, auth_headers):
+    account = client.post(
+        "/api/v1/comptes-bancaires",
+        json={"nom_banque": "Banque Repeat", "numero_compte": "REPEAT-001", "solde_initial": 500},
+        headers=auth_headers,
+    )
+    assert account.status_code == 201, account.text
+    charge = client.post(
+        "/api/v1/charges",
+        json={
+            "libelle": "Charge Repeat",
+            "montant": 75,
+            "date_charge": date.today().isoformat(),
+            "categorie": "Divers",
+            "id_compte": account.json()["id_compte"],
+        },
+        headers=auth_headers,
+    )
+    assert charge.status_code == 201, charge.text
+    charge_id = charge.json()["id_charge"]
+    first_count = db_session.query(MouvementBancaire).filter(
+        MouvementBancaire.id_charge == charge_id
+    ).count()
+    repeated = client.put(
+        f"/api/v1/charges/{charge_id}",
+        json={"notes": "Note opérationnelle"},
+        headers=auth_headers,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert db_session.query(MouvementBancaire).filter(
+        MouvementBancaire.id_charge == charge_id
+    ).count() == first_count
 
 
 def test_overdue_alert_generation_is_idempotent(client, db_session, auth_headers):

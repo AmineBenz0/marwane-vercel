@@ -5,9 +5,9 @@ Gère les endpoints pour créer, lire, modifier et supprimer des paiements.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -16,11 +16,11 @@ from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.lettre_credit import LettreDeCredit
 from app.models.cession_lc import CessionLC
-from app.models.caisse import Caisse
-from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.user import Utilisateur
-from app.services.ledger import record_correction, void_cash_movement
+from app.services.ledger import record_correction
 from app.services.financial import validate_payment_date, validate_payment_idempotency
+from app.services.financial_ledger import sync_payment_cash_movement
+from app.utils.business_date import business_date
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
     PaiementBatchCreate, StatutPaiementTransaction, PaiementSummary
@@ -84,7 +84,7 @@ def _validate_lc_payment(
             )
 
         if not lc.est_disponible:
-            if lc.date_disponibilite > date.today():
+            if lc.date_disponibilite > business_date():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
@@ -106,7 +106,10 @@ def _validate_lc_payment(
                 detail="Cette LC n'appartient pas au client de cette transaction"
             )
 
-    if transaction.id_fournisseur and lc.type_detenteur == 'fournisseur' and lc.id_fournisseur != transaction.id_fournisseur:
+    if transaction.id_fournisseur and (
+        lc.type_detenteur != 'fournisseur'
+        or lc.id_fournisseur != transaction.id_fournisseur
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cette LC n'appartient pas au fournisseur de cette transaction"
@@ -141,124 +144,6 @@ def _release_lc_if_unused(
     if lc and lc.statut == 'utilisee':
         lc.statut = 'active'
         lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
-
-
-def _update_caisse_movement(
-    db: Session,
-    paiement: Paiement,
-    transaction: Transaction,
-    current_user: Optional[Utilisateur] = None,
-    reason: str = "Synchronisation du mouvement de caisse",
-):
-    """Synchronise la caisse sans modifier ni supprimer un mouvement historique.
-
-    A changed movement is voided and replaced by a new row linked to the
-    original. A movement that is no longer applicable is voided with an
-    explicit inverse audit row.
-    """
-    # Types qui affectent immédiatement la caisse
-    types_immediats = ['cash', 'virement', 'lc', 'carte', 'compensation', 'autre']
-    
-    doit_creer_mouvement = False
-    
-    # 1. Vérifier si on doit créer un mouvement
-    if paiement.type_paiement in types_immediats and paiement.est_effectif:
-        doit_creer_mouvement = True
-    elif paiement.type_paiement == 'cheque' and paiement.est_effectif:
-        doit_creer_mouvement = True
-        
-    existing = db.query(Caisse).filter(
-        Caisse.id_paiement == paiement.id_paiement,
-        Caisse.statut == "active",
-    ).first()
-
-    if not doit_creer_mouvement:
-        if existing:
-            void_cash_movement(
-                db,
-                existing,
-                raison=reason,
-                current_user=current_user,
-                create_reversal_record=True,
-            )
-            _create_caisse_snapshot(db, existing.id_mouvement)
-        return None
-
-    type_mouvement = 'ENTREE' if transaction.id_client is not None else 'SORTIE'
-    expected_date = datetime.combine(
-        paiement.date_paiement,
-        datetime.min.time(),
-        tzinfo=timezone.utc,
-    )
-    if existing and (
-        existing.montant == paiement.montant
-        and existing.type_mouvement == type_mouvement
-        and existing.date_mouvement == expected_date
-    ):
-        return existing
-
-    if existing:
-        original_id = existing.id_mouvement
-        void_cash_movement(
-            db,
-            existing,
-            raison=reason,
-            current_user=current_user,
-            create_reversal_record=False,
-        )
-    else:
-        original_id = None
-
-    new_mouvement = Caisse(
-        montant=paiement.montant,
-        type_mouvement=type_mouvement,
-        id_transaction=transaction.id_transaction,
-        id_paiement=paiement.id_paiement,
-        date_mouvement=expected_date,
-    )
-    db.add(new_mouvement)
-    db.flush()
-    if original_id is not None:
-        original = db.query(Caisse).filter(Caisse.id_mouvement == original_id).first()
-        if original:
-            original.id_mouvement_inverse = new_mouvement.id_mouvement
-            new_mouvement.id_mouvement_inverse = original.id_mouvement
-        record_correction(
-            db,
-            type_entite="paiement",
-            id_entite=paiement.id_paiement,
-            action="remplacement_mouvement",
-            raison=reason,
-            current_user=current_user,
-            id_mouvement_original=original_id,
-            id_mouvement_inverse=new_mouvement.id_mouvement,
-            details={"table": "caisse"},
-        )
-    _create_caisse_snapshot(db, new_mouvement.id_mouvement)
-    return new_mouvement
-
-
-def _create_caisse_snapshot(db: Session, id_mouvement: int):
-    """
-    Crée un snapshot du solde après un mouvement.
-    """
-    solde_actuel = db.query(
-        func.sum(
-            case(
-                (Caisse.type_mouvement == 'ENTREE', Caisse.montant),
-                else_=-Caisse.montant
-            )
-        )
-    ).filter(Caisse.statut == "active").scalar() or Decimal('0.00')
-    
-    new_history = CaisseSoldeHistorique(
-        solde=solde_actuel,
-        id_mouvement=id_mouvement,
-        date_snapshot=datetime.now(timezone.utc)
-    )
-    db.add(new_history)
-
-
 
 
 @router.get("", response_model=List[PaiementRead], status_code=status.HTTP_200_OK)
@@ -431,7 +316,7 @@ def create_paiement(
         ) from exc
     
     # Mettre à jour la caisse
-    _update_caisse_movement(
+    sync_payment_cash_movement(
         db,
         nouveau_paiement,
         transaction,
@@ -539,7 +424,7 @@ def update_paiement(
 
     # Mettre à jour la caisse si nécessaire (ex: chèque passé à 'encaisse')
     if transaction:
-        _update_caisse_movement(
+        sync_payment_cash_movement(
             db,
             paiement,
             transaction,
@@ -596,7 +481,7 @@ def delete_paiement(
     paiement.motif_annulation = raison[:1000]
     paiement.date_annulation = datetime.now(timezone.utc)
     paiement.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
-    _update_caisse_movement(
+    sync_payment_cash_movement(
         db,
         paiement,
         paiement.transaction,
@@ -749,7 +634,7 @@ def create_paiements_batch(
             db.flush()
             
             # Mouvement de caisse
-            _update_caisse_movement(
+            sync_payment_cash_movement(
                 db,
                 nouveau_paiement,
                 transaction,

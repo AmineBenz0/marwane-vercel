@@ -593,7 +593,24 @@ def update_transaction(
     
     update_data = transaction_data.model_dump(exclude_unset=True)
 
+    # The database constraint is the final safety net, but returning a clear
+    # client error here avoids leaving an invalid in-memory transaction when a
+    # caller tries to clear the only party on a transaction.
+    final_id_client = update_data.get("id_client", transaction.id_client)
+    final_id_fournisseur = update_data.get("id_fournisseur", transaction.id_fournisseur)
+    if (final_id_client is None) == (final_id_fournisseur is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Une transaction doit concerner soit un client, soit un fournisseur",
+        )
+
     final_date_transaction = update_data.get("date_transaction", transaction.date_transaction)
+    final_date_echeance = update_data.get("date_echeance", transaction.date_echeance)
+    if final_date_echeance is not None and final_date_echeance < final_date_transaction:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La date d'échéance ne peut pas être antérieure à la transaction",
+        )
     if any(payment.date_paiement < final_date_transaction for payment in transaction.paiements):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -641,31 +658,27 @@ def update_transaction(
                 detail=f"Produit avec l'ID {transaction_data.id_produit} introuvable"
             )
         
-        # Valider que le produit correspond au type de transaction
-        final_id_client = transaction_data.id_client if transaction_data.id_client is not None else transaction.id_client
-        final_id_fournisseur = transaction_data.id_fournisseur if transaction_data.id_fournisseur is not None else transaction.id_fournisseur
-        
-        if final_id_client is not None and not produit.pour_clients:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients"
-            )
-        
-        if final_id_fournisseur is not None and not produit.pour_fournisseurs:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
-            )
-    
+    # Use the final product and final party together for compatibility checks.
+    # This also covers changing only the client or supplier on an existing
+    # transaction.
     # Mettre à jour les champs fournis
     final_produit = (
         db.query(Produit).filter(Produit.id_produit == transaction_data.id_produit).first()
         if transaction_data.id_produit is not None
         else transaction.produit
     )
-    final_id_client = update_data.get("id_client", transaction.id_client)
     final_id_batiment = update_data.get("id_batiment", transaction.id_batiment)
     final_id_cycle = update_data.get("id_cycle", transaction.id_cycle)
+    if final_id_client is not None and not final_produit.pour_clients:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le produit '{final_produit.nom_produit}' ne peut pas être utilisé pour les transactions clients",
+        )
+    if final_id_fournisseur is not None and not final_produit.pour_fournisseurs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Le produit '{final_produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs",
+        )
     _validate_source_batiment(
         id_batiment=final_id_batiment,
         id_client=final_id_client,
@@ -683,9 +696,9 @@ def update_transaction(
     
     for field, value in update_data.items():
         setattr(transaction, field, value)
-    if "id_client" in update_data and "id_fournisseur" not in update_data:
+    if "id_client" in update_data and update_data["id_client"] is not None and "id_fournisseur" not in update_data:
         transaction.id_fournisseur = None
-    if "id_fournisseur" in update_data and "id_client" not in update_data:
+    if "id_fournisseur" in update_data and update_data["id_fournisseur"] is not None and "id_client" not in update_data:
         transaction.id_client = None
     transaction.id_cycle = resolved_cycle_id
     transaction.produit = final_produit

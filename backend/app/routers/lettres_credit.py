@@ -4,11 +4,8 @@ Router FastAPI pour la gestion des Lettres de Crédit (LC).
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import date
-
 from app.database import get_db
 from app.models.lettre_credit import LettreDeCredit
-from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.cession_lc import CessionLC
@@ -22,6 +19,7 @@ from app.schemas.lettre_credit import (
     LettreCreditVerserBanque,
 )
 from app.utils.dependencies import get_current_active_user
+from app.utils.business_date import business_date
 
 router = APIRouter(prefix="/lettres-credit", tags=["Lettres de Crédit"])
 
@@ -87,7 +85,7 @@ def get_lettres_credit_disponibles(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Récupère les LC actives et disponibles (date OK)."""
-    today = date.today()
+    today = business_date()
     query = db.query(LettreDeCredit).filter(
         LettreDeCredit.statut == 'active',
         LettreDeCredit.date_disponibilite <= today,

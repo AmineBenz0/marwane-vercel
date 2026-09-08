@@ -2,7 +2,6 @@
 Router FastAPI pour la gestion des Charges / Dépenses.
 """
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,170 +13,11 @@ from app.models.caisse import Caisse
 from app.models.charge import Charge
 from app.models.user import Utilisateur
 from app.schemas.charge import ChargeCreate, ChargeRead, ChargeSummary, ChargeUpdate
+from app.services.financial_ledger import apply_charge_impact, create_cash_snapshot
 from app.services.ledger import record_correction, void_bank_movement, void_cash_movement
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/charges", tags=["Charges / Dépenses"])
-
-
-def _money(value) -> Decimal:
-    return Decimal(str(value or 0))
-
-
-def _apply_charge_impact(
-    db: Session,
-    charge: Charge,
-    *,
-    current_user: Optional[Utilisateur] = None,
-    reason: str = "Synchronisation de la dépense",
-):
-    """Synchronise a charge through append-only movement replacement.
-
-    A charge may affect either cash or one bank account. Existing movements
-    are never deleted or rewritten: changed movements are voided and replaced,
-    with a correction journal entry linking both records.
-    """
-    from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
-    from app.routers.paiements import _create_caisse_snapshot
-
-    active_cash = db.query(Caisse).filter(
-        Caisse.id_charge == charge.id_charge,
-        Caisse.statut == "active",
-    ).first()
-    active_bank = db.query(MouvementBancaire).filter(
-        MouvementBancaire.id_charge == charge.id_charge,
-        MouvementBancaire.statut == "active",
-    ).first()
-    movement_date = datetime.combine(charge.date_charge, datetime.min.time())
-
-    if charge.id_compte:
-        compte = db.query(CompteBancaire).filter(CompteBancaire.id_compte == charge.id_compte).with_for_update().first()
-        if not compte:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Compte bancaire introuvable pour cette dépense",
-            )
-
-        if active_cash:
-            original_id = active_cash.id_mouvement
-            void_cash_movement(
-                db, active_cash, raison=reason, current_user=current_user,
-                create_reversal_record=False,
-            )
-            record_correction(
-                db,
-                type_entite="charge",
-                id_entite=charge.id_charge,
-                action="remplacement_mouvement",
-                raison=reason,
-                current_user=current_user,
-                id_mouvement_original=original_id,
-                details={"original_table": "caisse", "replacement_table": "mouvements_bancaires"},
-            )
-
-        if active_bank and (
-            active_bank.id_compte == charge.id_compte
-            and active_bank.montant == charge.montant
-            and active_bank.date_mouvement == movement_date
-            and active_bank.notes == charge.libelle
-        ):
-            return active_bank
-
-        original_bank_id = active_bank.id_mouvement if active_bank else None
-        if active_bank:
-            void_bank_movement(
-                db, active_bank, raison=reason, current_user=current_user,
-                create_reversal_record=False,
-            )
-
-        compte.solde_actuel = _money(compte.solde_actuel) - _money(charge.montant)
-        replacement = MouvementBancaire(
-            id_compte=charge.id_compte,
-            id_charge=charge.id_charge,
-            montant=charge.montant,
-            type_mouvement="SORTIE",
-            source="frais",
-            notes=charge.libelle,
-            date_mouvement=movement_date,
-        )
-        db.add(replacement)
-        db.flush()
-        if original_bank_id is not None:
-            original = db.query(MouvementBancaire).filter(
-                MouvementBancaire.id_mouvement == original_bank_id
-            ).first()
-            if original:
-                original.id_mouvement_inverse = replacement.id_mouvement
-                replacement.id_mouvement_inverse = original.id_mouvement
-            record_correction(
-                db,
-                type_entite="charge",
-                id_entite=charge.id_charge,
-                action="remplacement_mouvement",
-                raison=reason,
-                current_user=current_user,
-                id_mouvement_original=original_bank_id,
-                id_mouvement_inverse=replacement.id_mouvement,
-                details={"table": "mouvements_bancaires"},
-            )
-        return replacement
-
-    if active_bank:
-        original_id = active_bank.id_mouvement
-        void_bank_movement(
-            db, active_bank, raison=reason, current_user=current_user,
-            create_reversal_record=False,
-        )
-        record_correction(
-            db,
-            type_entite="charge",
-            id_entite=charge.id_charge,
-            action="remplacement_mouvement",
-            raison=reason,
-            current_user=current_user,
-            id_mouvement_original=original_id,
-            details={"original_table": "mouvements_bancaires", "replacement_table": "caisse"},
-        )
-
-    if active_cash and (
-        active_cash.montant == charge.montant
-        and active_cash.date_mouvement == movement_date
-    ):
-        return active_cash
-
-    original_cash_id = active_cash.id_mouvement if active_cash else None
-    if active_cash:
-        void_cash_movement(
-            db, active_cash, raison=reason, current_user=current_user,
-            create_reversal_record=False,
-        )
-    replacement = Caisse(
-        montant=charge.montant,
-        type_mouvement="SORTIE",
-        id_charge=charge.id_charge,
-        date_mouvement=movement_date,
-    )
-    db.add(replacement)
-    db.flush()
-    if original_cash_id is not None:
-        original = db.query(Caisse).filter(Caisse.id_mouvement == original_cash_id).first()
-        if original:
-            original.id_mouvement_inverse = replacement.id_mouvement
-            replacement.id_mouvement_inverse = original.id_mouvement
-        record_correction(
-            db,
-            type_entite="charge",
-            id_entite=charge.id_charge,
-            action="remplacement_mouvement",
-            raison=reason,
-            current_user=current_user,
-            id_mouvement_original=original_cash_id,
-            id_mouvement_inverse=replacement.id_mouvement,
-            details={"table": "caisse"},
-        )
-    db.flush()
-    _create_caisse_snapshot(db, replacement.id_mouvement)
-    return replacement
 
 
 @router.get("", response_model=List[ChargeRead])
@@ -253,7 +93,7 @@ def create_charge(
     db.add(new_charge)
     db.flush()
 
-    _apply_charge_impact(
+    apply_charge_impact(
         db,
         new_charge,
         current_user=current_user,
@@ -287,7 +127,7 @@ def update_charge(
 
     charge.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
-    _apply_charge_impact(
+    apply_charge_impact(
         db,
         charge,
         current_user=current_user,
@@ -347,8 +187,7 @@ def delete_charge(
             current_user=current_user,
             create_reversal_record=True,
         )
-        from app.routers.paiements import _create_caisse_snapshot
-        _create_caisse_snapshot(db, caisse_mvmt.id_mouvement)
+        create_cash_snapshot(db, caisse_mvmt.id_mouvement)
 
     charge.statut = "annule"
     charge.motif_annulation = raison[:1000]

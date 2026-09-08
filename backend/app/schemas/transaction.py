@@ -112,6 +112,13 @@ class TransactionCreate(TransactionBase):
             raise ValueError("Une transaction doit concerner soit un client, soit un fournisseur")
         
         return self
+
+    @model_validator(mode='after')
+    def validate_echeance(self):
+        """Prevent an accounting due date before the transaction date."""
+        if self.date_echeance is not None and self.date_echeance < self.date_transaction:
+            raise ValueError("La date d'échéance ne peut pas être antérieure à la transaction")
+        return self
     
     @model_validator(mode='after')
     def calculate_montant_total(self):
@@ -129,6 +136,10 @@ class TransactionUpdate(BaseModel):
     date_transaction: Optional[date] = Field(
         None,
         description="Date de la transaction"
+    )
+    date_echeance: Optional[date] = Field(
+        None,
+        description="Date d'échéance du paiement"
     )
     id_produit: Optional[int] = Field(
         None,
@@ -218,6 +229,17 @@ class TransactionUpdate(BaseModel):
         if id_client is not None and id_fournisseur is not None:
             raise ValueError("Une transaction ne peut concerner qu'un client OU un fournisseur, pas les deux")
         
+        return self
+
+    @model_validator(mode='after')
+    def validate_echeance(self):
+        """Prevent an accounting due date before the updated transaction date."""
+        if (
+            self.date_echeance is not None
+            and self.date_transaction is not None
+            and self.date_echeance < self.date_transaction
+        ):
+            raise ValueError("La date d'échéance ne peut pas être antérieure à la transaction")
         return self
 
 

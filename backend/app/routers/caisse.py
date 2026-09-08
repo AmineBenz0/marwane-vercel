@@ -21,6 +21,7 @@ from app.schemas.caisse import (
     HistoriqueSoldeRead
 )
 from app.utils.dependencies import get_current_active_user
+from app.utils.business_date import business_date
 from app.models.user import Utilisateur
 
 router = APIRouter(prefix="/caisse", tags=["Caisse"])
@@ -30,7 +31,7 @@ def _get_lc_disponibles_total(db: Session) -> Decimal:
     """Valeur des LC actives et utilisables aujourd'hui, comptees comme caisse."""
     total = db.query(func.coalesce(func.sum(LettreDeCredit.montant), 0)).filter(
         LettreDeCredit.statut == 'active',
-        LettreDeCredit.date_disponibilite <= date.today()
+        LettreDeCredit.date_disponibilite <= business_date()
     ).scalar() or Decimal('0.00')
     return Decimal(str(total))
 

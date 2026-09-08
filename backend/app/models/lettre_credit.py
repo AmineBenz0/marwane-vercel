@@ -79,8 +79,8 @@ class LettreDeCredit(Base):
     @property
     def est_disponible(self):
         """Vérifie si la LC peut être utilisée comme paiement."""
-        from datetime import date
-        today = date.today()
+        from app.utils.business_date import business_date
+        today = business_date()
         return (
             self.statut == 'active' and 
             self.date_disponibilite <= today
