@@ -217,6 +217,7 @@ function ProduitsList() {
 
         return {
           nom_produit: produit.nom_produit,
+          type_produit: productTypeLabels[produit.type_produit] || 'Produit',
           fournisseurs: insight?.suppliers.size || 0,
           dernier_fournisseur: lastPurchase
             ? fournisseursMap.get(lastPurchase.id_fournisseur) || `Fournisseur #${lastPurchase.id_fournisseur}`
@@ -232,6 +233,7 @@ function ProduitsList() {
         rows,
         [
           { id: 'nom_produit', label: 'Produit' },
+          { id: 'type_produit', label: 'Type' },
           { id: 'fournisseurs', label: 'Fournisseurs' },
           { id: 'dernier_fournisseur', label: 'Dernier fournisseur' },
           { id: 'dernier_prix', label: 'Dernier prix' },
@@ -521,7 +523,7 @@ function EmptyProductsState({ hasFilters, onCreate }) {
         </Typography>
         <Typography color="text.secondary" sx={{ mt: 1, mb: 3, maxWidth: 520, mx: 'auto' }}>
           {hasFilters
-            ? 'Essayez un autre nom ou effacez la recherche.'
+            ? 'Essayez un autre nom ou effacez les filtres.'
             : 'Créez le premier produit acheté chez un fournisseur. Les achats pourront ensuite montrer les fournisseurs et les derniers prix.'}
         </Typography>
         {!hasFilters && (
