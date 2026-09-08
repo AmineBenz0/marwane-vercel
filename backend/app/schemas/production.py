@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from datetime import date, datetime
 from typing import Optional, List, Literal
 from decimal import Decimal
@@ -58,8 +58,7 @@ class ProductionRead(ProductionBase):
     nom_batiment: Optional[str] = None
     nom_cycle: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProductionDailyStats(BaseModel):

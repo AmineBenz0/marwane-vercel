@@ -84,9 +84,9 @@ async def rate_limit_handler(request, exc):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,  # Origines autorisées (localhost:3000, localhost:5173, etc.)
-    allow_credentials=True,  # Autorise l'envoi de cookies et headers d'authentification
-    allow_methods=["*"],  # Autorise toutes les méthodes HTTP (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Autorise tous les headers (Content-Type, Authorization, etc.)
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Accept", "Authorization", "Content-Type", "X-Request-ID"],
 )
 
 # Middleware de logging structuré (après CORS pour capturer toutes les requêtes)

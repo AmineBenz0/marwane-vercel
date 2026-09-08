@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 CycleStatus = Literal["actif", "a_cloturer", "termine"]
@@ -69,5 +69,4 @@ class CycleProductionRead(BaseModel):
     id_utilisateur_creation: Optional[int] = None
     id_utilisateur_modification: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

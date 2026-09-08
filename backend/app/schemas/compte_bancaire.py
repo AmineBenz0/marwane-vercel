@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from decimal import Decimal
 from datetime import datetime
 from typing import Optional, Literal
@@ -35,8 +35,7 @@ class CompteBancaireRead(BaseModel):
     solde_actuel: Decimal
     date_modification: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MouvementBancaireRead(BaseModel):
     id_mouvement: int
@@ -55,5 +54,4 @@ class MouvementBancaireRead(BaseModel):
     id_utilisateur_annulation: Optional[int] = None
     id_mouvement_inverse: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

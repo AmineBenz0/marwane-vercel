@@ -44,9 +44,23 @@ def upgrade() -> None:
                         table_name
                     );
                 END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+                    EXECUTE format(
+                        'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO app_runtime',
+                        table_name
+                    );
+                    EXECUTE format('DROP POLICY IF EXISTS app_runtime_access ON public.%I', table_name);
+                    EXECUTE format(
+                        'CREATE POLICY app_runtime_access ON public.%I FOR ALL TO app_runtime USING (true) WITH CHECK (true)',
+                        table_name
+                    );
+                END IF;
             END LOOP;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
                 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
             END IF;
         END $$;
     """)
@@ -85,6 +99,10 @@ def downgrade() -> None:
             LOOP
                 EXECUTE format('DROP POLICY IF EXISTS app_authenticated_access ON public.%I', table_name);
                 EXECUTE format('DROP POLICY IF EXISTS app_authenticated_read ON public.%I', table_name);
+                EXECUTE format('DROP POLICY IF EXISTS app_runtime_access ON public.%I', table_name);
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+                    EXECUTE format('REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I FROM app_runtime', table_name);
+                END IF;
                 EXECUTE format('ALTER TABLE public.%I DISABLE ROW LEVEL SECURITY', table_name);
             END LOOP;
         END $$;

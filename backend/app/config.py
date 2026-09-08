@@ -29,6 +29,13 @@ def _is_local_database_url(database_url: str) -> bool:
     )
 
 
+def _database_username(database_url: Optional[str]) -> Optional[str]:
+    """Return the database role encoded in a connection URL."""
+    if not database_url:
+        return None
+    return urlparse(database_url).username
+
+
 class Settings(BaseSettings):
     """Configuration de l'application via variables d'environnement."""
     
@@ -78,7 +85,11 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         """Retourne la liste des origines CORS."""
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        return [
+            origin.strip()
+            for origin in self.CORS_ORIGINS.split(",")
+            if origin.strip()
+        ]
 
     @model_validator(mode="after")
     def validate_deployment_configuration(self):
@@ -105,6 +116,43 @@ class Settings(BaseSettings):
 
         if not self.CRON_SECRET or len(self.CRON_SECRET) < 32:
             configuration_errors.append("CRON_SECRET must be a unique value of at least 32 characters")
+
+        migration_url = self.MIGRATION_DATABASE_URL
+        runtime_role = _database_username(self.DATABASE_URL)
+        migration_role = _database_username(migration_url)
+        privileged_runtime_roles = {"postgres", "supabase_admin", "service_role"}
+
+        if not migration_url or _is_local_database_url(migration_url):
+            configuration_errors.append(
+                "MIGRATION_DATABASE_URL must point to a separate managed migration database"
+            )
+        elif migration_url == self.DATABASE_URL or (
+            runtime_role and migration_role and runtime_role == migration_role
+        ):
+            configuration_errors.append(
+                "MIGRATION_DATABASE_URL must use a different database role from DATABASE_URL"
+            )
+
+        if runtime_role in privileged_runtime_roles:
+            configuration_errors.append(
+                "DATABASE_URL must use a least-privilege application database role"
+            )
+
+        origins = self.cors_origins_list
+        local_origins = {
+            origin
+            for origin in origins
+            if origin.startswith("http://localhost")
+            or origin.startswith("http://127.0.0.1")
+        }
+        if not origins or "*" in origins:
+            configuration_errors.append(
+                "CORS_ORIGINS must contain explicit origins outside development"
+            )
+        elif local_origins == set(origins):
+            configuration_errors.append(
+                "CORS_ORIGINS must include the deployed application origin outside development"
+            )
 
         if configuration_errors:
             raise ValueError("Invalid deployment configuration: " + "; ".join(configuration_errors))

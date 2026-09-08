@@ -44,7 +44,7 @@ def get_client_ip(request: Request) -> str:
 
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-@conditional_rate_limit("5/minute")  # TODO: Réactiver en production via ENABLE_RATE_LIMITING=True
+@conditional_rate_limit("5/minute")  # Activé par le feature flag de production.
 async def login(
     login_data: LoginRequest,
     request: Request,

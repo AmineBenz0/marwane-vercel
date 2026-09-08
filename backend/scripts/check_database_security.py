@@ -5,7 +5,8 @@ Usage from ``backend/``::
     python scripts/check_database_security.py
 
 The command inventories public tables, RLS state, public/anonymous grants,
-views, roles, and current connections. It does not change database state.
+views, security-definer functions, roles, and current connections. It does
+not change database state.
 """
 
 import json
@@ -41,14 +42,31 @@ def main() -> int:
             SELECT table_name, grantee, privilege_type
             FROM information_schema.table_privileges
             WHERE table_schema = 'public'
-              AND grantee IN ('PUBLIC', 'anon')
+              AND grantee IN ('PUBLIC', 'anon', 'authenticated', 'app_runtime', 'app_migrator')
             ORDER BY table_name, grantee, privilege_type
         """)
         views = _rows(db, """
-            SELECT schemaname, viewname
-            FROM pg_catalog.pg_views
-            WHERE schemaname = 'public'
-            ORDER BY viewname
+            SELECT v.schemaname, v.viewname,
+                   COALESCE(c.reloptions, ARRAY[]::text[]) AS reloptions,
+                   ('security_invoker=true' = ANY(COALESCE(c.reloptions, ARRAY[]::text[])))
+                       AS security_invoker
+            FROM pg_catalog.pg_views AS v
+            JOIN pg_catalog.pg_class AS c
+              ON c.relname = v.viewname
+            JOIN pg_catalog.pg_namespace AS n
+              ON n.oid = c.relnamespace AND n.nspname = v.schemaname
+            WHERE v.schemaname = 'public'
+            ORDER BY v.viewname
+        """)
+        security_definer_functions = _rows(db, """
+            SELECT n.nspname AS schemaname,
+                   p.proname,
+                   pg_catalog.pg_get_function_identity_arguments(p.oid) AS arguments,
+                   p.proconfig
+            FROM pg_catalog.pg_proc AS p
+            JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.prosecdef
+            ORDER BY p.proname, arguments
         """)
         policies = _rows(db, """
             SELECT schemaname, tablename, policyname, permissive, roles, cmd
@@ -84,15 +102,24 @@ def main() -> int:
     rls_gaps = [row["tablename"] for row in tables if not row["rowsecurity"]]
     policy_tables = {row["tablename"] for row in policies}
     policy_gaps = [row["tablename"] for row in tables if row["tablename"] not in policy_tables]
+    missing_roles = [role for role in ("app_runtime", "app_migrator") if role not in {row["rolname"] for row in roles}]
+    insecure_views = [row["viewname"] for row in views if not row["security_invoker"]]
+    unsafe_grants = [
+        row for row in grants if row["grantee"] in {"PUBLIC", "anon"}
+    ]
     result = {
-        "ok": not rls_gaps and not grants and not policy_gaps,
+        "ok": not rls_gaps and not unsafe_grants and not policy_gaps and not missing_roles and not insecure_views and not security_definer_functions,
         "tables": tables,
         "rls_disabled_tables": rls_gaps,
         "policyless_tables": policy_gaps,
-        "public_or_anon_grants": grants,
+        "grants": grants,
+        "public_or_anon_grants": unsafe_grants,
         "policies": policies,
         "views": views,
+        "insecure_views": insecure_views,
+        "security_definer_functions": security_definer_functions,
         "roles": roles,
+        "missing_required_roles": missing_roles,
         "connections": connections,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))

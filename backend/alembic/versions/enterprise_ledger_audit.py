@@ -74,6 +74,13 @@ def upgrade() -> None:
                 CREATE POLICY app_authenticated_read ON public.corrections_financieres
                     FOR SELECT TO authenticated USING (true);
             END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+                GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.corrections_financieres TO app_runtime;
+                DROP POLICY IF EXISTS app_runtime_access ON public.corrections_financieres;
+                CREATE POLICY app_runtime_access ON public.corrections_financieres
+                    FOR ALL TO app_runtime USING (true) WITH CHECK (true);
+                GRANT USAGE, SELECT ON SEQUENCE public.corrections_financieres_id_correction_seq TO app_runtime;
+            END IF;
         END $$;
     """)
     op.execute("""
@@ -185,6 +192,16 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP POLICY IF EXISTS app_authenticated_access ON public.corrections_financieres")
     op.execute("DROP POLICY IF EXISTS app_authenticated_read ON public.corrections_financieres")
+    op.execute("DROP POLICY IF EXISTS app_runtime_access ON public.corrections_financieres")
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+                REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLE public.corrections_financieres FROM app_runtime;
+                REVOKE USAGE, SELECT ON SEQUENCE public.corrections_financieres_id_correction_seq FROM app_runtime;
+            END IF;
+        END $$;
+    """)
     op.execute("ALTER TABLE public.corrections_financieres DISABLE ROW LEVEL SECURITY")
     op.execute("DROP TRIGGER IF EXISTS trg_protect_bank_identity ON mouvements_bancaires")
     op.execute("DROP TRIGGER IF EXISTS trg_protect_caisse_identity ON caisse")

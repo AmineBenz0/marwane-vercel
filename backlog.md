@@ -24,18 +24,24 @@ Voici le backlog qu'on a créé, qu'en penses-tu ? et aurais-tu des suggestions 
 
 ---
 
-## 📊 Vue d'Ensemble
+## 📊 Vue d'Ensemble historique (archivée)
+
+Cette vue de planification date de la première version du projet. Les statuts
+et pourcentages ci-dessous ne sont plus maintenus : ils sont conservés pour
+retrouver le contexte des anciennes tâches. Pour savoir ce qui est livré,
+utiliser exclusivement le tableau **Enterprise remediation status** ci-dessus
+et la checklist d'acceptation enterprise.
 
 | Phase | Statut | Progression | Durée Estimée | Détails Sprints |
 |-------|--------|------------|---------------|-----------------|
-| **Phase 0** : Préparation | ✅ Terminé | 100% | 2-3 jours | Sprint 0.1 (3 tâches) |
-| **Phase 1** : Backend | 🟡 En cours | ~67% | 4-5 semaines | Sprints 1.1 à 1.12 (40+ tâches) |
-| **Phase 2** : Frontend | 🟡 En cours | ~3% | 4-5 semaines | Sprints 2.1 à 2.11 (30+ tâches) |
-| **Phase 2.4** : Responsive Mobile | ✅ Terminé | 100% | 2-3 jours | Sprint 2.14 (12 tâches) |
-| **Phase 2.5** : Profils & Créances | ⚪ Non démarré | 0% | 2-3 jours | Sprints 2.12 à 2.13 (14 tâches) |
-| **Phase 3** : Tests & Déploiement | ⚪ Non démarré | 0% | 3 semaines | Sprints 3.1 à 3.7 (25+ tâches) |
-| **Phase 4** : Formation | ⚪ Non démarré | 0% | 1 semaine | Sprints 4.1 à 4.2 (3 tâches) |
-| **TOTAL PROJET** | 🟡 | ~15% | **3-4 mois** | ~115 tâches |
+| **Phase 0** : Préparation | Archivée | n/a | 2-3 jours | Sprint 0.1 (3 tâches) |
+| **Phase 1** : Backend | Archivée | n/a | 4-5 semaines | Sprints 1.1 à 1.12 (40+ tâches) |
+| **Phase 2** : Frontend | Archivée | n/a | 4-5 semaines | Sprints 2.1 à 2.11 (30+ tâches) |
+| **Phase 2.4** : Responsive Mobile | Archivée | n/a | 2-3 jours | Sprint 2.14 (12 tâches) |
+| **Phase 2.5** : Profils & Créances | Archivée | n/a | 2-3 jours | Sprints 2.12 à 2.13 (14 tâches) |
+| **Phase 3** : Tests & Déploiement | Archivée | n/a | 3 semaines | Sprints 3.1 à 3.7 (25+ tâches) |
+| **Phase 4** : Formation | Archivée | n/a | 1 semaine | Sprints 4.1 à 4.2 (3 tâches) |
+| **TOTAL PROJET** | Archivée | n/a | **3-4 mois** | ~115 tâches |
 
 **Légende des statuts :**
 - ⚪ Non démarré

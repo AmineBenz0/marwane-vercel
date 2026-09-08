@@ -1,7 +1,7 @@
 """
 Utilitaires de sécurité pour l'authentification JWT et le hashage des mots de passe.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from passlib.context import CryptContext
 import jwt
@@ -98,12 +98,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if "sub" in to_encode and isinstance(to_encode["sub"], int):
         to_encode["sub"] = str(to_encode["sub"])
     
+    now = datetime.now(timezone.utc)
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "access"})
+        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode.update({"exp": expire, "iat": now, "type": "access"})
     
     encoded_jwt = jwt.encode(
         to_encode,
@@ -142,9 +143,10 @@ def create_refresh_token(data: dict) -> str:
     if "sub" in to_encode and isinstance(to_encode["sub"], int):
         to_encode["sub"] = str(to_encode["sub"])
     
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "refresh"})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+    to_encode.update({"exp": expire, "iat": now, "type": "refresh"})
     
     encoded_jwt = jwt.encode(
         to_encode,

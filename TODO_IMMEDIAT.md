@@ -25,6 +25,10 @@ the current architecture.
 ## Vercel
 
 - [ ] Configure `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SECRET_KEY`, `CRON_SECRET`, and `ENVIRONMENT` in the correct scopes.
+- [ ] Confirm `DATABASE_URL` uses the least-privilege runtime role and
+      `MIGRATION_DATABASE_URL` uses a distinct migration role.
+- [ ] Set explicit deployed HTTPS origins in `CORS_ORIGINS`; localhost-only
+      origins are rejected outside development.
 - [ ] Keep privileged database credentials server-side; never expose them as `VITE_*` variables.
 - [ ] Confirm the Vercel Cron route returns 200 with the platform Authorization header.
 - [ ] Validate `/api/v1/health/live`, `/api/v1/health/ready`, OpenAPI, and the client shell.
