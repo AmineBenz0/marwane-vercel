@@ -23,6 +23,7 @@ from app.models.nomenclature import Nomenclature, NomenclatureLigne
 from app.models.inventory import MouvementStock
 from app.models.alert import Alerte
 from app.models.financial_correction import CorrectionFinanciere
+from app.models.job_execution import JobExecution
 from app.models.task import Tache
 
 # Export de tous les modèles pour faciliter les imports
@@ -52,5 +53,6 @@ __all__ = [
     "MouvementStock",
     "Alerte",
     "CorrectionFinanciere",
+    "JobExecution",
     "Tache",
 ]

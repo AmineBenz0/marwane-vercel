@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,10 @@ def unified_search(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
-    term = f"%{q.strip()}%"
+    normalized_query = q.strip()
+    if len(normalized_query) < 2:
+        raise HTTPException(status_code=422, detail="q doit contenir au moins deux caractères utiles")
+    term = f"%{normalized_query}%"
     scopes = {item.strip().lower() for item in scope.split(",")} if scope else {"clients", "fournisseurs", "produits", "transactions", "charges", "lettres_credit"}
     results = []
     if "clients" in scopes:

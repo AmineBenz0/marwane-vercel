@@ -7,6 +7,7 @@ from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.inventory import MouvementStock
+from app.models.job_execution import JobExecution
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.services.alerts import create_overdue_alerts
@@ -492,6 +493,41 @@ def test_overdue_alert_generation_is_idempotent(client, db_session, auth_headers
     assert create_overdue_alerts(db_session, date.today()) == 1
     assert create_overdue_alerts(db_session, date.today()) == 0
     assert db_session.query(Alerte).count() == 1
+
+
+def test_payment_alert_job_records_audited_execution(client, db_session, auth_headers, monkeypatch):
+    from app.config import settings
+
+    client_response = client.post(
+        "/api/v1/clients", json={"nom_client": "Client Job Audité"}, headers=auth_headers
+    )
+    product = create_product(client, "Service Job Audité", "service", True, False)
+    transaction = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": (date.today() - timedelta(days=10)).isoformat(),
+            "date_echeance": (date.today() - timedelta(days=1)).isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 50,
+            "id_client": client_response.json()["id_client"],
+        },
+        headers=auth_headers,
+    )
+    assert transaction.status_code == 201, transaction.text
+
+    secret = "cron-test-secret-value-with-at-least-32-chars"
+    monkeypatch.setattr(settings, "CRON_SECRET", secret)
+    response = client.get(
+        "/api/v1/internal/jobs/payment-alerts",
+        headers={"Authorization": f"Bearer {secret}"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["created"] == 1
+    execution = db_session.query(JobExecution).one()
+    assert execution.statut == "succeeded"
+    assert execution.created_count == 1
+    assert execution.completed_at is not None
 
 
 def test_bom_transformation_updates_stock_and_is_idempotent(client, auth_headers):
