@@ -10,6 +10,10 @@ the current architecture.
 - [ ] No secrets are present in tracked files or Git history; any historical credential has been revoked.
 - [ ] Dependency audit has no unresolved high or critical findings.
 - [ ] Preview smoke tests cover login, transactions, payments, alerts, stock, and reports.
+- [ ] Enable the authenticated E2E gate with the repository variable
+      `RUN_E2E=true` only after `E2E_BASE_URL`, `E2E_EMAIL`, and `E2E_PASSWORD`
+      target a disposable/staging environment; the workflow fails fast if any
+      required secret is absent.
 
 ## Supabase
 

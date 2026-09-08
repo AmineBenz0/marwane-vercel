@@ -56,6 +56,8 @@ attached to the release record.
 - [ ] Dependency audit has no high or critical findings.
 - [ ] Secret scanning passes.
 - [ ] Authenticated Playwright desktop and mobile workflows pass.
+- [ ] The GitHub `RUN_E2E` repository variable is enabled only for a
+      disposable/staging target, and the E2E secret preflight passes.
 - [ ] Preview smoke tests pass against the migrated staging database.
 - [ ] Production smoke tests pass after promotion.
 - [ ] Monitoring shows no repeated API, database, cron, or reconciliation failures during the observation window.

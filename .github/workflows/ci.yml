@@ -96,7 +96,10 @@ jobs:
       - run: npm audit --audit-level=high
 
   e2e:
-    if: ${{ secrets.E2E_BASE_URL != '' && secrets.E2E_EMAIL != '' && secrets.E2E_PASSWORD != '' }}
+    # Secrets are intentionally not referenced from a job-level `if`: GitHub
+    # does not make the secrets context reliably available there. Enable this
+    # release gate with the repository variable RUN_E2E=true instead.
+    if: ${{ vars.RUN_E2E == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -108,6 +111,15 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Verify authenticated E2E configuration
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: |
+          test -n "$E2E_BASE_URL"
+          test -n "$E2E_EMAIL"
+          test -n "$E2E_PASSWORD"
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- --project=chromium --project=mobile
