@@ -175,8 +175,11 @@ jobs:
       - run: python scripts/check_database_security.py
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.STAGING_MIGRATION_DATABASE_URL }}
           ENVIRONMENT: preview
           SECRET_KEY: ${{ secrets.STAGING_SECRET_KEY }}
           CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
+          CORS_ORIGINS: ${{ secrets.STAGING_CORS_ORIGINS }}
+          DEBUG: "false"
           ENABLE_AUTH: "true"
           ENABLE_RATE_LIMITING: "true"
