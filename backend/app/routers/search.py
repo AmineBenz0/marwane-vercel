@@ -23,7 +23,7 @@ router = APIRouter(prefix="/search", tags=["Search"])
 def _contains(column, term: str, db: Session):
     """Use accent-insensitive matching on PostgreSQL, portable matching in tests."""
     if db.bind and db.bind.dialect.name == "postgresql":
-        return func.unaccent(column).ilike(func.unaccent(term))
+        return func.immutable_unaccent(column).ilike(func.immutable_unaccent(term))
     return column.ilike(term)
 
 

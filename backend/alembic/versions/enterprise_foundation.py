@@ -133,10 +133,20 @@ def upgrade() -> None:
     op.create_foreign_key("fk_transformations_nomenclature", "transformations", "nomenclatures", ["id_nomenclature"], ["id_nomenclature"])
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_clients_nom_trgm ON clients USING gin (nom_client gin_trgm_ops)")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_fournisseurs_nom_trgm ON fournisseurs USING gin (nom_fournisseur gin_trgm_ops)")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_produits_nom_trgm ON produits USING gin (nom_produit gin_trgm_ops)")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_charges_libelle_trgm ON charges USING gin (libelle gin_trgm_ops)")
+    op.execute("""
+        CREATE OR REPLACE FUNCTION public.immutable_unaccent(value text)
+        RETURNS text
+        LANGUAGE sql
+        IMMUTABLE
+        PARALLEL SAFE
+        SET search_path = public, pg_catalog
+        AS $$ SELECT public.unaccent(value) $$
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_clients_nom_unaccent_trgm ON clients USING gin (public.immutable_unaccent(nom_client) gin_trgm_ops)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_fournisseurs_nom_unaccent_trgm ON fournisseurs USING gin (public.immutable_unaccent(nom_fournisseur) gin_trgm_ops)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_produits_nom_unaccent_trgm ON produits USING gin (public.immutable_unaccent(nom_produit) gin_trgm_ops)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_charges_libelle_unaccent_trgm ON charges USING gin (public.immutable_unaccent(libelle) gin_trgm_ops)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_lc_reference_unaccent_trgm ON lettres_de_credit USING gin (public.immutable_unaccent(numero_reference) gin_trgm_ops)")
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_caisse_active_payment ON caisse (id_paiement) WHERE id_paiement IS NOT NULL AND statut = 'active'")
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_caisse_active_charge ON caisse (id_charge) WHERE id_charge IS NOT NULL AND statut = 'active'")
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_bank_active_payment ON mouvements_bancaires (id_paiement) WHERE id_paiement IS NOT NULL AND statut = 'active'")
@@ -145,16 +155,18 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP INDEX IF EXISTS ix_charges_libelle_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_lc_reference_unaccent_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_charges_libelle_unaccent_trgm")
     op.execute("DROP INDEX IF EXISTS uq_nomenclature_active_product")
     op.execute("DROP INDEX IF EXISTS uq_lc_active_payment")
     op.execute("DROP INDEX IF EXISTS uq_bank_active_charge")
     op.execute("DROP INDEX IF EXISTS uq_bank_active_payment")
     op.execute("DROP INDEX IF EXISTS uq_caisse_active_charge")
     op.execute("DROP INDEX IF EXISTS uq_caisse_active_payment")
-    op.execute("DROP INDEX IF EXISTS ix_produits_nom_trgm")
-    op.execute("DROP INDEX IF EXISTS ix_fournisseurs_nom_trgm")
-    op.execute("DROP INDEX IF EXISTS ix_clients_nom_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_produits_nom_unaccent_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_fournisseurs_nom_unaccent_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_clients_nom_unaccent_trgm")
+    op.execute("DROP FUNCTION IF EXISTS public.immutable_unaccent(text)")
     op.drop_constraint("fk_transformations_nomenclature", "transformations", type_="foreignkey")
     op.drop_constraint("check_type_produit_valide", "produits", type_="check")
     op.drop_table("alertes")
