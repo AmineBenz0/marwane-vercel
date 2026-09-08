@@ -12,11 +12,14 @@ router = APIRouter(prefix="/batiments", tags=["Bâtiments"])
 
 
 @router.get("", response_model=List[BatimentRead])
-def get_batiments(db: Session = Depends(get_db)):
+def get_batiments(
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
     """
     Récupère la liste de tous les bâtiments actifs.
     """
-    return db.query(Batiment).filter(Batiment.est_actif == True).all()
+    return db.query(Batiment).filter(Batiment.est_actif.is_(True)).all()
 
 
 @router.post("", response_model=BatimentRead, status_code=status.HTTP_201_CREATED)
@@ -43,7 +46,11 @@ def create_batiment(
 
 
 @router.get("/{id}", response_model=BatimentRead)
-def get_batiment(id: int, db: Session = Depends(get_db)):
+def get_batiment(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
     """
     Récupère un bâtiment par son ID.
     """

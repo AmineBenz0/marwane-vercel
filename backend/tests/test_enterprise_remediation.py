@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from inspect import signature
 
 from app.models.alert import Alerte
 from app.models.caisse import Caisse
@@ -10,6 +11,8 @@ from app.models.transaction import Transaction
 from app.services.alerts import create_overdue_alerts
 from app.services.financial import remaining_amount_as_of
 from app.services.reconciliation import run_integrity_check
+from app.routers.batiments import get_batiment, get_batiments
+from app.utils.dependencies import get_current_active_user
 
 
 def create_product(client, name, product_type, clients, suppliers):
@@ -21,6 +24,13 @@ def create_product(client, name, product_type, clients, suppliers):
     })
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def test_building_read_endpoints_require_an_active_user():
+    """Business data must not be readable anonymously in a deployment."""
+    for endpoint in (get_batiments, get_batiment):
+        dependency = signature(endpoint).parameters["current_user"].default
+        assert dependency.dependency is get_current_active_user
 
 
 def test_receivables_payment_summary_and_void_are_auditable(client, db_session, auth_headers):
