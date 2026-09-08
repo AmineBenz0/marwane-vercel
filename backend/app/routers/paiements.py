@@ -3,11 +3,10 @@ Router FastAPI pour la gestion des paiements.
 Gère les endpoints pour créer, lire, modifier et supprimer des paiements.
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -15,11 +14,14 @@ from app.database import get_db
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.lettre_credit import LettreDeCredit
-from app.models.cession_lc import CessionLC
 from app.models.user import Utilisateur
 from app.services.ledger import record_correction
-from app.services.financial import validate_payment_date, validate_payment_idempotency
-from app.services.financial_ledger import sync_payment_cash_movement
+from app.services.financial import payment_status, validate_payment_date, validate_payment_idempotency
+from app.services.financial_ledger import (
+    release_letter_of_credit_if_unused,
+    sync_payment_cash_movement,
+    void_payment,
+)
 from app.utils.business_date import business_date
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
@@ -127,23 +129,61 @@ def _release_lc_if_unused(
     exclude_payment_id: Optional[int] = None,
 ) -> None:
     """Remet une LC en active si le paiement qui l'utilisait est retiré."""
-    if not id_lc:
+    release_letter_of_credit_if_unused(
+        db,
+        id_lc,
+        current_user=current_user,
+        exclude_payment_id=exclude_payment_id,
+    )
+
+
+def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> None:
+    """Keep the cheque lifecycle and effective-payment status coherent."""
+    if paiement.type_paiement != "cheque":
+        if update_data.get("statut_cheque") is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le statut de chèque ne peut être renseigné que pour un paiement par chèque",
+            )
         return
 
-    query = db.query(Paiement).filter(Paiement.id_lc == id_lc, Paiement.statut != "annule")
-    if exclude_payment_id is not None:
-        query = query.filter(Paiement.id_paiement != exclude_payment_id)
+    current_state = paiement.statut_cheque
+    next_state = update_data.get("statut_cheque", current_state)
+    if next_state is not None:
+        next_state = next_state.lower()
+        update_data["statut_cheque"] = next_state
 
-    if query.first():
+    if next_state is None:
         return
 
-    if db.query(CessionLC).filter(CessionLC.id_lc == id_lc).first():
-        return
+    allowed_transitions = {
+        None: {"emis", "a_encaisser", "encaisse", "rejete", "annule"},
+        "emis": {"a_encaisser", "encaisse", "rejete", "annule"},
+        "a_encaisser": {"encaisse", "rejete", "annule"},
+        "encaisse": set(),
+        "rejete": set(),
+        "annule": set(),
+    }
+    if next_state != current_state and next_state not in allowed_transitions.get(current_state, set()):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Transition de chèque impossible: {current_state or 'non défini'} -> {next_state}",
+        )
 
-    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id_lc).first()
-    if lc and lc.statut == 'utilisee':
-        lc.statut = 'active'
-        lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    if next_state == "encaisse":
+        update_data["statut"] = "valide"
+        update_data.setdefault("date_encaissement_effective", business_date())
+    elif next_state in {"rejete", "annule"}:
+        update_data["statut"] = "rejete"
+    else:
+        update_data["statut"] = "en_attente"
+
+    effective_date = update_data.get("date_encaissement_effective")
+    if effective_date is not None and effective_date < paiement.date_paiement:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La date d'encaissement ne peut pas être antérieure à la date du paiement",
+        )
 
 
 @router.get("", response_model=List[PaiementRead], status_code=status.HTTP_200_OK)
@@ -277,7 +317,12 @@ def create_paiement(
     if paiement_data.type_paiement == 'cheque':
         # An encashed cheque is already effective. Pending cheque statuses do
         # not enter the ledger until the cheque is explicitly encashed.
-        statut_initial = 'valide' if paiement_data.statut_cheque == 'encaisse' else 'en_attente'
+        if paiement_data.statut_cheque == 'encaisse':
+            statut_initial = 'valide'
+        elif paiement_data.statut_cheque in {'rejete', 'annule'}:
+            statut_initial = 'rejete'
+        else:
+            statut_initial = 'en_attente'
     
     # Créer le nouveau paiement
     nouveau_paiement = Paiement(
@@ -384,18 +429,14 @@ def update_paiement(
         )
 
     reason = update_data.pop("raison", None) or "Correction opérationnelle du paiement"
-    changed_fields = list(update_data)
     if update_data.get("statut") == "annule":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="L'annulation d'un paiement doit utiliser l'opération de void avec une raison.",
         )
 
-    # A cheque that transitions to encashed becomes effective in the same
-    # transaction. This keeps the general status and cheque status coherent.
-    if paiement.type_paiement == "cheque" and update_data.get("statut_cheque") == "encaisse":
-        if paiement.statut in {"en_attente", "valide"}:
-            update_data["statut"] = "valide"
+    _apply_cheque_state_transition(paiement, update_data)
+    changed_fields = list(update_data)
 
     next_payment = SimpleNamespace(
         type_paiement=update_data.get("type_paiement", paiement.type_paiement),
@@ -452,7 +493,11 @@ def update_paiement(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_paiement(
     id: int,
-    raison: str = "Annulation demandée par l'utilisateur",
+    raison: str = Query(
+        "Annulation demandée par l'utilisateur",
+        min_length=3,
+        max_length=1000,
+    ),
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -475,20 +520,7 @@ def delete_paiement(
             detail=f"Paiement avec l'ID {id} introuvable"
         )
 
-    if paiement.statut == "annule":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le paiement est déjà annulé")
-    paiement.statut = "annule"
-    paiement.motif_annulation = raison[:1000]
-    paiement.date_annulation = datetime.now(timezone.utc)
-    paiement.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
-    sync_payment_cash_movement(
-        db,
-        paiement,
-        paiement.transaction,
-        current_user=current_user,
-        reason=raison,
-    )
-    _release_lc_if_unused(db, paiement.id_lc, current_user, exclude_payment_id=id)
+    void_payment(db, paiement, current_user=current_user, reason=raison.strip())
     db.commit()
     
     return None
@@ -541,8 +573,8 @@ def get_statut_paiement_transaction(
         montant_paye=transaction.montant_paye,
         montant_restant=transaction.montant_restant,
         pourcentage_paye=transaction.pourcentage_paye,
-        statut_paiement=transaction.statut_paiement,
-        est_en_retard=transaction.est_en_retard,
+        statut_paiement=payment_status(transaction),
+        est_en_retard=payment_status(transaction) == "en_retard",
         nombre_paiements=nombre_paiements
     )
 
@@ -622,7 +654,12 @@ def create_paiements_batch(
             # Déterminer le statut initial
             statut_initial = 'valide'
             if p_data.type_paiement == 'cheque':
-                statut_initial = 'valide' if p_data.statut_cheque == 'encaisse' else 'en_attente'
+                if p_data.statut_cheque == 'encaisse':
+                    statut_initial = 'valide'
+                elif p_data.statut_cheque in {'rejete', 'annule'}:
+                    statut_initial = 'rejete'
+                else:
+                    statut_initial = 'en_attente'
                 
             # Créer le paiement
             nouveau_paiement = Paiement(

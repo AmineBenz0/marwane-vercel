@@ -253,6 +253,9 @@ class TransactionRead(TransactionBase):
     date_modification: datetime = Field(..., description="Date de dernière modification")
     id_utilisateur_creation: Optional[int] = Field(None, description="ID de l'utilisateur qui a créé la transaction")
     id_utilisateur_modification: Optional[int] = Field(None, description="ID de l'utilisateur qui a modifié la transaction")
+    motif_annulation: Optional[str] = Field(None, max_length=1000, description="Raison de l'annulation")
+    date_annulation: Optional[datetime] = Field(None, description="Date de l'annulation")
+    id_utilisateur_annulation: Optional[int] = Field(None, description="ID de l'utilisateur ayant annulé la transaction")
     
     # Champs de paiement (ajoutés pour la gestion des paiements)
     date_echeance: Optional[date] = Field(None, description="Date d'échéance du paiement")

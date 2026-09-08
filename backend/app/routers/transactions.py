@@ -3,9 +3,9 @@ Router FastAPI pour la gestion des transactions.
 Gère les endpoints CRUD pour les transactions.
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from app.database import get_db
@@ -27,6 +27,8 @@ from app.utils.dependencies import get_current_active_user
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.utils.production_cycles import require_active_cycle_for_date
 from app.services.inventory import record_transaction_movement, reverse_source_movements
+from app.services.financial_ledger import void_payment
+from app.services.ledger import record_correction
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
@@ -593,6 +595,30 @@ def update_transaction(
     
     update_data = transaction_data.model_dump(exclude_unset=True)
 
+    if "est_actif" in update_data and update_data["est_actif"] != transaction.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le statut actif se modifie via les opérations d'annulation ou de réactivation dédiées",
+        )
+
+    financial_identity_fields = {
+        "date_transaction",
+        "id_produit",
+        "quantite",
+        "prix_unitaire",
+        "montant_total",
+        "id_client",
+        "id_fournisseur",
+    }
+    if transaction.paiements and financial_identity_fields.intersection(update_data):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Une transaction ayant un historique de paiement est immuable sur ses attributs financiers. "
+                "Annulez-la puis créez une nouvelle transaction corrigée."
+            ),
+        )
+
     # The database constraint is the final safety net, but returning a clear
     # client error here avoids leaving an invalid in-memory transaction when a
     # caller tries to clear the only party on a transaction.
@@ -723,6 +749,11 @@ def update_transaction(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_transaction(
     id: int,
+    raison: str = Query(
+        "Annulation demandée par l'utilisateur",
+        min_length=3,
+        max_length=1000,
+    ),
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -757,6 +788,26 @@ def delete_transaction(
             detail=f"La transaction avec l'ID {id} est déjà inactive"
         )
     
+    reason = raison.strip()
+    if not reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La raison de l'annulation est obligatoire",
+        )
+
+    # Void every payment first. This preserves the payment rows and removes
+    # their active ledger impact before the transaction leaves the active set.
+    payment_ids = []
+    for payment in list(transaction.paiements):
+        if payment.statut != "annule":
+            void_payment(
+                db,
+                payment,
+                current_user=current_user,
+                reason=reason,
+            )
+            payment_ids.append(payment.id_paiement)
+
     # Soft delete : mettre est_actif à False
     transaction.est_actif = False
     reverse_source_movements(
@@ -764,11 +815,24 @@ def delete_transaction(
         source_type="transaction",
         source_id=transaction.id_transaction,
         current_user=current_user,
-        reason=f"Annulation de la transaction #{transaction.id_transaction}",
+        reason=reason,
     )
+    transaction.motif_annulation = reason
+    transaction.date_annulation = datetime.now(timezone.utc)
+    transaction.id_utilisateur_annulation = current_user.id_utilisateur if current_user else None
     # Enregistrer l'utilisateur qui a modifié (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
+
+    record_correction(
+        db,
+        type_entite="transaction",
+        id_entite=transaction.id_transaction,
+        action="annulation",
+        raison=reason,
+        current_user=current_user,
+        details={"paiements_annules": payment_ids},
+    )
     
     db.commit()
     
@@ -820,6 +884,15 @@ def reactivate_transaction(
     # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
+
+    record_correction(
+        db,
+        type_entite="transaction",
+        id_entite=transaction.id_transaction,
+        action="reactivation",
+        raison="Réactivation de la transaction",
+        current_user=current_user,
+    )
     
     db.commit()
     db.refresh(transaction)

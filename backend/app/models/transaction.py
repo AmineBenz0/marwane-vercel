@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Transactions.
 """
-from sqlalchemy import Column, Integer, Date, Numeric, Boolean, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, Date, Numeric, Boolean, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from decimal import Decimal
@@ -52,6 +52,9 @@ class Transaction(Base):
     date_modification = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     id_utilisateur_creation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
     id_utilisateur_modification = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
+    motif_annulation = Column(Text, nullable=True)
+    date_annulation = Column(DateTime(timezone=True), nullable=True)
+    id_utilisateur_annulation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
     
     # Contraintes au niveau SQLAlchemy (seront aussi ajoutées via migrations)
     __table_args__ = (
@@ -72,6 +75,7 @@ class Transaction(Base):
     cycle = relationship("CycleProduction", back_populates="transactions")
     utilisateur_creation = relationship("Utilisateur", foreign_keys=[id_utilisateur_creation], back_populates="transactions_crees")
     utilisateur_modification = relationship("Utilisateur", foreign_keys=[id_utilisateur_modification], back_populates="transactions_modifies")
+    utilisateur_annulation = relationship("Utilisateur", foreign_keys=[id_utilisateur_annulation], backref="transactions_annulees")
     mouvements_caisse = relationship("Caisse", back_populates="transaction")
     audits = relationship("TransactionAudit", back_populates="transaction")
     paiements = relationship("Paiement", back_populates="transaction", cascade="all, delete-orphan")

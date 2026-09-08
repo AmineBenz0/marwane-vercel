@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
 from app.models.charge import Charge
+from app.models.cession_lc import CessionLC
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
+from app.models.lettre_credit import LettreDeCredit
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
@@ -26,6 +28,81 @@ from app.services.ledger import record_correction, void_bank_movement, void_cash
 IMMEDIATE_PAYMENT_TYPES = frozenset(
     {"cash", "virement", "lc", "carte", "compensation", "autre"}
 )
+
+
+def release_letter_of_credit_if_unused(
+    db: Session,
+    id_lc: Optional[int],
+    *,
+    current_user: Optional[Utilisateur] = None,
+    exclude_payment_id: Optional[int] = None,
+) -> None:
+    """Release an LC only when no non-void payment or cession still uses it."""
+    if not id_lc:
+        return
+
+    query = db.query(Paiement).filter(
+        Paiement.id_lc == id_lc,
+        Paiement.statut != "annule",
+    )
+    if exclude_payment_id is not None:
+        query = query.filter(Paiement.id_paiement != exclude_payment_id)
+    if query.first() or db.query(CessionLC).filter(CessionLC.id_lc == id_lc).first():
+        return
+
+    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id_lc).first()
+    if lc and lc.statut == "utilisee":
+        lc.statut = "active"
+        lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+
+
+def void_payment(
+    db: Session,
+    payment: Paiement,
+    *,
+    current_user: Optional[Utilisateur] = None,
+    reason: str,
+) -> Paiement:
+    """Void a payment and its active ledger impact without deleting history."""
+    reason = reason.strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="La raison de l'annulation est obligatoire")
+    if payment.statut == "annule":
+        raise HTTPException(status_code=400, detail="Le paiement est déjà annulé")
+
+    original_status = payment.statut
+    original_lc_id = payment.id_lc
+    payment.statut = "annule"
+    payment.motif_annulation = reason[:1000]
+    payment.date_annulation = datetime.now(timezone.utc)
+    payment.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    transaction = payment.transaction or db.query(Transaction).filter(
+        Transaction.id_transaction == payment.id_transaction
+    ).first()
+    if transaction:
+        sync_payment_cash_movement(
+            db,
+            payment,
+            transaction,
+            current_user=current_user,
+            reason=reason,
+        )
+    release_letter_of_credit_if_unused(
+        db,
+        original_lc_id,
+        current_user=current_user,
+        exclude_payment_id=payment.id_paiement,
+    )
+    record_correction(
+        db,
+        type_entite="paiement",
+        id_entite=payment.id_paiement,
+        action="annulation",
+        raison=reason,
+        current_user=current_user,
+        details={"statut_precedent": original_status},
+    )
+    return payment
 
 
 def _money(value) -> Decimal:

@@ -4,7 +4,7 @@ Router FastAPI pour la gestion des Charges / Dépenses.
 from datetime import date, datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -152,7 +152,11 @@ def update_charge(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_charge(
     id: int,
-    raison: str = "Annulation demandée par l'utilisateur",
+    raison: str = Query(
+        "Annulation demandée par l'utilisateur",
+        min_length=3,
+        max_length=1000,
+    ),
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
@@ -189,6 +193,12 @@ def delete_charge(
         )
         create_cash_snapshot(db, caisse_mvmt.id_mouvement)
 
+    raison = raison.strip()
+    if not raison:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La raison de l'annulation est obligatoire",
+        )
     charge.statut = "annule"
     charge.motif_annulation = raison[:1000]
     charge.date_annulation = datetime.now(timezone.utc)

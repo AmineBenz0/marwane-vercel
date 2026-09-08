@@ -7,6 +7,7 @@ from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.inventory import MouvementStock
+from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.services.alerts import create_overdue_alerts
 from app.services.financial import remaining_amount_as_of
@@ -31,6 +32,128 @@ def test_building_read_endpoints_require_an_active_user():
     for endpoint in (get_batiments, get_batiment):
         dependency = signature(endpoint).parameters["current_user"].default
         assert dependency.dependency is get_current_active_user
+
+
+def test_transaction_cancellation_voids_payments_and_preserves_audit(
+    client, db_session, auth_headers, test_user
+):
+    from app.main import app
+
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    client_row = client.post(
+        "/api/v1/clients",
+        json={"nom_client": "Client Annulation Transaction"},
+        headers=auth_headers,
+    ).json()
+    product = create_product(client, "Service Annulation Transaction", "service", True, False)
+    transaction = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": date.today().isoformat(),
+            "date_echeance": date.today().isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 100,
+            "id_client": client_row["id_client"],
+        },
+        headers=auth_headers,
+    ).json()
+    payment = client.post(
+        "/api/v1/paiements",
+        json={
+            "id_transaction": transaction["id_transaction"],
+            "date_paiement": date.today().isoformat(),
+            "montant": 40,
+            "type_paiement": "cash",
+        },
+        headers=auth_headers,
+    )
+    assert payment.status_code == 201, payment.text
+    payment_id = payment.json()["id_paiement"]
+
+    cancelled = client.delete(
+        f"/api/v1/transactions/{transaction['id_transaction']}?raison=Erreur%20de%20saisie",
+        headers=auth_headers,
+    )
+    assert cancelled.status_code == 204, cancelled.text
+
+    db_session.expire_all()
+    stored_transaction = db_session.query(Transaction).filter(
+        Transaction.id_transaction == transaction["id_transaction"]
+    ).one()
+    stored_payment = db_session.query(Paiement).filter(
+        Paiement.id_paiement == payment_id
+    ).one()
+    assert stored_transaction.est_actif is False
+    assert stored_transaction.motif_annulation == "Erreur de saisie"
+    assert stored_transaction.date_annulation is not None
+    assert stored_transaction.id_utilisateur_annulation is not None
+    assert stored_payment.statut == "annule"
+    assert db_session.query(Caisse).filter(
+        Caisse.id_paiement == payment_id,
+        Caisse.statut == "active",
+    ).count() == 0
+    corrections = db_session.query(CorrectionFinanciere).filter(
+        CorrectionFinanciere.id_entite.in_([transaction["id_transaction"], payment_id]),
+        CorrectionFinanciere.action == "annulation",
+    ).all()
+    assert {"transaction", "paiement"}.issubset(
+        {correction.type_entite for correction in corrections}
+    )
+
+
+def test_cheque_state_transitions_are_coherent_and_terminal(client, auth_headers):
+    client_row = client.post(
+        "/api/v1/clients",
+        json={"nom_client": "Client États Chèque"},
+        headers=auth_headers,
+    ).json()
+    product = create_product(client, "Service États Chèque", "service", True, False)
+    transaction = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": date.today().isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 100,
+            "id_client": client_row["id_client"],
+        },
+        headers=auth_headers,
+    ).json()
+    cheque = client.post(
+        "/api/v1/paiements",
+        json={
+            "id_transaction": transaction["id_transaction"],
+            "date_paiement": date.today().isoformat(),
+            "montant": 100,
+            "type_paiement": "cheque",
+            "statut_cheque": "a_encaisser",
+        },
+        headers=auth_headers,
+    )
+    assert cheque.status_code == 201, cheque.text
+
+    rejected = client.put(
+        f"/api/v1/paiements/{cheque.json()['id_paiement']}",
+        json={"statut_cheque": "rejete", "motif_rejet": "Provision insuffisante"},
+        headers=auth_headers,
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["statut"] == "rejete"
+
+    terminal_transition = client.put(
+        f"/api/v1/paiements/{cheque.json()['id_paiement']}",
+        json={"statut_cheque": "encaisse"},
+        headers=auth_headers,
+    )
+    assert terminal_transition.status_code == 409
+
+    invalid_status = client.put(
+        f"/api/v1/paiements/{cheque.json()['id_paiement']}",
+        json={"statut_cheque": "inconnu"},
+        headers=auth_headers,
+    )
+    assert invalid_status.status_code == 422
 
 
 def test_receivables_payment_summary_and_void_are_auditable(client, db_session, auth_headers):

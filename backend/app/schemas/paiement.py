@@ -118,6 +118,30 @@ class PaiementUpdate(BaseModel):
             )
         return v.lower()
 
+    @field_validator('type_paiement')
+    @classmethod
+    def validate_type_paiement(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        types_valides = ['cash', 'cheque', 'virement', 'carte', 'compensation', 'lc', 'autre']
+        if v.lower() not in types_valides:
+            raise ValueError(
+                f"Type de paiement invalide. Doit être l'un de: {', '.join(types_valides)}"
+            )
+        return v.lower()
+
+    @field_validator('statut_cheque')
+    @classmethod
+    def validate_statut_cheque(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        statuts_valides = ['emis', 'a_encaisser', 'encaisse', 'rejete', 'annule']
+        if v.lower() not in statuts_valides:
+            raise ValueError(
+                f"Statut de chèque invalide. Doit être l'un de: {', '.join(statuts_valides)}"
+            )
+        return v.lower()
+
 
 class PaiementRead(PaiementBase):
     """

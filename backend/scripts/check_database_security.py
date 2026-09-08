@@ -5,8 +5,8 @@ Usage from ``backend/``::
     python scripts/check_database_security.py
 
 The command inventories public tables, RLS state, public/anonymous/
-authenticated grants, views, security-definer functions, roles, and current
-connections. It does not change database state.
+authenticated grants, append-only runtime privileges, views, security-definer
+functions, roles, and current connections. It does not change database state.
 """
 
 import json
@@ -115,14 +115,31 @@ def main() -> int:
     direct_supabase_auth_grants = [
         row for row in grants if row["grantee"] == "authenticated"
     ]
+    append_only_tables = {
+        "transactions",
+        "paiements",
+        "charges",
+        "caisse",
+        "mouvements_bancaires",
+        "mouvements_stock",
+        "corrections_financieres",
+    }
+    append_only_runtime_grants = [
+        row
+        for row in grants
+        if row["grantee"] == "app_runtime"
+        and row["table_name"] in append_only_tables
+        and row["privilege_type"] in {"DELETE", "TRUNCATE"}
+    ]
     result = {
-        "ok": not rls_gaps and not unsafe_grants and not direct_supabase_auth_grants and not policy_gaps and not missing_roles and not unsafe_runtime_roles and not insecure_views and not security_definer_functions,
+        "ok": not rls_gaps and not unsafe_grants and not direct_supabase_auth_grants and not policy_gaps and not missing_roles and not unsafe_runtime_roles and not insecure_views and not security_definer_functions and not append_only_runtime_grants,
         "tables": tables,
         "rls_disabled_tables": rls_gaps,
         "policyless_tables": policy_gaps,
         "grants": grants,
         "public_or_anon_grants": unsafe_grants,
         "direct_supabase_auth_grants": direct_supabase_auth_grants,
+        "append_only_runtime_grants": append_only_runtime_grants,
         "policies": policies,
         "views": views,
         "insecure_views": insecure_views,
