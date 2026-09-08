@@ -5,7 +5,9 @@ from app.models.alert import Alerte
 from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.financial_correction import CorrectionFinanciere
+from app.models.transaction import Transaction
 from app.services.alerts import create_overdue_alerts
+from app.services.financial import remaining_amount_as_of
 from app.services.reconciliation import run_integrity_check
 
 
@@ -138,6 +140,9 @@ def test_receivables_support_due_date_range(client, auth_headers):
 
     filtered = client.get("/api/v1/transactions/creances", params={
         "echeance_debut": date.today().isoformat(),
+        "echeance_fin": (date.today() + timedelta(days=5)).isoformat(),
+        "date_debut": date.today().isoformat(),
+        "recherche": "Dates",
     }, headers=auth_headers)
     assert filtered.status_code == 200, filtered.text
     assert len(filtered.json()["items"]) == 1
@@ -275,6 +280,10 @@ def test_search_and_monthly_report_are_available(client, db_session, auth_header
         "montant": 50, "type_paiement": "cash",
     }, headers=auth_headers)
     assert prior_payment.status_code == 201, prior_payment.text
+    current_row = db_session.query(Transaction).filter(
+        Transaction.id_transaction == response.json()["id_transaction"]
+    ).one()
+    assert remaining_amount_as_of(current_row, date.today()) == Decimal("100.00")
     account = CompteBancaire(nom_banque="Banque Rapport", numero_compte="REPORT-001")
     db_session.add(account)
     db_session.flush()
