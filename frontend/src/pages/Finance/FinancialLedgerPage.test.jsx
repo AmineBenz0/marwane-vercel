@@ -1,4 +1,3 @@
-import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +32,20 @@ describe('FinancialLedgerPage', () => {
     get.mockImplementation((path) => path === '/clients' ? Promise.resolve([]) : Promise.resolve({ items: [], summary: {} }));
     render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
     expect(await screen.findByText('Aucune créance ne correspond aux filtres.')).toBeVisible();
+  });
+
+  it('omits empty optional filters and formats zero overdue counts as a count', async () => {
+    get.mockImplementation((path) => path === '/clients' ? Promise.resolve([]) : Promise.resolve({
+      items: [],
+      summary: { total: '0.00', paye: '0.00', reste: '0.00', overdue_count: 0 },
+    }));
+    render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
+
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/creances', expect.objectContaining({
+      params: expect.not.objectContaining({ echeance_debut: '', echeance_fin: '', statut: '', recherche: '' }),
+    })));
+    expect(await screen.findByText('0', { exact: true })).toBeVisible();
+    expect(screen.queryByText('0,00\u00a0MAD')).not.toBeInTheDocument();
   });
 
   it('does not post when the user cancels the financial confirmation', async () => {

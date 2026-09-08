@@ -154,7 +154,7 @@ function SummaryCards({ summary }) {
           <Card variant="outlined" sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="caption" color="text.secondary">{label}</Typography>
-              <Typography variant="h6" sx={{ color, fontWeight: 700, mt: 0.5 }}>{count ? value : money(value)}</Typography>
+              <Typography variant="h6" sx={{ color, fontWeight: 700, mt: 0.5 }}>{count ? Number(value || 0).toLocaleString('fr-FR') : money(value)}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -215,7 +215,10 @@ function FinancialLedgerPage({ direction }) {
     try {
       const tierParam = isReceivable ? 'id_client' : 'id_fournisseur';
       const { id_tiers: selectedParty, ...queryFilters } = filters;
-      const result = await get(endpoint, { params: { ...queryFilters, [tierParam]: selectedParty || undefined, overdue_only: filters.overdue_only || undefined, skip: page * pageSize, limit: pageSize } });
+      const params = Object.fromEntries(
+        Object.entries(queryFilters).filter(([, value]) => value !== '' && value !== false && value !== null && value !== undefined),
+      );
+      const result = await get(endpoint, { params: { ...params, [tierParam]: selectedParty || undefined, skip: page * pageSize, limit: pageSize } });
       setData(result || { items: [], summary: {} });
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Impossible de charger les données.');
