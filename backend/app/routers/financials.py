@@ -1,7 +1,6 @@
 """Receivables and payables endpoints."""
 
 from datetime import date
-from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,7 +11,12 @@ from app.models.user import Utilisateur
 from app.schemas.financial import FinancialCollectionRead, FinancialSummary
 from app.schemas.paiement import StatutPaiementTransaction
 from app.models.transaction import Transaction
-from app.services.financial import payment_status, query_financial_transactions, serialize_financial_transaction
+from app.services.financial import (
+    payment_status,
+    query_financial_transactions,
+    serialize_financial_transaction,
+    summarize_financial_transactions,
+)
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/transactions", tags=["Receivables / Payables"])
@@ -48,17 +52,25 @@ def _collection(
         recherche=recherche,
         sort_by=sort_by,
         sort_order=sort_order,
+        skip=skip,
+        limit=limit,
     )
     serialized = [serialize_financial_transaction(row) for row in rows]
     summary = FinancialSummary(
-        total=sum((Decimal(str(row["montant_total"])) for row in serialized), Decimal("0")),
-        paye=sum((Decimal(str(row["montant_paye"])) for row in serialized), Decimal("0")),
-        reste=sum((Decimal(str(row["montant_restant"])) for row in serialized), Decimal("0")),
-        count=len(serialized),
-        overdue_count=sum(1 for row in serialized if row["est_en_retard"]),
+        **summarize_financial_transactions(
+            db,
+            direction=direction,
+            statut=statut,
+            id_tiers=id_tiers,
+            date_debut=date_debut,
+            date_fin=date_fin,
+            echeance_debut=echeance_debut,
+            echeance_fin=echeance_fin,
+            overdue_only=overdue_only,
+            recherche=recherche,
+        )
     )
-    page = serialized[skip : skip + limit]
-    return FinancialCollectionRead(items=page, summary=summary, skip=skip, limit=limit)
+    return FinancialCollectionRead(items=serialized, summary=summary, skip=skip, limit=limit)
 
 
 @router.get("/creances", response_model=FinancialCollectionRead)

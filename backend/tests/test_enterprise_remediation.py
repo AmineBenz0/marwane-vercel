@@ -337,6 +337,69 @@ def test_receivables_support_due_date_range(client, auth_headers):
     assert sorted_items.json()["items"][0]["montant_total"] == "20.00"
 
 
+def test_receivables_page_is_database_paginated_but_summary_covers_all_matches(
+    client, auth_headers
+):
+    client_row = client.post(
+        "/api/v1/clients",
+        json={"nom_client": "Client Pagination SQL"},
+        headers=auth_headers,
+    ).json()
+    product = create_product(client, "Service Pagination SQL", "service", True, False)
+    transaction_ids = []
+    for offset, amount in enumerate((10, 20, 30)):
+        transaction = client.post(
+            "/api/v1/transactions",
+            json={
+                "date_transaction": (date.today() - timedelta(days=3)).isoformat(),
+                "date_echeance": (date.today() + timedelta(days=offset - 1)).isoformat(),
+                "id_produit": product["id_produit"],
+                "quantite": 1,
+                "prix_unitaire": amount,
+                "id_client": client_row["id_client"],
+            },
+            headers=auth_headers,
+        )
+        assert transaction.status_code == 201, transaction.text
+        transaction_ids.append(transaction.json()["id_transaction"])
+
+    payment = client.post(
+        "/api/v1/paiements",
+        json={
+            "id_transaction": transaction_ids[0],
+            "date_paiement": date.today().isoformat(),
+            "montant": 5,
+            "type_paiement": "cash",
+        },
+        headers=auth_headers,
+    )
+    assert payment.status_code == 201, payment.text
+
+    response = client.get(
+        "/api/v1/transactions/creances",
+        params={
+            "id_client": client_row["id_client"],
+            "sort_by": "montant_total",
+            "sort_order": "asc",
+            "skip": 1,
+            "limit": 1,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert [item["montant_total"] for item in data["items"]] == ["20.00"]
+    assert data["skip"] == 1
+    assert data["limit"] == 1
+    assert data["summary"] == {
+        "total": "60.00",
+        "paye": "5.00",
+        "reste": "55.00",
+        "count": 3,
+        "overdue_count": 1,
+    }
+
+
 def test_payment_and_inventory_dates_respect_source_dates(client, db_session, auth_headers):
     client_row = client.post(
         "/api/v1/clients",
@@ -992,4 +1055,64 @@ def test_manual_bank_movement_uses_shared_ledger_and_is_idempotent(
     assert not any(
         issue["code"] == "BANK_BALANCE_MISMATCH"
         for issue in run_integrity_check(db_session)
+    )
+
+
+def test_reconciliation_detects_payment_movement_value_and_direction_drift(
+    client, db_session, auth_headers
+):
+    client_row = client.post(
+        "/api/v1/clients",
+        json={"nom_client": "Client Audit Mouvement"},
+        headers=auth_headers,
+    ).json()
+    product = create_product(client, "Service Audit Mouvement", "service", True, False)
+    transaction = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": date.today().isoformat(),
+            "id_produit": product["id_produit"],
+            "quantite": 1,
+            "prix_unitaire": 75,
+            "id_client": client_row["id_client"],
+        },
+        headers=auth_headers,
+    ).json()
+    payment = client.post(
+        "/api/v1/paiements",
+        json={
+            "id_transaction": transaction["id_transaction"],
+            "date_paiement": date.today().isoformat(),
+            "montant": 75,
+            "type_paiement": "cash",
+        },
+        headers=auth_headers,
+    )
+    assert payment.status_code == 201, payment.text
+    movement = db_session.query(Caisse).filter(
+        Caisse.id_paiement == payment.json()["id_paiement"],
+        Caisse.statut == "active",
+    ).one()
+    movement.montant = Decimal("70.00")
+    movement.type_mouvement = "SORTIE"
+    db_session.flush()
+
+    codes = {issue["code"] for issue in run_integrity_check(db_session)}
+    assert "PAYMENT_MOVEMENT_AMOUNT_MISMATCH" in codes
+    assert "PAYMENT_MOVEMENT_DIRECTION_MISMATCH" in codes
+
+
+def test_reconciliation_reports_legacy_product_flag_review(client, db_session, auth_headers):
+    product = create_product(
+        client,
+        "Matière Historique À Vérifier",
+        "matiere_premiere",
+        True,
+        False,
+    )
+    issues = run_integrity_check(db_session)
+    assert any(
+        issue["code"] == "PRODUCT_TYPE_FLAG_REVIEW"
+        and issue["entity_id"] == product["id_produit"]
+        for issue in issues
     )
