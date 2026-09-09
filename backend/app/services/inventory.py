@@ -9,7 +9,7 @@ from datetime import datetime, time, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from app.models.inventory import MouvementStock
@@ -64,21 +64,19 @@ def get_stock_quantity(db: Session, id_produit: int) -> Decimal:
 
 def get_average_unit_cost(db: Session, id_produit: int) -> Decimal:
     """Calculate weighted average cost from positive stock receipts."""
-    rows = db.query(
-        MouvementStock.quantite_delta,
-        MouvementStock.cout_unitaire,
-    ).filter(
-        MouvementStock.id_produit == id_produit,
+    positive_entry = and_(
+        MouvementStock.quantite_delta > 0,
         MouvementStock.id_mouvement_inverse.is_(None),
         MouvementStock.type_mouvement != "reversal",
-    ).all()
-    total_quantity = Decimal("0")
-    total_value = Decimal("0")
-    for quantity, cost in rows:
-        quantity = Decimal(str(quantity or 0))
-        if quantity > 0:
-            total_quantity += quantity
-            total_value += quantity * Decimal(str(cost or 0))
+    )
+    total_quantity, total_value = db.query(
+        func.coalesce(func.sum(case((positive_entry, MouvementStock.quantite_delta), else_=0)), 0),
+        func.coalesce(func.sum(case((positive_entry, MouvementStock.quantite_delta * MouvementStock.cout_unitaire), else_=0)), 0),
+    ).filter(
+        MouvementStock.id_produit == id_produit,
+    ).one()
+    total_quantity = Decimal(str(total_quantity or 0))
+    total_value = Decimal(str(total_value or 0))
     return total_value / total_quantity if total_quantity else Decimal("0")
 
 
@@ -262,10 +260,47 @@ def get_stock_snapshot(db: Session, *, id_produit: Optional[int] = None):
     if id_produit is not None:
         query = query.filter(Produit.id_produit == id_produit)
 
+    positive_entry = and_(
+        MouvementStock.quantite_delta > 0,
+        MouvementStock.id_mouvement_inverse.is_(None),
+        MouvementStock.type_mouvement != "reversal",
+    )
+    ledger_totals = db.query(
+        MouvementStock.id_produit.label("id_produit"),
+        func.coalesce(func.sum(MouvementStock.quantite_delta), 0).label("quantite"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (positive_entry, MouvementStock.quantite_delta * MouvementStock.cout_unitaire),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("valeur_entrees"),
+        func.coalesce(
+            func.sum(case((positive_entry, MouvementStock.quantite_delta), else_=0)),
+            0,
+        ).label("quantite_entrees"),
+    ).group_by(MouvementStock.id_produit).subquery("stock_ledger_totals")
+    products = query.outerjoin(
+        ledger_totals,
+        ledger_totals.c.id_produit == Produit.id_produit,
+    ).with_entities(
+        Produit,
+        func.coalesce(ledger_totals.c.quantite, 0).label("quantite"),
+        func.coalesce(ledger_totals.c.valeur_entrees, 0).label("valeur_entrees"),
+        func.coalesce(ledger_totals.c.quantite_entrees, 0).label("quantite_entrees"),
+    ).order_by(Produit.nom_produit.asc()).all()
+
     result = []
-    for produit in query.order_by(Produit.nom_produit.asc()).all():
-        quantity = get_stock_quantity(db, produit.id_produit)
-        cost = get_average_unit_cost(db, produit.id_produit)
+    for produit, quantity_value, value_value, entry_quantity_value in products:
+        quantity = Decimal(str(quantity_value or 0))
+        entry_quantity = Decimal(str(entry_quantity_value or 0))
+        cost = (
+            Decimal(str(value_value or 0)) / entry_quantity
+            if entry_quantity
+            else Decimal("0")
+        )
         result.append({
             "id_produit": produit.id_produit,
             "nom_produit": produit.nom_produit,
