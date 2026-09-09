@@ -35,7 +35,7 @@ def _database_username(database_url: Optional[str]) -> Optional[str]:
     """Return the database role encoded in a connection URL."""
     if not database_url:
         return None
-    return urlparse(database_url).username
+    return (urlparse(database_url).username or "").split(".")[0] or None
 
 
 class Settings(BaseSettings):
