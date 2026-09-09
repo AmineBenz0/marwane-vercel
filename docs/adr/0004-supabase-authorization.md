@@ -10,9 +10,10 @@ credential is server-side only, and migration credentials are separate from the
 runtime credential.
 
 The Alembic environment accepts `MIGRATION_DATABASE_URL` and falls back to
-`DATABASE_URL` only for local development. Production releases must provide
-the dedicated `app_migrator` role and use the separate `app_runtime` role for
-the API. The security
+`DATABASE_URL` only for local development. The Vercel runtime does not require
+or receive the migration-only credential. Production migration jobs must
+provide the dedicated `app_migrator` role and use the separate `app_runtime`
+role for the API. The security
 migration discovers all public tables (excluding Alembic bookkeeping),
 enables RLS, revokes public/anonymous/authenticated table grants, and grants
 access only to the dedicated server-side application role. The read-only

@@ -100,7 +100,6 @@ jobs:
         env:
           VERCEL_ENV: preview
           DATABASE_URL: postgresql://app_runtime:ci-only@db.example.com:5432/app?sslmode=require
-          MIGRATION_DATABASE_URL: postgresql://app_migrator:ci-only@db.example.com:5432/app?sslmode=require
           SECRET_KEY: ci-preview-secret-value-for-tests-only-0123456789
           CRON_SECRET: ci-preview-cron-value-for-tests-only-0123456789
           CORS_ORIGINS: https://preview.example.com

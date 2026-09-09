@@ -352,16 +352,6 @@ def apply_charge_impact(
                 current_user=current_user,
                 create_reversal_record=False,
             )
-            record_correction(
-                db,
-                type_entite="charge",
-                id_entite=charge.id_charge,
-                action="remplacement_mouvement",
-                raison=reason,
-                current_user=current_user,
-                id_mouvement_original=original_id,
-                details={"original_table": "caisse", "replacement_table": "mouvements_bancaires"},
-            )
             create_cash_snapshot(db, original_id)
 
         if active_bank and (
@@ -394,6 +384,22 @@ def apply_charge_impact(
         )
         db.add(replacement)
         db.flush()
+        if active_cash:
+            original = db.query(Caisse).filter(Caisse.id_mouvement == original_id).first()
+            if original:
+                original.id_mouvement_inverse = replacement.id_mouvement
+                replacement.id_mouvement_inverse = original.id_mouvement
+            record_correction(
+                db,
+                type_entite="charge",
+                id_entite=charge.id_charge,
+                action="remplacement_mouvement",
+                raison=reason,
+                current_user=current_user,
+                id_mouvement_original=original_id,
+                id_mouvement_inverse=replacement.id_mouvement,
+                details={"original_table": "caisse", "replacement_table": "mouvements_bancaires"},
+            )
         if original_bank_id is not None:
             original = db.query(MouvementBancaire).filter(
                 MouvementBancaire.id_mouvement == original_bank_id
@@ -423,16 +429,6 @@ def apply_charge_impact(
             current_user=current_user,
             create_reversal_record=False,
         )
-        record_correction(
-            db,
-            type_entite="charge",
-            id_entite=charge.id_charge,
-            action="remplacement_mouvement",
-            raison=reason,
-            current_user=current_user,
-            id_mouvement_original=original_id,
-            details={"original_table": "mouvements_bancaires", "replacement_table": "caisse"},
-        )
 
     if active_cash and (
         _money(active_cash.montant) == _money(charge.montant)
@@ -457,6 +453,24 @@ def apply_charge_impact(
     )
     db.add(replacement)
     db.flush()
+    if active_bank:
+        original = db.query(MouvementBancaire).filter(
+            MouvementBancaire.id_mouvement == original_id
+        ).first()
+        if original:
+            original.id_mouvement_inverse = replacement.id_mouvement
+            replacement.id_mouvement_inverse = original.id_mouvement
+        record_correction(
+            db,
+            type_entite="charge",
+            id_entite=charge.id_charge,
+            action="remplacement_mouvement",
+            raison=reason,
+            current_user=current_user,
+            id_mouvement_original=original_id,
+            id_mouvement_inverse=replacement.id_mouvement,
+            details={"original_table": "mouvements_bancaires", "replacement_table": "caisse"},
+        )
     if original_cash_id is not None:
         original = db.query(Caisse).filter(Caisse.id_mouvement == original_cash_id).first()
         if original:

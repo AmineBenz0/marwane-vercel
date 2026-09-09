@@ -7,8 +7,8 @@ from alembic import context
 
 # Import the Base and models
 from app.database import Base
-from app.config import settings
-import app.models  # This ensures all models are imported
+from app.config import get_migration_database_url
+import app.models as _models  # noqa: F401  # Import all models for Alembic metadata.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -23,7 +23,7 @@ if config.config_file_name is not None:
 # Runtime application credentials must never be used for schema changes.
 config.set_main_option(
     "sqlalchemy.url",
-    settings.MIGRATION_DATABASE_URL or settings.DATABASE_URL,
+    get_migration_database_url(),
 )
 
 # add your model's MetaData object here

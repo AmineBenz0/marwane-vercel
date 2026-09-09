@@ -3,7 +3,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -47,7 +47,15 @@ def unified_search(
     if "produits" in scopes:
         results.extend(SearchResult(kind="produit", id=row.id_produit, label=row.nom_produit, subtitle=row.type_produit, href=f"/produits/{row.id_produit}") for row in db.query(Produit).filter(Produit.est_actif.is_(True), _contains(Produit.nom_produit, term, db)).limit(10))
     if "transactions" in scopes:
-        rows = db.query(Transaction).join(Transaction.produit).outerjoin(Transaction.client).outerjoin(Transaction.fournisseur).filter(Transaction.est_actif.is_(True), or_(_contains(Produit.nom_produit, term, db), _contains(Client.nom_client, term, db), _contains(Fournisseur.nom_fournisseur, term, db))).limit(15).all()
+        rows = db.query(Transaction).join(Transaction.produit).outerjoin(Transaction.client).outerjoin(Transaction.fournisseur).filter(
+            Transaction.est_actif.is_(True),
+            or_(
+                _contains(Produit.nom_produit, term, db),
+                _contains(Client.nom_client, term, db),
+                _contains(Fournisseur.nom_fournisseur, term, db),
+                cast(Transaction.id_transaction, String).ilike(term),
+            ),
+        ).limit(15).all()
         results.extend(SearchResult(kind="transaction", id=row.id_transaction, label=f"Transaction #{row.id_transaction}", subtitle=row.produit.nom_produit if row.produit else None, href=f"/transactions/{row.id_transaction}") for row in rows)
     if "charges" in scopes:
         results.extend(SearchResult(kind="charge", id=row.id_charge, label=row.libelle, subtitle=row.categorie, href="/charges") for row in db.query(Charge).filter(Charge.statut == "active", _contains(Charge.libelle, term, db)).limit(10))

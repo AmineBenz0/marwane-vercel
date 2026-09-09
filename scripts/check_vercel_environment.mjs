@@ -2,7 +2,7 @@
 
 /**
  * Fail the Vercel build before a deployment can be marked usable when the
- * serverless API would reject its configuration at import time.
+ * serverless API would reject its runtime configuration at import time.
  *
  * This intentionally validates names and safe metadata only. It never logs
  * connection strings, tokens, or secret values.
@@ -23,7 +23,6 @@ const errors = [];
 const value = (name) => process.env[name]?.trim() || "";
 
 const databaseUrl = value("DATABASE_URL");
-const migrationDatabaseUrl = value("MIGRATION_DATABASE_URL");
 const secretKey = value("SECRET_KEY");
 const cronSecret = value("CRON_SECRET");
 const corsOrigins = value("CORS_ORIGINS")
@@ -60,18 +59,6 @@ if (databaseRole(databaseUrl) !== "app_runtime") {
   errors.push("DATABASE_URL must use the dedicated app_runtime role");
 }
 
-if (!migrationDatabaseUrl || isLocalDatabase(migrationDatabaseUrl)) {
-  errors.push(
-    "MIGRATION_DATABASE_URL must point to a separate managed migration database",
-  );
-}
-if (databaseUrl && migrationDatabaseUrl && databaseUrl === migrationDatabaseUrl) {
-  errors.push("MIGRATION_DATABASE_URL must not equal DATABASE_URL");
-}
-if (databaseRole(migrationDatabaseUrl) !== "app_migrator") {
-  errors.push("MIGRATION_DATABASE_URL must use the dedicated app_migrator role");
-}
-
 if (secretKey.length < 32 || secretKey === "your-secret-key-change-this-in-production") {
   errors.push("SECRET_KEY must be a unique value of at least 32 characters");
 }
@@ -105,7 +92,7 @@ if (
 }
 
 if (errors.length > 0) {
-  console.error("Vercel environment preflight failed:");
+  console.error(`Vercel environment preflight failed for ${environment}:`);
   for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
 }

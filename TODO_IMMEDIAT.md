@@ -29,9 +29,10 @@ the current architecture.
 
 ## Vercel
 
-- [ ] Configure `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SECRET_KEY`, `CRON_SECRET`, and `ENVIRONMENT` in the correct scopes.
-- [ ] Confirm `DATABASE_URL` uses the least-privilege runtime role and
-      `MIGRATION_DATABASE_URL` uses a distinct migration role.
+- [ ] Configure `DATABASE_URL`, `SECRET_KEY`, `CRON_SECRET`, and `ENVIRONMENT` in the correct Vercel scopes; keep `MIGRATION_DATABASE_URL` in the controlled migration job.
+- [ ] Confirm `DATABASE_URL` uses the least-privilege runtime role and the
+      controlled migration job uses `MIGRATION_DATABASE_URL` with a distinct
+      migration role.
 - [ ] Set explicit deployed HTTPS origins in `CORS_ORIGINS`; localhost-only
       origins are rejected outside development.
 - [ ] Keep privileged database credentials server-side; never expose them as `VITE_*` variables.

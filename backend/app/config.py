@@ -119,30 +119,12 @@ class Settings(BaseSettings):
         if not self.CRON_SECRET or len(self.CRON_SECRET) < 32:
             configuration_errors.append("CRON_SECRET must be a unique value of at least 32 characters")
 
-        migration_url = self.MIGRATION_DATABASE_URL
         runtime_role = _database_username(self.DATABASE_URL)
-        migration_role = _database_username(migration_url)
         privileged_runtime_roles = {"postgres", "supabase_admin", "service_role"}
-
-        if not migration_url or _is_local_database_url(migration_url):
-            configuration_errors.append(
-                "MIGRATION_DATABASE_URL must point to a separate managed migration database"
-            )
-        elif migration_url == self.DATABASE_URL or (
-            runtime_role and migration_role and runtime_role == migration_role
-        ):
-            configuration_errors.append(
-                "MIGRATION_DATABASE_URL must use a different database role from DATABASE_URL"
-            )
 
         if runtime_role != RUNTIME_DATABASE_ROLE:
             configuration_errors.append(
                 f"DATABASE_URL must use the dedicated {RUNTIME_DATABASE_ROLE} role"
-            )
-
-        if migration_role != MIGRATION_DATABASE_ROLE:
-            configuration_errors.append(
-                f"MIGRATION_DATABASE_URL must use the dedicated {MIGRATION_DATABASE_ROLE} role"
             )
 
         if runtime_role in privileged_runtime_roles:
@@ -174,3 +156,28 @@ class Settings(BaseSettings):
 
 # Instance globale des settings
 settings = Settings()
+
+
+def get_migration_database_url() -> str:
+    """Return the migration-only URL and validate it at migration time.
+
+    The API runtime must not require or receive the privileged migration
+    credential. Alembic calls this function instead, so production migrations
+    fail closed while normal Vercel function imports remain runtime-only.
+    """
+    migration_url = settings.MIGRATION_DATABASE_URL
+    environment = settings.ENVIRONMENT.lower()
+    if environment not in {"production", "preview"}:
+        return migration_url or settings.DATABASE_URL
+
+    migration_role = _database_username(migration_url)
+    errors = []
+    if not migration_url or _is_local_database_url(migration_url):
+        errors.append("MIGRATION_DATABASE_URL must point to a separate managed migration database")
+    elif migration_url == settings.DATABASE_URL or migration_role == _database_username(settings.DATABASE_URL):
+        errors.append("MIGRATION_DATABASE_URL must use a different database role from DATABASE_URL")
+    if migration_role != MIGRATION_DATABASE_ROLE:
+        errors.append(f"MIGRATION_DATABASE_URL must use the dedicated {MIGRATION_DATABASE_ROLE} role")
+    if errors:
+        raise RuntimeError("Invalid migration configuration: " + "; ".join(errors))
+    return migration_url

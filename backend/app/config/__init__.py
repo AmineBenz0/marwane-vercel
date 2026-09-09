@@ -15,9 +15,10 @@ spec.loader.exec_module(config_module)
 
 # Exporter settings
 settings = config_module.settings
+get_migration_database_url = config_module.get_migration_database_url
 
 # Importer depuis logging_config
-from app.config.logging_config import setup_logging, get_logger
+from app.config.logging_config import setup_logging, get_logger  # noqa: E402
 
-__all__ = ["settings", "setup_logging", "get_logger"]
+__all__ = ["settings", "get_migration_database_url", "setup_logging", "get_logger"]
 

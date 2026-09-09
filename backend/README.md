@@ -39,7 +39,8 @@ Le fichier `.env` est déjà créé avec des valeurs par défaut. Pour la produc
 
 - `SECRET_KEY` : Générez une clé secrète forte pour JWT
 - `DATABASE_URL` : Connexion runtime Supabase avec pooler adapté à Vercel
-- `MIGRATION_DATABASE_URL` : Connexion de migration séparée et privilégiée
+- `MIGRATION_DATABASE_URL` : Connexion de migration séparée et privilégiée,
+  réservée au job Alembic et non requise par les fonctions Vercel
 - `DATABASE_URL` doit utiliser le rôle runtime dédié `app_runtime`, jamais
   `postgres`, `service_role` ou un autre rôle administrateur.
   `MIGRATION_DATABASE_URL` doit utiliser le rôle distinct `app_migrator`.
@@ -106,13 +107,15 @@ Pour une instance Vercel, utilisez les endpoints suivants :
 - `GET /api/v1/health/live` : vérifie que la fonction est chargée, sans accès à la base
 - `GET /api/v1/health/ready` : vérifie que la base de données est joignable
 
-Les variables `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SECRET_KEY`,
-`CRON_SECRET`, `DEBUG`, `ENABLE_AUTH` et `ENABLE_RATE_LIMITING` doivent être
-configurées dans l'environnement Vercel.
+Les variables `DATABASE_URL`, `SECRET_KEY`, `CRON_SECRET`, `DEBUG`,
+`ENABLE_AUTH` et `ENABLE_RATE_LIMITING` doivent être configurées dans
+l'environnement Vercel. `MIGRATION_DATABASE_URL` doit rester dans le job de
+migration contrôlé.
 L'application refuse automatiquement les valeurs locales ou dangereuses en
-preview et en production, notamment l'absence de rôle de migration distinct,
+preview et en production, notamment l'absence du rôle runtime dédié,
 l'utilisation d'un rôle PostgreSQL privilégié par le runtime, ou une
-configuration CORS locale uniquement.
+configuration CORS locale uniquement. Le job Alembic refuse séparément toute
+connexion de migration absente ou configurée avec un mauvais rôle.
 
 ## Tests et exploitation
 

@@ -810,10 +810,15 @@ def test_charge_edit_replaces_cash_movement_without_deleting_history(
     assert voided.id_mouvement_inverse == replacement.id_mouvement
     assert replacement.id_mouvement_inverse == voided.id_mouvement
     assert replacement.statut == "active"
-    assert db_session.query(CorrectionFinanciere).filter(
+    charge_corrections = db_session.query(CorrectionFinanciere).filter(
         CorrectionFinanciere.type_entite == "charge",
         CorrectionFinanciere.id_entite == charge_id,
-    ).count() >= 1
+    ).all()
+    assert any(
+        correction.id_mouvement_original == voided.id_mouvement
+        and correction.id_mouvement_inverse == replacement.id_mouvement
+        for correction in charge_corrections
+    )
 
 
 def test_charge_bank_edit_restores_old_account_and_preserves_bank_history(
@@ -855,6 +860,90 @@ def test_charge_bank_edit_restores_old_account_and_preserves_bank_history(
     account_row.solde_actuel = Decimal("1.00")
     db_session.flush()
     assert any(issue["code"] == "BANK_BALANCE_MISMATCH" for issue in run_integrity_check(db_session))
+
+
+def test_charge_cancellation_links_original_and_reversal_in_charge_audit(
+    client, db_session, auth_headers, test_user
+):
+    from app.main import app
+
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    created = client.post(
+        "/api/v1/charges",
+        json={
+            "libelle": "Charge à annuler",
+            "montant": 75,
+            "date_charge": date.today().isoformat(),
+            "categorie": "Fixe",
+        },
+        headers=auth_headers,
+    )
+    assert created.status_code == 201, created.text
+    charge_id = created.json()["id_charge"]
+    original = db_session.query(Caisse).filter(Caisse.id_charge == charge_id).one()
+
+    cancelled = client.delete(
+        f"/api/v1/charges/{charge_id}",
+        params={"raison": "Charge saisie en double"},
+        headers=auth_headers,
+    )
+    assert cancelled.status_code == 204, cancelled.text
+
+    db_session.expire_all()
+    rows = db_session.query(Caisse).filter(Caisse.id_charge == charge_id).all()
+    assert len(rows) == 2
+    reversal = next(row for row in rows if row.id_mouvement != original.id_mouvement)
+    assert original.statut == "annule"
+    assert reversal.statut == "annule"
+    assert original.id_mouvement_inverse == reversal.id_mouvement
+    assert reversal.id_mouvement_inverse == original.id_mouvement
+
+    correction = db_session.query(CorrectionFinanciere).filter(
+        CorrectionFinanciere.type_entite == "charge",
+        CorrectionFinanciere.id_entite == charge_id,
+        CorrectionFinanciere.action == "annulation",
+        CorrectionFinanciere.id_mouvement_original == original.id_mouvement,
+    ).one()
+    assert correction.id_mouvement_inverse == reversal.id_mouvement
+    assert correction.id_utilisateur == test_user.id_utilisateur
+    assert correction.raison == "Charge saisie en double"
+
+
+def test_unified_search_matches_transaction_identifier(client, auth_headers):
+    client_row = client.post(
+        "/api/v1/clients",
+        json={"nom_client": "Client Recherche Transaction"},
+        headers=auth_headers,
+    )
+    assert client_row.status_code == 201, client_row.text
+    product = create_product(client, "Produit Recherche Transaction", "service", True, False)
+    transaction_ids = []
+    for _ in range(10):
+        created = client.post(
+            "/api/v1/transactions",
+            json={
+                "date_transaction": date.today().isoformat(),
+                "id_produit": product["id_produit"],
+                "quantite": 1,
+                "prix_unitaire": 25,
+                "id_client": client_row.json()["id_client"],
+            },
+            headers=auth_headers,
+        )
+        assert created.status_code == 201, created.text
+        transaction_ids.append(created.json()["id_transaction"])
+
+    transaction_id = next(value for value in transaction_ids if value >= 10)
+    response = client.get(
+        "/api/v1/search",
+        params={"q": str(transaction_id), "scope": "transactions"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert any(
+        item["kind"] == "transaction" and item["id"] == transaction_id
+        for item in response.json()["results"]
+    )
 
 
 def test_manual_bank_movement_uses_shared_ledger_and_is_idempotent(

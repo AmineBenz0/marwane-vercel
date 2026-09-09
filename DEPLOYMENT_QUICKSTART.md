@@ -26,7 +26,6 @@ in the appropriate Preview and Production scopes:
 
 ```text
 DATABASE_URL=<Supabase URL using the app_runtime role>
-MIGRATION_DATABASE_URL=<separate Supabase URL using the app_migrator role>
 SECRET_KEY=<unique random value, at least 32 characters>
 CRON_SECRET=<unique random value, at least 32 characters>
 ENVIRONMENT=preview or production
@@ -38,12 +37,13 @@ CORS_ORIGINS=https://<deployed-domain>
 
 Never expose database credentials or privileged Supabase keys through a
 `VITE_*` variable. `MIGRATION_DATABASE_URL` is used only by Alembic and is not
-read by the running API.
+read by the running API. Keep it in the controlled migration job or its
+server-side CI secret store, not in the Vercel runtime environment.
 
 ## 3. Validate before promotion
 
-The Vercel build runs a configuration preflight before installing frontend
-dependencies. A missing or incorrectly scoped runtime/migration credential,
+The Vercel build runs a runtime configuration preflight before installing
+frontend dependencies. A missing or incorrectly scoped runtime credential,
 secret, or deployed CORS origin fails the build with the variable name only;
 secret values are never printed.
 
