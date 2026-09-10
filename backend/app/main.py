@@ -39,9 +39,7 @@ def _request_id(request: Request) -> str:
 async def database_error_handler(request: Request, exc: Exception):
     """Convertit les pannes DB en réponse stable et non sensible."""
     request_id = _request_id(request)
-    logger = logging.getLogger(__name__)
-    logger.error("Database connection root cause: %s: %s", type(exc).__name__, str(exc))
-    logger.exception(
+    logging.getLogger(__name__).exception(
         "Database unavailable",
         exc_info=(type(exc), exc, exc.__traceback__),
         extra={
