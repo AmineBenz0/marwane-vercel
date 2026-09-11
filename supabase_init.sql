@@ -48,7 +48,7 @@ VALUES
     ('Bâtiment C', 'Bâtiment C', TRUE)
 ON CONFLICT (nom) DO UPDATE
 SET description = EXCLUDED.description,
-    est_actif = TRUE
+    est_actif = TRUE;
 
 -- Table: comptes_bancaires
 
