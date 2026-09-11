@@ -31,6 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { productionService, batimentService, cycleProductionService } from '../../services/productionService';
 import ProductionForm from './ProductionForm';
 import useNotification from '../../hooks/useNotification';
+import { LOTS_FEATURE_ENABLED } from '../../config/features';
 
 const STATUS_CONFIG = {
   ok: { label: 'OK', color: 'success', tone: '#1f7a4d', bg: 'rgba(31, 122, 77, 0.1)' },
@@ -212,7 +213,10 @@ function ProductionDashboard() {
   const buildingRows = stockData?.batiments || [];
   const lotOverview = useMemo(() => getLotOverview(buildingRows), [buildingRows]);
   const categoryStocks = useMemo(() => getCategoryStocks(buildingRows), [buildingRows]);
-  const actionItems = useMemo(() => getActionItems(buildingRows, totals), [buildingRows, totals]);
+  const actionItems = useMemo(
+    () => (LOTS_FEATURE_ENABLED ? getActionItems(buildingRows, totals) : []),
+    [buildingRows, totals],
+  );
   const completedBuildingsCount = Math.max(
     0,
     Number(totals.buildings_count || 0) - Number(totals.missing_buildings_count || 0),
@@ -235,6 +239,7 @@ function ProductionDashboard() {
 
   const handleActionItem = (item) => {
     if (item.kind === 'start-lot') {
+      if (!LOTS_FEATURE_ENABLED) return;
       setOpenLotForm(true);
       return;
     }
@@ -294,7 +299,7 @@ function ProductionDashboard() {
         actionItems={actionItems}
         onDateChange={setSelectedDate}
         onOpenProduction={() => handleOpenProduction()}
-        onOpenLotForm={() => setOpenLotForm(true)}
+        onOpenLotForm={() => LOTS_FEATURE_ENABLED && setOpenLotForm(true)}
         onActionItem={handleActionItem}
       />
 
@@ -325,9 +330,9 @@ function ProductionDashboard() {
           <BuildingStockCard
             key={batiment.id_batiment}
             batiment={batiment}
-            canStartSharedLot={!lotOverview.hasActiveLot}
+            canStartSharedLot={LOTS_FEATURE_ENABLED && !lotOverview.hasActiveLot}
             onAddProduction={() => handleOpenProduction(batiment.id_batiment)}
-            onOpenLotForm={() => setOpenLotForm(true)}
+            onOpenLotForm={() => LOTS_FEATURE_ENABLED && setOpenLotForm(true)}
             onOpenDetail={() => navigate(`/production/batiment/${batiment.id_batiment}`)}
           />
         ))}
@@ -362,12 +367,14 @@ function ProductionDashboard() {
         />
       )}
 
-      <SharedLotDialog
-        open={openLotForm}
-        onClose={() => setOpenLotForm(false)}
-        onSubmit={handleCreateSharedLot}
-        batiments={batiments}
-      />
+      {LOTS_FEATURE_ENABLED && (
+        <SharedLotDialog
+          open={openLotForm}
+          onClose={() => setOpenLotForm(false)}
+          onSubmit={handleCreateSharedLot}
+          batiments={batiments}
+        />
+      )}
     </Box>
   );
 }
@@ -418,20 +425,22 @@ function HeroHeader({
                 maxWidth: 760,
               }}
             >
-              <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.72)', border: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
-                  Lot actuel
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mt: 0.5 }}>
-                  <Typography variant="h6" fontWeight={950}>{lotOverview.label}</Typography>
-                  {lotOverview.color !== 'success' && (
-                    <Chip label="À vérifier" color={lotOverview.color} size="small" sx={{ fontWeight: 900 }} />
+              {LOTS_FEATURE_ENABLED && (
+                <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.72)', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
+                    Lot actuel
+                  </Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mt: 0.5 }}>
+                    <Typography variant="h6" fontWeight={950}>{lotOverview.label}</Typography>
+                    {lotOverview.color !== 'success' && (
+                      <Chip label="À vérifier" color={lotOverview.color} size="small" sx={{ fontWeight: 900 }} />
+                    )}
+                  </Stack>
+                  {lotOverview.helper && (
+                    <Typography variant="body2" color="text.secondary">{lotOverview.helper}</Typography>
                   )}
-                </Stack>
-                {lotOverview.helper && (
-                  <Typography variant="body2" color="text.secondary">{lotOverview.helper}</Typography>
-                )}
-              </Box>
+                </Box>
+              )}
               <TextField
                 label="Jour"
                 type="date"
