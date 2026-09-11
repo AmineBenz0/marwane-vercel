@@ -6,14 +6,14 @@
 CREATE EXTENSION IF NOT EXISTS unaccent;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-CREATE OR REPLACE FUNCTION public.immutable_unaccent(input text)
+CREATE OR REPLACE FUNCTION public.immutable_unaccent(value text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
 PARALLEL SAFE
 STRICT
 SET search_path = public, extensions
-AS $$ SELECT unaccent(input) $$;
+AS $$ SELECT unaccent(value) $$;
 
 CREATE TABLE audit_connexions (
 	id_audit_connexion SERIAL NOT NULL, 

@@ -26,7 +26,6 @@ from app.utils.egg_product_sync import ensure_sellable_egg_product, parse_sellab
 from app.utils.production_cycles import (
     ACTIVE_CYCLE_STATUSES,
     cycle_to_dict,
-    find_active_cycle,
     require_active_cycle_for_date,
     refresh_cycle_status,
 )

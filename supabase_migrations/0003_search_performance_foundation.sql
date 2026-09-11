@@ -3,14 +3,14 @@
 CREATE EXTENSION IF NOT EXISTS unaccent;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-CREATE OR REPLACE FUNCTION public.immutable_unaccent(input text)
+CREATE OR REPLACE FUNCTION public.immutable_unaccent(value text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
 PARALLEL SAFE
 STRICT
 SET search_path = public, extensions
-AS $$ SELECT unaccent(input) $$;
+AS $$ SELECT unaccent(value) $$;
 
 CREATE INDEX IF NOT EXISTS ix_clients_search_name
   ON clients USING gin (lower(public.immutable_unaccent(nom_client::text)) gin_trgm_ops)

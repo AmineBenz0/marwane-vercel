@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, relative } from 'node:path';
 
-const root = join(process.cwd(), 'frontend', 'src');
+const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const root = join(repositoryRoot, 'frontend', 'src');
 const extensions = new Set(['.js', '.jsx', '.ts', '.tsx', '.css', '.html']);
 const forbidden = /(?:Ã.|Â.|ðŸ|�)/;
 const violations = [];
@@ -18,7 +20,7 @@ function visit(directory) {
     const content = readFileSync(path, 'utf8');
     content.split(/\r?\n/).forEach((line, index) => {
       if (forbidden.test(line)) {
-        violations.push(relative(process.cwd(), path) + ':' + (index + 1));
+        violations.push(relative(repositoryRoot, path) + ':' + (index + 1));
       }
     });
   }
