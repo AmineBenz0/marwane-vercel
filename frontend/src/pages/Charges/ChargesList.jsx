@@ -58,12 +58,12 @@ const PERIODS = [
 
 const cleanText = (value = '') => (
   value
-    .replaceAll('Ã©', 'é')
-    .replaceAll('Ã¨', 'è')
+    .replaceAll('é', '駩
+    .replaceAll('è', '觩
     .replaceAll('Ã‰', 'É')
-    .replaceAll('Ãª', 'ê')
-    .replaceAll('Ã ', 'à')
-    .replaceAll('Ã®', 'î')
+    .replaceAll('ê', 'ꧩ
+    .replaceAll('à', '৩
+    .replaceAll('î', '
 );
 
 const toDateKey = (date) => format(date, 'yyyy-MM-dd');

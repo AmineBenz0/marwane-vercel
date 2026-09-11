@@ -131,7 +131,7 @@ function ClientProfile() {
   const [balancePeriod, setBalancePeriod] = useState('month');
 
   /**
-   * CrÃ©e une map de lookup pour les produits.
+   * Crée une map de lookup pour les produits.
    */
   const produitsMap = useMemo(() => {
     const map = new Map();
@@ -168,14 +168,14 @@ function ClientProfile() {
   };
 
   /**
-   * Charge les produits achetÃ©s par le client.
+   * Charge les produits achetés par le client.
    */
   const fetchProduitsAchetes = async () => {
     try {
       const produitsData = await get(`/clients/${id}/produits-achetes`);
       setProduitsAchetes(produitsData);
     } catch (err) {
-      console.error('Erreur lors du chargement des produits achetÃ©s:', err);
+      console.error('Erreur lors du chargement des produits achetés:', err);
     }
   };
 
@@ -192,7 +192,7 @@ function ClientProfile() {
   };
 
   /**
-   * Charge le score de fiabilitÃ© du client.
+   * Charge le score de fiabilité du client.
    */
   const fetchClientScore = async () => {
     try {
@@ -231,7 +231,7 @@ function ClientProfile() {
 
       setStatsMensuelles(statsMensuellesData.data || []);
 
-      // Charger les produits achetÃ©s, les insights financiers et le score
+      // Charger les produits achetés, les insights financiers et le score
       await Promise.all([
         fetchProduitsAchetes(),
         fetchInsightsFinanciers(),
@@ -248,7 +248,7 @@ function ClientProfile() {
   };
 
   /**
-   * Charge les donnÃ©es au montage et lorsque l'ID change.
+   * Charge les données au montage et lorsque l'ID change.
    */
   useEffect(() => {
     if (id) {
@@ -258,7 +258,7 @@ function ClientProfile() {
   }, [id]);
 
   /**
-   * PrÃ©pare les donnÃ©es pour le graphique.
+   * Prépare les données pour le graphique.
    */
   const chartData = useMemo(() => {
     if (!statsMensuelles || statsMensuelles.length === 0) {
@@ -372,7 +372,7 @@ function ClientProfile() {
   ];
 
   /**
-   * GÃ¨re l'export Excel des transactions.
+   * Gère l'export Excel des transactions.
    */
   const handleExportExcel = async () => {
     try {
@@ -442,7 +442,7 @@ function ClientProfile() {
   };
 
   /**
-   * SchÃ©ma de validation Yup pour le formulaire client.
+   * Schéma de validation Yup pour le formulaire client.
    */
   const clientValidationSchema = yup.object().shape({
     nom_client: yup
@@ -468,7 +468,7 @@ function ClientProfile() {
   ];
 
   /**
-   * GÃ¨re l'ouverture de la modal d'Ã©dition.
+   * Gère l'ouverture de la modal d'édition.
    */
   const handleEdit = () => {
     setFormError(null);
@@ -476,35 +476,35 @@ function ClientProfile() {
   };
 
   /**
-   * GÃ¨re la soumission du formulaire d'Ã©dition.
+   * Gère la soumission du formulaire d'édition.
    */
   const handleSubmit = async (data) => {
     setFormLoading(true);
     setFormError(null);
 
     try {
-      // Mode Ã©dition : PUT
+      // Mode édition : PUT
       await put(`/clients/${client.id_client}`, data);
 
-      // Fermer la modal et rafraÃ®chir les donnÃ©es
+      // Fermer la modal et rafraîchir les données
       setModalOpen(false);
       await fetchClientProfile();
       
-      // Afficher une notification de succÃ¨s
+      // Afficher une notification de succès
       notification.success('Client modifié avec succès');
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
       setFormError(errorMessage);
       notification.error(errorMessage);
-      throw err; // Re-throw pour que ModalForm puisse gÃ©rer les erreurs de validation
+      throw err; // Re-throw pour que ModalForm puisse gérer les erreurs de validation
     } finally {
       setFormLoading(false);
     }
   };
 
   /**
-   * GÃ¨re la fermeture de la modal.
+   * Gère la fermeture de la modal.
    */
   const handleCloseModal = () => {
     if (!formLoading) {
@@ -514,7 +514,7 @@ function ClientProfile() {
   };
 
   /**
-   * GÃ¨re l'ouverture de la modal de nouvelle transaction.
+   * Gère l'ouverture de la modal de nouvelle transaction.
    */
   const handleNewTransaction = () => {
     setTransactionFormError(null);
@@ -522,35 +522,35 @@ function ClientProfile() {
   };
 
   /**
-   * GÃ¨re la soumission de la nouvelle transaction.
+   * Gère la soumission de la nouvelle transaction.
    */
   const handleTransactionSubmit = async (data) => {
     setTransactionFormLoading(true);
     setTransactionFormError(null);
 
     try {
-      // Mode crÃ©ation : POST
+      // Mode création : POST
       await post('/transactions', data);
 
-      // Fermer la modal et rafraÃ®chir les donnÃ©es du profil
+      // Fermer la modal et rafraîchir les données du profil
       setTransactionModalOpen(false);
       await fetchClientProfile();
       
-      // Afficher une notification de succÃ¨s
+      // Afficher une notification de succès
       notification.success('Transaction créée avec succès');
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
       setTransactionFormError(errorMessage);
       notification.error(errorMessage);
-      throw err; // Re-throw pour que le formulaire puisse gÃ©rer les erreurs de validation
+      throw err; // Re-throw pour que le formulaire puisse gérer les erreurs de validation
     } finally {
       setTransactionFormLoading(false);
     }
   };
 
   /**
-   * GÃ¨re la fermeture de la modal de nouvelle transaction.
+   * Gère la fermeture de la modal de nouvelle transaction.
    */
   const handleCloseTransactionModal = () => {
     if (!transactionFormLoading) {
@@ -560,7 +560,7 @@ function ClientProfile() {
   };
 
   /**
-   * GÃ¨re la navigation vers les dÃ©tails d'une transaction.
+   * Gère la navigation vers les détails d'une transaction.
    */
   const handleViewTransaction = (transaction) => {
     navigate(`/transactions/${transaction.id_transaction}`);
@@ -828,7 +828,7 @@ function ClientProfile() {
         type="client"
       />
 
-      {/* Graphique d'Ã©volution des ventes */}
+      {/* Graphique d'évolution des ventes */}
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
           <Typography 
@@ -907,7 +907,7 @@ function ClientProfile() {
       </Box>
 
       <Box sx={{ display: activeTab === 'produits' ? 'block' : 'none' }}>
-      {/* Section Produits AchetÃ©s */}
+      {/* Section Produits Achetés */}
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
           <Typography 

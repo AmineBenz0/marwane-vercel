@@ -134,7 +134,7 @@ function FournisseurProfile() {
   const [balancePeriod, setBalancePeriod] = useState('month');
 
   /**
-   * CrÃ©e une map de lookup pour les produits.
+   * Crée une map de lookup pour les produits.
    */
   const produitsMap = useMemo(() => {
     const map = new Map();
@@ -251,7 +251,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * Charge les donnÃ©es au montage et lorsque l'ID change.
+   * Charge les données au montage et lorsque l'ID change.
    */
   useEffect(() => {
     if (id) {
@@ -261,7 +261,7 @@ function FournisseurProfile() {
   }, [id]);
 
   /**
-   * PrÃ©pare les donnÃ©es pour le graphique.
+   * Prépare les données pour le graphique.
    */
   const chartData = useMemo(() => {
     if (!statsMensuelles || statsMensuelles.length === 0) {
@@ -377,7 +377,7 @@ function FournisseurProfile() {
   ];
 
   /**
-   * GÃ¨re l'export Excel des transactions.
+   * Gère l'export Excel des transactions.
    */
   const handleExportExcel = async () => {
     try {
@@ -447,7 +447,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * SchÃ©ma de validation Yup pour le formulaire fournisseur.
+   * Schéma de validation Yup pour le formulaire fournisseur.
    */
   const fournisseurValidationSchema = yup.object().shape({
     nom_fournisseur: yup
@@ -473,7 +473,7 @@ function FournisseurProfile() {
   ];
 
   /**
-   * GÃ¨re l'ouverture de la modal d'Ã©dition.
+   * Gère l'ouverture de la modal d'édition.
    */
   const handleEdit = () => {
     setFormError(null);
@@ -481,35 +481,35 @@ function FournisseurProfile() {
   };
 
   /**
-   * GÃ¨re la soumission du formulaire d'Ã©dition.
+   * Gère la soumission du formulaire d'édition.
    */
   const handleSubmit = async (data) => {
     setFormLoading(true);
     setFormError(null);
 
     try {
-      // Mode Ã©dition : PUT
+      // Mode édition : PUT
       await put(`/fournisseurs/${fournisseur.id_fournisseur}`, data);
 
-      // Fermer la modal et rafraÃ®chir les donnÃ©es
+      // Fermer la modal et rafraîchir les données
       setModalOpen(false);
       await fetchFournisseurProfile();
       
-      // Afficher une notification de succÃ¨s
+      // Afficher une notification de succès
       notification.success('Fournisseur modifié avec succès');
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
       setFormError(errorMessage);
       notification.error(errorMessage);
-      throw err; // Re-throw pour que ModalForm puisse gÃ©rer les erreurs de validation
+      throw err; // Re-throw pour que ModalForm puisse gérer les erreurs de validation
     } finally {
       setFormLoading(false);
     }
   };
 
   /**
-   * GÃ¨re la fermeture de la modal.
+   * Gère la fermeture de la modal.
    */
   const handleCloseModal = () => {
     if (!formLoading) {
@@ -519,7 +519,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * GÃ¨re l'ouverture de la modal de nouvelle transaction.
+   * Gère l'ouverture de la modal de nouvelle transaction.
    */
   const handleNewTransaction = () => {
     setTransactionFormError(null);
@@ -527,35 +527,35 @@ function FournisseurProfile() {
   };
 
   /**
-   * GÃ¨re la soumission de la nouvelle transaction.
+   * Gère la soumission de la nouvelle transaction.
    */
   const handleTransactionSubmit = async (data) => {
     setTransactionFormLoading(true);
     setTransactionFormError(null);
 
     try {
-      // Mode crÃ©ation : POST
+      // Mode création : POST
       await post('/transactions', data);
 
-      // Fermer la modal et rafraÃ®chir les donnÃ©es du profil
+      // Fermer la modal et rafraîchir les données du profil
       setTransactionModalOpen(false);
       await fetchFournisseurProfile();
       
-      // Afficher une notification de succÃ¨s
+      // Afficher une notification de succès
       notification.success('Transaction créée avec succès');
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';
       setTransactionFormError(errorMessage);
       notification.error(errorMessage);
-      throw err; // Re-throw pour que le formulaire puisse gÃ©rer les erreurs de validation
+      throw err; // Re-throw pour que le formulaire puisse gérer les erreurs de validation
     } finally {
       setTransactionFormLoading(false);
     }
   };
 
   /**
-   * GÃ¨re la fermeture de la modal de nouvelle transaction.
+   * Gère la fermeture de la modal de nouvelle transaction.
    */
   const handleCloseTransactionModal = () => {
     if (!transactionFormLoading) {
@@ -565,7 +565,7 @@ function FournisseurProfile() {
   };
 
   /**
-   * GÃ¨re la navigation vers les dÃ©tails d'une transaction.
+   * Gère la navigation vers les détails d'une transaction.
    */
   const handleViewTransaction = (transaction) => {
     navigate(`/transactions/${transaction.id_transaction}`);
@@ -798,7 +798,7 @@ function FournisseurProfile() {
         type="fournisseur"
       />
 
-      {/* Graphique d'Ã©volution des achats */}
+      {/* Graphique d'évolution des achats */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" component="h2" gutterBottom>
@@ -838,7 +838,7 @@ function FournisseurProfile() {
                   />
                   <Legend verticalAlign="top" height={36}/>
                   
-                  {/* Solde cumulÃ© en arriÃ¨re-plan (Area) */}
+                  {/* Solde cumulé en arrière-plan (Area) */}
                   <Area
                     type="monotone"
                     dataKey="solde"
