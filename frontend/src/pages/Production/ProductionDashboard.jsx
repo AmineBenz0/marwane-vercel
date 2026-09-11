@@ -411,7 +411,7 @@ function HeroHeader({
               Production & stock
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 720 }}>
-              La page montre le lot commun, les saisies du jour et les stocks en oeufs.
+              La page montre les saisies du jour et les stocks en oeufs.
               Les tableaux detailles restent dans chaque batiment.
             </Typography>
 
