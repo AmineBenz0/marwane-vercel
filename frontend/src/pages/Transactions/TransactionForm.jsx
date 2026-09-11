@@ -1,22 +1,22 @@
 /**
  * Composant TransactionForm.
  * 
- * Formulaire pour crÃ©er et Ã©diter des transactions avec :
+ * Formulaire pour créer et éditer des transactions avec :
  * - Date transaction
- * - SÃ©lection Client OU Fournisseur (radio buttons)
- * - Liste de lignes dynamique (produit + quantitÃ© + prix unitaire)
+ * - Sélection Client OU Fournisseur (radio buttons)
+ * - Liste de lignes dynamique (produit + quantité + prix unitaire)
  * - Calcul automatique du montant total
- * - Validation complÃ¨te
+ * - Validation complète
  * 
- * En mode crÃ©ation : crÃ©e N transactions indÃ©pendantes (une par ligne) via /batch
- * En mode Ã©dition : Ã©dite UNE transaction existante
+ * En mode création : crée N transactions indépendantes (une par ligne) via /batch
+ * En mode édition : édite UNE transaction existante
  * 
- * @param {boolean} open - ContrÃ´le l'ouverture/fermeture de la modal
- * @param {Function} onClose - Callback appelÃ© lors de la fermeture de la modal
- * @param {Function} onSubmit - Callback appelÃ© lors de la soumission du formulaire (reÃ§oit les donnÃ©es validÃ©es)
- * @param {object} initialValues - Valeurs initiales pour le formulaire (pour l'Ã©dition)
+ * @param {boolean} open - Contrôle l'ouverture/fermeture de la modal
+ * @param {Function} onClose - Callback appelé lors de la fermeture de la modal
+ * @param {Function} onSubmit - Callback appelé lors de la soumission du formulaire (reçoit les données validées)
+ * @param {object} initialValues - Valeurs initiales pour le formulaire (pour l'édition)
  * @param {boolean} loading - Indique si la soumission est en cours
- * @param {string} errorMessage - Message d'erreur serveur Ã  afficher
+ * @param {string} errorMessage - Message d'erreur serveur à afficher
  */
 
 import React, { useState, useEffect } from 'react';
@@ -65,7 +65,7 @@ import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 
 /**
- * SchÃ©ma de validation Yup pour une ligne de transaction.
+ * Schéma de validation Yup pour une ligne de transaction.
  */
 const ligneValidationSchema = yup.object().shape({
   id_produit: yup
@@ -84,10 +84,10 @@ const ligneValidationSchema = yup.object().shape({
     }),
   quantite: yup
     .number()
-    .typeError('La quantitÃ© doit Ãªtre un nombre')
-    .required('La quantitÃ© est requise')
-    .positive('La quantitÃ© doit Ãªtre supÃ©rieure Ã  0')
-    .integer('La quantitÃ© doit Ãªtre un nombre entier')
+    .typeError('La quantité doit être un nombre')
+    .required('La quantité est requise')
+    .positive('La quantité doit être supérieure à 0')
+    .integer('La quantité doit être un nombre entier')
     .transform((value, originalValue) => {
       if (originalValue === '' || originalValue === null || originalValue === undefined) {
         return undefined;
@@ -97,9 +97,9 @@ const ligneValidationSchema = yup.object().shape({
     }),
   prix_unitaire: yup
     .number()
-    .typeError('Le prix unitaire doit Ãªtre un nombre')
+    .typeError('Le prix unitaire doit être un nombre')
     .required('Le prix unitaire est requis')
-    .positive('Le prix unitaire doit Ãªtre supÃ©rieur Ã  0')
+    .positive('Le prix unitaire doit être supérieur à 0')
     .transform((value, originalValue) => {
       if (originalValue === '' || originalValue === null || originalValue === undefined) {
         return undefined;
@@ -111,7 +111,7 @@ const ligneValidationSchema = yup.object().shape({
   paiements: yup.array().of(
     yup.object().shape({
       date: yup.string().required('La date est requise'),
-      montant: yup.number().required('Le montant est requis').positive('Le montant doit Ãªtre positif'),
+      montant: yup.number().required('Le montant est requis').positive('Le montant doit être positif'),
       type: yup.string().required('Le type est requis'),
       numero_cheque: yup.string().nullable(),
       banque: yup.string().nullable(),
@@ -125,8 +125,8 @@ const ligneValidationSchema = yup.object().shape({
 });
 
 /**
- * Composant interne pour la sÃ©lection d'une Lettre de CrÃ©dit dans une ligne de transaction.
- * Encapsule la logique de chargement des LC disponibles pour Ã©viter les mises Ã  jour d'Ã©tat
+ * Composant interne pour la sélection d'une Lettre de Crédit dans une ligne de transaction.
+ * Encapsule la logique de chargement des LC disponibles pour éviter les mises à jour d'état
  * pendant le rendu du composant parent.
  */
 const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, loading, formatMontant }) => {
@@ -174,13 +174,13 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
     <Controller
       name={`lignes.${index}.paiements.${paymentIndex}.id_lc`}
       control={control}
-      rules={{ required: 'Veuillez sÃ©lectionner une LC' }}
+      rules={{ required: 'Veuillez sélectionner une LC' }}
       render={({ field, fieldState: { error } }) => (
         <TextField
           {...field}
           select
           fullWidth
-          label="Choisir une Lettre de CrÃ©dit"
+          label="Choisir une Lettre de Crédit"
           error={!!error}
           helperText={error?.message || (lcs.length === 0 && !fetching ? 'Aucune LC disponible pour ce partenaire' : '')}
           disabled={loading || fetching}
@@ -207,7 +207,7 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
 };
 
 /**
- * SchÃ©ma de validation Yup pour le formulaire transaction.
+ * Schéma de validation Yup pour le formulaire transaction.
  */
 const transactionValidationSchema = yup.object().shape({
   date_transaction: yup
@@ -226,8 +226,8 @@ const transactionValidationSchema = yup.object().shape({
     }),
   type_entite: yup
     .string()
-    .required('Vous devez sÃ©lectionner un client ou un fournisseur')
-    .oneOf(['client', 'fournisseur'], 'Vous devez sÃ©lectionner un client ou un fournisseur'),
+    .required('Vous devez sélectionner un client ou un fournisseur')
+    .oneOf(['client', 'fournisseur'], 'Vous devez sélectionner un client ou un fournisseur'),
   id_client: yup
     .number()
     .nullable()
@@ -269,18 +269,18 @@ function TransactionForm({
   prefillFournisseurId = null,
   prefillBatimentId = null,
 }) {
-  // Ã‰tat pour les donnÃ©es de rÃ©fÃ©rence
+  // État pour les données de référence
   const [clients, setClients] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [produits, setProduits] = useState([]);
   const [batiments, setBatiments] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
   
-  // Ã‰tat pour gÃ©rer les paiements par ligne (tableau de booleans)
-  // Ã‰tat pour gÃ©rer l'expansion des accordions (premiÃ¨re ligne expanded par dÃ©faut)
+  // État pour gérer les paiements par ligne (tableau de booleans)
+  // État pour gérer l'expansion des accordions (première ligne expanded par défaut)
   const [expandedAccordion, setExpandedAccordion] = useState(0);
 
-  // Ã‰tat pour stocker les paiements existants (en mode Ã©dition)
+  // État pour stocker les paiements existants (en mode édition)
   const [, setPaiementsExistants] = useState([]);
 
   // Initialiser react-hook-form avec le resolver Yup
@@ -328,7 +328,7 @@ function TransactionForm({
 
 
   /**
-   * Charge les donnÃ©es de rÃ©fÃ©rence (clients, fournisseurs, produits).
+   * Charge les données de référence (clients, fournisseurs, produits).
    */
   const fetchReferenceData = async (typeEntite = 'client') => {
     setLoadingData(true);
@@ -345,14 +345,14 @@ function TransactionForm({
       setProduits(produitsData || []);
       setBatiments(batimentsData || []);
     } catch (err) {
-      console.error('Erreur lors du chargement des donnÃ©es de rÃ©fÃ©rence:', err);
+      console.error('Erreur lors du chargement des données de référence:', err);
     } finally {
       setLoadingData(false);
     }
   };
 
   /**
-   * Charge les paiements existants pour une transaction (en mode Ã©dition).
+   * Charge les paiements existants pour une transaction (en mode édition).
    */
   const fetchPaiementsExistants = async (idTransaction) => {
     try {
@@ -367,27 +367,27 @@ function TransactionForm({
     }
   };
 
-  // Charger les donnÃ©es de rÃ©fÃ©rence au montage et Ã  l'ouverture de la modal
+  // Charger les données de référence au montage et à l'ouverture de la modal
   useEffect(() => {
     if (open) {
       fetchReferenceData(watchedTypeEntite || 'client');
     }
   }, [open, watchedTypeEntite]);
 
-  // RÃ©initialiser le formulaire lorsque initialValues change (pour l'Ã©dition)
+  // Réinitialiser le formulaire lorsque initialValues change (pour l'édition)
   useEffect(() => {
     const loadFormData = async () => {
       if (open) {
         const isEditing = initialValues && initialValues.id_transaction;
         
         if (isEditing) {
-          // Mode Ã©dition : prÃ©-remplir avec UNE ligne (la transaction Ã  Ã©diter)
+          // Mode édition : pré-remplir avec UNE ligne (la transaction à éditer)
           const typeEntite = initialValues.id_client ? 'client' : 'fournisseur';
           
           // Charger les paiements existants
           const paiements = await fetchPaiementsExistants(initialValues.id_transaction);
           
-          // VÃ©rifier s'il y a au moins un paiement
+          // Vérifier s'il y a au moins un paiement
           reset({
             date_transaction: initialValues.date_transaction
               ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
@@ -418,7 +418,7 @@ function TransactionForm({
             }],
           });
         } else {
-          // Mode crÃ©ation : valeurs par dÃ©faut ou prÃ©-remplies
+          // Mode création : valeurs par défaut ou pré-remplies
           const hasPrefillClient = prefillClientId !== null && prefillClientId !== undefined;
           const hasPrefillFournisseur = prefillFournisseurId !== null && prefillFournisseurId !== undefined;
           
@@ -461,7 +461,7 @@ function TransactionForm({
   }, [open, reset, clearErrors]);
 
   /**
-   * Calcule le montant total Ã  partir des lignes.
+   * Calcule le montant total à partir des lignes.
    */
   const calculateTotal = () => {
     if (!watchedLignes || watchedLignes.length === 0) return 0;
@@ -475,14 +475,14 @@ function TransactionForm({
 
 
   /**
-   * GÃ¨re la soumission du formulaire.
+   * Gère la soumission du formulaire.
    */
   const handleFormSubmit = async (data) => {
     try {
       const isEditing = initialValues && initialValues.id_transaction;
       
       if (isEditing) {
-        // Mode Ã©dition : on Ã©dite UNE seule transaction
+        // Mode édition : on édite UNE seule transaction
         const transactionData = {
           date_transaction: data.date_transaction,
           date_echeance: data.date_echeance || null,
@@ -495,7 +495,7 @@ function TransactionForm({
           est_actif: initialValues.est_actif !== undefined ? initialValues.est_actif : true,
         };
         
-        // Passer aussi les donnÃ©es de paiement pour que le parent les gÃ¨re
+        // Passer aussi les données de paiement pour que le parent les gère
         const paiementsData = data.lignes[0].ajouter_paiement ? data.lignes[0].paiements.map(p => ({
           id_paiement: p.id_paiement || null,
           date_paiement: p.date,
@@ -510,7 +510,7 @@ function TransactionForm({
         
         await onSubmit({ ...transactionData, paiements: paiementsData });
       } else {
-        // Mode crÃ©ation : on crÃ©e N transactions via l'endpoint batch
+        // Mode création : on crée N transactions via l'endpoint batch
         const transactionsData = data.lignes.map((ligne) => ({
           date_transaction: data.date_transaction,
           date_echeance: data.date_echeance || null,
@@ -523,14 +523,14 @@ function TransactionForm({
           est_actif: true,
         }));
         
-        // Appeler le callback onSubmit avec le tableau de transactions et les donnÃ©es des lignes (pour les paiements)
+        // Appeler le callback onSubmit avec le tableau de transactions et les données des lignes (pour les paiements)
         await onSubmit({ batch: true, transactions: transactionsData, lignesData: data.lignes });
       }
       
-      // Si la soumission rÃ©ussit, rÃ©initialiser le formulaire
+      // Si la soumission réussit, réinitialiser le formulaire
       reset();
     } catch (error) {
-      // GÃ©rer les erreurs de validation serveur
+      // Gérer les erreurs de validation serveur
       if (error?.data?.detail) {
         const detail = error.data.detail;
         
@@ -539,7 +539,7 @@ function TransactionForm({
             if (err.loc && err.loc.length > 1) {
               const fieldPath = err.loc.slice(1);
               
-              // GÃ©rer les erreurs dans les lignes
+              // Gérer les erreurs dans les lignes
               if (fieldPath[0] === 'lignes' && fieldPath.length === 3) {
                 const ligneIndex = parseInt(fieldPath[1]);
                 const fieldName = fieldPath[2];
@@ -570,13 +570,13 @@ function TransactionForm({
         });
       }
       
-      // Re-throw pour que le composant parent puisse aussi gÃ©rer l'erreur
+      // Re-throw pour que le composant parent puisse aussi gérer l'erreur
       throw error;
     }
   };
 
   /**
-   * GÃ¨re la fermeture de la modal.
+   * Gère la fermeture de la modal.
    */
   const handleClose = () => {
     if (!loading) {
@@ -621,17 +621,17 @@ function TransactionForm({
       const newLignes = currentLignes.filter((_, i) => i !== index);
       setValue('lignes', newLignes, { shouldDirty: true });
       
-      // Ajuster l'accordion expanded si nÃ©cessaire
+      // Ajuster l'accordion expanded si nécessaire
       if (expandedAccordion === index) {
-        setExpandedAccordion(0); // Expand la premiÃ¨re ligne
+        setExpandedAccordion(0); // Expand la première ligne
       } else if (expandedAccordion > index) {
-        setExpandedAccordion(expandedAccordion - 1); // DÃ©caler l'index
+        setExpandedAccordion(expandedAccordion - 1); // Décaler l'index
       }
     }
   };
 
   /**
-   * GÃ¨re le changement du type d'entitÃ© (client/fournisseur).
+   * Gère le changement du type d'entité (client/fournisseur).
    */
   const handleTypeEntiteChange = async (newType) => {
     setValue('type_entite', newType, { shouldDirty: true });
@@ -646,7 +646,7 @@ function TransactionForm({
       );
     }
 
-    // Recharger les produits pour le type sÃ©lectionnÃ©
+    // Recharger les produits pour le type sélectionné
     setLoadingData(true);
     try {
       const produitsData = await getProduitsParType(newType, {
@@ -716,7 +716,7 @@ function TransactionForm({
               </Typography>
             </Box>
             <Typography variant="h6" component="div" sx={{ display: 'none' }}>
-              {isEditing ? 'Modifier la transaction' : 'CrÃ©er une nouvelle transaction'}
+              {isEditing ? 'Modifier la transaction' : 'Créer une nouvelle transaction'}
             </Typography>
             <Button
               onClick={handleClose}
@@ -729,7 +729,7 @@ function TransactionForm({
         </DialogTitle>
 
         <DialogContent dividers sx={{ backgroundColor: '#f7f3ea', px: { xs: 2, md: 3 }, py: 2.5 }}>
-          {/* Afficher l'erreur serveur gÃ©nÃ©rale si prÃ©sente */}
+          {/* Afficher l'erreur serveur générale si présente */}
           {(errorMessage || errors.root) && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {errorMessage || errors.root?.message}
@@ -885,9 +885,9 @@ function TransactionForm({
                 )}
               />
 
-              {/* SÃ©lection Client OU Fournisseur */}
+              {/* Sélection Client OU Fournisseur */}
               <FormControl component="fieldset" margin="normal" fullWidth error={!!errors.type_entite} sx={{ display: 'none' }}>
-                <FormLabel component="legend">Type d'entitÃ©</FormLabel>
+                <FormLabel component="legend">Type d'entité</FormLabel>
                 <Controller
                   name="type_entite"
                   control={control}
@@ -917,7 +917,7 @@ function TransactionForm({
                 )}
               </FormControl>
 
-              {/* SÃ©lection Client */}
+              {/* Sélection Client */}
               {watchedTypeEntite === 'client' && (
                 <Controller
                   name="id_client"
@@ -936,7 +936,7 @@ function TransactionForm({
                         value={field.value || ''}
                       >
                         <MenuItem value="">
-                          <em>SÃ©lectionner un client</em>
+                          <em>Sélectionner un client</em>
                         </MenuItem>
                         {clients.map((client) => (
                           <MenuItem key={client.id_client} value={client.id_client}>
@@ -950,7 +950,7 @@ function TransactionForm({
                 />
               )}
 
-              {/* SÃ©lection Fournisseur */}
+              {/* Sélection Fournisseur */}
               {watchedTypeEntite === 'fournisseur' && (
                 <Controller
                   name="id_fournisseur"
@@ -969,7 +969,7 @@ function TransactionForm({
                         value={field.value || ''}
                       >
                         <MenuItem value="">
-                          <em>SÃ©lectionner un fournisseur</em>
+                          <em>Sélectionner un fournisseur</em>
                         </MenuItem>
                         {fournisseurs.map((fournisseur) => (
                           <MenuItem
@@ -1008,7 +1008,7 @@ function TransactionForm({
                   <Box>
                     <Typography variant="h6" fontWeight={900}>2. Produits et paiements</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Ajoutez les produits, puis cochez le paiement uniquement si l'argent est dÃ©jÃ  encaissÃ© ou payÃ©.
+                      Ajoutez les produits, puis cochez le paiement uniquement si l'argent est déjà encaissé ou payé.
                     </Typography>
                   </Box>
                   {!isEditing && (
@@ -1036,7 +1036,7 @@ function TransactionForm({
                           (parseFloat(ligne.quantite) || 0) *
                           (parseFloat(ligne.prix_unitaire) || 0);
                   const selectedProduit = produits.find(p => Number(p.id_produit) === Number(ligne.id_produit));
-                  const produitNom = selectedProduit?.nom_produit || 'Produit non sÃ©lectionnÃ©';
+                  const produitNom = selectedProduit?.nom_produit || 'Produit non sélectionné';
                   const shouldShowBatimentSource = watchedTypeEntite === 'client' && isEggProduct(selectedProduit);
                   
                         return (
@@ -1153,7 +1153,7 @@ function TransactionForm({
                             </Grid>
                           )}
 
-                          {/* QuantitÃ© */}
+                          {/* Quantité */}
                           <Grid item xs={12} sm={6}>
                               <Controller
                                 name={`lignes.${index}.quantite`}
@@ -1172,7 +1172,7 @@ function TransactionForm({
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
-                                      // Mettre Ã  jour le montant du paiement si paiement activÃ©
+                                      // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
                                         setValue(`lignes.${index}.paiement_montant`, newTotal);
@@ -1203,7 +1203,7 @@ function TransactionForm({
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
-                                      // Mettre Ã  jour le montant du paiement si paiement activÃ©
+                                      // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(ligne.quantite) || 0) * (parseFloat(value) || 0);
                                         setValue(`lignes.${index}.paiement_montant`, newTotal);
@@ -1246,8 +1246,8 @@ function TransactionForm({
                                   }}
                                 >
                                   {[
-                                    { value: true, title: 'PayÃ© maintenant', subtitle: 'CrÃ©er le paiement' },
-                                    { value: false, title: 'Ã€ payer plus tard', subtitle: 'Sans paiement' },
+                                    { value: true, title: 'Payé maintenant', subtitle: 'Créer le paiement' },
+                                    { value: false, title: 'À payer plus tard', subtitle: 'Sans paiement' },
                                   ].map((option) => {
                                     const isSelected = Boolean(field.value) === option.value;
                                     return (
@@ -1310,7 +1310,7 @@ function TransactionForm({
                                       disabled={loading}
                                       onChange={(e) => {
                                         field.onChange(e.target.checked);
-                                        // PrÃ©-remplir le montant avec le total de la ligne
+                                        // Pré-remplir le montant avec le total de la ligne
                                         if (e.target.checked && ligneTotal > 0) {
                                           setValue(`lignes.${index}.paiement_montant`, ligneTotal);
                                           setValue(`lignes.${index}.paiement_date`, watch('date_transaction'));
@@ -1321,10 +1321,10 @@ function TransactionForm({
                                   label={
                                     <Box>
                                       <Typography variant="subtitle2" fontWeight="medium">
-                                        ðŸ’° Ajouter un paiement pour cette ligne
+                                        💰 Ajouter un paiement pour cette ligne
                                       </Typography>
                                       <Typography variant="caption" color="text.secondary">
-                                        Le paiement sera crÃ©Ã© en mÃªme temps que la transaction
+                                        Le paiement sera créé en même temps que la transaction
                                       </Typography>
                                     </Box>
                                   }
@@ -1338,7 +1338,7 @@ function TransactionForm({
                               <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderRadius: 2, border: '1px solid', borderColor: 'success.light' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                   <Typography variant="subtitle2" color="success.dark">
-                                    ðŸ“‹ Liste des paiements
+                                    📋 Liste des paiements
                                   </Typography>
                                   <Button 
                                     size="small" 
@@ -1434,13 +1434,13 @@ function TransactionForm({
                                               disabled={loading}
                                               size="small"
                                             >
-                                              <MenuItem value="cash">ðŸ’µ EspÃ¨ces</MenuItem>
-                                              <MenuItem value="cheque">ðŸ’³ ChÃ¨que</MenuItem>
-                                              <MenuItem value="virement">ðŸ¦ Virement</MenuItem>
-                                              <MenuItem value="carte">ðŸ’³ Carte bancaire</MenuItem>
-                                              <MenuItem value="compensation">â†”ï¸ Compensation</MenuItem>
-                                              <MenuItem value="lc">ðŸ“œ Lettre de CrÃ©dit</MenuItem>
-                                              <MenuItem value="autre">ðŸ“„ Autre</MenuItem>
+                                              <MenuItem value="cash">💵 Espèces</MenuItem>
+                                              <MenuItem value="cheque">💳 Chèque</MenuItem>
+                                              <MenuItem value="virement">🏦 Virement</MenuItem>
+                                              <MenuItem value="carte">💳 Carte bancaire</MenuItem>
+                                              <MenuItem value="compensation">↔️ Compensation</MenuItem>
+                                              <MenuItem value="lc">📜 Lettre de Crédit</MenuItem>
+                                              <MenuItem value="autre">📄 Autre</MenuItem>
                                             </TextField>
                                           )}
                                         />
@@ -1454,7 +1454,7 @@ function TransactionForm({
                                               name={`lignes.${index}.paiements.${pIndex}.numero_cheque`}
                                               control={control}
                                               render={({ field }) => (
-                                                <TextField {...field} fullWidth label="NÂ° ChÃ¨que" disabled={loading} size="small" />
+                                                <TextField {...field} fullWidth label="N° Chèque" disabled={loading} size="small" />
                                               )}
                                             />
                                           </Grid>
@@ -1476,7 +1476,7 @@ function TransactionForm({
                                             name={`lignes.${index}.paiements.${pIndex}.reference`}
                                             control={control}
                                             render={({ field }) => (
-                                              <TextField {...field} fullWidth label="RÃ©fÃ©rence" disabled={loading} size="small" />
+                                              <TextField {...field} fullWidth label="Référence" disabled={loading} size="small" />
                                             )}
                                           />
                                         </Grid>
@@ -1502,7 +1502,7 @@ function TransactionForm({
                                 {ligne.ajouter_paiement && (
                                   <Box sx={{ mt: 1, p: 1, borderTop: '1px solid #ddd' }}>
                                     <Typography variant="caption">
-                                      Total payÃ© pour cette ligne: <strong>{ligne.paiements.reduce((acc, p) => acc + (parseFloat(p.montant) || 0), 0).toFixed(2)} / {ligneTotal.toFixed(2)} MAD</strong>
+                                      Total payé pour cette ligne: <strong>{ligne.paiements.reduce((acc, p) => acc + (parseFloat(p.montant) || 0), 0).toFixed(2)} / {ligneTotal.toFixed(2)} MAD</strong>
                                     </Typography>
                                   </Box>
                                 )}
@@ -1543,10 +1543,10 @@ function TransactionForm({
                   }}
                 >
                   <Typography sx={{ fontWeight: 900, mb: 1 }}>
-                    3. RÃ©sumÃ© avant validation
+                    3. Résumé avant validation
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    VÃ©rifiez le total et les paiements avant d'enregistrer.
+                    Vérifiez le total et les paiements avant d'enregistrer.
                   </Typography>
                 <Box
                   sx={{
@@ -1569,7 +1569,7 @@ function TransactionForm({
                 
                 {!isEditing && watchedLignes.length > 1 && (
                   <Alert severity="info" sx={{ mt: 2 }}>
-                    {watchedLignes.length} transactions indÃ©pendantes seront crÃ©Ã©es (une par ligne).
+                    {watchedLignes.length} transactions indépendantes seront créées (une par ligne).
                     Vous pouvez ajouter un paiement pour chacune dans son accordion.
                   </Alert>
                 )}
@@ -1592,7 +1592,7 @@ function TransactionForm({
             disabled={loading || !isDirty}
             startIcon={loading ? <CircularProgress size={16} /> : null}
           >
-            {loading ? 'Enregistrement...' : isEditing ? 'Modifier' : 'CrÃ©er'}
+            {loading ? 'Enregistrement...' : isEditing ? 'Modifier' : 'Créer'}
           </Button>
         </DialogActions>
     </Dialog>

@@ -89,11 +89,13 @@ function BatimentProductionPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [batData, stock, cyclesData, activeCycleData] = await Promise.all([
+      const [batData, stock, activeCycleData, cyclesData] = await Promise.all([
         batimentService.getBatiments(),
         productionService.getDailyStock(selectedDate),
-        cycleProductionService.getCycles({ id_batiment: selectedBatimentId }),
         cycleProductionService.getActiveCycle(selectedBatimentId),
+        LOTS_FEATURE_ENABLED
+          ? cycleProductionService.getCycles({ id_batiment: selectedBatimentId })
+          : Promise.resolve([]),
       ]);
       const cycleList = cyclesData || [];
       const chosenCycleId = activeCycleData?.id_cycle || cycleList[0]?.id_cycle || '';
@@ -470,7 +472,7 @@ function DailyHeroCard({
                 ? 'La saisie quotidienne inclut aussi les oeufs perdus.'
                 : lotsEnabled
                   ? 'Commencez le lot commun depuis Production & stock avant la saisie.'
-                  : 'La saisie de production sera réactivee lorsque le fonctionnement des lots sera confirme.'}
+                  : 'La saisie de production est temporairement indisponible.'}
           </Typography>
           <Typography variant="caption" color="text.secondary" fontWeight={900} sx={{ display: 'block', mt: 1.5, textTransform: 'capitalize' }}>
             {selectedDateLabel}
