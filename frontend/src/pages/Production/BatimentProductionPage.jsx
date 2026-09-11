@@ -33,6 +33,7 @@ import useNotification from '../../hooks/useNotification';
 import ProductionForm from './ProductionForm';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportToPDF } from '../../utils/exportToPDF';
+import { LOTS_FEATURE_ENABLED } from '../../config/features';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
 const formatDecimal = (value, decimals = 2) => Number(value || 0).toLocaleString('fr-FR', {
@@ -97,12 +98,17 @@ function BatimentProductionPage() {
       const cycleList = cyclesData || [];
       const chosenCycleId = activeCycleData?.id_cycle || cycleList[0]?.id_cycle || '';
 
-      const [prodData, performanceData] = chosenCycleId
-        ? await Promise.all([
-          productionService.getProductions({ limit: 500, id_batiment: selectedBatimentId, id_cycle: chosenCycleId }),
-          productionService.getPerformance(chosenCycleId),
-        ])
-        : [[], { rows: [] }];
+      const productionFilters = {
+        limit: 500,
+        id_batiment: selectedBatimentId,
+        ...(LOTS_FEATURE_ENABLED && chosenCycleId ? { id_cycle: chosenCycleId } : {}),
+      };
+      const [prodData, performanceData] = await Promise.all([
+        productionService.getProductions(productionFilters),
+        LOTS_FEATURE_ENABLED && chosenCycleId
+          ? productionService.getPerformance(chosenCycleId)
+          : Promise.resolve({ rows: [] }),
+      ]);
 
       setBatiments(batData || []);
       setStockData(stock);
@@ -210,6 +216,10 @@ function BatimentProductionPage() {
   };
 
   const handleAddProduction = () => {
+    if (!LOTS_FEATURE_ENABLED && !activeCycle) {
+      notification.warning('La saisie de production est temporairement indisponible.');
+      return;
+    }
     if (!activeCycle) {
       notification.warning('Commencez le lot depuis Production & stock avant de saisir.');
       navigate('/production');
@@ -291,42 +301,44 @@ function BatimentProductionPage() {
               {batiment?.nom || 'Batiment'}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1.5, fontSize: { md: '1.1rem' }, maxWidth: 760 }}>
-              Une page simple pour saisir la journee, verifier le lot, puis consulter le suivi complet si necessaire.
+              Consultez la production, le stock et les mouvements de ce batiment.
             </Typography>
 
-            <Box
-              sx={{
-                mt: 3,
-                p: 2,
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'rgba(255,255,255,0.74)',
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 190px' },
-                gap: 1.5,
-                alignItems: 'center',
-              }}
-            >
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={950} textTransform="uppercase">
-                  Lot
-                </Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
-                  {activeCycle?.nom_cycle || 'Aucun lot actif'}
-                </Typography>
+            {LOTS_FEATURE_ENABLED && (
+              <Box
+                sx={{
+                  mt: 3,
+                  p: 2,
+                  borderRadius: 3,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  bgcolor: 'rgba(255,255,255,0.74)',
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 190px' },
+                  gap: 1.5,
+                  alignItems: 'center',
+                }}
+              >
+                <Box>
+                  <Typography variant="caption" color="text.secondary" fontWeight={950} textTransform="uppercase">
+                    Lot
+                  </Typography>
+                  <Typography variant="h6" fontWeight={950} sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+                    {activeCycle?.nom_cycle || 'Aucun lot actif'}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" fontWeight={950} textTransform="uppercase">
+                    {activeCycle ? `Semaine ${activeCycle.semaine_cycle}/${activeCycle.duree_semaines}` : 'Lot requis'}
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={progress}
+                    sx={{ mt: 1, height: 10, borderRadius: 999 }}
+                  />
+                </Box>
               </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={950} textTransform="uppercase">
-                  {activeCycle ? `Semaine ${activeCycle.semaine_cycle}/${activeCycle.duree_semaines}` : 'Lot requis'}
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={progress}
-                  sx={{ mt: 1, height: 10, borderRadius: 999 }}
-                />
-              </Box>
-            </Box>
+            )}
           </CardContent>
         </Card>
 
@@ -338,6 +350,7 @@ function BatimentProductionPage() {
           latestEntry={latestTodayEntry}
           onAddProduction={handleAddProduction}
           onGoToOverview={() => navigate('/production')}
+          lotsEnabled={LOTS_FEATURE_ENABLED}
         />
       </Box>
 
@@ -346,8 +359,10 @@ function BatimentProductionPage() {
         lowStockCategory={lowStockCategory}
       />
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2.5 }}>
-        <QuickFact tone="green" label="Poules restantes" value={remainingHens != null ? formatNumber(remainingHens) : '-'} />
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: `repeat(${LOTS_FEATURE_ENABLED ? 4 : 3}, minmax(0, 1fr))` }, gap: 1.5, mb: 2.5 }}>
+        {LOTS_FEATURE_ENABLED && (
+          <QuickFact tone="green" label="Poules restantes" value={remainingHens != null ? formatNumber(remainingHens) : '-'} />
+        )}
         <QuickFact tone="blue" label="Grammage moyen" value={latestGrammage} />
         <QuickFact tone="amber" label="Aliment" value={latestAliment} />
         <QuickFact tone="red" label="Mortalite" value={formatNumber(buildingStock?.mortalite || 0)} />
@@ -356,11 +371,13 @@ function BatimentProductionPage() {
       <Box sx={{ display: 'grid', gap: 2.5, minWidth: 0 }}>
         <StockCategoryCard categories={stockCategories} />
 
-        <PerformanceTable
-          rows={performanceRows}
-          onExportExcel={handleExportExcel}
-          onExportPDF={handleExportPDF}
-        />
+        {LOTS_FEATURE_ENABLED && (
+          <PerformanceTable
+            rows={performanceRows}
+            onExportExcel={handleExportExcel}
+            onExportPDF={handleExportPDF}
+          />
+        )}
 
         <Box
           sx={{
@@ -381,6 +398,7 @@ function BatimentProductionPage() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onAddProduction={handleAddProduction}
+            canAddProduction={Boolean(activeCycle)}
           />
           <SummaryHistoryCard totalStats={totalStats} />
         </Box>
@@ -416,6 +434,7 @@ function DailyHeroCard({
   latestEntry,
   onAddProduction,
   onGoToOverview,
+  lotsEnabled,
 }) {
   const primaryAction = activeCycle ? onAddProduction : onGoToOverview;
 
@@ -433,7 +452,7 @@ function DailyHeroCard({
       <CardContent sx={{ p: { xs: 2.25, md: 3.25 }, height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <Box>
           <Chip
-            label={hasProduction ? 'Journee saisie' : activeCycle ? 'A saisir' : 'Lot requis'}
+            label={hasProduction ? 'Journee saisie' : activeCycle ? 'A saisir' : lotsEnabled ? 'Lot requis' : 'Saisie indisponible'}
             color={hasProduction ? 'success' : 'warning'}
             sx={{ mb: 1.5, fontWeight: 950, borderRadius: 2 }}
           />
@@ -449,7 +468,9 @@ function DailyHeroCard({
               ? 'Les pertes du jour sont incluses dans la meme saisie quotidienne.'
               : activeCycle
                 ? 'La saisie quotidienne inclut aussi les oeufs perdus.'
-                : 'Commencez le lot commun depuis Production & stock avant la saisie.'}
+                : lotsEnabled
+                  ? 'Commencez le lot commun depuis Production & stock avant la saisie.'
+                  : 'La saisie de production sera réactivee lorsque le fonctionnement des lots sera confirme.'}
           </Typography>
           <Typography variant="caption" color="text.secondary" fontWeight={900} sx={{ display: 'block', mt: 1.5, textTransform: 'capitalize' }}>
             {selectedDateLabel}
@@ -470,14 +491,16 @@ function DailyHeroCard({
           </Box>
         )}
 
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={primaryAction}
-          sx={{ mt: 'auto', borderRadius: 999, minHeight: 48, fontWeight: 950 }}
-        >
-          {activeCycle ? (hasProduction ? 'Modifier la saisie' : "Saisir aujourd'hui") : 'Retour a Production & stock'}
-        </Button>
+        {(activeCycle || lotsEnabled) && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={primaryAction}
+            sx={{ mt: 'auto', borderRadius: 999, minHeight: 48, fontWeight: 950 }}
+          >
+            {activeCycle ? (hasProduction ? 'Modifier la saisie' : "Saisir aujourd'hui") : 'Retour a Production & stock'}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -683,7 +706,7 @@ function MovementListCard({ movements }) {
   );
 }
 
-function HistoryCard({ productions, onEdit, onDelete, onAddProduction }) {
+function HistoryCard({ productions, onEdit, onDelete, onAddProduction, canAddProduction }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0, height: '100%' }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
@@ -695,12 +718,16 @@ function HistoryCard({ productions, onEdit, onDelete, onAddProduction }) {
         {productions.length === 0 ? (
           <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'grey.50', textAlign: 'center', minWidth: 0 }}>
             <Typography fontWeight={900}>Aucune saisie pour ce batiment</Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.75, mb: 1.5 }}>
-              Ajoutez la premiere collecte pour commencer le suivi.
+            <Typography color="text.secondary" sx={{ mt: 0.75, mb: canAddProduction ? 1.5 : 0 }}>
+              {canAddProduction
+                ? 'Ajoutez la premiere collecte pour commencer le suivi.'
+                : 'Aucune production n’est disponible pour ce batiment a cette date.'}
             </Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={onAddProduction} sx={{ borderRadius: 999, width: { xs: '100%', sm: 'auto' } }}>
-              Nouvelle saisie
-            </Button>
+            {canAddProduction && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={onAddProduction} sx={{ borderRadius: 999, width: { xs: '100%', sm: 'auto' } }}>
+                Nouvelle saisie
+              </Button>
+            )}
           </Box>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: '1fr' }, gap: 1.25, maxHeight: { xs: 360, md: 430 }, overflow: 'auto', pr: 0.25, minWidth: 0 }}>
@@ -735,7 +762,7 @@ function SummaryHistoryCard({ totalStats }) {
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography variant="h5" fontWeight={950}>Resume historique</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Total du lot actuel, sans melanger les anciens lots.
+          Totaux de l'historique affiche pour ce batiment.
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))', xl: '1fr' }, gap: 1 }}>
           <Fact label="Total oeufs" value={`${formatNumber(totalStats.oeufs)} oeufs`} />
