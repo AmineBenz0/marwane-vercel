@@ -322,11 +322,28 @@ def get_daily_stock(
     """
     target_date = date_stock or date.today()
     batiments = db.query(Batiment).filter(Batiment.est_actif.is_(True)).order_by(Batiment.nom).all()
-    cycles_by_batiment = {
-        batiment.id_batiment: find_active_cycle(db, batiment.id_batiment, target_date)
-        for batiment in batiments
-    }
-    db.flush()
+    # Load active cycles for all buildings in one query. The previous
+    # implementation performed one lookup per building on every dashboard load.
+    building_ids = [batiment.id_batiment for batiment in batiments]
+    cycles = (
+        db.query(CycleProduction)
+        .filter(
+            CycleProduction.id_batiment.in_(building_ids),
+            CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES),
+            CycleProduction.date_debut <= target_date,
+        )
+        .order_by(
+            CycleProduction.id_batiment.asc(),
+            CycleProduction.date_debut.desc(),
+        )
+        .all()
+    )
+    cycles_by_batiment = {}
+    for cycle in cycles:
+        if cycle.id_batiment not in cycles_by_batiment:
+            refresh_cycle_status(db, cycle)
+            cycles_by_batiment[cycle.id_batiment] = cycle
+
     productions = db.query(Production).filter(
         Production.date_production == target_date,
         Production.est_actif.is_(True),
