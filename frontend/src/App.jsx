@@ -222,14 +222,6 @@ function App() {
           }
         />
         <Route
-          path="/production/boms"
-          element={
-            <ProtectedRoute>
-              <AppLayout><ProductBomsPage /></AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/production/batiment/:id"
           element={
             <ProtectedRoute>
