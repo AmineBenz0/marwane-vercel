@@ -642,9 +642,11 @@ function BuildingStockCard({ batiment, canStartSharedLot, onAddProduction, onOpe
         <Stack direction="row" justifyContent="space-between" spacing={1.5} alignItems="flex-start">
           <Box>
             <Typography variant="h5" fontWeight={900}>{batiment.nom_batiment}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-              {cycle ? 'Lot actif' : 'Aucun lot actif'}
-            </Typography>
+            {LOTS_FEATURE_ENABLED && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                {cycle ? 'Lot actif' : 'Aucun lot actif'}
+              </Typography>
+            )}
           </Box>
           <Chip label={status.label} color={status.color} sx={{ fontWeight: 900, borderRadius: 2 }} />
         </Stack>
@@ -659,10 +661,12 @@ function BuildingStockCard({ batiment, canStartSharedLot, onAddProduction, onOpe
           }}
         >
           <Typography variant="h5" fontWeight={950} sx={{ letterSpacing: '-0.04em', lineHeight: 1.08 }}>
-            {showEmpty ? 'Saisir la production' : `${formatNumber(batiment.produced_eggs)} oeufs saisis`}
+            {showEmpty ? 'Production non saisie' : `${formatNumber(batiment.produced_eggs)} oeufs saisis`}
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }}>
-            {cycle ? `${remainingHens} poules restantes` : 'Commencez un lot pour activer la saisie.'}
+            {LOTS_FEATURE_ENABLED
+              ? (cycle ? `${remainingHens} poules restantes` : 'Commencez un lot pour activer la saisie.')
+              : `${formatNumber(batiment.available_eggs)} oeufs disponibles`}
           </Typography>
         </Box>
 
