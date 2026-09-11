@@ -28,10 +28,10 @@ def _contains(column, term: str, db: Session):
     """Match text accent-insensitively on PostgreSQL and portably in tests."""
     if db.bind and db.bind.dialect.name == "postgresql":
         normalized_column = func.lower(
-            func.immutable_unaccent(cast(column, Text))
+            func.public.immutable_unaccent(cast(column, Text))
         )
         normalized_term = func.lower(
-            func.immutable_unaccent(cast(term, Text))
+            func.public.immutable_unaccent(cast(term, Text))
         )
         return normalized_column.ilike(normalized_term)
     return column.ilike(term)
