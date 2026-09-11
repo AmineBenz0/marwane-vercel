@@ -47,7 +47,6 @@ const CalendarView = lazy(() => import('./pages/Calendar/CalendarView'));
 const TasksList = lazy(() => import('./pages/Tasks/TasksList'));
 const ReceivablesPage = lazy(() => import('./pages/Finance/FinancialLedgerPage').then((module) => ({ default: module.ReceivablesPage })));
 const PayablesPage = lazy(() => import('./pages/Finance/FinancialLedgerPage').then((module) => ({ default: module.PayablesPage })));
-const ProductBomsPage = lazy(() => import('./pages/Production/ProductBomsPage'));
 const MonthlyReportPage = lazy(() => import('./pages/Reports/MonthlyReportPage'));
 
 function PageLoading() {
