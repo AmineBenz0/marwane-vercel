@@ -2,9 +2,9 @@
  * Page Profil Client.
  * 
  * Affiche le profil complet d'un client avec :
- * - Header : Nom client, statut, boutons d'action (Ã‰diter, Nouvelle vente)
+ * - Header : Nom client, statut, boutons d'action (Éditer, Nouvelle vente)
  * - Cartes statistiques (StatCard) : Total ventes, Nombre transactions, Montant moyen
- * - Graphique : Ã‰volution des ventes (6 derniers mois) avec recharts
+ * - Graphique : Évolution des ventes (6 derniers mois) avec recharts
  * - Tableau transactions : Historique complet (DataGrid)
  * - Bouton Export : Exporter l'historique (Excel)
  * 
@@ -105,7 +105,7 @@ function ClientProfile() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
 
-  // Ã‰tats pour les donnÃ©es
+  // États pour les données
   const [client, setClient] = useState(null);
   const [statistiques, setStatistiques] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -118,12 +118,12 @@ function ClientProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Ã‰tat pour la modal d'Ã©dition
+  // État pour la modal d'édition
   const [modalOpen, setModalOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
-  // Ã‰tat pour la modal de nouvelle transaction
+  // État pour la modal de nouvelle transaction
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [transactionFormLoading, setTransactionFormLoading] = useState(false);
   const [transactionFormError, setTransactionFormError] = useState(null);
