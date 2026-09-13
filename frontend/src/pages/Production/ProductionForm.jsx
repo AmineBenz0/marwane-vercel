@@ -33,6 +33,7 @@ function ProductionForm({
   batiments,
   preselectedBatimentId = '',
   preselectedEggType = 'normal',
+  preselectedDate = new Date().toISOString().split('T')[0],
   title,
   description,
 }) {
@@ -44,7 +45,7 @@ function ProductionForm({
       ...initialData,
       date_production: initialData.date_production ? initialData.date_production.split('T')[0] : new Date().toISOString().split('T')[0],
     } : {
-      date_production: new Date().toISOString().split('T')[0],
+      date_production: preselectedDate,
       id_batiment: preselectedBatimentId || '',
       type_oeuf: preselectedEggType,
       nombre_oeufs: '',
@@ -115,9 +116,11 @@ function ProductionForm({
     try {
       const lostEggs = Number(data.oeufs_perdus || 0);
       const payload = {
-        ...data,
-        oeufs_perdus: undefined,
-        calibre: undefined,
+        date_production: data.date_production,
+        id_batiment: Number(data.id_batiment),
+        type_oeuf: data.type_oeuf,
+        nombre_oeufs: Number(data.nombre_oeufs),
+        grammage: Number(data.grammage),
         mortalite: data.mortalite === '' || data.mortalite === null ? null : Number(data.mortalite),
         consommation_aliment_kg: data.consommation_aliment_kg === '' || data.consommation_aliment_kg === null
           ? null

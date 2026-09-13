@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -8,13 +8,6 @@ import {
   Chip,
   CircularProgress,
   IconButton,
-  LinearProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Stack,
   TextField,
   Typography,
@@ -23,16 +16,13 @@ import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
   Delete as DeleteIcon,
-  FileDownload as FileDownloadIcon,
   Edit as EditIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { productionService, batimentService, cycleProductionService } from '../../services/productionService';
-import useNotification from '../../hooks/useNotification';
+import { productionService, batimentService } from '../../services/productionService';
+import useNotificationStore from '../../store/notificationStore';
 import ProductionForm from './ProductionForm';
-import { exportToExcelAdvanced } from '../../utils/exportToExcel';
-import { exportToPDF } from '../../utils/exportToPDF';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
 const formatDecimal = (value, decimals = 2) => Number(value || 0).toLocaleString('fr-FR', {
@@ -40,40 +30,14 @@ const formatDecimal = (value, decimals = 2) => Number(value || 0).toLocaleString
   maximumFractionDigits: decimals,
 });
 
-const PERFORMANCE_COLUMNS = [
-  { id: 'date', label: 'Date' },
-  { id: 'age_semaines', label: 'Age', align: 'right' },
-  { id: 'effectif_debut', label: 'Effectif', align: 'right' },
-  { id: 'mort', label: 'Mort', align: 'right' },
-  { id: 'mort_pct', label: '% Mort/j', align: 'right' },
-  { id: 'oeufs', label: 'Oeufs/j', align: 'right' },
-  { id: 'oeufs_cumul', label: 'Oeuf cum/j', align: 'right' },
-  { id: 'ponte_pct', label: '% Ponte', align: 'right' },
-  { id: 'formule', label: 'Formule' },
-  { id: 'aliment_kg', label: 'Aliment kg', align: 'right' },
-  { id: 'g_poule', label: 'g/poule', align: 'right' },
-  { id: 'g_oeuf', label: 'g/oeuf', align: 'right' },
-  { id: 'calibre', label: 'Calibre' },
-];
-
-const formatPerformanceValue = (columnId, value) => {
-  if (value === null || value === undefined || value === '') return '-';
-  if (columnId === 'aliment_kg') return formatDecimal(value, 2);
-  if (columnId === 'g_oeuf' || columnId === 'g_poule') return value === '-' ? '-' : formatDecimal(value, 1);
-  if (columnId === 'mort_pct' || columnId === 'ponte_pct') return value === '-' ? '-' : `${formatDecimal(value, 2)}%`;
-  if (typeof value === 'number') return formatNumber(value);
-  return value;
-};
-
 function BatimentProductionPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const notification = useNotification();
+  const notifySuccess = useNotificationStore((state) => state.success);
+  const notifyError = useNotificationStore((state) => state.error);
   const [productions, setProductions] = useState([]);
   const [batiments, setBatiments] = useState([]);
   const [stockData, setStockData] = useState(null);
-  const [activeCycle, setActiveCycle] = useState(null);
-  const [performanceRows, setPerformanceRows] = useState([]);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
@@ -85,40 +49,31 @@ function BatimentProductionPage() {
   const selectedBatimentId = Number(id);
   const batiment = batiments.find((item) => Number(item.id_batiment) === selectedBatimentId);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [batData, stock, cyclesData, activeCycleData] = await Promise.all([
+      const [batData, stock, productionData] = await Promise.all([
         batimentService.getBatiments(),
         productionService.getDailyStock(selectedDate),
-        cycleProductionService.getCycles({ id_batiment: selectedBatimentId }),
-        cycleProductionService.getActiveCycle(selectedBatimentId),
+        productionService.getProductions({
+          limit: 500,
+          id_batiment: selectedBatimentId,
+        }),
       ]);
-      const cycleList = cyclesData || [];
-      const chosenCycleId = activeCycleData?.id_cycle || cycleList[0]?.id_cycle || '';
-
-      const [prodData, performanceData] = chosenCycleId
-        ? await Promise.all([
-          productionService.getProductions({ limit: 500, id_batiment: selectedBatimentId, id_cycle: chosenCycleId }),
-          productionService.getPerformance(chosenCycleId),
-        ])
-        : [[], { rows: [] }];
 
       setBatiments(batData || []);
       setStockData(stock);
-      setActiveCycle(activeCycleData || null);
-      setProductions(prodData || []);
-      setPerformanceRows(performanceData?.rows || []);
+      setProductions(productionData || []);
     } catch (err) {
-      notification.error('Erreur lors du chargement des donnees du batiment');
+      notifyError('Erreur lors du chargement des donnees du batiment');
     } finally {
       setLoading(false);
     }
-  };
+  }, [notifyError, selectedBatimentId, selectedDate]);
 
   useEffect(() => {
     loadData();
-  }, [id, selectedDate]);
+  }, [loadData]);
 
   const selectedDateLabel = useMemo(() => {
     try {
@@ -159,7 +114,6 @@ function BatimentProductionPage() {
     saisies: productions.length,
   }), [productions]);
   const stockCategories = buildingStock?.categories || [];
-  const remainingHens = activeCycle?.effectif_actuel != null ? Number(activeCycle.effectif_actuel) : null;
   const latestGrammage = latestTodayEntry?.grammage != null ? `${formatDecimal(latestTodayEntry.grammage, 1)} g` : '-';
   const latestAliment = latestTodayEntry?.consommation_aliment_kg != null
     ? `${formatDecimal(latestTodayEntry.consommation_aliment_kg, 2)} kg`
@@ -167,54 +121,8 @@ function BatimentProductionPage() {
   const lowStockCategory = stockCategories.find((category) => Number(category.available_eggs || 0) <= 0)
     || stockCategories.find((category) => Number(category.available_eggs || 0) < 200);
   const hasProduction = todayProductionEntries.length > 0;
-  const progress = activeCycle
-    ? Math.min(100, Math.max(0, (Number(activeCycle.semaine_cycle || 0) / Number(activeCycle.duree_semaines || 1)) * 100))
-    : 0;
-
-  const handleExportExcel = async () => {
-    if (performanceRows.length === 0) {
-      notification.warning('Aucune ligne de performance a exporter');
-      return;
-    }
-
-    await exportToExcelAdvanced(
-      performanceRows,
-      PERFORMANCE_COLUMNS,
-      `suivi_performance_${batiment?.nom || 'batiment'}`,
-      'Suivi performance',
-      Object.fromEntries(PERFORMANCE_COLUMNS.map((column) => [
-        column.id,
-        (value) => formatPerformanceValue(column.id, value),
-      ])),
-    );
-  };
-
-  const handleExportPDF = () => {
-    if (performanceRows.length === 0) {
-      notification.warning('Aucune ligne de performance a exporter');
-      return;
-    }
-
-    exportToPDF(
-      performanceRows,
-      PERFORMANCE_COLUMNS,
-      `Suivi performance - ${batiment?.nom || 'Batiment'}`,
-      `suivi_performance_${batiment?.nom || 'batiment'}`,
-      {
-        customFormatters: Object.fromEntries(PERFORMANCE_COLUMNS.map((column) => [
-          column.id,
-          (value) => formatPerformanceValue(column.id, value),
-        ])),
-      },
-    );
-  };
 
   const handleAddProduction = () => {
-    if (!activeCycle) {
-      notification.warning('Commencez le lot depuis Production & stock avant de saisir.');
-      navigate('/production');
-      return;
-    }
     setEditingProduction(null);
     setPreselectedEggType('normal');
     setFormTitle('Saisir la production');
@@ -234,10 +142,10 @@ function BatimentProductionPage() {
     if (!window.confirm('Desactiver cette saisie de production ?')) return;
     try {
       await productionService.deleteProduction(production.id_production);
-      notification.success('Saisie desactivee');
+      notifySuccess('Saisie desactivee');
       loadData();
     } catch (err) {
-      notification.error('Erreur lors de la desactivation');
+      notifyError('Erreur lors de la desactivation');
     }
   };
 
@@ -291,53 +199,17 @@ function BatimentProductionPage() {
               {batiment?.nom || 'Batiment'}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1.5, fontSize: { md: '1.1rem' }, maxWidth: 760 }}>
-              Une page simple pour saisir la journee, verifier le lot, puis consulter le suivi complet si necessaire.
+              Saisissez la production du jour et consultez l'historique complet de ce bâtiment.
             </Typography>
-
-            <Box
-              sx={{
-                mt: 3,
-                p: 2,
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'rgba(255,255,255,0.74)',
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 190px' },
-                gap: 1.5,
-                alignItems: 'center',
-              }}
-            >
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={950} textTransform="uppercase">
-                  Lot
-                </Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
-                  {activeCycle?.nom_cycle || 'Aucun lot actif'}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={950} textTransform="uppercase">
-                  {activeCycle ? `Semaine ${activeCycle.semaine_cycle}/${activeCycle.duree_semaines}` : 'Lot requis'}
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={progress}
-                  sx={{ mt: 1, height: 10, borderRadius: 999 }}
-                />
-              </Box>
-            </Box>
           </CardContent>
         </Card>
 
         <DailyHeroCard
-          activeCycle={activeCycle}
           hasProduction={hasProduction}
           selectedDateLabel={selectedDateLabel}
           todayStats={todayStats}
           latestEntry={latestTodayEntry}
           onAddProduction={handleAddProduction}
-          onGoToOverview={() => navigate('/production')}
         />
       </Box>
 
@@ -347,7 +219,6 @@ function BatimentProductionPage() {
       />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2.5 }}>
-        <QuickFact tone="green" label="Poules restantes" value={remainingHens != null ? formatNumber(remainingHens) : '-'} />
         <QuickFact tone="blue" label="Grammage moyen" value={latestGrammage} />
         <QuickFact tone="amber" label="Aliment" value={latestAliment} />
         <QuickFact tone="red" label="Mortalite" value={formatNumber(buildingStock?.mortalite || 0)} />
@@ -355,12 +226,6 @@ function BatimentProductionPage() {
 
       <Box sx={{ display: 'grid', gap: 2.5, minWidth: 0 }}>
         <StockCategoryCard categories={stockCategories} />
-
-        <PerformanceTable
-          rows={performanceRows}
-          onExportExcel={handleExportExcel}
-          onExportPDF={handleExportPDF}
-        />
 
         <Box
           sx={{
@@ -399,6 +264,7 @@ function BatimentProductionPage() {
           batiments={batiments}
           preselectedBatimentId={selectedBatimentId}
           preselectedEggType={preselectedEggType}
+          preselectedDate={selectedDate}
           title={formTitle}
           description={formDescription}
         />
@@ -409,16 +275,12 @@ function BatimentProductionPage() {
 }
 
 function DailyHeroCard({
-  activeCycle,
   hasProduction,
   selectedDateLabel,
   todayStats,
   latestEntry,
   onAddProduction,
-  onGoToOverview,
 }) {
-  const primaryAction = activeCycle ? onAddProduction : onGoToOverview;
-
   return (
     <Card
       variant="outlined"
@@ -433,7 +295,7 @@ function DailyHeroCard({
       <CardContent sx={{ p: { xs: 2.25, md: 3.25 }, height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <Box>
           <Chip
-            label={hasProduction ? 'Journee saisie' : activeCycle ? 'A saisir' : 'Lot requis'}
+            label={hasProduction ? 'Journee saisie' : 'A saisir'}
             color={hasProduction ? 'success' : 'warning'}
             sx={{ mb: 1.5, fontWeight: 950, borderRadius: 2 }}
           />
@@ -447,9 +309,7 @@ function DailyHeroCard({
           <Typography color="text.secondary" sx={{ mt: 1.25 }}>
             {hasProduction
               ? 'Les pertes du jour sont incluses dans la meme saisie quotidienne.'
-              : activeCycle
-                ? 'La saisie quotidienne inclut aussi les oeufs perdus.'
-                : 'Commencez le lot commun depuis Production & stock avant la saisie.'}
+              : 'La saisie quotidienne inclut aussi les oeufs perdus.'}
           </Typography>
           <Typography variant="caption" color="text.secondary" fontWeight={900} sx={{ display: 'block', mt: 1.5, textTransform: 'capitalize' }}>
             {selectedDateLabel}
@@ -473,10 +333,10 @@ function DailyHeroCard({
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={primaryAction}
+          onClick={onAddProduction}
           sx={{ mt: 'auto', borderRadius: 999, minHeight: 48, fontWeight: 950 }}
         >
-          {activeCycle ? (hasProduction ? 'Modifier la saisie' : "Saisir aujourd'hui") : 'Retour a Production & stock'}
+          {hasProduction ? 'Modifier la saisie' : "Saisir aujourd'hui"}
         </Button>
       </CardContent>
     </Card>
@@ -735,138 +595,13 @@ function SummaryHistoryCard({ totalStats }) {
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography variant="h5" fontWeight={950}>Resume historique</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Total du lot actuel, sans melanger les anciens lots.
+          Total des saisies enregistrées pour ce bâtiment.
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))', xl: '1fr' }, gap: 1 }}>
           <Fact label="Total oeufs" value={`${formatNumber(totalStats.oeufs)} oeufs`} />
           <Fact label="Cartons" value={totalStats.cartons} />
           <Fact label="Saisies" value={totalStats.saisies} />
         </Box>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PerformanceTable({ rows, onExportExcel, onExportPDF }) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
-      <CardContent sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" fontWeight={900}>Suivi performance type Excel</Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-              Les informations quotidiennes du lot actuel, groupees par semaine avec une ligne Total/Moyenne.
-            </Typography>
-          </Box>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={onExportExcel} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-              Excel
-            </Button>
-            <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={onExportPDF} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-              PDF
-            </Button>
-          </Stack>
-        </Stack>
-
-        <TableContainer
-          sx={{
-            width: '100%',
-            maxWidth: '100%',
-            overflowX: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 3,
-          }}
-        >
-          <Table size="small" sx={{ minWidth: { xs: 1040, md: 1180 } }}>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'grey.100' }}>
-                {PERFORMANCE_COLUMNS.map((column) => (
-                  <TableCell
-                    key={column.id}
-                    align={column.align || 'left'}
-                    sx={{
-                      fontWeight: 900,
-                      whiteSpace: 'nowrap',
-                      fontSize: { xs: '0.72rem', md: '0.8125rem' },
-                      ...(column.id === 'date'
-                        ? {
-                          position: 'sticky',
-                          left: 0,
-                          zIndex: 2,
-                          bgcolor: 'grey.100',
-                          boxShadow: '1px 0 0 rgba(15, 23, 42, 0.08)',
-                        }
-                        : {}),
-                    }}
-                  >
-                    {column.label}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={PERFORMANCE_COLUMNS.length} align="center" sx={{ py: 3 }}>
-                    Aucune donnee de performance pour ce batiment.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    sx={{
-                      bgcolor: row.rowType === 'week'
-                        ? 'primary.50'
-                        : row.rowType === 'summary'
-                          ? 'success.50'
-                          : 'background.paper',
-                      '& td': {
-                        fontWeight: row.rowType === 'day' ? 500 : 900,
-                        borderBottom: row.rowType === 'summary' ? '2px solid' : undefined,
-                        borderBottomColor: row.rowType === 'summary' ? 'success.light' : undefined,
-                      },
-                    }}
-                  >
-                    {PERFORMANCE_COLUMNS.map((column) => (
-                      <TableCell
-                        key={column.id}
-                        align={column.align || 'left'}
-                        sx={{
-                          whiteSpace: 'nowrap',
-                          fontSize: { xs: '0.72rem', md: '0.8125rem' },
-                          ...(column.id === 'date'
-                            ? {
-                              position: 'sticky',
-                              left: 0,
-                              zIndex: 1,
-                              bgcolor: row.rowType === 'week'
-                                ? 'primary.50'
-                                : row.rowType === 'summary'
-                                  ? 'success.50'
-                                  : 'background.paper',
-                              boxShadow: '1px 0 0 rgba(15, 23, 42, 0.08)',
-                            }
-                            : {}),
-                        }}
-                      >
-                        {row.rowType === 'week' && column.id !== 'date'
-                          ? ''
-                          : formatPerformanceValue(column.id, row[column.id])}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
-          Les pourcentages et ratios sont calcules automatiquement depuis l'effectif du lot. Sur mobile, glissez le tableau horizontalement.
-        </Typography>
       </CardContent>
     </Card>
   );

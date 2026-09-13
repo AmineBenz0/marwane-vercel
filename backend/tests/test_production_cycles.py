@@ -32,7 +32,7 @@ def test_cycle_prevents_duplicate_active_lot(client, db_session, auth_headers):
     assert duplicate.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_production_auto_attaches_active_cycle_and_performance_updates(client, db_session, auth_headers):
+def test_explicit_cycle_assignment_and_performance_updates(client, db_session, auth_headers):
     batiment = create_batiment(db_session)
     cycle_response = client.post(
         "/api/v1/cycles-production",
@@ -54,6 +54,7 @@ def test_production_auto_attaches_active_cycle_and_performance_updates(client, d
         json={
             "date_production": str(date.today()),
             "id_batiment": batiment.id_batiment,
+            "id_cycle": cycle_id,
             "type_oeuf": "normal",
             "nombre_oeufs": 900,
             "grammage": "61",
@@ -77,3 +78,23 @@ def test_production_auto_attaches_active_cycle_and_performance_updates(client, d
     assert day_row["effectif_fin"] == 998
     assert day_row["mort"] == 2
     assert day_row["ponte_pct"] == "90.00"
+
+
+def test_production_can_be_created_without_a_lot(client, db_session, auth_headers):
+    batiment = create_batiment(db_session)
+
+    response = client.post(
+        "/api/v1/productions",
+        json={
+            "date_production": str(date.today()),
+            "id_batiment": batiment.id_batiment,
+            "type_oeuf": "normal",
+            "nombre_oeufs": 240,
+            "grammage": "61",
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.text
+    assert response.json()["id_cycle"] is None
+    assert response.json()["nom_cycle"] is None

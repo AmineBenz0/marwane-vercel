@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -7,10 +7,6 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
   Stack,
   TextField,
@@ -28,9 +24,9 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { productionService, batimentService, cycleProductionService } from '../../services/productionService';
+import { productionService, batimentService } from '../../services/productionService';
 import ProductionForm from './ProductionForm';
-import useNotification from '../../hooks/useNotification';
+import useNotificationStore from '../../store/notificationStore';
 
 const STATUS_CONFIG = {
   ok: { label: 'OK', color: 'success', tone: '#1f7a4d', bg: 'rgba(31, 122, 77, 0.1)' },
@@ -48,41 +44,6 @@ const MOVEMENT_CONFIG = {
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
 const formatEggs = (value) => `${formatNumber(value)} oeufs`;
-const DEFAULT_LOT_DURATION_WEEKS = 100;
-const buildLotName = (dateValue) => `Lot ${dateValue || new Date().toISOString().split('T')[0]}`;
-
-const getLotOverview = (buildings) => {
-  const cycles = buildings.map((building) => building.cycle).filter(Boolean);
-  const totalBuildings = buildings.length;
-
-  if (cycles.length === 0) {
-    return {
-      label: 'Aucun lot actif',
-      helper: 'Commencez le lot pour activer la saisie quotidienne.',
-      color: 'warning',
-      hasActiveLot: false,
-      activeBuildingsCount: 0,
-      totalBuildings,
-    };
-  }
-
-  const dates = [...new Set(cycles.map((cycle) => cycle.date_debut).filter(Boolean))];
-  const names = [...new Set(cycles.map((cycle) => cycle.nom_cycle).filter(Boolean))];
-  const sharedName = names[0] || (dates[0] ? `Lot ${dates[0]}` : 'Lot actuel');
-  const isSharedLot = dates.length <= 1;
-  const allBuildingsCovered = cycles.length === totalBuildings;
-
-  return {
-    label: isSharedLot ? sharedName : 'Lots avec dates differentes',
-    helper: isSharedLot
-      ? ''
-      : "À vérifier : les batiments n'ont pas tous la même date de lot.",
-    color: isSharedLot && allBuildingsCovered ? 'success' : 'warning',
-    hasActiveLot: true,
-    activeBuildingsCount: cycles.length,
-    totalBuildings,
-  };
-};
 
 const getCategoryStocks = (buildings) => {
   const byCategory = new Map();
@@ -118,64 +79,9 @@ const getCategoryStocks = (buildings) => {
     .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
 };
 
-const getActionItems = (buildings, totals) => {
-  const items = [];
-  const missingCycle = buildings.find((building) => !building.cycle);
-  const missingProduction = buildings.find((building) => building.cycle && building.entries_count === 0);
-  const lowStock = buildings.find((building) => ['low', 'empty'].includes(building.status) && building.entries_count > 0);
-
-  if (missingCycle && buildings.every((building) => !building.cycle)) {
-    items.push({
-      kind: 'start-lot',
-      title: 'Aucun lot actif',
-      description: 'Commencez un lot commun pour tous les batiments.',
-      buttonLabel: 'Commencer',
-    });
-  } else if (missingCycle) {
-    items.push({
-      kind: 'detail',
-      id_batiment: missingCycle.id_batiment,
-      title: `${missingCycle.nom_batiment}: lot manquant`,
-      description: 'Commencez le lot avant la saisie quotidienne.',
-      buttonLabel: 'Ouvrir',
-    });
-  }
-
-  if (missingProduction) {
-    items.push({
-      kind: 'production',
-      id_batiment: missingProduction.id_batiment,
-      title: `${missingProduction.nom_batiment}: production a saisir`,
-      description: "Aucune production enregistree aujourd'hui.",
-      buttonLabel: 'Saisir',
-    });
-  }
-
-  if (Number(totals.unassigned_sold_eggs || 0) > 0) {
-    items.push({
-      kind: 'transactions',
-      title: 'Ventes non attribuees',
-      description: `${formatEggs(totals.unassigned_sold_eggs)} a rattacher a un batiment.`,
-      buttonLabel: 'Corriger',
-    });
-  }
-
-  if (lowStock) {
-    items.push({
-      kind: 'detail',
-      id_batiment: lowStock.id_batiment,
-      title: `${lowStock.nom_batiment}: stock à vérifier`,
-      description: `Stock disponible: ${formatEggs(lowStock.available_eggs)}.`,
-      buttonLabel: 'Voir',
-    });
-  }
-
-  return items.slice(0, 3);
-};
-
 function ProductionDashboard() {
   const navigate = useNavigate();
-  const notification = useNotification();
+  const notifyError = useNotificationStore((state) => state.error);
 
   const [stockData, setStockData] = useState(null);
   const [batiments, setBatiments] = useState([]);
@@ -186,9 +92,8 @@ function ProductionDashboard() {
   const [selectedEggType, setSelectedEggType] = useState('normal');
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [openLotForm, setOpenLotForm] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [stock, batimentData] = await Promise.all([
@@ -198,21 +103,19 @@ function ProductionDashboard() {
       setStockData(stock);
       setBatiments(batimentData || []);
     } catch (err) {
-      notification.error(err?.message || "Erreur lors du chargement du stock de production");
+      notifyError(err?.message || "Erreur lors du chargement du stock de production");
     } finally {
       setLoading(false);
     }
-  };
+  }, [notifyError, selectedDate]);
 
   useEffect(() => {
     loadData();
-  }, [selectedDate]);
+  }, [loadData]);
 
   const totals = stockData?.totals || {};
-  const buildingRows = stockData?.batiments || [];
-  const lotOverview = useMemo(() => getLotOverview(buildingRows), [buildingRows]);
+  const buildingRows = useMemo(() => stockData?.batiments || [], [stockData]);
   const categoryStocks = useMemo(() => getCategoryStocks(buildingRows), [buildingRows]);
-  const actionItems = useMemo(() => getActionItems(buildingRows, totals), [buildingRows, totals]);
   const completedBuildingsCount = Math.max(
     0,
     Number(totals.buildings_count || 0) - Number(totals.missing_buildings_count || 0),
@@ -233,50 +136,6 @@ function ProductionDashboard() {
     setOpenForm(true);
   };
 
-  const handleActionItem = (item) => {
-    if (item.kind === 'start-lot') {
-      setOpenLotForm(true);
-      return;
-    }
-    if (item.kind === 'production') {
-      handleOpenProduction(item.id_batiment);
-      return;
-    }
-    if (item.kind === 'transactions') {
-      navigate('/transactions');
-      return;
-    }
-    if (item.id_batiment) {
-      navigate(`/production/batiment/${item.id_batiment}`);
-    }
-  };
-
-  const handleCreateSharedLot = async (payload) => {
-    const activeBuildings = buildingRows.filter((building) => building.cycle);
-    if (activeBuildings.length > 0) {
-      notification.warning("Un lot actif existe deja. Terminez le lot actuel avant d'en commencer un nouveau.");
-      return;
-    }
-
-    try {
-      await Promise.all(payload.allocations.map((allocation) => cycleProductionService.createCycle({
-        id_batiment: allocation.id_batiment,
-        nom_cycle: buildLotName(payload.date_debut),
-        souche: payload.souche || null,
-        date_debut: payload.date_debut,
-        age_depart_semaines: 0,
-        effectif_initial: allocation.effectif_initial,
-        duree_semaines: DEFAULT_LOT_DURATION_WEEKS,
-        notes: payload.notes || null,
-      })));
-      notification.success('Lot commun commence pour tous les batiments');
-      setOpenLotForm(false);
-      loadData();
-    } catch (err) {
-      notification.error(err.response?.data?.detail || 'Erreur lors de la creation du lot commun');
-    }
-  };
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
@@ -290,12 +149,7 @@ function ProductionDashboard() {
         <HeroHeader
         selectedDate={selectedDate}
         selectedDateLabel={selectedDateLabel}
-        lotOverview={lotOverview}
-        actionItems={actionItems}
         onDateChange={setSelectedDate}
-        onOpenProduction={() => handleOpenProduction()}
-        onOpenLotForm={() => setOpenLotForm(true)}
-        onActionItem={handleActionItem}
       />
 
       <Box
@@ -325,9 +179,7 @@ function ProductionDashboard() {
           <BuildingStockCard
             key={batiment.id_batiment}
             batiment={batiment}
-            canStartSharedLot={!lotOverview.hasActiveLot}
             onAddProduction={() => handleOpenProduction(batiment.id_batiment)}
-            onOpenLotForm={() => setOpenLotForm(true)}
             onOpenDetail={() => navigate(`/production/batiment/${batiment.id_batiment}`)}
           />
         ))}
@@ -357,17 +209,12 @@ function ProductionDashboard() {
           batiments={batiments}
           preselectedBatimentId={selectedBatimentId}
           preselectedEggType={selectedEggType}
+          preselectedDate={selectedDate}
           title={formTitle}
           description={formDescription}
         />
       )}
 
-      <SharedLotDialog
-        open={openLotForm}
-        onClose={() => setOpenLotForm(false)}
-        onSubmit={handleCreateSharedLot}
-        batiments={batiments}
-      />
     </Box>
   );
 }
@@ -375,7 +222,6 @@ function ProductionDashboard() {
 function HeroHeader({
   selectedDate,
   selectedDateLabel,
-  lotOverview,
   onDateChange,
 }) {
   return (
@@ -404,7 +250,7 @@ function HeroHeader({
               Production & stock
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 720 }}>
-              La page montre le lot commun, les saisies du jour et les stocks en oeufs.
+              Saisissez la production quotidienne et consultez les stocks en oeufs.
               Les tableaux detailles restent dans chaque batiment.
             </Typography>
 
@@ -418,20 +264,6 @@ function HeroHeader({
                 maxWidth: 760,
               }}
             >
-              <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.72)', border: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
-                  Lot actuel
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mt: 0.5 }}>
-                  <Typography variant="h6" fontWeight={950}>{lotOverview.label}</Typography>
-                  {lotOverview.color !== 'success' && (
-                    <Chip label="À vérifier" color={lotOverview.color} size="small" sx={{ fontWeight: 900 }} />
-                  )}
-                </Stack>
-                {lotOverview.helper && (
-                  <Typography variant="body2" color="text.secondary">{lotOverview.helper}</Typography>
-                )}
-              </Box>
               <TextField
                 label="Jour"
                 type="date"
@@ -453,130 +285,6 @@ function HeroHeader({
         </Typography>
       </CardContent>
     </Card>
-  );
-}
-
-function SharedLotDialog({ open, onClose, onSubmit, batiments }) {
-  const today = new Date().toISOString().split('T')[0];
-
-  const [form, setForm] = useState({
-    date_debut: today,
-    allocations: {},
-  });
-
-  useEffect(() => {
-    if (open) {
-      setForm({
-        date_debut: today,
-        allocations: batiments.reduce((acc, batiment) => {
-          acc[batiment.id_batiment] = '';
-          return acc;
-        }, {}),
-      });
-    }
-  }, [open, batiments, today]);
-
-  const allocations = batiments.map((batiment) => ({
-    id_batiment: batiment.id_batiment,
-    nom_batiment: batiment.nom || batiment.nom_batiment,
-    effectif_initial: Number(form.allocations[batiment.id_batiment] || 0),
-  }));
-  const totalEffectif = allocations.reduce((sum, allocation) => sum + allocation.effectif_initial, 0);
-  const canSubmit = form.date_debut && batiments.length > 0 && allocations.every((allocation) => allocation.effectif_initial > 0);
-
-  const updateField = (field, value) => {
-    setForm((current) => ({ ...current, [field]: value }));
-  };
-
-  const updateAllocation = (idBatiment, value) => {
-    setForm((current) => ({
-      ...current,
-      allocations: {
-        ...current.allocations,
-        [idBatiment]: value,
-      },
-    }));
-  };
-
-  const submit = (event) => {
-    event.preventDefault();
-    if (!canSubmit) return;
-
-    onSubmit({
-      date_debut: form.date_debut,
-      souche: null,
-      notes: `Lot commun cree depuis Production & stock. Total poussins: ${totalEffectif}.`,
-      allocations,
-    });
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
-      <form onSubmit={submit}>
-        <DialogTitle fontWeight={950}>Commencer le lot commun</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2.25}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2 }}>
-              <TextField label="Nom du lot" value={buildLotName(form.date_debut)} fullWidth disabled />
-              <TextField
-                label="Date debut"
-                type="date"
-                value={form.date_debut}
-                onChange={(event) => updateField('date_debut', event.target.value)}
-                required
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField label="Duree fixe" value={`${DEFAULT_LOT_DURATION_WEEKS} semaines`} fullWidth disabled />
-            </Box>
-
-            <Box>
-              <Typography variant="subtitle2" fontWeight={900} sx={{ mb: 1 }}>
-                Poules par batiment
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
-                {batiments.map((batiment) => (
-                  <TextField
-                    key={batiment.id_batiment}
-                    label={batiment.nom || batiment.nom_batiment}
-                    type="number"
-                    value={form.allocations[batiment.id_batiment] || ''}
-                    onChange={(event) => updateAllocation(batiment.id_batiment, event.target.value)}
-                    inputProps={{ min: 1 }}
-                    required
-                    fullWidth
-                  />
-                ))}
-              </Box>
-              <Box
-                sx={{
-                  mt: 1.5,
-                  p: 1.5,
-                  borderRadius: 3,
-                  bgcolor: 'rgba(20, 184, 166, 0.08)',
-                  border: '1px solid',
-                  borderColor: 'success.light',
-                }}
-              >
-                <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
-                  Total du lot
-                </Typography>
-                <Typography fontWeight={950}>
-                  {formatNumber(totalEffectif)} poules
-                </Typography>
-              </Box>
-            </Box>
-
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={onClose} color="inherit">Annuler</Button>
-          <Button type="submit" variant="contained" disabled={!canSubmit}>
-            Commencer le lot
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
   );
 }
 
@@ -609,12 +317,10 @@ function SummaryCard({ icon, label, value, tone }) {
   );
 }
 
-function BuildingStockCard({ batiment, canStartSharedLot, onAddProduction, onOpenLotForm, onOpenDetail }) {
+function BuildingStockCard({ batiment, onAddProduction, onOpenDetail }) {
   const status = STATUS_CONFIG[batiment.status] || STATUS_CONFIG.ok;
   const showEmpty = batiment.entries_count === 0;
-  const cycle = batiment.cycle;
   const hasDailyAlert = Number(batiment.mortalite || 0) > 0;
-  const remainingHens = cycle?.effectif_actuel != null ? formatNumber(cycle.effectif_actuel) : '-';
 
   return (
     <Card
@@ -634,7 +340,7 @@ function BuildingStockCard({ batiment, canStartSharedLot, onAddProduction, onOpe
           <Box>
             <Typography variant="h5" fontWeight={900}>{batiment.nom_batiment}</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-              {cycle ? 'Lot actif' : 'Aucun lot actif'}
+              Suivi quotidien
             </Typography>
           </Box>
           <Chip label={status.label} color={status.color} sx={{ fontWeight: 900, borderRadius: 2 }} />
@@ -653,7 +359,7 @@ function BuildingStockCard({ batiment, canStartSharedLot, onAddProduction, onOpe
             {showEmpty ? 'Saisir la production' : `${formatNumber(batiment.produced_eggs)} oeufs saisis`}
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }}>
-            {cycle ? `${remainingHens} poules restantes` : 'Commencez un lot pour activer la saisie.'}
+            Production et stock du jour
           </Typography>
         </Box>
 
@@ -666,15 +372,15 @@ function BuildingStockCard({ batiment, canStartSharedLot, onAddProduction, onOpe
         <Divider sx={{ my: 1.5 }} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          {showEmpty && (cycle || canStartSharedLot) && (
+          {showEmpty && (
             <Button
               variant="contained"
-              onClick={cycle ? onAddProduction : onOpenLotForm}
+              onClick={onAddProduction}
               startIcon={<AddIcon />}
               size="small"
               sx={{ borderRadius: 1.75, flex: 1, minHeight: 34, fontSize: '0.85rem', fontWeight: 800, px: 1.25 }}
             >
-              {cycle ? 'Saisir' : 'Commencer le lot'}
+              Saisir
             </Button>
           )}
           <Button

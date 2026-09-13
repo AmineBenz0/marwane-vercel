@@ -83,6 +83,116 @@ def test_daily_stock_counts_production_sales_and_losses(client, db_session, auth
     assert stock_row["available_eggs"] == 55
 
 
+def test_daily_stock_and_egg_sales_work_without_a_lot(
+    client,
+    db_session,
+    auth_headers,
+    test_user,
+):
+    batiment = Batiment(nom="Batiment Sans Lot", est_actif=True)
+    client_row = Client(
+        nom_client="Client Sans Lot",
+        est_actif=True,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add_all([batiment, client_row])
+    db_session.commit()
+    db_session.refresh(batiment)
+    db_session.refresh(client_row)
+
+    production_payload = {
+        "date_production": str(date.today()),
+        "id_batiment": batiment.id_batiment,
+        "type_oeuf": "normal",
+        "nombre_oeufs": 100,
+        "grammage": "62.0",
+    }
+    production_response = client.post(
+        "/api/v1/productions",
+        json=production_payload,
+        headers=auth_headers,
+    )
+    assert production_response.status_code == status.HTTP_201_CREATED, production_response.text
+    assert production_response.json()["id_cycle"] is None
+
+    loss_response = client.post(
+        "/api/v1/productions",
+        json={
+            **production_payload,
+            "type_oeuf": "perdu",
+            "nombre_oeufs": 5,
+            "grammage": "0",
+        },
+        headers=auth_headers,
+    )
+    assert loss_response.status_code == status.HTTP_201_CREATED, loss_response.text
+    assert loss_response.json()["id_cycle"] is None
+
+    product_name = build_sellable_egg_product_name("normal", "gros")
+    produit = db_session.query(Produit).filter(Produit.nom_produit == product_name).first()
+    assert produit is not None
+
+    sale_response = client.post(
+        "/api/v1/transactions",
+        json={
+            "date_transaction": str(date.today()),
+            "id_client": client_row.id_client,
+            "id_produit": produit.id_produit,
+            "id_batiment": batiment.id_batiment,
+            "quantite": 40,
+            "prix_unitaire": "1.50",
+        },
+        headers=auth_headers,
+    )
+    assert sale_response.status_code == status.HTTP_201_CREATED, sale_response.text
+    assert sale_response.json()["id_cycle"] is None
+
+    stock_response = client.get("/api/v1/productions/stock/daily", headers=auth_headers)
+    assert stock_response.status_code == status.HTTP_200_OK, stock_response.text
+    stock_row = next(
+        item for item in stock_response.json()["batiments"]
+        if item["id_batiment"] == batiment.id_batiment
+    )
+    assert stock_row["produced_eggs"] == 100
+    assert stock_row["sold_eggs"] == 40
+    assert stock_row["lost_eggs"] == 5
+    assert stock_row["available_eggs"] == 55
+
+
+def test_lotless_production_can_be_updated_without_being_attached(
+    client,
+    db_session,
+    auth_headers,
+):
+    batiment = Batiment(nom="Batiment Modification Sans Lot", est_actif=True)
+    db_session.add(batiment)
+    db_session.commit()
+    db_session.refresh(batiment)
+
+    create_response = client.post(
+        "/api/v1/productions",
+        json={
+            "date_production": str(date.today()),
+            "id_batiment": batiment.id_batiment,
+            "type_oeuf": "normal",
+            "nombre_oeufs": 60,
+            "grammage": "55",
+        },
+        headers=auth_headers,
+    )
+    assert create_response.status_code == status.HTTP_201_CREATED, create_response.text
+    production_id = create_response.json()["id_production"]
+
+    update_response = client.put(
+        f"/api/v1/productions/{production_id}",
+        json={"nombre_oeufs": 90, "grammage": "62"},
+        headers=auth_headers,
+    )
+    assert update_response.status_code == status.HTTP_200_OK, update_response.text
+    assert update_response.json()["nombre_oeufs"] == 90
+    assert update_response.json()["id_cycle"] is None
+
+
 def test_production_delete_is_audited_and_removed_from_active_stock(
     client,
     db_session,

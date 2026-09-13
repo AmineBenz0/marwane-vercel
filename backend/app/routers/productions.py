@@ -27,7 +27,6 @@ from app.utils.production_cycles import (
     ACTIVE_CYCLE_STATUSES,
     cycle_to_dict,
     find_active_cycle,
-    require_active_cycle_for_date,
     refresh_cycle_status,
 )
 from app.models.user import Utilisateur
@@ -186,7 +185,8 @@ def create_production(
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
 
-    if prod_in.id_cycle:
+    cycle = None
+    if prod_in.id_cycle is not None:
         cycle = db.query(CycleProduction).filter(CycleProduction.id_cycle == prod_in.id_cycle).first()
         if not cycle or cycle.id_batiment != prod_in.id_batiment:
             raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
@@ -195,14 +195,6 @@ def create_production(
             raise HTTPException(status_code=400, detail="Ce lot est termine")
         if prod_in.date_production < cycle.date_debut or prod_in.date_production > cycle.date_fin_prevue:
             raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
-    else:
-        cycle = require_active_cycle_for_date(
-            db,
-            prod_in.id_batiment,
-            prod_in.date_production,
-            action_label="de saisir la production",
-        )
-
     # Calculer le nombre de cartons selon les règles métier
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
     calibre = _deduce_calibre(prod_in.type_oeuf, prod_in.grammage)
@@ -211,7 +203,7 @@ def create_production(
     ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
     
     db_prod = Production(
-        **{**prod_in.model_dump(), "id_cycle": cycle.id_cycle, "calibre": calibre},
+        **{**prod_in.model_dump(), "id_cycle": cycle.id_cycle if cycle else None, "calibre": calibre},
         nombre_cartons=nb_cartons,
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )
@@ -223,7 +215,7 @@ def create_production(
     # Ajouter le nom du bâtiment pour la réponse
     res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
     res["nom_batiment"] = batiment.nom
-    res["nom_cycle"] = cycle.nom_cycle
+    res["nom_cycle"] = cycle.nom_cycle if cycle else None
     return res
 
 
@@ -357,10 +349,6 @@ def get_daily_stock(
         building = stock_by_batiment.get(prod.id_batiment)
         if not building:
             continue
-        active_cycle = cycles_by_batiment.get(prod.id_batiment)
-        if not active_cycle or prod.id_cycle != active_cycle.id_cycle:
-            continue
-
         quantity = int(prod.nombre_oeufs or 0)
         building["mortalite"] += int(prod.mortalite or 0)
         building["consommation_aliment_kg"] += float(prod.consommation_aliment_kg or 0)
@@ -444,10 +432,6 @@ def get_daily_stock(
         building = stock_by_batiment.get(transaction.id_batiment)
         if not building:
             continue
-        active_cycle = cycles_by_batiment.get(transaction.id_batiment)
-        if not active_cycle or (transaction.id_cycle is not None and transaction.id_cycle != active_cycle.id_cycle):
-            continue
-
         type_key, calibre_key = category_from_product
         category_key = (type_key, calibre_key)
         category = building["categories"].setdefault(
@@ -726,26 +710,33 @@ def update_production(
         raise HTTPException(status_code=404, detail="Production introuvable")
     
     update_dict = prod_in.model_dump(exclude_unset=True)
+    final_batiment_id = update_dict.get("id_batiment", prod.id_batiment)
+    final_date = update_dict.get("date_production", prod.date_production)
+    cycle = None
+
+    # A lot is optional for normal daily production. Existing historical links
+    # are preserved unless the caller explicitly changes id_cycle.
+    if "id_cycle" in update_dict:
+        if update_dict["id_cycle"] is not None:
+            cycle = db.query(CycleProduction).filter(
+                CycleProduction.id_cycle == update_dict["id_cycle"]
+            ).first()
+            if not cycle or cycle.id_batiment != final_batiment_id:
+                raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
+            if final_date < cycle.date_debut or final_date > cycle.date_fin_prevue:
+                raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
+        # Explicit null detaches the production from its lot.
+    elif prod.id_cycle is not None:
+        cycle = db.query(CycleProduction).filter(
+            CycleProduction.id_cycle == prod.id_cycle
+        ).first()
+        if not cycle or cycle.id_batiment != final_batiment_id:
+            raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
+        if final_date < cycle.date_debut or final_date > cycle.date_fin_prevue:
+            raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
+
     for key, value in update_dict.items():
         setattr(prod, key, value)
-
-    if prod.id_cycle:
-        cycle = db.query(CycleProduction).filter(CycleProduction.id_cycle == prod.id_cycle).first()
-        if not cycle or cycle.id_batiment != prod.id_batiment:
-            raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
-        refresh_cycle_status(db, cycle)
-        if cycle.statut not in ACTIVE_CYCLE_STATUSES:
-            raise HTTPException(status_code=400, detail="Ce lot est termine")
-        if prod.date_production < cycle.date_debut or prod.date_production > cycle.date_fin_prevue:
-            raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
-    else:
-        cycle = require_active_cycle_for_date(
-            db,
-            prod.id_batiment,
-            prod.date_production,
-            action_label="de modifier la production",
-        )
-        prod.id_cycle = cycle.id_cycle
 
     prod.calibre = _deduce_calibre(prod.type_oeuf, prod.grammage)
     
@@ -764,7 +755,7 @@ def update_production(
     batiment = db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).first()
     res = {c.name: getattr(prod, c.name) for c in prod.__table__.columns}
     res["nom_batiment"] = batiment.nom if batiment else None
-    res["nom_cycle"] = cycle.nom_cycle
+    res["nom_cycle"] = cycle.nom_cycle if cycle else None
     return res
 
 
