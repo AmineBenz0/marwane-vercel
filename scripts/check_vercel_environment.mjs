@@ -52,10 +52,13 @@ const databaseRole = (connectionString) => {
   }
 };
 
+const isRuntimeDatabaseRole = (role) =>
+  role === "app_runtime" || /^app_runtime\.[a-z0-9]+$/.test(role);
+
 if (!databaseUrl || isLocalDatabase(databaseUrl)) {
   errors.push("DATABASE_URL must point to a managed database");
 }
-if (databaseRole(databaseUrl) !== "app_runtime") {
+if (!isRuntimeDatabaseRole(databaseRole(databaseUrl))) {
   errors.push("DATABASE_URL must use the dedicated app_runtime role");
 }
 

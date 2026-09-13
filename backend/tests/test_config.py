@@ -22,7 +22,7 @@ def test_production_configuration_rejects_local_defaults():
 def test_production_configuration_accepts_managed_database_and_secure_flags():
     configured = Settings(
         ENVIRONMENT="production",
-        DATABASE_URL="postgresql://app_runtime:password@db.example.com:5432/app?sslmode=require",
+        DATABASE_URL="postgresql://app_runtime.projectref123:password@db.example.com:5432/app?sslmode=require",
         MIGRATION_DATABASE_URL="postgresql://app_migrator:password@db.example.com:5432/app?sslmode=require",
         SECRET_KEY="a" * 64,
         DEBUG=False,

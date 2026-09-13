@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, model_validator
 from typing import List, Optional
 import os
+import re
 from urllib.parse import urlparse
 
 DEFAULT_LOCAL_DATABASE_URL = (
@@ -36,6 +37,13 @@ def _database_username(database_url: Optional[str]) -> Optional[str]:
     if not database_url:
         return None
     return urlparse(database_url).username
+
+
+def _is_database_role(role: Optional[str], expected_role: str) -> bool:
+    """Accept a role and Supabase's project-qualified pooler form."""
+    if role == expected_role:
+        return True
+    return bool(role and re.fullmatch(rf"{re.escape(expected_role)}\.[a-z0-9]+", role))
 
 
 class Settings(BaseSettings):
@@ -122,7 +130,7 @@ class Settings(BaseSettings):
         runtime_role = _database_username(self.DATABASE_URL)
         privileged_runtime_roles = {"postgres", "supabase_admin", "service_role"}
 
-        if runtime_role != RUNTIME_DATABASE_ROLE:
+        if not _is_database_role(runtime_role, RUNTIME_DATABASE_ROLE):
             configuration_errors.append(
                 f"DATABASE_URL must use the dedicated {RUNTIME_DATABASE_ROLE} role"
             )
