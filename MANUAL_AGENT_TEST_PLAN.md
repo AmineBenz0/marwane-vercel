@@ -519,7 +519,83 @@ Expected: the entire application does not remain unusable after a component fail
 
 Result: ☐ Pass  ☐ Fail  ☐ Blocked   Evidence: ____________________
 
-## 6. Current frontend coverage gaps to track
+## 6. Cross-module propagation and dependency verification
+
+This suite is mandatory after every mutation that can affect another module. A local success message is not enough. The agent must verify the changed record, every known dependent screen, derived totals, exports and the expected non-effects.
+
+### MA-DATA-01 — Propagation protocol
+
+For each create, edit, payment, deletion, stock change, LC action or task mutation:
+
+1. Record the value before the mutation.
+2. Perform exactly one mutation.
+3. Confirm the immediate screen shows the new value and a success state.
+4. Navigate to every related screen listed in the matrix below.
+5. Refresh or reopen each screen to distinguish persisted data from stale frontend state.
+6. Verify derived totals, badges, counts, filters, charts, exports and search results.
+7. Verify that unrelated domains did not change unexpectedly.
+8. Capture the before/after values and mark every dependent surface Pass, Fail or Blocked.
+
+### MA-DATA-02 — Impact matrix
+
+| Mutation | Verify updates in | Verify no unintended update in |
+|---|---|---|
+| Client create/edit | Client list, global search, client profile, transaction selectors, receivables and dashboard counts | Supplier list, bank balance, stock and unrelated products |
+| Supplier create/edit | Supplier list, global search, supplier profile, transaction selectors, payables and dashboard counts | Client list, cash balance, stock and unrelated products |
+| Product create/edit/deactivate/reactivate | Product list, search, product detail, transaction selectors, supplier/product history, BOM selectors and relevant stock/report surfaces | Existing transactions must not be rewritten unexpectedly |
+| Sale transaction | Transaction register/detail, client profile, receivables, dashboard, cash or bank movement when paid, monthly report and egg stock when a building source is selected | Supplier balances and unrelated building stock |
+| Purchase transaction | Transaction register/detail, supplier profile, payables, dashboard, cash or bank movement when paid, monthly report and product purchase history | Client receivables and unrelated products |
+| Payment create/edit/delete | Transaction detail, payment status, transaction register, client or supplier ledger, client/supplier profile, cash or bank movement, dashboard and monthly report | Transaction total, product definition and unrelated accounts |
+| Expense create/edit/delete | Charges list, cash or selected bank account, Caisse or bank movements, dashboard and monthly report | Transaction principal amount, stock and unrelated account balances |
+| Bank movement | Bank account card, bank movement register and monthly report | Cash-in-hand balance must not change unless the movement explicitly represents a cash transfer |
+| Cash movement | Caisse, dashboard, related transaction or expense and monthly report | Bank account balances unless explicitly transferred |
+| LC create/edit/use | LC list/detail, payment or supplier transaction, bank account and bank movement when deposited, related ledger and monthly report | Unrelated LC records, cash balance when the action is a bank deposit |
+| Production entry edit/delete | Production overview, building detail, building history, stock categories, movement feed and monthly report | Client/supplier balances and bank balances |
+| Egg sale with building source | Transaction detail, client profile, receivables, building stock, production movement feed, Caisse when paid and monthly report | Other buildings and unrelated egg categories |
+| BOM transformation/reversal | BOM history, raw-material stock, finished-product stock, product detail where stock is displayed, production/report surfaces | Cash, bank, clients and suppliers unless a separate transaction is created |
+| Task create/edit/delete or reschedule | Tasks page, calendar event, counts, filters and mobile agenda | Financial, stock, client and supplier data |
+
+### MA-DATA-03 — Cross-screen refresh and stale-state check
+
+1. Open the source list in one browser tab and the dependent screen in another tab when practical.
+2. Perform the mutation from the intended UI.
+3. Check the current screen, navigate away and back, then hard-refresh the dependent screen.
+4. Compare the values before and after.
+5. Repeat once using browser back/forward navigation.
+
+Expected: persisted values survive navigation and refresh; no duplicate rows appear; list counts, badges, charts and totals agree; stale values are not presented as current; and expected non-effects remain unchanged.
+
+Result: ☐ Pass  ☐ Fail  ☐ Blocked   Evidence: ____________________
+
+### MA-DATA-04 — Export and search propagation
+
+After a mutation that should be searchable or exportable:
+
+1. Search for the created or edited record globally and inside its domain list.
+2. Apply a relevant filter and verify the record remains included or excluded correctly.
+3. Export the filtered dataset.
+4. Open or inspect the exported file and compare its row, amount, status and date with the UI.
+
+Expected: search indexes, filter counts, visible rows and exported values reflect the same committed state.
+
+Result: ☐ Pass  ☐ Fail  ☐ Blocked   Evidence: ____________________
+
+### MA-DATA-05 — Invariant checks
+
+Use the recorded baseline and test values to verify these invariants:
+
+- Remaining amount = total amount - recorded payments, subject to the product's overpayment rule.
+- Paid, remaining and payment-status badges agree on every screen.
+- Cash balance changes only for cash-affecting operations.
+- Bank balance changes only for the selected bank account and bank-affecting operations.
+- Production stock = prior stock + production - sales - losses, according to the displayed business rules.
+- BOM transformation consumes the required raw-material quantity and creates the expected finished-product quantity.
+- Reversing a transformation restores the previous stock state.
+- A used or unavailable LC cannot be reused.
+- Deleted or inactive records are not silently shown as active.
+
+Result: ☐ Pass  ☐ Fail  ☐ Blocked   Evidence: ____________________
+## 7. Current frontend coverage gaps to track
 
 These components exist in the repository but are not currently exposed through a normal route in App.jsx:
 
@@ -533,7 +609,7 @@ These components exist in the repository but are not currently exposed through a
 
 Do not mark the application feature-complete until each row is classified as one of: supported and tested, intentionally hidden, deprecated and removable, or still required.
 
-## 7. Cleanup and final report
+## 8. Cleanup and final report
 
 After mutation testing:
 
@@ -559,7 +635,7 @@ Final report:
 
 Overall verdict: ☐ Release candidate  ☐ Needs fixes  ☐ Blocked
 
-## 8. Defect template
+## 9. Defect template
 
 ### [Severity] [Test ID] Short title
 
