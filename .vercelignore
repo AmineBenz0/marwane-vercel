@@ -1,0 +1,27 @@
+# Frontend
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# Backend local artifacts
+backend/.venv
+backend/venv
+backend/env
+backend/__pycache__
+backend/.pytest_cache
+backend/.coverage
+backend/htmlcov
+backend/logs
+
+# Local environment
+.env*
+!*.env.example
+
+# Docker and OS
+docker-compose.yml
+Dockerfile
+.DS_Store
+Thumbs.db
+
+# Documentation archive
+docs/archive

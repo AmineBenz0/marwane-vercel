@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comparaison UI/UX par section</title>
+  <style>
+    :root {
+      --ink: #17211d;
+      --muted: #627069;
+      --paper: #fbfaf6;
+      --card: #ffffff;
+      --line: #e3ded2;
+      --green: #1f7a55;
+      --red: #b4473c;
+      --blue: #315f85;
+      --gold: #9a6a20;
+      --soft-green: #edf7f1;
+      --soft-red: #fff0ee;
+      --soft-blue: #edf5fb;
+      --soft-gold: #fff7e4;
+      --shadow: 0 16px 42px rgba(23, 33, 29, .08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #f4f1ea;
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      width: min(1320px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin: 0 calc(50% - 50vw) 26px;
+      padding: 14px max(16px, calc((100vw - 1320px) / 2));
+      background: rgba(244, 241, 234, .92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar-inner {
+      width: min(1320px, calc(100vw - 32px));
+      margin: 0 auto;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .nav a {
+      flex: 0 0 auto;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 999px;
+      padding: 8px 12px;
+    }
+
+    .brand {
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(237, 247, 241, .9), rgba(255, 247, 228, .86)), var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: clamp(22px, 4vw, 42px);
+      margin-bottom: 22px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      max-width: 920px;
+      font-size: clamp(32px, 5vw, 58px);
+      line-height: .98;
+      letter-spacing: -.045em;
+    }
+
+    .hero p {
+      max-width: 860px;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .legend-card {
+      background: rgba(255, 255, 255, .74);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .legend-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .legend-card span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .section {
+      scroll-margin-top: 92px;
+      margin-top: 24px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: start;
+      padding: 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .65);
+    }
+
+    .section h2 {
+      font-size: clamp(22px, 3vw, 32px);
+      letter-spacing: -.03em;
+    }
+
+    .section-head p {
+      margin-top: 7px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .recommended {
+      justify-self: end;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      background: var(--soft-green);
+      color: var(--green);
+      border: 1px solid rgba(31, 122, 85, .2);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      padding: 16px;
+    }
+
+    .option {
+      min-height: 460px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .option-title {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .option-title small {
+      color: var(--muted);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      font-size: 11px;
+    }
+
+    .option-title h3 {
+      margin-top: 6px;
+      font-size: 19px;
+      letter-spacing: -.02em;
+    }
+
+    .option-title p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .mock {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      flex: 1;
+      align-content: start;
+    }
+
+    .mini-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .title-line strong {
+      display: block;
+      font-size: 16px;
+    }
+
+    .title-line span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      min-height: 36px;
+      padding: 8px 11px;
+      font-size: 13px;
+      font-weight: 800;
+      background: var(--card);
+    }
+
+    .button.primary {
+      color: white;
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 9px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 18px;
+      letter-spacing: -.02em;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 11px;
+      background: #fff;
+    }
+
+    .row strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .row span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .money {
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .money.in { color: var(--green); }
+    .money.out { color: var(--red); }
+
+    .tag {
+      display: inline-flex;
+      width: max-content;
+      border-radius: 999px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .tag.warn {
+      color: var(--gold);
+      background: var(--soft-gold);
+      border-color: rgba(154, 106, 32, .22);
+    }
+
+    .tag.bad {
+      color: var(--red);
+      background: var(--soft-red);
+      border-color: rgba(180, 71, 60, .22);
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .segmented span {
+      text-align: center;
+      padding: 8px 6px;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .segmented .on {
+      color: white;
+      background: var(--green);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .field {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+      min-height: 58px;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .field div {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .wide { grid-column: 1 / -1; }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .step i {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--soft-green);
+      color: var(--green);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .step strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .note {
+      margin: 0 16px 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .68);
+      border: 1px dashed var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .best { border-color: rgba(31, 122, 85, .45); box-shadow: inset 0 0 0 1px rgba(31, 122, 85, .18); }
+
+    @media (max-width: 1050px) {
+      .options, .legend { grid-template-columns: 1fr; }
+      .option { min-height: auto; }
+      .section-head { grid-template-columns: 1fr; }
+      .recommended { justify-self: start; }
+    }
+
+    @media (max-width: 640px) {
+      .topbar-inner { align-items: flex-start; flex-direction: column; }
+      .metric-grid, .field-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">UI/UX options</div>
+      <nav class="nav" aria-label="Sections">
+        <a href="#dashboard">Dashboard</a>
+        <a href="#transactions">Transactions</a>
+        <a href="#transaction-form">Saisie</a>
+        <a href="#partners">Clients & fournisseurs</a>
+        <a href="#profile">Profils</a>
+        <a href="#products">Produits</a>
+        <a href="#production">Production</a>
+        <a href="#caisse">Caisse</a>
+        <a href="#shared">Composants</a>
+      </nav>
+    </div>
+  </div>
+
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">Mockups statiques pour choisir avant de coder</p>
+      <h1>Comparer les options UI/UX section par section.</h1>
+      <p>
+        Chaque section propose trois directions. L'objectif est de choisir la bonne densite pour des utilisateurs
+        non techniques qui utilisent l'application tous les jours: moins de tags, moins de bruit, plus de decisions claires.
+      </p>
+      <div class="legend">
+        <div class="legend-card">
+          <strong>Option A: minimale</strong>
+          <span>Le moins d'information possible. Ideale quand la section sert surtout a trouver ou saisir vite.</span>
+        </div>
+        <div class="legend-card">
+          <strong>Option B: registre metier</strong>
+          <span>Un peu plus dense, mais organise autour des actions quotidiennes. Souvent le meilleur compromis.</span>
+        </div>
+        <div class="legend-card">
+          <strong>Option C: guidee</strong>
+          <span>Plus explicite et rassurante pour les taches sensibles ou les nouveaux utilisateurs.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="dashboard">
+      <header class="section-head">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Doit donner la priorite a ce qui demande une action aujourd'hui, pas a tous les chiffres possibles.</p>
+        </div>
+        <div class="recommended">Recommande: A + alertes de B</div>
+      </header>
+      <div class="options">
+        <article class="option best">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Tableau de bord quotidien</h3>
+            <p>Un ecran de pilotage court: solde, ventes, achats, alertes.</p>
+          </div>
+          <div class="mock">
+            <div class="mini-header">
+              <div class="title-line"><strong>Aujourd'hui</strong><span>Mercredi 13 mai</span></div>
+              <span class="button primary">Nouvelle saisie</span>
+            </div>
+            <div class="metric-grid">
+              <div class="metric"><b>142 500 MAD</b><span>Caisse disponible</span></div>
+              <div class="metric"><b>18 900 MAD</b><span>A encaisser</span></div>
+              <div class="metric"><b>12</b><span>Ventes du jour</span></div>
+              <div class="metric"><b>3</b><span>A suivre</span></div>
+            </div>
+            <div class="row"><div><strong>Paiements en retard</strong><span>3 clients a relancer</span></div><span class="tag bad">Priorite</span></div>
+            <div class="row"><div><strong>Production faible</strong><span>Batiment B sous la moyenne</span></div><span class="tag warn">Verifier</span></div>
+          </div>
+          <p class="note">Le meilleur choix si le dashboard doit devenir un point de depart simple.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Operations recentes</h3>
+            <p>Melange de KPI et registre recent pour comprendre ce qui vient de se passer.</p>
+          </div>
+          <div class="mock">
+            <div class="metric-grid">
+              <div class="metric"><b>+32 400</b><span>Entrees</span></div>
+              <div class="metric"><b>-8 700</b><span>Sorties</span></div>
+            </div>
+            <div class="row"><div><strong>Marche central</strong><span>Oeufs calibre M</span></div><div class="money in">+4 800</div></div>
+            <div class="row"><div><strong>Coop Agadir</strong><span>Aliments</span></div><div class="money out">-2 100</div></div>
+            <div class="row"><div><strong>Restaurant Atlas</strong><span>Paiement partiel</span></div><span class="tag warn">A suivre</span></div>
+          </div>
+          <p class="note">Bien si les utilisateurs veulent surveiller l'activite sans ouvrir chaque module.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Vue responsable</h3>
+            <p>Plus analytique, pour direction ou admin: tendances, risques, comparaisons.</p>
+          </div>
+          <div class="mock">
+            <div class="metric"><b>+18%</b><span>Ventes vs mois dernier</span></div>
+            <div class="metric"><b>72%</b><span>Taux d'encaissement</span></div>
+            <div class="metric"><b>38 200 MAD</b><span>Risque de retard</span></div>
+            <div class="row"><div><strong>Clients a risque</strong><span>6 comptes avec retard frequent</span></div><span class="button">Voir</span></div>
+          </div>
+          <p class="note">Utile, mais trop lourd comme premier ecran pour une equipe operationnelle.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="transactions">
+      <header class="section-head">
+        <div>
+          <h2>Transactions</h2>
+          <p>Le registre doit repondre vite a: qui, quoi, combien, et est-ce qu'il faut agir?</p>
+        </div>
+        <div class="recommended">Recommande: B</div>
+      </header>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Liste tres simple</h3>
+            <p>Une seule ligne par operation. Peu de details, peu de friction.</p>
+          </div>
+          <div class="mock">
+            <div class="segmented"><span class="on">Tout</span><span>Ventes</span><span>Achats</span></div>
+            <div class="row"><div><strong>Marche central</strong><span>13/05/2026</span></div><div class="money in">+4 800</div></div>
+            <div class="row"><div><strong>Coop Agadir</strong><span>13/05/2026</span></div><div class="money out">-2 100</div></div>
+            <div class="row"><div><strong>Restaurant Atlas</strong><span>12/05/2026</span></div><div class="money in">+1 400</div></div>
+          </div>
+          <p class="note">Tres calme, mais peut cacher trop d'information pour retrouver une operation.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Registre metier</h3>
+            <p>Affiche le minimum utile sans ID, sans statut inutile, sans tags repetes.</p>
+          </div>
+          <div class="mock">
+            <div class="segmented"><span class="on">Tout 128</span><span>A suivre 9</span><span>Achats 31</span></div>
+            <div class="row"><div><strong>Vente client</strong><span>Marche central - Oeufs M - 20 x 240</span></div><div class="money in">+4 800</div></div>
+            <div class="row"><div><strong>Achat fournisseur</strong><span>Coop Agadir - Aliments - 7 sacs</span></div><div class="money out">-2 100</div></div>
+            <div class="row"><div><strong>Vente client</strong><span>Restaurant Atlas - Paiement partiel</span></div><span class="tag warn">A suivre</span></div>
+          </div>
+          <p class="note">Le meilleur equilibre pour usage intensif: scannable, actionnable, pas technique.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Table detaillee</h3>
+            <p>Plus proche comptabilite: colonnes, filtres, exports, tri.</p>
+          </div>
+          <div class="mock">
+            <div class="field-grid">
+              <div class="field"><label>Date</label><div>13/05/2026</div></div>
+              <div class="field"><label>Partenaire</label><div>Marche central</div></div>
+              <div class="field"><label>Produit</label><div>Oeufs M</div></div>
+              <div class="field"><label>Montant</label><div>4 800 MAD</div></div>
+            </div>
+            <div class="row"><div><strong>Filtres avances</strong><span>Date, client, fournisseur, montant, paiement</span></div><span class="button">Ouvrir</span></div>
+          </div>
+          <p class="note">A garder comme mode expert ou export, pas forcement comme vue principale.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="transaction-form">
+      <header class="section-head">
+        <div>
+          <h2>Saisie transaction</h2>
+          <p>La creation doit eviter les erreurs: vendre/acheter, choisir partenaire, produit, quantite, paiement.</p>
+        </div>
+        <div class="recommended">Recommande: C</div>
+      </header>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Formulaire compact</h3>
+            <p>Tout sur un ecran, rapide pour utilisateurs habitues.</p>
+          </div>
+          <div class="mock">
+            <div class="segmented"><span class="on">Vente</span><span>Achat</span><span>Autre</span></div>
+            <div class="field-grid">
+              <div class="field"><label>Client</label><div>Marche central</div></div>
+              <div class="field"><label>Produit</label><div>Oeufs M</div></div>
+              <div class="field"><label>Quantite</label><div>20</div></div>
+              <div class="field"><label>Prix</label><div>240</div></div>
+              <div class="field wide"><label>Paiement</label><div>Partiel - 2 000 MAD</div></div>
+            </div>
+            <span class="button primary">Enregistrer</span>
+          </div>
+          <p class="note">Rapide, mais moins rassurant pour les erreurs de sens vente/achat.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Sections accordions</h3>
+            <p>Garde un seul modal mais groupe les informations.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>1. Operation</strong><span>Vente client</span></div><span class="tag">Termine</span></div>
+            <div class="row"><div><strong>2. Produit</strong><span>Oeufs M - 20 cartons</span></div><span class="tag">Termine</span></div>
+            <div class="row"><div><strong>3. Paiement</strong><span>A payer plus tard</span></div><span class="tag warn">A verifier</span></div>
+            <span class="button primary">Enregistrer</span>
+          </div>
+          <p class="note">Bon compromis si on veut garder le modal existant.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Assistant guide</h3>
+            <p>La meilleure option pour non techniques: une decision par etape.</p>
+          </div>
+          <div class="mock">
+            <div class="timeline">
+              <div class="step"><i>1</i><div><strong>Que s'est-il passe?</strong><span>Vente client ou achat fournisseur</span></div></div>
+              <div class="step"><i>2</i><div><strong>Avec qui?</strong><span>Client ou fournisseur reconnu</span></div></div>
+              <div class="step"><i>3</i><div><strong>Quoi et combien?</strong><span>Produit, quantite, prix</span></div></div>
+              <div class="step"><i>4</i><div><strong>Paiement</strong><span>Paye maintenant, partiel ou plus tard</span></div></div>
+            </div>
+            <span class="button primary">Continuer</span>
+          </div>
+          <p class="note">Plus lent pour experts, mais beaucoup plus sur pour l'equipe.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="partners">
+      <header class="section-head">
+        <div>
+          <h2>Clients & fournisseurs</h2>
+          <p>Ces pages servent surtout a retrouver une personne ou societe, puis ouvrir son profil.</p>
+        </div>
+        <div class="recommended">Recommande: A</div>
+      </header>
+      <div class="options">
+        <article class="option best">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Cartes annuaire</h3>
+            <p>Nom en premier, actions simples, aucun detail technique.</p>
+          </div>
+          <div class="mock">
+            <div class="mini-header"><div class="title-line"><strong>Clients</strong><span>Recherche rapide</span></div><span class="button primary">Creer</span></div>
+            <div class="field wide"><label>Rechercher</label><div>Marche...</div></div>
+            <div class="row"><div><strong>Marche central</strong><span>Cree le 04/05/2026</span></div><span class="button">Profil</span></div>
+            <div class="row"><div><strong>Restaurant Atlas</strong><span>Cree le 02/05/2026</span></div><span class="button">Profil</span></div>
+          </div>
+          <p class="note">C'est le plus adapte pour des listes de noms.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Liste dense</h3>
+            <p>Plus rapide pour beaucoup de lignes, mais moins chaleureux.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Marche central</strong><span>Derniere vente: 13/05</span></div><div class="money in">+4 800</div></div>
+            <div class="row"><div><strong>Restaurant Atlas</strong><span>Derniere vente: 12/05</span></div><span class="tag warn">A suivre</span></div>
+            <div class="row"><div><strong>Hotel Nord</strong><span>Aucune dette</span></div><span class="button">Ouvrir</span></div>
+          </div>
+          <p class="note">Interressant si on veut melanger annuaire et activite recente.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>CRM simplifie</h3>
+            <p>Classe les partenaires par relation commerciale.</p>
+          </div>
+          <div class="mock">
+            <div class="segmented"><span class="on">Actifs</span><span>A relancer</span><span>Nouveaux</span></div>
+            <div class="metric"><b>8</b><span>Clients a relancer</span></div>
+            <div class="row"><div><strong>Restaurant Atlas</strong><span>Paiement en retard</span></div><span class="tag bad">Relancer</span></div>
+          </div>
+          <p class="note">Utile plus tard, mais peut compliquer une page qui doit rester simple.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="profile">
+      <header class="section-head">
+        <div>
+          <h2>Profil client/fournisseur</h2>
+          <p>Le profil doit repondre: situation actuelle, historique, prochaine action.</p>
+        </div>
+        <div class="recommended">Recommande: B</div>
+      </header>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Resume simple</h3>
+            <p>Solde, derniere activite, historique court.</p>
+          </div>
+          <div class="mock">
+            <div class="mini-header"><div class="title-line"><strong>Marche central</strong><span>Client</span></div><span class="button">Modifier</span></div>
+            <div class="metric-grid">
+              <div class="metric"><b>18 900</b><span>A encaisser</span></div>
+              <div class="metric"><b>13/05</b><span>Derniere vente</span></div>
+            </div>
+            <div class="row"><div><strong>Oeufs M</strong><span>20 cartons</span></div><div class="money in">+4 800</div></div>
+          </div>
+          <p class="note">Tres lisible, mais manque de contexte si le compte est sensible.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Profil actionnable</h3>
+            <p>Resume + alertes + historique. La meilleure vue de travail.</p>
+          </div>
+          <div class="mock">
+            <div class="mini-header"><div class="title-line"><strong>Marche central</strong><span>Derniere vente aujourd'hui</span></div><span class="button primary">Ajouter vente</span></div>
+            <div class="metric-grid">
+              <div class="metric"><b>18 900</b><span>A encaisser</span></div>
+              <div class="metric"><b>82%</b><span>Paiement</span></div>
+            </div>
+            <div class="row"><div><strong>Action conseillee</strong><span>Relancer le paiement partiel</span></div><span class="tag warn">A suivre</span></div>
+            <div class="row"><div><strong>Historique</strong><span>12 operations recentes</span></div><span class="button">Voir</span></div>
+          </div>
+          <p class="note">Preserve la simplicite tout en aidant la prochaine decision.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Profil analytique</h3>
+            <p>Score, tendances, comportement de paiement.</p>
+          </div>
+          <div class="mock">
+            <div class="metric"><b>76 / 100</b><span>Score relation</span></div>
+            <div class="metric"><b>22 jours</b><span>Delai moyen</span></div>
+            <div class="metric"><b>+12%</b><span>Evolution achats</span></div>
+          </div>
+          <p class="note">A garder en panneau secondaire, pas forcement en haut de profil.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="products">
+      <header class="section-head">
+        <div>
+          <h2>Produits</h2>
+          <p>Separer clairement les oeufs produits et les produits achetes evite beaucoup de confusion.</p>
+        </div>
+        <div class="recommended">Recommande: A</div>
+      </header>
+      <div class="options">
+        <article class="option best">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Catalogue achats</h3>
+            <p>Page dediee aux achats fournisseur uniquement.</p>
+          </div>
+          <div class="mock">
+            <div class="mini-header"><div class="title-line"><strong>Produits achetes</strong><span>Aliments, emballages, medicaments</span></div><span class="button primary">Creer</span></div>
+            <div class="field wide"><label>Rechercher</label><div>aliment...</div></div>
+            <div class="row"><div><strong>Aliment pondeuse</strong><span>Utilise dans les achats</span></div><span class="button">Modifier</span></div>
+            <div class="row"><div><strong>Plateaux carton</strong><span>Emballage</span></div><span class="button">Modifier</span></div>
+          </div>
+          <p class="note">Le plus simple: pas de badge "achat fournisseur" car la page le dit deja.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Deux catalogues</h3>
+            <p>Oeufs vendus et produits achetes visibles mais separes.</p>
+          </div>
+          <div class="mock">
+            <div class="segmented"><span class="on">Achetes</span><span>Oeufs</span><span>Masques</span></div>
+            <div class="row"><div><strong>Oeufs calibre M</strong><span>Gere par production</span></div><span class="tag">Lecture</span></div>
+            <div class="row"><div><strong>Aliment pondeuse</strong><span>Produit achete</span></div><span class="button">Modifier</span></div>
+          </div>
+          <p class="note">Plus complet, mais risque de ramener l'ancienne confusion.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Catalogue avec categories</h3>
+            <p>Regroupe par famille, utile si la liste devient longue.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Aliments</strong><span>6 produits</span></div><span class="button">Ouvrir</span></div>
+            <div class="row"><div><strong>Emballages</strong><span>4 produits</span></div><span class="button">Ouvrir</span></div>
+            <div class="row"><div><strong>Medicaments</strong><span>3 produits</span></div><span class="button">Ouvrir</span></div>
+          </div>
+          <p class="note">Bonne evolution si le catalogue grossit.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="production">
+      <header class="section-head">
+        <div>
+          <h2>Production</h2>
+          <p>La production doit privilegier la saisie par batiment et la comparaison simple.</p>
+        </div>
+        <div class="recommended">Recommande: B</div>
+      </header>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Saisie rapide</h3>
+            <p>Un formulaire court par batiment.</p>
+          </div>
+          <div class="mock">
+            <div class="field"><label>Batiment</label><div>A</div></div>
+            <div class="field"><label>Nombre d'oeufs</label><div>8 400</div></div>
+            <div class="field"><label>Calibre principal</label><div>M</div></div>
+            <span class="button primary">Enregistrer</span>
+          </div>
+          <p class="note">Ideal pour saisie quotidienne, mais faible pour supervision.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Batiments d'abord</h3>
+            <p>Chaque batiment a son resume et son action de saisie.</p>
+          </div>
+          <div class="mock">
+            <div class="row"><div><strong>Batiment A</strong><span>8 400 oeufs aujourd'hui</span></div><span class="button">Saisir</span></div>
+            <div class="row"><div><strong>Batiment B</strong><span>Sous la moyenne</span></div><span class="tag warn">Verifier</span></div>
+            <div class="row"><div><strong>Batiment C</strong><span>7 900 oeufs aujourd'hui</span></div><span class="button">Saisir</span></div>
+          </div>
+          <p class="note">Le plus naturel pour une exploitation avec suivi par batiment.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Dashboard production</h3>
+            <p>Graphiques et repartitions pour analyse.</p>
+          </div>
+          <div class="mock">
+            <div class="metric-grid">
+              <div class="metric"><b>24 200</b><span>Oeufs aujourd'hui</span></div>
+              <div class="metric"><b>-6%</b><span>vs moyenne</span></div>
+            </div>
+            <div class="row"><div><strong>Repartition</strong><span>Normal, double jaune, casse</span></div><span class="button">Voir</span></div>
+          </div>
+          <p class="note">A garder pour responsable, pas comme saisie principale.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="caisse">
+      <header class="section-head">
+        <div>
+          <h2>Caisse</h2>
+          <p>La caisse doit parler en entrees, sorties, disponible, a encaisser, a payer.</p>
+        </div>
+        <div class="recommended">Recommande: B</div>
+      </header>
+      <div class="options">
+        <article class="option">
+          <div class="option-title">
+            <small>Option A</small>
+            <h3>Solde simple</h3>
+            <p>Un seul chiffre principal et les derniers mouvements.</p>
+          </div>
+          <div class="mock">
+            <div class="metric"><b>142 500 MAD</b><span>Disponible</span></div>
+            <div class="row"><div><strong>Entree</strong><span>Marche central</span></div><div class="money in">+4 800</div></div>
+            <div class="row"><div><strong>Sortie</strong><span>Coop Agadir</span></div><div class="money out">-2 100</div></div>
+          </div>
+          <p class="note">Tres clair, mais masque les creances/dettes importantes.</p>
+        </article>
+
+        <article class="option best">
+          <div class="option-title">
+            <small>Option B</small>
+            <h3>Disponible + engagements</h3>
+            <p>Distingue argent reel, a encaisser, a payer.</p>
+          </div>
+          <div class="mock">
+            <div class="metric-grid">
+              <div class="metric"><b>142 500</b><span>Disponible</span></div>
+              <div class="metric"><b>18 900</b><span>A encaisser</span></div>
+              <div class="metric"><b>7 300</b><span>A payer</span></div>
+              <div class="metric"><b>+11 600</b><span>Variation 30j</span></div>
+            </div>
+            <div class="row"><div><strong>Mouvements recents</strong><span>Entrees et sorties sans IDs techniques</span></div><span class="button">Exporter</span></div>
+          </div>
+          <p class="note">Le meilleur langage pour utilisateurs non techniques.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Option C</small>
+            <h3>Vue finance complete</h3>
+            <p>Solde theorique, reel, ecart, ratios.</p>
+          </div>
+          <div class="mock">
+            <div class="metric"><b>151 800</b><span>Solde theorique</span></div>
+            <div class="metric"><b>142 500</b><span>Solde reel</span></div>
+            <div class="metric"><b>9 300</b><span>Ecart</span></div>
+          </div>
+          <p class="note">Utile pour controle, mais vocabulaire a simplifier dans l'ecran quotidien.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="shared">
+      <header class="section-head">
+        <div>
+          <h2>Composants partages</h2>
+          <p>Ces composants influencent toutes les pages. Il faut choisir leur niveau de bruit par defaut.</p>
+        </div>
+        <div class="recommended">Recommande: calme par defaut</div>
+      </header>
+      <div class="options">
+        <article class="option best">
+          <div class="option-title">
+            <small>Badges</small>
+            <h3>Calmes par defaut</h3>
+            <p>Pas d'icone, contour leger, couleur forte seulement si action necessaire.</p>
+          </div>
+          <div class="mock">
+            <span class="tag">Paye</span>
+            <span class="tag warn">Partiel</span>
+            <span class="tag bad">En retard</span>
+            <div class="row"><div><strong>Regle</strong><span>Un badge doit signaler un etat utile, pas decorer la ligne.</span></div></div>
+          </div>
+          <p class="note">C'est le systeme le plus coherent avec la simplification.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Filtres</small>
+            <h3>Recherche d'abord</h3>
+            <p>Champ principal visible, filtres avances caches, chips discrets.</p>
+          </div>
+          <div class="mock">
+            <div class="field wide"><label>Recherche</label><div>client, fournisseur, produit...</div></div>
+            <span class="button">Filtres</span>
+            <span class="tag">Date: 13/05</span>
+            <span class="tag">Effacer</span>
+          </div>
+          <p class="note">Evite que les filtres prennent plus de place que les resultats.</p>
+        </article>
+
+        <article class="option">
+          <div class="option-title">
+            <small>Actions</small>
+            <h3>Action principale claire</h3>
+            <p>Un bouton fort par section, actions secondaires en icones ou boutons sobres.</p>
+          </div>
+          <div class="mock">
+            <span class="button primary">Nouvelle transaction</span>
+            <span class="button">Exporter</span>
+            <span class="button">Modifier</span>
+            <div class="row"><div><strong>Regle</strong><span>Ne pas mettre trois boutons importants au meme niveau.</span></div></div>
+          </div>
+          <p class="note">A appliquer globalement pour reduire l'effort de decision.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

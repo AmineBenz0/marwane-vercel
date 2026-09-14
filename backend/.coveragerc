@@ -1,0 +1,47 @@
+[run]
+# Répertoires à inclure dans le rapport de couverture
+source = app
+
+# Répertoires à exclure du rapport de couverture
+omit =
+    */tests/*
+    */__pycache__/*
+    */alembic/*
+    */venv/*
+    */env/*
+    */migrations/*
+    */scripts/*
+    */test_*.py
+    */conftest.py
+    */__init__.py
+
+# Branches à inclure
+branch = True
+
+[report]
+# Seuil minimum de couverture (0 = pas de seuil minimum)
+precision = 2
+
+# Exclure les lignes de code qui ne peuvent pas être testées
+exclude_lines =
+    # Exclure les pragmas
+    pragma: no cover
+    # Exclure les fonctions abstraites
+    def __repr__
+    def __str__
+    # Exclure les raise NotImplementedError
+    raise NotImplementedError
+    # Exclure les if __name__ == .__main__.:
+    if __name__ == .__main__.:
+    # Exclure les imports
+    ^\s*import 
+    ^\s*from .* import
+    # Exclure les définitions de classe sans logique
+    ^\s*class .*\(.*\):\s*$
+    # Exclure les pass statements
+    ^\s*pass\s*$
+
+[html]
+# Répertoire de sortie pour le rapport HTML
+directory = htmlcov
+

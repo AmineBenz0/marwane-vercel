@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Option A - Daily Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #18221d;
+      --muted: #677069;
+      --bg: #f7f1e5;
+      --paper: #fffdf7;
+      --paper-2: #fbf4e8;
+      --line: #ded2bd;
+      --green: #1d6f50;
+      --green-soft: #e0f1e7;
+      --red: #a84435;
+      --red-soft: #f8ded9;
+      --amber: #a96522;
+      --amber-soft: #f8e8cc;
+      --blue: #315f85;
+      --blue-soft: #dcecf7;
+      --shadow: 0 24px 60px rgba(55, 44, 24, .11);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Manrope, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 0 0, rgba(255,255,255,.9), transparent 28%),
+        radial-gradient(circle at 85% 8%, rgba(29,111,80,.16), transparent 25%),
+        linear-gradient(145deg, #fbf6ec, var(--bg));
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    .side {
+      padding: 22px 18px;
+      background: rgba(255,253,247,.72);
+      border-right: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      margin-bottom: 24px;
+    }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #1d6f50, #b56b3c);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+    }
+
+    .brand strong { display: block; }
+    .brand span { color: var(--muted); font-size: 12px; }
+
+    .nav-title {
+      padding: 12px 10px 7px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-weight: 800;
+    }
+
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      text-decoration: none;
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 5px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .nav a.active {
+      background: var(--green);
+      color: white;
+      box-shadow: 0 14px 30px rgba(29,111,80,.22);
+    }
+
+    .content {
+      padding: 26px;
+      max-width: 1420px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    h1, h2, h3 {
+      font-family: Fraunces, serif;
+      margin: 0;
+      letter-spacing: -.03em;
+    }
+
+    h1 { font-size: clamp(34px, 5vw, 58px); line-height: .98; }
+
+    .date-pill {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 11px 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.18fr .82fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .panel {
+      background: rgba(255,253,247,.9);
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .focus {
+      padding: 28px;
+      min-height: 300px;
+      background:
+        linear-gradient(135deg, rgba(255,253,247,.95), rgba(255,253,247,.85)),
+        repeating-linear-gradient(45deg, transparent 0, transparent 18px, rgba(29,111,80,.04) 18px, rgba(29,111,80,.04) 19px);
+    }
+
+    .focus p {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+      margin: 12px 0 24px;
+      max-width: 660px;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    .action {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 22px;
+      padding: 18px 14px;
+      min-height: 126px;
+      display: grid;
+      align-content: space-between;
+      cursor: default;
+    }
+
+    .action strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .action span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      margin-bottom: 18px;
+    }
+
+    .g { background: var(--green-soft); color: var(--green); }
+    .r { background: var(--red-soft); color: var(--red); }
+    .a { background: var(--amber-soft); color: var(--amber); }
+    .b { background: var(--blue-soft); color: var(--blue); }
+
+    .alerts {
+      padding: 22px;
+      display: grid;
+      gap: 13px;
+    }
+
+    .alerts h2 { font-size: 27px; }
+
+    .alert {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 20px;
+      padding: 14px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--amber);
+    }
+
+    .alert strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .alert span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mini-button {
+      border: 0;
+      background: var(--ink);
+      color: white;
+      border-radius: 999px;
+      padding: 9px 12px;
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .metric {
+      padding: 20px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+    }
+
+    .metric small {
+      color: var(--muted);
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 30px;
+      margin-top: 8px;
+      letter-spacing: -.04em;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .section {
+      padding: 22px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .section h2 { font-size: 26px; }
+
+    .link {
+      color: var(--green);
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .row strong { display: block; font-size: 14px; }
+    .row span { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+    .amount {
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .amount.in { color: var(--green); }
+    .amount.out { color: var(--red); }
+
+    @media (max-width: 1180px) {
+      .shell { grid-template-columns: 1fr; }
+      .side {
+        position: static;
+        height: auto;
+        display: block;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .nav { display: flex; gap: 8px; overflow-x: auto; }
+      .nav-title { display: none; }
+      .nav a { white-space: nowrap; }
+      .hero, .bottom { grid-template-columns: 1fr; }
+      .actions, .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 640px) {
+      .content { padding: 16px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .actions, .grid { grid-template-columns: 1fr; }
+      .focus, .alerts, .section { padding: 18px; }
+      .alert { grid-template-columns: auto 1fr; }
+      .mini-button { grid-column: 2; width: max-content; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo">G</div>
+        <div>
+          <strong>Gestion ferme</strong>
+          <span>Mode quotidien</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Navigation simplifiée">
+        <div class="nav-title">Aujourd'hui</div>
+        <a class="active" href="#">Accueil</a>
+        <a href="#">Actions rapides</a>
+        <a href="#">À vérifier</a>
+        <div class="nav-title">Travail</div>
+        <a href="#">Ventes & achats</a>
+        <a href="#">Production</a>
+        <a href="#">Paiements</a>
+        <a href="#">Partenaires</a>
+        <div class="nav-title">Gestion</div>
+        <a href="#">Caisse</a>
+        <a href="#">Banques & LC</a>
+        <a href="#">Rapports</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1>Bonjour, que voulez-vous faire aujourd'hui ?</h1>
+        </div>
+        <div class="date-pill">Vendredi 8 mai 2026</div>
+      </header>
+
+      <section class="hero">
+        <article class="panel focus">
+          <h2>Les 5 actions les plus utilisées</h2>
+          <p>
+            Instead of making users choose a module first, the app starts with their real-world action.
+            The current modules still exist, but they move behind clear daily tasks.
+          </p>
+          <div class="actions">
+            <div class="action">
+              <div>
+                <div class="icon g">+</div>
+                <strong>Vendre à un client</strong>
+                <span>Crée transaction + paiement si payé.</span>
+              </div>
+            </div>
+            <div class="action">
+              <div>
+                <div class="icon r">-</div>
+                <strong>Acheter fournisseur</strong>
+                <span>Crée achat + dette ou paiement.</span>
+              </div>
+            </div>
+            <div class="action">
+              <div>
+                <div class="icon a">O</div>
+                <strong>Saisir production</strong>
+                <span>Collecte par bâtiment et cartons.</span>
+              </div>
+            </div>
+            <div class="action">
+              <div>
+                <div class="icon b">P</div>
+                <strong>Ajouter paiement</strong>
+                <span>Encaisser client ou payer fournisseur.</span>
+              </div>
+            </div>
+            <div class="action">
+              <div>
+                <div class="icon r">D</div>
+                <strong>Nouvelle dépense</strong>
+                <span>Charge + mouvement caisse.</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel alerts">
+          <h2>À traiter maintenant</h2>
+          <div class="alert">
+            <div class="dot"></div>
+            <div>
+              <strong>3 paiements en retard</strong>
+              <span>Clients avec échéance dépassée.</span>
+            </div>
+            <button class="mini-button">Voir</button>
+          </div>
+          <div class="alert">
+            <div class="dot" style="background: var(--red)"></div>
+            <div>
+              <strong>Écart caisse à contrôler</strong>
+              <span>Théorique - réel : 12 400 MAD.</span>
+            </div>
+            <button class="mini-button">Régler</button>
+          </div>
+          <div class="alert">
+            <div class="dot" style="background: var(--green)"></div>
+            <div>
+              <strong>Production du jour incomplète</strong>
+              <span>2 bâtiments non saisis.</span>
+            </div>
+            <button class="mini-button">Saisir</button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="grid" aria-label="Résumé business">
+        <div class="metric">
+          <small>Argent disponible</small>
+          <strong>184 250 MAD</strong>
+          <span>Solde réel de caisse</span>
+        </div>
+        <div class="metric">
+          <small>À encaisser</small>
+          <strong>96 800 MAD</strong>
+          <span>Créances clients</span>
+        </div>
+        <div class="metric">
+          <small>À payer</small>
+          <strong>41 300 MAD</strong>
+          <span>Dettes fournisseurs</span>
+        </div>
+        <div class="metric">
+          <small>Production aujourd'hui</small>
+          <strong>1 260 oeufs</strong>
+          <span>49 cartons estimés</span>
+        </div>
+      </section>
+
+      <section class="bottom">
+        <article class="panel section">
+          <div class="section-head">
+            <h2>Dernières opérations</h2>
+            <span class="link">Tout voir</span>
+          </div>
+          <div class="list">
+            <div class="row">
+              <div><strong>Vente - Ferme Atlas Distribution</strong><span>Oeufs moyen, 18 cartons, payé cash</span></div>
+              <div class="amount in">+7 560 MAD</div>
+            </div>
+            <div class="row">
+              <div><strong>Achat - Fournisseur Aliment Nord</strong><span>Aliment pondeuse, paiement différé</span></div>
+              <div class="amount out">-21 000 MAD</div>
+            </div>
+            <div class="row">
+              <div><strong>Dépense - Réparation pompe</strong><span>Maintenance / réparation</span></div>
+              <div class="amount out">-850 MAD</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel section">
+          <div class="section-head">
+            <h2>Raccourcis de consultation</h2>
+            <span class="link">Configurer</span>
+          </div>
+          <div class="list">
+            <div class="row">
+              <div><strong>Voir les clients non payés</strong><span>Filtre préconfiguré, pas besoin de chercher.</span></div>
+              <div class="amount">12</div>
+            </div>
+            <div class="row">
+              <div><strong>Voir les LC disponibles</strong><span>Références utilisables dans les prochains paiements.</span></div>
+              <div class="amount">5</div>
+            </div>
+            <div class="row">
+              <div><strong>Exporter le rapport du mois</strong><span>Excel/PDF regroupés dans un seul endroit.</span></div>
+              <div class="amount">Mai</div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

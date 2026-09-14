@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Options UX - Production et stock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #17211d;
+      --muted: #657069;
+      --paper: #fffdf6;
+      --cream: #f5edde;
+      --line: #dfd2bd;
+      --green: #1f6f4f;
+      --green-soft: #e1f2e8;
+      --amber: #a5651c;
+      --amber-soft: #faead0;
+      --red: #a94638;
+      --red-soft: #f7ddd8;
+      --blue: #315f85;
+      --blue-soft: #dcecf7;
+      --slate: #24332c;
+      --shadow: 0 24px 70px rgba(55, 44, 24, .13);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: Manrope, sans-serif;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(31, 111, 79, .14), transparent 27%),
+        radial-gradient(circle at 93% 6%, rgba(165, 101, 28, .18), transparent 26%),
+        linear-gradient(140deg, #fbf7ec 0%, #f2eadc 55%, #eef5ee 100%);
+      min-height: 100vh;
+    }
+
+    .page {
+      width: min(1440px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 38px 0 64px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 22px;
+      align-items: stretch;
+      margin-bottom: 24px;
+    }
+
+    .panel {
+      border: 1px solid rgba(223, 210, 189, .95);
+      background: rgba(255, 253, 246, .9);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .intro {
+      padding: 34px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: Fraunces, serif;
+      letter-spacing: -.035em;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(40px, 7vw, 78px);
+      line-height: .93;
+      max-width: 900px;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.72;
+      margin: 14px 0 0;
+      font-size: 16px;
+    }
+
+    .note-card {
+      padding: 24px;
+      display: grid;
+      gap: 14px;
+      align-content: center;
+    }
+
+    .note-line {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 16px;
+    }
+
+    .note-line strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .note-line span {
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 13px;
+    }
+
+    .recommendation {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 18px;
+      align-items: center;
+      padding: 22px;
+      margin-bottom: 28px;
+      background: var(--slate);
+      color: #fff9eb;
+    }
+
+    .mark {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      background: #f5c66b;
+      color: #2a2112;
+      font-weight: 900;
+      font-size: 22px;
+    }
+
+    .recommendation h2 {
+      font-size: 28px;
+      margin-bottom: 4px;
+    }
+
+    .recommendation p {
+      color: rgba(255, 249, 235, .78);
+      margin: 0;
+    }
+
+    .tag {
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 9px 12px;
+      background: rgba(255, 255, 255, .13);
+      color: #fff9eb;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .option-stack {
+      display: grid;
+      gap: 30px;
+    }
+
+    .option {
+      padding: 18px;
+    }
+
+    .option-head {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 6px 6px 18px;
+    }
+
+    .badge {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 17px;
+      color: white;
+      background: var(--green);
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    .option h2 {
+      font-size: 28px;
+    }
+
+    .option-head p {
+      margin-top: 3px;
+      font-size: 14px;
+    }
+
+    .score {
+      display: grid;
+      justify-items: end;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .score strong {
+      color: var(--green);
+      font-size: 20px;
+    }
+
+    .screen {
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--paper);
+      overflow: hidden;
+    }
+
+    .screen-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 16px;
+      padding: 22px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #fffaf0, #fff7e9);
+    }
+
+    .screen-header h3 {
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    button,
+    .button {
+      border: 0;
+      border-radius: 16px;
+      padding: 13px 16px;
+      background: #ece4d5;
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .primary {
+      background: var(--green);
+      color: white;
+      box-shadow: 0 14px 28px rgba(31, 111, 79, .2);
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .metric,
+    .card,
+    .field,
+    .row,
+    .stock-card,
+    .calc-card {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: white;
+    }
+
+    .metric {
+      padding: 16px;
+    }
+
+    .metric span,
+    .mini-label,
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .metric b {
+      display: block;
+      margin-top: 7px;
+      font-size: 27px;
+      letter-spacing: -.03em;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.12fr .88fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .building-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .stock-card {
+      padding: 18px;
+      min-height: 188px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .stock-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .stock-top h4,
+    .calc-card h4,
+    .daily-entry h4 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: -.02em;
+    }
+
+    .status {
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--green);
+      background: var(--green-soft);
+      white-space: nowrap;
+    }
+
+    .status.warn {
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .stock-number {
+      font-size: 42px;
+      line-height: .9;
+      font-weight: 900;
+      letter-spacing: -.05em;
+      color: var(--green);
+    }
+
+    .stock-number.warn {
+      color: var(--amber);
+    }
+
+    .equation {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .eq-box {
+      border-radius: 16px;
+      padding: 10px;
+      background: #faf6ed;
+    }
+
+    .eq-box strong {
+      display: block;
+      font-size: 18px;
+      margin-top: 3px;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .calc-card {
+      padding: 18px;
+    }
+
+    .formula {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .formula-line {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 11px 12px;
+      border-radius: 14px;
+      background: #faf6ed;
+      font-weight: 800;
+    }
+
+    .formula-line.minus {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .formula-line.result {
+      color: var(--green);
+      background: var(--green-soft);
+      font-size: 18px;
+    }
+
+    .daily-entry {
+      display: grid;
+      gap: 12px;
+    }
+
+    .field {
+      padding: 13px;
+    }
+
+    .field strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 17px;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .choice {
+      border: 2px solid var(--line);
+      background: #fffdf8;
+      border-radius: 18px;
+      padding: 14px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .choice.active {
+      border-color: var(--green);
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .ledger {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 110px 1fr auto auto;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+    }
+
+    .row strong {
+      display: block;
+    }
+
+    .row small {
+      color: var(--muted);
+      display: block;
+      margin-top: 3px;
+    }
+
+    .delta {
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-weight: 900;
+      font-size: 12px;
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .delta.out {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .wizard {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 500px;
+    }
+
+    .steps {
+      padding: 22px;
+      border-right: 1px solid var(--line);
+      background: #fff8ec;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px;
+      color: var(--muted);
+      font-weight: 900;
+      border-radius: 16px;
+      margin-bottom: 8px;
+    }
+
+    .step i {
+      width: 33px;
+      height: 33px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: white;
+      color: var(--muted);
+      font-style: normal;
+    }
+
+    .step.active {
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .step.active i {
+      color: white;
+      background: var(--green);
+    }
+
+    .wizard-main {
+      padding: 28px;
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .big-question {
+      font-size: clamp(32px, 4vw, 50px);
+      line-height: .98;
+    }
+
+    .big-choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    .big-choice {
+      border: 2px solid var(--line);
+      border-radius: 24px;
+      background: white;
+      padding: 20px;
+      min-height: 150px;
+    }
+
+    .big-choice.active {
+      border-color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .big-choice strong {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 7px;
+    }
+
+    .big-choice span {
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .bottom-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .mobile-shell {
+      width: min(380px, 100%);
+      margin: 0 auto;
+      border: 10px solid #1f2a24;
+      border-radius: 38px;
+      background: #1f2a24;
+      box-shadow: 0 22px 60px rgba(21, 28, 23, .22);
+    }
+
+    .mobile-screen {
+      background: #fff9ee;
+      border-radius: 28px;
+      overflow: hidden;
+      min-height: 690px;
+    }
+
+    .mobile-header {
+      padding: 22px 18px;
+      background: var(--green);
+      color: white;
+    }
+
+    .mobile-header h3 {
+      font-size: 32px;
+    }
+
+    .mobile-content {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .tap-card {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: white;
+      padding: 16px;
+      display: grid;
+      gap: 9px;
+    }
+
+    .tap-card h4 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .tap-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .pros {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .pros span {
+      border-radius: 999px;
+      padding: 8px 10px;
+      background: rgba(31, 111, 79, .08);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    @media (max-width: 1050px) {
+      .hero,
+      .recommendation,
+      .main-grid,
+      .screen-header,
+      .wizard,
+      .option-head {
+        grid-template-columns: 1fr;
+      }
+
+      .score {
+        justify-items: start;
+      }
+
+      .metrics,
+      .building-grid,
+      .bottom-summary,
+      .choice-grid,
+      .big-choice-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .row {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      button,
+      .button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <article class="panel intro">
+        <span class="eyebrow">Production + stock</span>
+        <h1>Make the daily farm work feel obvious.</h1>
+        <p>
+          The user should not need to understand databases, transaction models, or inventory theory.
+          The screen should answer three plain questions: what did each building produce today, what left
+          the stock, and what is still available to sell.
+        </p>
+      </article>
+
+      <aside class="panel note-card">
+        <div class="note-line">
+          <strong>What the handwritten note asks for</strong>
+          <span>Daily production by building, then stock per building based on production, sold eggs, and lost eggs.</span>
+        </div>
+        <div class="note-line">
+          <strong>UX problem to solve</strong>
+          <span>The current production form records eggs, but the stock story is not visible enough for a non-technical operator.</span>
+        </div>
+        <div class="note-line">
+          <strong>Design rule</strong>
+          <span>Show the formula in words and numbers: Produced today - Sold - Lost = Available stock.</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel recommendation">
+      <div class="mark">1</div>
+      <div>
+        <h2>Recommendation: building stock board + quick daily entry</h2>
+        <p>
+          This is the best fit for a non-technical farm user. It starts with buildings, not tables.
+          Each card shows stock, the exact calculation, and the next action.
+        </p>
+      </div>
+      <span class="tag">Best daily UX</span>
+    </section>
+
+    <section class="option-stack">
+      <article class="panel option">
+        <div class="option-head">
+          <div class="badge">1</div>
+          <div>
+            <h2>Building stock board</h2>
+            <p>Best default screen: users see every building, stock health, and the formula in one glance.</p>
+          </div>
+          <div class="score">
+            <span>Non-technical clarity</span>
+            <strong>9/10</strong>
+          </div>
+        </div>
+
+        <div class="screen">
+          <header class="screen-header">
+            <div>
+              <h3>Production et stock du jour</h3>
+              <p>Choisir un batiment pour saisir la production, voir le stock, ou enregistrer les pertes.</p>
+            </div>
+            <div class="actions">
+              <button>Voir historique</button>
+              <button class="primary">Saisie du jour</button>
+            </div>
+          </header>
+
+          <div class="content">
+            <div class="metrics">
+              <div class="metric"><span>Oeufs produits</span><b>12 480</b></div>
+              <div class="metric"><span>Oeufs vendus</span><b>7 200</b></div>
+              <div class="metric"><span>Oeufs perdus</span><b>180</b></div>
+              <div class="metric"><span>Stock disponible</span><b>5 100</b></div>
+            </div>
+
+            <div class="main-grid">
+              <section class="building-grid">
+                <article class="stock-card">
+                  <div class="stock-top">
+                    <div>
+                      <h4>Batiment A</h4>
+                      <span class="mini-label">Normal - moyen</span>
+                    </div>
+                    <span class="status">OK</span>
+                  </div>
+                  <div class="stock-number">1 520</div>
+                  <div class="equation">
+                    <div class="eq-box"><span class="mini-label">Produit</span><strong>3 240</strong></div>
+                    <div class="eq-box"><span class="mini-label">Vendu</span><strong>1 650</strong></div>
+                    <div class="eq-box"><span class="mini-label">Perdu</span><strong>70</strong></div>
+                  </div>
+                  <button class="primary">Saisir pour A</button>
+                </article>
+
+                <article class="stock-card">
+                  <div class="stock-top">
+                    <div>
+                      <h4>Batiment B</h4>
+                      <span class="mini-label">Double jaune</span>
+                    </div>
+                    <span class="status warn">Bas</span>
+                  </div>
+                  <div class="stock-number warn">260</div>
+                  <div class="equation">
+                    <div class="eq-box"><span class="mini-label">Produit</span><strong>860</strong></div>
+                    <div class="eq-box"><span class="mini-label">Vendu</span><strong>560</strong></div>
+                    <div class="eq-box"><span class="mini-label">Perdu</span><strong>40</strong></div>
+                  </div>
+                  <button>Verifier stock</button>
+                </article>
+
+                <article class="stock-card">
+                  <div class="stock-top">
+                    <div>
+                      <h4>Batiment C</h4>
+                      <span class="mini-label">Normal - gros</span>
+                    </div>
+                    <span class="status">OK</span>
+                  </div>
+                  <div class="stock-number">2 480</div>
+                  <div class="equation">
+                    <div class="eq-box"><span class="mini-label">Produit</span><strong>4 120</strong></div>
+                    <div class="eq-box"><span class="mini-label">Vendu</span><strong>1 560</strong></div>
+                    <div class="eq-box"><span class="mini-label">Perdu</span><strong>80</strong></div>
+                  </div>
+                  <button>Saisir vente</button>
+                </article>
+
+                <article class="stock-card">
+                  <div class="stock-top">
+                    <div>
+                      <h4>Batiment D</h4>
+                      <span class="mini-label">Pas encore saisi</span>
+                    </div>
+                    <span class="status warn">A faire</span>
+                  </div>
+                  <div class="stock-number warn">--</div>
+                  <p>La production du jour n'a pas encore ete entree pour ce batiment.</p>
+                  <button class="primary">Entrer production</button>
+                </article>
+              </section>
+
+              <aside class="side-stack">
+                <section class="calc-card">
+                  <h4>Calcul visible pour l'utilisateur</h4>
+                  <p>Example: Batiment A, oeufs moyen.</p>
+                  <div class="formula">
+                    <div class="formula-line"><span>Produit aujourd'hui</span><strong>3 240</strong></div>
+                    <div class="formula-line minus"><span>Moins vendu</span><strong>-1 650</strong></div>
+                    <div class="formula-line minus"><span>Moins perdu</span><strong>-70</strong></div>
+                    <div class="formula-line result"><span>Stock disponible</span><strong>1 520</strong></div>
+                  </div>
+                </section>
+
+                <section class="calc-card daily-entry">
+                  <h4>Saisie rapide</h4>
+                  <div class="field"><label>Date</label><strong>Aujourd'hui</strong></div>
+                  <div class="field"><label>Batiment</label><strong>Batiment A</strong></div>
+                  <div class="choice-grid">
+                    <div class="choice active">Produit</div>
+                    <div class="choice">Vendu</div>
+                    <div class="choice">Perdu</div>
+                  </div>
+                  <div class="field"><label>Nombre d'oeufs</label><strong>3 240</strong></div>
+                  <button class="primary">Enregistrer</button>
+                </section>
+              </aside>
+            </div>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Recommended</span>
+          <span>Shows stock without opening reports</span>
+          <span>Building-first language</span>
+          <span>Easy to detect missing entries</span>
+        </div>
+      </article>
+
+      <article class="panel option">
+        <div class="option-head">
+          <div class="badge" style="background: var(--blue);">2</div>
+          <div>
+            <h2>Guided daily assistant</h2>
+            <p>Best when data-entry mistakes are the main fear: one question at a time, with confirmation.</p>
+          </div>
+          <div class="score">
+            <span>Error prevention</span>
+            <strong>10/10</strong>
+          </div>
+        </div>
+
+        <div class="screen">
+          <header class="screen-header">
+            <div>
+              <h3>Assistant de saisie</h3>
+              <p>Un chemin guide pour entrer production, vente ou perte sans se tromper.</p>
+            </div>
+            <div class="actions">
+              <button>Annuler</button>
+              <button class="primary">Continuer</button>
+            </div>
+          </header>
+
+          <div class="wizard">
+            <aside class="steps">
+              <div class="step active"><i>1</i> Action</div>
+              <div class="step"><i>2</i> Batiment</div>
+              <div class="step"><i>3</i> Type d'oeuf</div>
+              <div class="step"><i>4</i> Quantite</div>
+              <div class="step"><i>5</i> Validation</div>
+            </aside>
+
+            <section class="wizard-main">
+              <h3 class="big-question">Que voulez-vous enregistrer ?</h3>
+              <div class="big-choice-grid">
+                <div class="big-choice active">
+                  <strong>Production du jour</strong>
+                  <span>Ajouter les oeufs collectes dans un batiment.</span>
+                </div>
+                <div class="big-choice">
+                  <strong>Oeufs vendus</strong>
+                  <span>Sortir des oeufs du stock et creer une vente.</span>
+                </div>
+                <div class="big-choice">
+                  <strong>Oeufs perdus</strong>
+                  <span>Declarer casse, perte ou autre sortie non vendue.</span>
+                </div>
+                <div class="big-choice">
+                  <strong>Verifier stock</strong>
+                  <span>Voir ce qui reste par batiment et calibre.</span>
+                </div>
+              </div>
+
+              <div class="bottom-summary">
+                <div class="metric"><span>Aujourd'hui</span><b>12 480</b></div>
+                <div class="metric"><span>Batiments saisis</span><b>3/4</b></div>
+                <div class="metric"><span>A verifier</span><b>1</b></div>
+                <div class="metric"><span>Stock total</span><b>5 100</b></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Safest for new users</span>
+          <span>Very clear steps</span>
+          <span>Slower than the stock board</span>
+          <span>Good for mobile/tablet</span>
+        </div>
+      </article>
+
+      <article class="panel option">
+        <div class="option-head">
+          <div class="badge" style="background: var(--amber);">3</div>
+          <div>
+            <h2>Stock movement register</h2>
+            <p>Best for managers who want traceability: every production, sale, and loss appears as a movement.</p>
+          </div>
+          <div class="score">
+            <span>Audit clarity</span>
+            <strong>9/10</strong>
+          </div>
+        </div>
+
+        <div class="screen">
+          <header class="screen-header">
+            <div>
+              <h3>Registre des mouvements</h3>
+              <p>Une ligne claire pour chaque entree ou sortie de stock.</p>
+            </div>
+            <div class="actions">
+              <button>Filtrer</button>
+              <button>Exporter</button>
+              <button class="primary">Nouveau mouvement</button>
+            </div>
+          </header>
+
+          <div class="content">
+            <div class="metrics">
+              <div class="metric"><span>Entrees</span><b>12 480</b></div>
+              <div class="metric"><span>Sorties vente</span><b>7 200</b></div>
+              <div class="metric"><span>Sorties perte</span><b>180</b></div>
+              <div class="metric"><span>Solde</span><b>5 100</b></div>
+            </div>
+
+            <section class="ledger">
+              <div class="row">
+                <strong>09:12</strong>
+                <div><strong>Production ajoutee</strong><small>Batiment A - Oeufs moyen - par Youssef</small></div>
+                <span class="delta">+3 240</span>
+                <button>Details</button>
+              </div>
+              <div class="row">
+                <strong>10:40</strong>
+                <div><strong>Vente client</strong><small>Marche central - Batiment A - Oeufs moyen</small></div>
+                <span class="delta out">-1 650</span>
+                <button>Details</button>
+              </div>
+              <div class="row">
+                <strong>11:05</strong>
+                <div><strong>Oeufs perdus</strong><small>Batiment A - casse pendant tri</small></div>
+                <span class="delta out">-70</span>
+                <button>Details</button>
+              </div>
+              <div class="row">
+                <strong>13:20</strong>
+                <div><strong>Production ajoutee</strong><small>Batiment C - Oeufs gros - par Nadia</small></div>
+                <span class="delta">+4 120</span>
+                <button>Details</button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Best for traceability</span>
+          <span>Matches accounting logic</span>
+          <span>More technical visually</span>
+          <span>Good secondary tab</span>
+        </div>
+      </article>
+
+      <article class="panel option">
+        <div class="option-head">
+          <div class="badge" style="background: var(--red);">4</div>
+          <div>
+            <h2>Mobile-first daily cards</h2>
+            <p>Best if the operator enters data on a phone near the buildings.</p>
+          </div>
+          <div class="score">
+            <span>Field usability</span>
+            <strong>8/10</strong>
+          </div>
+        </div>
+
+        <div class="screen" style="padding: 28px;">
+          <div class="mobile-shell">
+            <div class="mobile-screen">
+              <header class="mobile-header">
+                <span class="mini-label" style="color: rgba(255,255,255,.75);">Aujourd'hui</span>
+                <h3>Stock oeufs</h3>
+                <p style="color: rgba(255,255,255,.8); margin-top: 8px;">3 batiments saisis, 1 reste a faire.</p>
+              </header>
+
+              <div class="mobile-content">
+                <article class="tap-card">
+                  <div class="stock-top">
+                    <h4>Batiment A</h4>
+                    <span class="status">OK</span>
+                  </div>
+                  <div class="stock-number">1 520</div>
+                  <div class="tap-actions">
+                    <button class="primary">Ajouter</button>
+                    <button>Vendre</button>
+                  </div>
+                </article>
+
+                <article class="tap-card">
+                  <div class="stock-top">
+                    <h4>Batiment B</h4>
+                    <span class="status warn">Bas</span>
+                  </div>
+                  <div class="stock-number warn">260</div>
+                  <div class="tap-actions">
+                    <button>Perte</button>
+                    <button>Verifier</button>
+                  </div>
+                </article>
+
+                <article class="tap-card">
+                  <div class="stock-top">
+                    <h4>Batiment D</h4>
+                    <span class="status warn">A faire</span>
+                  </div>
+                  <p>Pas encore de production entree aujourd'hui.</p>
+                  <button class="primary">Saisir maintenant</button>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Great on phone</span>
+          <span>Big tap targets</span>
+          <span>Less space for details</span>
+          <span>Could pair with option 1</span>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

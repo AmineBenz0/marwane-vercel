@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clients - Option 1 implémentée</title>
+  <style>
+    :root {
+      --bg: #f4f1e8;
+      --panel: #fffdf7;
+      --ink: #211b12;
+      --muted: #71695c;
+      --line: #ded4c4;
+      --green: #236b43;
+      --green-soft: #e8f4ea;
+      --amber: #b56a15;
+      --blue: #2d5a86;
+      --danger: #9c3d28;
+      --shadow: 0 16px 45px rgba(55, 42, 22, .12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 2%, rgba(181, 106, 21, .15), transparent 32%),
+        radial-gradient(circle at 92% 8%, rgba(35, 107, 67, .14), transparent 30%),
+        linear-gradient(135deg, #fbf8ef, var(--bg));
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 34px));
+      margin: 0 auto;
+      padding: 34px 0 56px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 50px);
+      letter-spacing: -1.8px;
+      line-height: .95;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 0;
+      border-radius: 16px;
+      padding: 14px 18px;
+      background: #eee5d7;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .primary {
+      background: var(--green);
+      color: white;
+      box-shadow: 0 12px 24px rgba(35, 107, 67, .2);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .summary, .client-card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .summary {
+      padding: 17px;
+      border-radius: 22px;
+    }
+
+    .summary span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .summary b {
+      display: block;
+      margin-top: 8px;
+      font-size: 28px;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .input, .pill {
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: white;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .input { padding: 0 18px; }
+    .pill { justify-content: center; padding: 0 16px; white-space: nowrap; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .client-card {
+      padding: 18px;
+      border-radius: 26px;
+      background: white;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 15px;
+    }
+
+    .identity {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .avatar {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      border-radius: 18px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 19px;
+      font-weight: 900;
+    }
+
+    .name {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .note { color: var(--muted); font-size: 13px; }
+
+    .status {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .status.off {
+      background: #ece5dc;
+      color: var(--muted);
+    }
+
+    .facts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 16px 0;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .fact {
+      padding: 11px;
+      border-radius: 15px;
+      background: #faf6ed;
+    }
+
+    .fact span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .fact b {
+      display: block;
+      margin-top: 5px;
+      font-size: 16px;
+    }
+
+    .card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+    }
+
+    .danger {
+      width: 52px;
+      min-width: 52px;
+      padding: 0;
+      color: var(--danger);
+      background: #f4e8e4;
+    }
+
+    @media (max-width: 900px) {
+      .header, .filters { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+      .summary-grid, .cards { grid-template-columns: 1fr; }
+      .actions, button { width: 100%; }
+      .card-actions { grid-template-columns: 1fr; }
+      .danger { width: 100%; min-width: 0; padding: 14px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1>Clients</h1>
+        <div class="subtitle">Chercher, ouvrir un client, modifier ou réactiver sans tableau compliqué.</div>
+      </div>
+      <div class="actions">
+        <button>Exporter</button>
+        <button class="primary">Créer un client</button>
+      </div>
+    </header>
+
+    <section class="summary-grid">
+      <div class="summary"><span>Total clients</span><b>128</b></div>
+      <div class="summary"><span>Actifs</span><b>119</b></div>
+      <div class="summary"><span>Créés ce mois</span><b>8</b></div>
+      <div class="summary"><span>Inactifs</span><b>9</b></div>
+    </section>
+
+    <section class="filters">
+      <div class="input">Rechercher un client...</div>
+      <div class="pill">Actifs</div>
+      <div class="pill">128 résultats</div>
+    </section>
+
+    <section class="cards">
+      <article class="client-card">
+        <div class="top">
+          <div class="identity">
+            <div class="avatar">MC</div>
+            <div>
+              <p class="name">Marché central</p>
+              <div class="note">Client #124</div>
+            </div>
+          </div>
+          <div class="status">Actif</div>
+        </div>
+        <div class="facts">
+          <div class="fact"><span>Créé le</span><b>03/05/2026</b></div>
+          <div class="fact"><span>Modifié le</span><b>Hier</b></div>
+        </div>
+        <div class="card-actions">
+          <button class="primary">Profil</button>
+          <button>Modifier</button>
+          <button class="danger">Suppr.</button>
+        </div>
+      </article>
+
+      <article class="client-card">
+        <div class="top">
+          <div class="identity">
+            <div class="avatar">SR</div>
+            <div>
+              <p class="name">Souk Rabat</p>
+              <div class="note">Client #118</div>
+            </div>
+          </div>
+          <div class="status">Actif</div>
+        </div>
+        <div class="facts">
+          <div class="fact"><span>Créé le</span><b>18/04/2026</b></div>
+          <div class="fact"><span>Modifié le</span><b>05/05/2026</b></div>
+        </div>
+        <div class="card-actions">
+          <button class="primary">Profil</button>
+          <button>Modifier</button>
+          <button class="danger">Suppr.</button>
+        </div>
+      </article>
+
+      <article class="client-card">
+        <div class="top">
+          <div class="identity">
+            <div class="avatar">CA</div>
+            <div>
+              <p class="name">Coop Agadir</p>
+              <div class="note">Client #071</div>
+            </div>
+          </div>
+          <div class="status off">Inactif</div>
+        </div>
+        <div class="facts">
+          <div class="fact"><span>Créé le</span><b>11/02/2026</b></div>
+          <div class="fact"><span>Modifié le</span><b>22/04/2026</b></div>
+        </div>
+        <div class="card-actions" style="grid-template-columns: 1fr 1fr;">
+          <button class="primary">Profil</button>
+          <button>Réactiver</button>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision UX - Comptes bancaires</title>
+  <style>
+    :root {
+      --ink: #101828;
+      --muted: #667085;
+      --line: #d9e2ef;
+      --paper: #fffaf2;
+      --surface: #ffffff;
+      --teal: #159d8f;
+      --teal-dark: #087568;
+      --amber: #f59e0b;
+      --green: #16a34a;
+      --red: #dc2626;
+      --blue: #2563eb;
+      --shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(21, 157, 143, 0.12), transparent 34rem),
+        linear-gradient(135deg, #f7fbff, #fff7ec);
+    }
+
+    .page {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 56px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: start;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 4.2rem);
+      line-height: 0.96;
+      letter-spacing: -0.07em;
+    }
+
+    .subtitle {
+      max-width: 680px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 1.06rem;
+      line-height: 1.7;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 18px;
+      font-weight: 900;
+      font-size: 0.98rem;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .primary {
+      color: white;
+      background: var(--teal);
+      box-shadow: 0 14px 28px rgba(21, 157, 143, 0.25);
+    }
+
+    .secondary {
+      color: var(--ink);
+      background: white;
+      border: 1px solid var(--line);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1.45fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .big-balance {
+      padding: 30px;
+      background:
+        linear-gradient(135deg, rgba(21, 157, 143, 0.95), rgba(8, 117, 104, 0.95)),
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.28), transparent 16rem);
+      color: white;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .big-balance .label {
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .amount {
+      margin-top: 10px;
+      font-size: clamp(2.15rem, 5vw, 4.8rem);
+      line-height: 0.95;
+      font-weight: 950;
+      letter-spacing: -0.07em;
+    }
+
+    .helper {
+      margin-top: 10px;
+      color: rgba(255, 255, 255, 0.78);
+      line-height: 1.5;
+    }
+
+    .mini-stat {
+      padding: 24px;
+    }
+
+    .mini-stat strong {
+      display: block;
+      margin: 10px 0 6px;
+      font-size: 2.1rem;
+      letter-spacing: -0.05em;
+    }
+
+    .mini-stat p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.35fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .section {
+      padding: 24px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.55rem;
+      letter-spacing: -0.04em;
+    }
+
+    .section-head p {
+      margin: 5px 0 0;
+      color: var(--muted);
+    }
+
+    .account-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .account {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: #fffdfa;
+    }
+
+    .account-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .bank-name {
+      font-size: 1.15rem;
+      font-weight: 950;
+      letter-spacing: -0.03em;
+    }
+
+    .rib {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 5px;
+    }
+
+    .account-amount {
+      text-align: right;
+      font-size: 1.3rem;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .account-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #edf1f7;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: #eff6ff;
+      color: var(--blue);
+      font-weight: 900;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+
+    .small-action {
+      padding: 9px 13px;
+      font-size: 0.88rem;
+      box-shadow: none;
+    }
+
+    .movement-card {
+      padding: 0;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    th {
+      text-align: left;
+      padding: 14px 16px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+    }
+
+    td {
+      padding: 15px 16px;
+      border-bottom: 1px solid #edf1f7;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .move-title {
+      font-weight: 900;
+    }
+
+    .move-note {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .in {
+      color: var(--green);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .out {
+      color: var(--red);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .mobile-movements {
+      display: none;
+      gap: 10px;
+    }
+
+    .mobile-move {
+      padding: 16px;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: white;
+    }
+
+    .mobile-move-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    @media (max-width: 920px) {
+      .hero,
+      .summary,
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .page {
+        width: min(100% - 20px, 1220px);
+        padding-top: 20px;
+      }
+
+      .card,
+      .account {
+        border-radius: 22px;
+      }
+
+      .section,
+      .big-balance,
+      .mini-stat {
+        padding: 18px;
+      }
+
+      .account-top,
+      .account-foot,
+      .section-head {
+        flex-direction: column;
+      }
+
+      .account-amount {
+        text-align: left;
+      }
+
+      .desktop-table {
+        display: none;
+      }
+
+      .mobile-movements {
+        display: grid;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <h1>Comptes bancaires</h1>
+        <p class="subtitle">Une vue simple pour savoir combien il y a en banque, sur quel compte, et quelles opérations ont changé le solde récemment.</p>
+      </div>
+      <div class="actions">
+        <button class="secondary">Ajouter un mouvement</button>
+        <button class="primary">Nouveau compte</button>
+      </div>
+    </section>
+
+    <section class="summary">
+      <article class="card big-balance">
+        <div class="label">Solde bancaire total</div>
+        <div class="amount">184 500 MAD</div>
+        <div class="helper">Somme de tous les comptes bancaires actifs. Les LC versées en banque apparaissent ici après dépôt.</div>
+      </article>
+
+      <article class="card mini-stat">
+        <div class="label">Comptes actifs</div>
+        <strong>3</strong>
+        <p>CIH, Attijariwafa Bank, Banque Populaire.</p>
+      </article>
+
+      <article class="card mini-stat">
+        <div class="label">Dernier mouvement</div>
+        <strong>+45 000</strong>
+        <p>LC déposée aujourd'hui sur CIH.</p>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <article class="card section">
+        <div class="section-head">
+          <div>
+            <h2>Mes comptes</h2>
+            <p>Un compte = une carte. Le solde est toujours visible.</p>
+          </div>
+        </div>
+
+        <div class="account-list">
+          <div class="account">
+            <div class="account-top">
+              <div>
+                <div class="bank-name">CIH Bank</div>
+                <div class="rib">RIB 230 780 000112345678</div>
+              </div>
+              <div class="account-amount">92 500 MAD</div>
+            </div>
+            <div class="account-foot">
+              <span class="pill">Dernière opération: aujourd'hui</span>
+              <button class="primary small-action">Mouvement</button>
+            </div>
+          </div>
+
+          <div class="account">
+            <div class="account-top">
+              <div>
+                <div class="bank-name">Attijariwafa Bank</div>
+                <div class="rib">RIB 007 810 991234567890</div>
+              </div>
+              <div class="account-amount">56 000 MAD</div>
+            </div>
+            <div class="account-foot">
+              <span class="pill">Dernière opération: 24/05/2026</span>
+              <button class="primary small-action">Mouvement</button>
+            </div>
+          </div>
+
+          <div class="account">
+            <div class="account-top">
+              <div>
+                <div class="bank-name">Banque Populaire</div>
+                <div class="rib">RIB 011 110 001234567899</div>
+              </div>
+              <div class="account-amount">36 000 MAD</div>
+            </div>
+            <div class="account-foot">
+              <span class="pill">Dernière opération: 22/05/2026</span>
+              <button class="primary small-action">Mouvement</button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card section movement-card">
+        <div class="section-head">
+          <div>
+            <h2>Historique bancaire</h2>
+            <p>Les derniers mouvements de tous les comptes, sans ouvrir une fenêtre séparée.</p>
+          </div>
+          <button class="secondary">Exporter</button>
+        </div>
+
+        <div class="table-wrap desktop-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Compte</th>
+                <th>Opération</th>
+                <th>Référence</th>
+                <th>Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>26/05/2026</td>
+                <td>CIH Bank</td>
+                <td>
+                  <div class="move-title">Dépôt LC</div>
+                  <div class="move-note">Client Atlas Distribution</div>
+                </td>
+                <td>LC-2026-018</td>
+                <td class="in">+45 000 MAD</td>
+              </tr>
+              <tr>
+                <td>24/05/2026</td>
+                <td>Attijariwafa Bank</td>
+                <td>
+                  <div class="move-title">Paiement fournisseur</div>
+                  <div class="move-note">Aliment pondeuses</div>
+                </td>
+                <td>VIR-8732</td>
+                <td class="out">-18 500 MAD</td>
+              </tr>
+              <tr>
+                <td>22/05/2026</td>
+                <td>Banque Populaire</td>
+                <td>
+                  <div class="move-title">Virement entrant</div>
+                  <div class="move-note">Paiement client</div>
+                </td>
+                <td>VIR-8621</td>
+                <td class="in">+12 000 MAD</td>
+              </tr>
+              <tr>
+                <td>20/05/2026</td>
+                <td>CIH Bank</td>
+                <td>
+                  <div class="move-title">Autre sortie</div>
+                  <div class="move-note">Frais bancaires</div>
+                </td>
+                <td>-</td>
+                <td class="out">-120 MAD</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mobile-movements">
+          <div class="mobile-move">
+            <div class="mobile-move-top">
+              <div>
+                <div class="move-title">Dépôt LC</div>
+                <div class="move-note">CIH Bank - LC-2026-018</div>
+              </div>
+              <div class="in">+45 000</div>
+            </div>
+          </div>
+          <div class="mobile-move">
+            <div class="mobile-move-top">
+              <div>
+                <div class="move-title">Paiement fournisseur</div>
+                <div class="move-note">Attijariwafa - VIR-8732</div>
+              </div>
+              <div class="out">-18 500</div>
+            </div>
+          </div>
+          <div class="mobile-move">
+            <div class="mobile-move-top">
+              <div>
+                <div class="move-title">Virement entrant</div>
+                <div class="move-note">Banque Populaire - VIR-8621</div>
+              </div>
+              <div class="in">+12 000</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

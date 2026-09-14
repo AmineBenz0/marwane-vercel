@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Options profil client</title>
+  <style>
+    :root {
+      --bg: #f4f1e8;
+      --panel: #fffdf7;
+      --ink: #211b12;
+      --muted: #71695c;
+      --line: #ded4c4;
+      --green: #236b43;
+      --green-soft: #e8f4ea;
+      --amber: #b56a15;
+      --amber-soft: #fff0d9;
+      --blue: #2d5a86;
+      --blue-soft: #e8f0f8;
+      --danger: #9c3d28;
+      --shadow: 0 18px 55px rgba(55, 42, 22, .13);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 2%, rgba(181, 106, 21, .16), transparent 32%),
+        radial-gradient(circle at 92% 8%, rgba(35, 107, 67, .15), transparent 30%),
+        linear-gradient(135deg, #fbf8ef, var(--bg));
+    }
+
+    .page {
+      width: min(1360px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 34px 0 58px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: .95;
+      letter-spacing: -2px;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 780px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .recommendation {
+      min-width: 280px;
+      padding: 18px 20px;
+      border-radius: 22px;
+      background: #1f2d20;
+      color: #fff8e9;
+      box-shadow: var(--shadow);
+    }
+
+    .recommendation strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #f6cf83;
+      font-size: 13px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .options { display: grid; gap: 30px; }
+
+    .option {
+      padding: 18px;
+      border: 1px solid rgba(222, 212, 196, .8);
+      border-radius: 34px;
+      background: rgba(255, 253, 247, .72);
+      box-shadow: var(--shadow);
+    }
+
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      padding: 6px 8px 16px;
+    }
+
+    .title {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .badge {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      color: white;
+      background: var(--green);
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 25px;
+      letter-spacing: -.5px;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .screen {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--panel);
+    }
+
+    .screen-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: start;
+      padding: 24px;
+      border-bottom: 1px solid var(--line);
+      background: #fffaf0;
+    }
+
+    .back {
+      display: inline-flex;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .client-title {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .avatar {
+      width: 64px;
+      height: 64px;
+      display: grid;
+      place-items: center;
+      border-radius: 22px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .screen-header h3 {
+      margin: 0;
+      font-size: 36px;
+      letter-spacing: -1px;
+    }
+
+    .status {
+      display: inline-flex;
+      margin-top: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 0;
+      border-radius: 16px;
+      padding: 14px 18px;
+      background: #eee5d7;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .primary {
+      background: var(--green);
+      color: white;
+      box-shadow: 0 12px 24px rgba(35, 107, 67, .2);
+    }
+
+    .content { padding: 22px; }
+
+    .daily-layout {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 18px;
+    }
+
+    .section, .metric, .transaction, .product, .insight {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: white;
+    }
+
+    .section {
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .section h4 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      letter-spacing: -.3px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      padding: 16px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .metric b {
+      display: block;
+      margin-top: 7px;
+      font-size: 25px;
+    }
+
+    .transactions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .transaction {
+      display: grid;
+      grid-template-columns: 100px 1fr 130px;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+    }
+
+    .transaction b:last-child { text-align: right; }
+
+    .chart {
+      height: 220px;
+      display: flex;
+      align-items: end;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(180deg, #fffdf8, #f8efe0);
+    }
+
+    .bar {
+      flex: 1;
+      border-radius: 10px 10px 0 0;
+      background: var(--green);
+      opacity: .85;
+    }
+
+    .products {
+      display: grid;
+      gap: 10px;
+    }
+
+    .product {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 13px 14px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      padding: 0 22px 18px;
+      background: #fffaf0;
+    }
+
+    .tab {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: white;
+      border: 1px solid var(--line);
+      font-weight: 900;
+    }
+
+    .tab.active {
+      color: white;
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .timeline-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 18px;
+    }
+
+    .side-card {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: white;
+    }
+
+    .feed {
+      display: grid;
+      gap: 14px;
+    }
+
+    .feed-card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: white;
+    }
+
+    .feed-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .big-chart {
+      min-height: 320px;
+      grid-column: span 2;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: white;
+    }
+
+    .insight {
+      padding: 18px;
+    }
+
+    .pros {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .pros span {
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(35, 107, 67, .08);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    @media (max-width: 980px) {
+      .hero, .screen-header, .daily-layout, .timeline-layout, .analytics-grid, .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .transaction { grid-template-columns: 1fr; }
+      .transaction b:last-child { text-align: left; }
+      .actions { justify-content: stretch; }
+      button { width: 100%; }
+      .big-chart { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <h1>Profil client, options UX</h1>
+        <p>Le profil contient beaucoup d'information: statistiques, ventes, graphique, produits achetés, score, insights et historique. La bonne UX dépend surtout de ce que l'utilisateur doit faire en premier.</p>
+      </div>
+      <aside class="recommendation">
+        <strong>Ma recommandation</strong>
+        Option 1: fiche client quotidienne. Les actions et infos utiles restent en haut, les analyses restent disponibles plus bas.
+      </aside>
+    </section>
+
+    <section class="options">
+      <article class="option">
+        <div class="option-head">
+          <div class="title">
+            <div class="badge">1</div>
+            <div>
+              <h2>Fiche client quotidienne</h2>
+              <div class="note">Le profil devient une fiche simple: état du client, actions, dernières ventes, produits.</div>
+            </div>
+          </div>
+          <div class="note">Recommandé</div>
+        </div>
+
+        <div class="screen">
+          <header class="screen-header">
+            <div>
+              <span class="back">Retour aux clients</span>
+              <div class="client-title">
+                <div class="avatar">MC</div>
+                <div>
+                  <h3>Marché central</h3>
+                  <span class="status">Actif</span>
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <button>Modifier</button>
+              <button class="primary">Nouvelle vente</button>
+            </div>
+          </header>
+
+          <div class="content">
+            <div class="metrics">
+              <div class="metric"><span>Total ventes</span><b>84 600 MAD</b></div>
+              <div class="metric"><span>Transactions</span><b>16</b></div>
+              <div class="metric"><span>Montant moyen</span><b>5 288 MAD</b></div>
+            </div>
+
+            <div class="daily-layout">
+              <section class="section">
+                <h4>Dernières transactions</h4>
+                <div class="transactions">
+                  <div class="transaction"><b>Hier</b><span>Tomates • 420 kg • Payé</span><b>7 560 MAD</b></div>
+                  <div class="transaction"><b>05/05</b><span>Pommes de terre • 800 kg • Partiel</span><b>9 200 MAD</b></div>
+                  <div class="transaction"><b>01/05</b><span>Oignons • 300 kg • À payer</span><b>3 900 MAD</b></div>
+                </div>
+                <div class="actions" style="margin-top:14px; justify-content:flex-start;">
+                  <button>Exporter historique</button>
+                  <button class="primary">Voir toutes</button>
+                </div>
+              </section>
+
+              <aside>
+                <section class="section">
+                  <h4>Produits achetés</h4>
+                  <div class="products">
+                    <div class="product"><span>Tomates</span><b>2 340 kg</b></div>
+                    <div class="product"><span>Pommes de terre</span><b>1 820 kg</b></div>
+                    <div class="product"><span>Oignons</span><b>940 kg</b></div>
+                  </div>
+                </section>
+                <section class="section">
+                  <h4>Évolution 6 mois</h4>
+                  <div class="chart">
+                    <div class="bar" style="height:45%"></div>
+                    <div class="bar" style="height:62%"></div>
+                    <div class="bar" style="height:54%"></div>
+                    <div class="bar" style="height:78%"></div>
+                    <div class="bar" style="height:70%"></div>
+                    <div class="bar" style="height:88%"></div>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Le plus clair</span>
+          <span>Actions immédiates</span>
+          <span>Garde toute l'information</span>
+          <span>Bonne continuité avec les cartes clients</span>
+        </div>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div class="title">
+            <div class="badge" style="background:var(--blue)">2</div>
+            <div>
+              <h2>Profil à onglets</h2>
+              <div class="note">On sépare les informations: résumé, transactions, produits, analyse.</div>
+            </div>
+          </div>
+          <div class="note">Le plus organisé</div>
+        </div>
+
+        <div class="screen">
+          <header class="screen-header">
+            <div>
+              <span class="back">Retour aux clients</span>
+              <div class="client-title">
+                <div class="avatar">MC</div>
+                <div>
+                  <h3>Marché central</h3>
+                  <span class="status">Actif</span>
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <button>Modifier</button>
+              <button class="primary">Nouvelle vente</button>
+            </div>
+          </header>
+          <div class="tabs">
+            <div class="tab active">Résumé</div>
+            <div class="tab">Transactions</div>
+            <div class="tab">Produits</div>
+            <div class="tab">Analyse</div>
+          </div>
+          <div class="content">
+            <div class="metrics">
+              <div class="metric"><span>Total ventes</span><b>84 600 MAD</b></div>
+              <div class="metric"><span>Transactions</span><b>16</b></div>
+              <div class="metric"><span>Score</span><b>82/100</b></div>
+            </div>
+            <div class="section">
+              <h4>À retenir</h4>
+              <div class="transactions">
+                <div class="transaction"><b>Dernière vente</b><span>Tomates • 420 kg</span><b>7 560 MAD</b></div>
+                <div class="transaction"><b>Produit principal</b><span>Tomates</span><b>2 340 kg</b></div>
+                <div class="transaction"><b>Tendance</b><span>Ventes en hausse sur 6 mois</span><b>+18%</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Très rangé</span>
+          <span>Moins long visuellement</span>
+          <span>Plus de clics</span>
+          <span>Risque de cacher des infos</span>
+        </div>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div class="title">
+            <div class="badge" style="background:var(--amber)">3</div>
+            <div>
+              <h2>Journal client</h2>
+              <div class="note">Le profil ressemble à un fil d'activité: chaque vente est une carte chronologique.</div>
+            </div>
+          </div>
+          <div class="note">Le plus narratif</div>
+        </div>
+
+        <div class="screen">
+          <header class="screen-header">
+            <div>
+              <span class="back">Retour aux clients</span>
+              <div class="client-title">
+                <div class="avatar">MC</div>
+                <div>
+                  <h3>Marché central</h3>
+                  <span class="status">Actif</span>
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <button>Modifier</button>
+              <button class="primary">Nouvelle vente</button>
+            </div>
+          </header>
+          <div class="content">
+            <div class="timeline-layout">
+              <aside class="side-card">
+                <h4 style="margin-top:0;">Résumé</h4>
+                <div class="metric"><span>Total ventes</span><b>84 600 MAD</b></div>
+                <div class="metric" style="margin-top:10px;"><span>Transactions</span><b>16</b></div>
+                <div class="metric" style="margin-top:10px;"><span>Score</span><b>82/100</b></div>
+              </aside>
+              <section class="feed">
+                <div class="feed-card">
+                  <div class="feed-top"><b>Hier</b><b>7 560 MAD</b></div>
+                  <div>Tomates • 420 kg • Paiement encaissé</div>
+                </div>
+                <div class="feed-card">
+                  <div class="feed-top"><b>05/05/2026</b><b>9 200 MAD</b></div>
+                  <div>Pommes de terre • 800 kg • Paiement partiel</div>
+                </div>
+                <div class="feed-card">
+                  <div class="feed-top"><b>01/05/2026</b><b>3 900 MAD</b></div>
+                  <div>Oignons • 300 kg • À payer</div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Très lisible pour historique</span>
+          <span>Bon mobile</span>
+          <span>Analytics moins visibles</span>
+          <span>Moins complet au premier regard</span>
+        </div>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div class="title">
+            <div class="badge" style="background:#5f4b32">4</div>
+            <div>
+              <h2>Tableau de bord analytique simplifié</h2>
+              <div class="note">On garde le profil comme page d'analyse, mais avec une lecture plus propre.</div>
+            </div>
+          </div>
+          <div class="note">Le plus proche de l'existant</div>
+        </div>
+
+        <div class="screen">
+          <header class="screen-header">
+            <div>
+              <span class="back">Retour aux clients</span>
+              <div class="client-title">
+                <div class="avatar">MC</div>
+                <div>
+                  <h3>Marché central</h3>
+                  <span class="status">Actif</span>
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <button>Modifier</button>
+              <button class="primary">Nouvelle vente</button>
+            </div>
+          </header>
+          <div class="content">
+            <div class="analytics-grid">
+              <div class="metric"><span>Total ventes</span><b>84 600 MAD</b></div>
+              <div class="metric"><span>Montant moyen</span><b>5 288 MAD</b></div>
+              <div class="big-chart">
+                <h4 style="margin-top:0;">Évolution des ventes</h4>
+                <div class="chart" style="height:240px;">
+                  <div class="bar" style="height:45%"></div>
+                  <div class="bar" style="height:62%"></div>
+                  <div class="bar" style="height:54%"></div>
+                  <div class="bar" style="height:78%"></div>
+                  <div class="bar" style="height:70%"></div>
+                  <div class="bar" style="height:88%"></div>
+                </div>
+              </div>
+              <div class="insight"><h4 style="margin-top:0;">Insights financiers</h4><p class="note">Tendance positive, paiement généralement fiable.</p></div>
+              <div class="insight"><h4 style="margin-top:0;">Produits achetés</h4><p class="note">Tomates, pommes de terre, oignons.</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Garde l'analyse forte</span>
+          <span>Moins de changement</span>
+          <span>Moins quotidien</span>
+          <span>Plus chargé</span>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

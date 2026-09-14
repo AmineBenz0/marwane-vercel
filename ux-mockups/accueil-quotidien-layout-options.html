@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Accueil quotidien - Options UI/UX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #19231f;
+      --muted: #66746e;
+      --line: #dce4df;
+      --paper: #fffdf8;
+      --soft: #f5f7f4;
+      --teal: #129b89;
+      --teal-dark: #0b7468;
+      --green: #1d6f50;
+      --blue: #315f85;
+      --amber: #b66a1e;
+      --red: #a84435;
+      --cream: #fbf3e3;
+      --shadow: 0 18px 42px rgba(28, 38, 34, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Plus Jakarta Sans", sans-serif;
+      color: var(--ink);
+      background: #eef3f1;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .page {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .intro {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .intro p {
+      max-width: 650px;
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .device-note {
+      min-width: 270px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .option {
+      margin-bottom: 32px;
+      border: 1px solid #cfdad4;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+    }
+
+    .option-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .option-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .number {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--teal);
+      color: white;
+      font-weight: 900;
+    }
+
+    .option-title h2 {
+      font-size: 21px;
+      line-height: 1.15;
+    }
+
+    .option-title span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .best-for {
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: #e3f2ec;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .mock {
+      padding: 22px;
+      background: #f6f9f7;
+    }
+
+    .card,
+    .panel,
+    .metric,
+    .action,
+    .row-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-title h3 {
+      font-size: 22px;
+      line-height: 1.15;
+    }
+
+    .section-title small {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .primary-btn,
+    .ghost-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 8px;
+      border: 0;
+      cursor: default;
+      font-weight: 900;
+    }
+
+    .primary-btn {
+      background: var(--teal);
+      color: white;
+    }
+
+    .ghost-btn {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+    }
+
+    .icon {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border-radius: 8px;
+      background: #e3f2ec;
+      color: var(--green);
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+
+    .icon.amber {
+      background: #faecd2;
+      color: var(--amber);
+    }
+
+    .icon.blue {
+      background: #dfedf6;
+      color: var(--blue);
+    }
+
+    .icon.red {
+      background: #f6ded9;
+      color: var(--red);
+    }
+
+    .metric {
+      min-height: 124px;
+      padding: 18px;
+    }
+
+    .metric-label {
+      color: #63716b;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 14px;
+      font-size: clamp(24px, 2.2vw, 34px);
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .metric-helper {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .alert {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid #e7c99c;
+      border-radius: 8px;
+      background: #fffaf1;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--amber);
+    }
+
+    .alert strong {
+      display: block;
+      font-size: 17px;
+    }
+
+    .alert span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .action {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 82px;
+      padding: 14px;
+    }
+
+    .action strong {
+      display: block;
+      line-height: 1.15;
+    }
+
+    .action span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .chart {
+      height: 270px;
+      border: 1px dashed #ccd8d2;
+      border-radius: 8px;
+      background:
+        linear-gradient(to top, transparent 49px, rgba(49, 95, 133, 0.1) 50px),
+        linear-gradient(to right, transparent 49px, rgba(49, 95, 133, 0.08) 50px),
+        #fff;
+      background-size: 100% 55px, 64px 100%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart::after {
+      content: "";
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      bottom: 52px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--amber);
+    }
+
+    .empty {
+      padding: 16px;
+      border-radius: 8px;
+      background: #e9f6ff;
+      color: #1768b3;
+      font-weight: 800;
+    }
+
+    .production-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .production-tile {
+      padding: 18px;
+      border-radius: 8px;
+    }
+
+    .production-tile.amber {
+      background: #faecd2;
+    }
+
+    .production-tile.green {
+      background: #dff0e6;
+    }
+
+    .production-tile span {
+      color: var(--muted);
+      font-weight: 900;
+      font-size: 13px;
+    }
+
+    .production-tile strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 38px;
+      line-height: 1;
+    }
+
+    .operation {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .operation strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .operation span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .amount.plus {
+      color: var(--green);
+      font-weight: 900;
+    }
+
+    .amount.minus {
+      color: var(--red);
+      font-weight: 900;
+    }
+
+    .option-a-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+      gap: 18px;
+    }
+
+    .option-a-main,
+    .option-a-side {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .option-a-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .option-b-layout {
+      display: grid;
+      grid-template-columns: 310px minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    .today-rail {
+      padding: 18px;
+      background: #17231f;
+      color: white;
+    }
+
+    .today-rail h3 {
+      font-size: 26px;
+      line-height: 1.1;
+    }
+
+    .today-rail p {
+      margin-top: 10px;
+      color: rgba(255, 255, 255, 0.72);
+      line-height: 1.5;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 13px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    .step-num {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--teal);
+      font-weight: 900;
+    }
+
+    .option-b-content {
+      display: grid;
+      gap: 18px;
+    }
+
+    .focus-card {
+      padding: 22px;
+      background: var(--cream);
+    }
+
+    .focus-card h3 {
+      font-size: clamp(26px, 3vw, 42px);
+      line-height: 1.05;
+    }
+
+    .focus-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .option-b-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .option-c-layout {
+      display: grid;
+      gap: 14px;
+    }
+
+    .status-strip {
+      display: grid;
+      grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .status-main {
+      padding: 18px;
+      border-radius: 8px;
+      background: #17231f;
+      color: #fff;
+    }
+
+    .status-main span {
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 700;
+    }
+
+    .status-main strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 30px;
+      line-height: 1;
+    }
+
+    .cockpit-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 370px;
+      gap: 14px;
+    }
+
+    .table-card {
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      color: #61706a;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: #f7faf8;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .panel h3 {
+      font-size: 22px;
+      margin-bottom: 14px;
+    }
+
+    .compact-actions {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .compact-actions .action {
+      min-height: 64px;
+      padding: 10px;
+    }
+
+    .compact-actions .icon {
+      width: 34px;
+      height: 34px;
+    }
+
+    .compact-actions span {
+      display: none;
+    }
+
+    @media (max-width: 1200px) {
+      .option-a-layout,
+      .cockpit-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .status-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .option-a-metrics,
+      .quick-actions,
+      .compact-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .option-b-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .today-rail {
+        display: grid;
+        grid-template-columns: 1fr 1.4fr;
+        gap: 20px;
+      }
+
+      .step-list {
+        margin-top: 0;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        padding: 14px;
+      }
+
+      .intro,
+      .option-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .best-for {
+        width: fit-content;
+      }
+
+      .mock {
+        padding: 12px;
+      }
+
+      .option-a-metrics,
+      .quick-actions,
+      .option-b-grid,
+      .focus-actions,
+      .status-strip,
+      .compact-actions,
+      .production-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .today-rail {
+        grid-template-columns: 1fr;
+      }
+
+      .alert {
+        grid-template-columns: auto 1fr;
+      }
+
+      .alert .primary-btn {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
+      .metric {
+        min-height: 104px;
+      }
+
+      .chart {
+        height: 210px;
+      }
+
+      .table-card {
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <div>
+        <div class="eyebrow">Accueil quotidien - explorations layout</div>
+        <h1>3 options pour une page “tout faire facilement”</h1>
+        <p>Chaque option garde les mêmes informations, mais change la priorité visuelle. L'objectif est que l'utilisateur non technique sache quoi faire en moins de cinq secondes.</p>
+      </div>
+      <div class="device-note">Redimensionnez la fenêtre pour voir les adaptations mobile/tablette. Ces maquettes sont volontairement proches de l'app actuelle.</div>
+    </section>
+
+    <section class="option">
+      <header class="option-header">
+        <div class="option-title">
+          <div class="number">1</div>
+          <div>
+            <h2>Priorité aux tâches du jour</h2>
+            <span>La meilleure option si l'utilisateur ouvre la page pour savoir quoi faire maintenant.</span>
+          </div>
+        </div>
+        <div class="best-for">Mon choix recommandé</div>
+      </header>
+      <div class="mock">
+        <div class="option-a-layout">
+          <div class="option-a-main">
+            <div class="panel">
+              <div class="section-title">
+                <div>
+                  <h3>À traiter maintenant</h3>
+                  <small>Les choses importantes en premier</small>
+                </div>
+                <div class="icon amber">!</div>
+              </div>
+              <div class="alert">
+                <div class="dot"></div>
+                <div>
+                  <strong>Production du jour à saisir</strong>
+                  <span>Aucun oeuf enregistré aujourd'hui. Vérifiez les bâtiments.</span>
+                </div>
+                <button class="primary-btn">Saisir</button>
+              </div>
+            </div>
+
+            <div class="option-a-metrics">
+              <div class="metric">
+                <div class="metric-label">Caisse</div>
+                <div class="metric-value">121503 MAD</div>
+                <div class="metric-helper">Argent disponible</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Ventes</div>
+                <div class="metric-value">0 MAD</div>
+                <div class="metric-helper">Ce mois</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Achats</div>
+                <div class="metric-value">0 MAD</div>
+                <div class="metric-helper">Ce mois</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Opérations</div>
+                <div class="metric-value">0</div>
+                <div class="metric-helper">Ce mois</div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="section-title">
+                <div>
+                  <h3>Actions rapides</h3>
+                  <small>Les boutons les plus utilisés</small>
+                </div>
+              </div>
+              <div class="quick-actions">
+                <div class="action"><div class="icon">V</div><div><strong>Vendre</strong><span>Client</span></div></div>
+                <div class="action"><div class="icon red">A</div><div><strong>Acheter</strong><span>Fournisseur</span></div></div>
+                <div class="action"><div class="icon amber">P</div><div><strong>Production</strong><span>Collecte</span></div></div>
+                <div class="action"><div class="icon blue">R</div><div><strong>Paiement</strong><span>Règlement</span></div></div>
+                <div class="action"><div class="icon red">D</div><div><strong>Dépense</strong><span>Caisse</span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="option-a-side">
+            <div class="panel">
+              <div class="section-title">
+                <div>
+                  <h3>Production aujourd'hui</h3>
+                  <small>Résumé de la collecte</small>
+                </div>
+              </div>
+              <div class="production-grid">
+                <div class="production-tile amber"><span>Oeufs</span><strong>0</strong></div>
+                <div class="production-tile green"><span>Cartons</span><strong>0</strong></div>
+              </div>
+              <button class="primary-btn" style="width:100%; margin-top:14px;">Saisir ou consulter</button>
+            </div>
+
+            <div class="panel">
+              <div class="section-title">
+                <div>
+                  <h3>Dernières opérations</h3>
+                  <small>Suivi simple</small>
+                </div>
+              </div>
+              <div class="empty">Aucune transaction récente trouvée.</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <header class="option-header">
+        <div class="option-title">
+          <div class="number">2</div>
+          <div>
+            <h2>Assistant de journée</h2>
+            <span>Une page guidée comme une checklist: très rassurante pour les profils peu techniques.</span>
+          </div>
+        </div>
+        <div class="best-for">Très simple sur mobile</div>
+      </header>
+      <div class="mock">
+        <div class="option-b-layout">
+          <aside class="today-rail card">
+            <div>
+              <div class="eyebrow" style="color:#79dfcf;">Mode quotidien</div>
+              <h3>Bonjour, on commence par quoi ?</h3>
+              <p>La journée est découpée en quelques étapes faciles à suivre.</p>
+            </div>
+            <div class="step-list">
+              <div class="step"><div class="step-num">1</div><strong>Vérifier les alertes</strong></div>
+              <div class="step"><div class="step-num">2</div><strong>Saisir la production</strong></div>
+              <div class="step"><div class="step-num">3</div><strong>Ajouter vente ou achat</strong></div>
+              <div class="step"><div class="step-num">4</div><strong>Contrôler la caisse</strong></div>
+            </div>
+          </aside>
+
+          <div class="option-b-content">
+            <div class="focus-card card">
+              <h3>Production du jour à saisir</h3>
+              <p style="margin-top:10px; color:var(--muted); line-height:1.55;">Aucun oeuf enregistré aujourd'hui. Cette action est la priorité de la journée.</p>
+              <div class="focus-actions">
+                <button class="primary-btn">Saisir production</button>
+                <button class="ghost-btn">Vendre à un client</button>
+                <button class="ghost-btn">Nouvelle dépense</button>
+              </div>
+            </div>
+
+            <div class="option-b-grid">
+              <div class="metric"><div class="metric-label">Caisse</div><div class="metric-value">121503 MAD</div><div class="metric-helper">Disponible</div></div>
+              <div class="metric"><div class="metric-label">Oeufs</div><div class="metric-value">0</div><div class="metric-helper">Aujourd'hui</div></div>
+              <div class="metric"><div class="metric-label">Transactions</div><div class="metric-value">0</div><div class="metric-helper">Ce mois</div></div>
+            </div>
+
+            <div class="panel">
+              <div class="section-title">
+                <div>
+                  <h3>Actions rapides</h3>
+                  <small>Grandes zones de clic, langage simple</small>
+                </div>
+              </div>
+              <div class="quick-actions">
+                <div class="action"><div class="icon">V</div><div><strong>Vendre</strong><span>Créer une vente</span></div></div>
+                <div class="action"><div class="icon red">A</div><div><strong>Acheter</strong><span>Fournisseur</span></div></div>
+                <div class="action"><div class="icon blue">R</div><div><strong>Paiement</strong><span>Encaisser ou payer</span></div></div>
+                <div class="action"><div class="icon amber">S</div><div><strong>Stock</strong><span>Voir production</span></div></div>
+                <div class="action"><div class="icon red">D</div><div><strong>Dépense</strong><span>Sortie caisse</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <header class="option-header">
+        <div class="option-title">
+          <div class="number">3</div>
+          <div>
+            <h2>Poste de contrôle compact</h2>
+            <span>Plus dense, très efficace pour un utilisateur régulier qui veut tout voir sans beaucoup scroller.</span>
+          </div>
+        </div>
+        <div class="best-for">Desktop/tablette</div>
+      </header>
+      <div class="mock">
+        <div class="option-c-layout">
+          <div class="status-strip">
+            <div class="status-main">
+              <span>État du jour</span>
+              <strong>1 action à faire</strong>
+            </div>
+            <div class="metric"><div class="metric-label">Caisse</div><div class="metric-value">121503</div><div class="metric-helper">MAD</div></div>
+            <div class="metric"><div class="metric-label">Oeufs</div><div class="metric-value">0</div><div class="metric-helper">Aujourd'hui</div></div>
+            <div class="metric"><div class="metric-label">Ventes</div><div class="metric-value">0</div><div class="metric-helper">MAD</div></div>
+            <div class="metric"><div class="metric-label">Achats</div><div class="metric-value">0</div><div class="metric-helper">MAD</div></div>
+          </div>
+
+          <div class="compact-actions">
+            <div class="action"><div class="icon">V</div><div><strong>Vendre</strong><span>Client</span></div></div>
+            <div class="action"><div class="icon red">A</div><div><strong>Acheter</strong><span>Fournisseur</span></div></div>
+            <div class="action"><div class="icon amber">P</div><div><strong>Production</strong><span>Collecte</span></div></div>
+            <div class="action"><div class="icon blue">R</div><div><strong>Paiement</strong><span>Règlement</span></div></div>
+            <div class="action"><div class="icon red">D</div><div><strong>Dépense</strong><span>Caisse</span></div></div>
+          </div>
+
+          <div class="cockpit-grid">
+            <div class="table-card card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Priorité</th>
+                    <th>À faire</th>
+                    <th>État</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1</td>
+                    <td>Production du jour</td>
+                    <td>Aucun oeuf enregistré</td>
+                    <td><button class="primary-btn">Saisir</button></td>
+                  </tr>
+                  <tr>
+                    <td>2</td>
+                    <td>Caisse</td>
+                    <td>121503 MAD disponibles</td>
+                    <td><button class="ghost-btn">Voir</button></td>
+                  </tr>
+                  <tr>
+                    <td>3</td>
+                    <td>Dernières opérations</td>
+                    <td>Aucune transaction récente</td>
+                    <td><button class="ghost-btn">Ajouter</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <aside class="side-stack">
+              <div class="panel">
+                <h3>Production aujourd'hui</h3>
+                <div class="production-grid">
+                  <div class="production-tile amber"><span>Oeufs</span><strong>0</strong></div>
+                  <div class="production-tile green"><span>Cartons</span><strong>0</strong></div>
+                </div>
+              </div>
+              <div class="panel">
+                <h3>Activité 30 jours</h3>
+                <div class="chart"></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

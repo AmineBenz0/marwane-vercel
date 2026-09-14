@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Options modal transaction</title>
+  <style>
+    :root {
+      --bg: #f4f1e8;
+      --panel: #fffdf7;
+      --ink: #201b14;
+      --muted: #71695c;
+      --line: #ded4c4;
+      --green: #236b43;
+      --green-soft: #e7f3ea;
+      --amber: #b56a15;
+      --amber-soft: #fff0d9;
+      --blue: #2d5a86;
+      --blue-soft: #e7f0f8;
+      --danger: #9c3d28;
+      --shadow: 0 22px 70px rgba(55, 42, 22, .18);
+      --radius: 28px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, rgba(181, 106, 21, .16), transparent 34%),
+        radial-gradient(circle at 90% 10%, rgba(35, 107, 67, .16), transparent 32%),
+        linear-gradient(135deg, #faf7ee, var(--bg));
+    }
+
+    .page {
+      width: min(1320px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 34px 0 56px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: .95;
+      letter-spacing: -2px;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 720px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .recommendation {
+      background: #1f2d20;
+      color: #fff8e9;
+      padding: 18px 20px;
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      min-width: 270px;
+    }
+
+    .recommendation strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #f6cf83;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .options {
+      display: grid;
+      gap: 30px;
+    }
+
+    .option-shell {
+      background: rgba(255, 253, 247, .68);
+      border: 1px solid rgba(222, 212, 196, .8);
+      border-radius: 36px;
+      padding: 18px;
+      box-shadow: 0 16px 50px rgba(64, 48, 23, .11);
+    }
+
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      padding: 6px 8px 16px;
+    }
+
+    .option-title {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .badge {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      color: white;
+      background: var(--green);
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 25px;
+      letter-spacing: -.5px;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .modal {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      padding: 22px 26px;
+      border-bottom: 1px solid var(--line);
+      background: #fffaf0;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -.5px;
+    }
+
+    .close {
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: white;
+      color: var(--muted);
+      font-size: 24px;
+    }
+
+    .modal-body { padding: 24px; }
+
+    .big-choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .choice {
+      min-height: 116px;
+      padding: 22px;
+      border: 2px solid var(--line);
+      border-radius: 24px;
+      background: white;
+      cursor: default;
+    }
+
+    .choice.active {
+      border-color: var(--green);
+      background: var(--green-soft);
+      box-shadow: inset 0 0 0 2px rgba(35, 107, 67, .12);
+    }
+
+    .choice.amber.active {
+      border-color: var(--amber);
+      background: var(--amber-soft);
+      box-shadow: inset 0 0 0 2px rgba(181, 106, 21, .14);
+    }
+
+    .choice b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 25px;
+    }
+
+    .choice span {
+      display: block;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .field, .select-card {
+      min-height: 68px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: white;
+    }
+
+    .field label, .select-card label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .field div, .select-card div {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .line-item {
+      display: grid;
+      grid-template-columns: 1.3fr .7fr .7fr;
+      gap: 12px;
+      align-items: stretch;
+      margin-top: 14px;
+    }
+
+    .payment-choice {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .pay {
+      padding: 18px;
+      border: 2px solid var(--line);
+      border-radius: 20px;
+      background: white;
+      text-align: center;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .pay.active {
+      border-color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      padding: 18px 24px;
+      border-top: 1px solid var(--line);
+      background: #fffaf0;
+    }
+
+    .total {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .total b {
+      display: block;
+      color: var(--ink);
+      font-size: 28px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      min-width: 140px;
+      border: 0;
+      border-radius: 16px;
+      padding: 16px 20px;
+      font-size: 16px;
+      font-weight: 900;
+      background: #eee5d7;
+      color: var(--ink);
+    }
+
+    .btn.primary {
+      background: var(--green);
+      color: white;
+      box-shadow: 0 12px 24px rgba(35, 107, 67, .22);
+    }
+
+    .wizard {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 500px;
+    }
+
+    .steps {
+      padding: 24px;
+      background: #f7efe0;
+      border-right: 1px solid var(--line);
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 18px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .step i {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: white;
+      font-style: normal;
+    }
+
+    .step.active {
+      color: var(--ink);
+    }
+
+    .step.active i {
+      color: white;
+      background: var(--green);
+    }
+
+    .wizard-main {
+      padding: 34px;
+    }
+
+    .wizard-main h3 {
+      margin: 0 0 18px;
+      font-size: 34px;
+      letter-spacing: -1px;
+    }
+
+    .wizard-main .big-choice-grid {
+      max-width: 720px;
+    }
+
+    .ticket-layout {
+      display: grid;
+      grid-template-columns: 1.05fr 360px;
+      min-height: 560px;
+    }
+
+    .ticket-input {
+      padding: 24px;
+    }
+
+    .ticket-summary {
+      padding: 24px;
+      background: #253222;
+      color: #fff8e9;
+    }
+
+    .ticket-summary h3 {
+      margin: 0 0 18px;
+      font-size: 26px;
+    }
+
+    .receipt-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 13px 0;
+      border-bottom: 1px dashed rgba(255, 248, 233, .26);
+    }
+
+    .receipt-total {
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 2px solid rgba(255, 248, 233, .45);
+      font-size: 34px;
+      font-weight: 900;
+    }
+
+    .compact-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .quick-products {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .product-chip {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: white;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .pros {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .pros span {
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(35, 107, 67, .08);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    @media (max-width: 920px) {
+      .hero, .wizard, .ticket-layout, .fields, .line-item, .compact-row {
+        grid-template-columns: 1fr;
+      }
+
+      .big-choice-grid, .payment-choice, .quick-products {
+        grid-template-columns: 1fr;
+      }
+
+      .footer {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .actions, .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <h1>Modal transaction, version plus simple</h1>
+        <p>Trois directions possibles. Elles gardent les mêmes informations, mais retirent le bruit et donnent de très grands choix pour éviter les erreurs.</p>
+      </div>
+      <aside class="recommendation">
+        <strong>Ma recommandation</strong>
+        Option 1 pour l'app actuelle: rapide, claire, et facile à intégrer sans changer le fonctionnement.
+      </aside>
+    </section>
+
+    <section class="options">
+      <article class="option-shell">
+        <div class="option-head">
+          <div class="option-title">
+            <div class="badge">1</div>
+            <div>
+              <h2>Deux gros choix, puis formulaire court</h2>
+              <div class="note">Le meilleur équilibre: très clair, très rapide, peu risqué.</div>
+            </div>
+          </div>
+          <div class="note">Recommandé</div>
+        </div>
+
+        <div class="modal">
+          <header class="modal-header">
+            <h3>Nouvelle transaction</h3>
+            <button class="close">×</button>
+          </header>
+
+          <div class="modal-body">
+            <div class="big-choice-grid">
+              <div class="choice active">
+                <b>Vente client</b>
+                <span>Argent qui entre</span>
+              </div>
+              <div class="choice amber">
+                <b>Achat fournisseur</b>
+                <span>Argent qui sort</span>
+              </div>
+            </div>
+
+            <div class="fields">
+              <div class="field">
+                <label>Client</label>
+                <div>Marché central</div>
+              </div>
+              <div class="field">
+                <label>Date</label>
+                <div>08/05/2026</div>
+              </div>
+            </div>
+
+            <div class="line-item">
+              <div class="select-card">
+                <label>Produit</label>
+                <div>Tomates</div>
+              </div>
+              <div class="field">
+                <label>Quantité</label>
+                <div>420 kg</div>
+              </div>
+              <div class="field">
+                <label>Prix</label>
+                <div>18 MAD</div>
+              </div>
+            </div>
+
+            <div class="payment-choice">
+              <div class="pay active">Payé maintenant</div>
+              <div class="pay">À payer plus tard</div>
+              <div class="pay">Paiement partiel</div>
+            </div>
+          </div>
+
+          <footer class="footer">
+            <div class="total">
+              Total à enregistrer
+              <b>7 560 MAD</b>
+            </div>
+            <div class="actions">
+              <button class="btn">Annuler</button>
+              <button class="btn primary">Créer la vente</button>
+            </div>
+          </footer>
+        </div>
+
+        <div class="pros">
+          <span>Très peu de texte</span>
+          <span>Choix visibles immédiatement</span>
+          <span>Adapté desktop et mobile</span>
+          <span>Intégration simple</span>
+        </div>
+      </article>
+
+      <article class="option-shell">
+        <div class="option-head">
+          <div class="option-title">
+            <div class="badge" style="background: var(--blue)">2</div>
+            <div>
+              <h2>Assistant étape par étape</h2>
+              <div class="note">Une décision à la fois pour les profils les moins à l'aise.</div>
+            </div>
+          </div>
+          <div class="note">Plus guidé</div>
+        </div>
+
+        <div class="modal">
+          <header class="modal-header">
+            <h3>Nouvelle transaction</h3>
+            <button class="close">×</button>
+          </header>
+          <div class="wizard">
+            <aside class="steps">
+              <div class="step active"><i>1</i>Type</div>
+              <div class="step"><i>2</i>Client / fournisseur</div>
+              <div class="step"><i>3</i>Produits</div>
+              <div class="step"><i>4</i>Paiement</div>
+            </aside>
+            <section class="wizard-main">
+              <h3>Que voulez-vous enregistrer ?</h3>
+              <div class="big-choice-grid">
+                <div class="choice active">
+                  <b>Vente client</b>
+                  <span>Je vends des produits</span>
+                </div>
+                <div class="choice amber">
+                  <b>Achat fournisseur</b>
+                  <span>J'achète des produits ou services</span>
+                </div>
+              </div>
+            </section>
+          </div>
+          <footer class="footer">
+            <div class="total">
+              Étape 1 sur 4
+              <b>Type choisi</b>
+            </div>
+            <div class="actions">
+              <button class="btn">Annuler</button>
+              <button class="btn primary">Continuer</button>
+            </div>
+          </footer>
+        </div>
+
+        <div class="pros">
+          <span>Impossible de rater une étape</span>
+          <span>Moins intimidant</span>
+          <span>Meilleur pour formation</span>
+          <span>Un peu plus lent</span>
+        </div>
+      </article>
+
+      <article class="option-shell">
+        <div class="option-head">
+          <div class="option-title">
+            <div class="badge" style="background: var(--amber)">3</div>
+            <div>
+              <h2>Style caisse avec ticket</h2>
+              <div class="note">Très pratique pour usage quotidien rapide avec contrôle visuel du total.</div>
+            </div>
+          </div>
+          <div class="note">Le plus rapide</div>
+        </div>
+
+        <div class="modal">
+          <header class="modal-header">
+            <h3>Nouvelle transaction</h3>
+            <button class="close">×</button>
+          </header>
+
+          <div class="ticket-layout">
+            <section class="ticket-input">
+              <div class="big-choice-grid">
+                <div class="choice active">
+                  <b>Vente</b>
+                  <span>Entrée d'argent</span>
+                </div>
+                <div class="choice amber">
+                  <b>Achat</b>
+                  <span>Sortie d'argent</span>
+                </div>
+              </div>
+
+              <div class="fields">
+                <div class="field">
+                  <label>Partenaire</label>
+                  <div>Marché central</div>
+                </div>
+                <div class="field">
+                  <label>Date</label>
+                  <div>Aujourd'hui</div>
+                </div>
+              </div>
+
+              <div class="quick-products">
+                <div class="product-chip">Tomates</div>
+                <div class="product-chip">Pommes de terre</div>
+                <div class="product-chip">Ajouter autre</div>
+              </div>
+
+              <div class="compact-row">
+                <div class="field">
+                  <label>Quantité</label>
+                  <div>420</div>
+                </div>
+                <div class="field">
+                  <label>Unité</label>
+                  <div>kg</div>
+                </div>
+                <div class="field">
+                  <label>Prix</label>
+                  <div>18</div>
+                </div>
+                <div class="field">
+                  <label>Paiement</label>
+                  <div>Payé</div>
+                </div>
+              </div>
+            </section>
+
+            <aside class="ticket-summary">
+              <h3>Ticket</h3>
+              <div class="receipt-line">
+                <span>Vente</span>
+                <strong>Client</strong>
+              </div>
+              <div class="receipt-line">
+                <span>Tomates</span>
+                <strong>420 kg</strong>
+              </div>
+              <div class="receipt-line">
+                <span>Prix unitaire</span>
+                <strong>18 MAD</strong>
+              </div>
+              <div class="receipt-line">
+                <span>Paiement</span>
+                <strong>Payé</strong>
+              </div>
+              <div class="receipt-total">7 560 MAD</div>
+              <button class="btn primary" style="width:100%; margin-top:24px;">Valider</button>
+            </aside>
+          </div>
+        </div>
+
+        <div class="pros">
+          <span>Total toujours visible</span>
+          <span>Très rapide au quotidien</span>
+          <span>Bon pour écran tactile</span>
+          <span>Moins naturel pour transactions complexes</span>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

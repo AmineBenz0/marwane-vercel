@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision UX - Caisse</title>
+  <style>
+    :root {
+      --ink: #101828;
+      --muted: #667085;
+      --line: #d9e2ef;
+      --surface: rgba(255, 255, 255, 0.9);
+      --teal: #159d8f;
+      --teal-dark: #087568;
+      --amber: #f59e0b;
+      --green: #16a34a;
+      --red: #dc2626;
+      --blue: #2563eb;
+      --cream: #fff8ed;
+      --shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(21, 157, 143, 0.13), transparent 34rem),
+        radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.11), transparent 30rem),
+        linear-gradient(135deg, #f7fbff, #fff7ec);
+    }
+
+    .page {
+      width: min(1240px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 56px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.2rem, 5vw, 4.8rem);
+      line-height: 0.94;
+      letter-spacing: -0.075em;
+    }
+
+    .subtitle {
+      max-width: 720px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 1.08rem;
+      line-height: 1.7;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 18px;
+      font-weight: 900;
+      font-size: 0.98rem;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .primary {
+      color: white;
+      background: var(--teal);
+      box-shadow: 0 14px 28px rgba(21, 157, 143, 0.24);
+    }
+
+    .secondary {
+      color: var(--ink);
+      background: white;
+      border: 1px solid var(--line);
+    }
+
+    .cash-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .cash-main {
+      color: white;
+      padding: 30px;
+      background:
+        linear-gradient(135deg, rgba(21, 157, 143, 0.98), rgba(8, 117, 104, 0.98)),
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.25), transparent 15rem);
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cash-main .label {
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .amount-line {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .amount {
+      font-size: clamp(3rem, 7vw, 5.6rem);
+      line-height: 0.9;
+      font-weight: 950;
+      letter-spacing: -0.07em;
+    }
+
+    .currency {
+      font-size: 1.35rem;
+      font-weight: 950;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .helper {
+      margin-top: 16px;
+      color: rgba(255, 255, 255, 0.82);
+      line-height: 1.55;
+      max-width: 560px;
+    }
+
+    .mini {
+      padding: 24px;
+    }
+
+    .mini strong {
+      display: block;
+      margin: 10px 0 6px;
+      font-size: 2.25rem;
+      letter-spacing: -0.055em;
+    }
+
+    .mini p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .mini.good strong {
+      color: var(--green);
+    }
+
+    .mini.warn strong {
+      color: var(--amber);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .section {
+      padding: 24px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.55rem;
+      letter-spacing: -0.04em;
+    }
+
+    .section-head p {
+      margin: 5px 0 0;
+      color: var(--muted);
+    }
+
+    .split-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .simple-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: #fffdfa;
+    }
+
+    .simple-row span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.92rem;
+      margin-top: 4px;
+    }
+
+    .simple-row strong {
+      font-size: 1.08rem;
+    }
+
+    .green {
+      color: var(--green);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .red {
+      color: var(--red);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .amber {
+      color: var(--amber);
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .filter {
+      border-radius: 999px;
+      padding: 9px 13px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--muted);
+      font-weight: 900;
+      font-size: 0.88rem;
+    }
+
+    .filter.active {
+      background: #e7f8f4;
+      color: var(--teal-dark);
+      border-color: rgba(21, 157, 143, 0.35);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    th {
+      text-align: left;
+      padding: 14px 16px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+    }
+
+    td {
+      padding: 15px 16px;
+      border-bottom: 1px solid #edf1f7;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .move-title {
+      font-weight: 950;
+    }
+
+    .move-note {
+      color: var(--muted);
+      margin-top: 3px;
+      font-size: 0.9rem;
+    }
+
+    .mobile-list {
+      display: none;
+      gap: 10px;
+    }
+
+    .mobile-item {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: white;
+    }
+
+    .mobile-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    @media (max-width: 960px) {
+      .hero,
+      .cash-grid,
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        width: min(100% - 20px, 1240px);
+        padding-top: 20px;
+      }
+
+      .card {
+        border-radius: 22px;
+      }
+
+      .cash-main,
+      .mini,
+      .section {
+        padding: 18px;
+      }
+
+      button {
+        width: 100%;
+      }
+
+      .section-head,
+      .simple-row {
+        flex-direction: column;
+      }
+
+      .table-wrap {
+        display: none;
+      }
+
+      .mobile-list {
+        display: grid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <h1>Caisse</h1>
+        <p class="subtitle">Une vue simple pour savoir combien d'argent est disponible maintenant, ce qui doit encore rentrer, et les dernières entrées / sorties.</p>
+      </div>
+      <div class="actions">
+        <button class="secondary">Exporter</button>
+        <button class="primary">Actualiser</button>
+      </div>
+    </section>
+
+    <section class="cash-grid">
+      <article class="card cash-main">
+        <div class="label">Argent disponible</div>
+        <div class="amount-line">
+          <div class="amount">121 503</div>
+          <div class="currency">MAD</div>
+        </div>
+        <div class="helper">Caisse actuelle avec les paiements encaissés et les LC disponibles comptées directement. C'est le chiffre principal à regarder.</div>
+      </article>
+
+      <article class="card mini warn">
+        <div class="label">À encaisser</div>
+        <strong>18 200 MAD</strong>
+        <p>Clients qui doivent encore payer.</p>
+      </article>
+
+      <article class="card mini good">
+        <div class="label">À payer</div>
+        <strong>7 500 MAD</strong>
+        <p>Fournisseurs pas encore réglés.</p>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <article class="card section">
+        <div class="section-head">
+          <div>
+            <h2>Résumé simple</h2>
+            <p>Pas de vocabulaire comptable lourd.</p>
+          </div>
+        </div>
+
+        <div class="split-list">
+          <div class="simple-row">
+            <div>
+              <strong>Entrées encaissées</strong>
+              <span>Paiements clients + LC disponibles</span>
+            </div>
+            <div class="green">+145 000 MAD</div>
+          </div>
+          <div class="simple-row">
+            <div>
+              <strong>Sorties payées</strong>
+              <span>Dépenses et paiements fournisseurs</span>
+            </div>
+            <div class="red">-23 497 MAD</div>
+          </div>
+          <div class="simple-row">
+            <div>
+              <strong>Écart à surveiller</strong>
+              <span>Ce qui est prévu mais pas encore encaissé/payé</span>
+            </div>
+            <div class="amber">10 700 MAD</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card section">
+        <div class="section-head">
+          <div>
+            <h2>Mouvements de caisse</h2>
+            <p>Une lecture type registre, comme transactions et banques.</p>
+          </div>
+          <button class="secondary">Excel / PDF</button>
+        </div>
+
+        <div class="filters">
+          <div class="filter active">30 derniers jours</div>
+          <div class="filter">Aujourd'hui</div>
+          <div class="filter">Entrées</div>
+          <div class="filter">Sorties</div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Opération</th>
+                <th>Origine</th>
+                <th>Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>26/05/2026</td>
+                <td>
+                  <div class="move-title">Paiement client</div>
+                  <div class="move-note">Vente d'œufs - Client Atlas</div>
+                </td>
+                <td>Espèces</td>
+                <td class="green">+12 000 MAD</td>
+              </tr>
+              <tr>
+                <td>26/05/2026</td>
+                <td>
+                  <div class="move-title">LC disponible</div>
+                  <div class="move-note">LC-2026-018 comptée dans la caisse</div>
+                </td>
+                <td>Lettre de crédit</td>
+                <td class="green">+45 000 MAD</td>
+              </tr>
+              <tr>
+                <td>25/05/2026</td>
+                <td>
+                  <div class="move-title">Dépense</div>
+                  <div class="move-note">Réparation matériel</div>
+                </td>
+                <td>Caisse</td>
+                <td class="red">-1 500 MAD</td>
+              </tr>
+              <tr>
+                <td>24/05/2026</td>
+                <td>
+                  <div class="move-title">Paiement fournisseur</div>
+                  <div class="move-note">Achat aliment</div>
+                </td>
+                <td>Espèces</td>
+                <td class="red">-18 000 MAD</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mobile-list">
+          <div class="mobile-item">
+            <div class="mobile-top">
+              <div>
+                <div class="move-title">Paiement client</div>
+                <div class="move-note">26/05/2026 - Espèces</div>
+              </div>
+              <div class="green">+12 000</div>
+            </div>
+          </div>
+          <div class="mobile-item">
+            <div class="mobile-top">
+              <div>
+                <div class="move-title">LC disponible</div>
+                <div class="move-note">LC-2026-018</div>
+              </div>
+              <div class="green">+45 000</div>
+            </div>
+          </div>
+          <div class="mobile-item">
+            <div class="mobile-top">
+              <div>
+                <div class="move-title">Dépense</div>
+                <div class="move-note">Réparation matériel</div>
+              </div>
+              <div class="red">-1 500</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

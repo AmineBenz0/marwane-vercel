@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Options UI - Production & stock</title>
+  <style>
+    :root {
+      --ink: #17211d;
+      --muted: #66756f;
+      --line: #dfe8e3;
+      --paper: #fffdf7;
+      --wash: #f3f7f4;
+      --green: #11947f;
+      --green-soft: #dff3ea;
+      --amber: #b86a18;
+      --amber-soft: #faead0;
+      --red: #b84c3b;
+      --red-soft: #f7dfdb;
+      --blue: #2c668d;
+      --blue-soft: #e0edf5;
+      --shadow: 0 24px 70px rgba(22, 33, 29, 0.08);
+      --radius: 28px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(17, 148, 127, 0.11), transparent 34rem),
+        linear-gradient(135deg, #f8faf6 0%, #eef4f0 100%);
+    }
+
+    main {
+      width: min(1440px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 34px 0 60px;
+    }
+
+    .intro {
+      display: flex;
+      gap: 22px;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 4.8rem);
+      letter-spacing: -0.06em;
+      line-height: 0.95;
+      max-width: 860px;
+    }
+
+    .intro p {
+      max-width: 520px;
+      color: var(--muted);
+      font-size: 1.08rem;
+      line-height: 1.6;
+    }
+
+    .option {
+      margin-top: 28px;
+      padding: clamp(18px, 3vw, 32px);
+      border: 1px solid var(--line);
+      border-radius: 36px;
+      background: rgba(255, 253, 247, 0.82);
+      box-shadow: var(--shadow);
+    }
+
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: #0d6b5c;
+      font-weight: 800;
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-family: Verdana, sans-serif;
+    }
+
+    .option h2 {
+      margin-top: 10px;
+      font-size: clamp(1.55rem, 2.7vw, 2.6rem);
+      letter-spacing: -0.04em;
+    }
+
+    .option-head p {
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 600px;
+    }
+
+    .screen {
+      border: 1px solid #dae4df;
+      border-radius: var(--radius);
+      background: #f8fbf8;
+      overflow: hidden;
+    }
+
+    .screen-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.82);
+      font-family: Verdana, sans-serif;
+    }
+
+    .screen-bar strong { font-size: 1.1rem; }
+
+    .user-pill {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--green);
+      color: white;
+      font-weight: 900;
+    }
+
+    .content {
+      padding: clamp(14px, 2.5vw, 26px);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 20px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--paper);
+      padding: 18px;
+    }
+
+    .priority {
+      background:
+        radial-gradient(circle at top right, rgba(184, 106, 24, 0.16), transparent 16rem),
+        #fffaf0;
+      border-color: #ead2ad;
+      min-height: 100%;
+    }
+
+    .metric {
+      min-height: 130px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-family: Verdana, sans-serif;
+      font-weight: 800;
+    }
+
+    .number {
+      margin-top: 12px;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      letter-spacing: -0.07em;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .helper {
+      color: var(--muted);
+      line-height: 1.45;
+      margin-top: 8px;
+    }
+
+    .button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 18px;
+      background: var(--green);
+      color: white;
+      font-weight: 900;
+      font-family: Verdana, sans-serif;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .button.secondary {
+      background: white;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .todo {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .todo-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      padding: 14px;
+      border-radius: 18px;
+      background: white;
+      border: 1px solid #ead2ad;
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--amber);
+      flex: 0 0 auto;
+    }
+
+    .building {
+      display: grid;
+      gap: 12px;
+      min-height: 230px;
+    }
+
+    .building-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .status {
+      padding: 7px 10px;
+      border-radius: 999px;
+      font: 800 0.78rem Verdana, sans-serif;
+      background: var(--green-soft);
+      color: #0d6b5c;
+      white-space: nowrap;
+    }
+
+    .status.warn { background: var(--amber-soft); color: var(--amber); }
+    .status.danger { background: var(--red-soft); color: var(--red); }
+    .status.blue { background: var(--blue-soft); color: var(--blue); }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mini {
+      border-radius: 16px;
+      background: #f6f8f5;
+      padding: 12px;
+    }
+
+    .mini span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+    }
+
+    .mini strong {
+      font-size: 1.25rem;
+      letter-spacing: -0.03em;
+    }
+
+    .stock-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 13px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stock-row:last-child { border-bottom: 0; }
+
+    .bar {
+      height: 9px;
+      margin-top: 8px;
+      border-radius: 999px;
+      background: #e9eee9;
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+
+    .split-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .large-action {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px;
+      align-items: center;
+      padding: 18px;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: white;
+    }
+
+    .icon {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      background: var(--green-soft);
+      color: #0d6b5c;
+      font: 900 1.25rem Verdana, sans-serif;
+    }
+
+    .heatmap {
+      display: grid;
+      grid-template-columns: 1.1fr repeat(4, minmax(80px, 1fr));
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      overflow: hidden;
+      background: white;
+      font-family: Verdana, sans-serif;
+    }
+
+    .heatmap > div {
+      padding: 14px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      min-height: 58px;
+    }
+
+    .heatmap > div:nth-child(5n) { border-right: 0; }
+    .heatmap > div:nth-last-child(-n+5) { border-bottom: 0; }
+    .heat-head { background: #eef5ef; font-weight: 900; color: #43544d; }
+    .ok { background: #eff9f2; }
+    .wait { background: #fff3df; }
+    .bad { background: #fae8e4; }
+
+    .phone-preview {
+      max-width: 430px;
+      margin: 0 auto;
+      border: 10px solid #17211d;
+      border-radius: 38px;
+      overflow: hidden;
+      background: #f8fbf8;
+      box-shadow: var(--shadow);
+    }
+
+    .phone-preview .content { padding: 14px; }
+    .phone-stack { display: grid; gap: 12px; }
+
+    @media (max-width: 1050px) {
+      .intro, .option-head { align-items: flex-start; flex-direction: column; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 680px) {
+      main { width: min(100% - 18px, 1440px); padding-top: 18px; }
+      .screen-bar { padding: 14px; }
+      .screen-bar .user-pill { display: none; }
+      .metrics, .grid-3, .mini-grid { grid-template-columns: 1fr; }
+      .todo-row, .large-action { grid-template-columns: 1fr; align-items: stretch; }
+      .button { width: 100%; }
+      .heatmap {
+        grid-template-columns: 1fr;
+      }
+      .heatmap > div {
+        border-right: 0 !important;
+      }
+      .heat-head:not(:first-child) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="intro">
+      <div>
+        <span class="tag">Production & stock</span>
+        <h1>Choisir le bon niveau de simplicité.</h1>
+      </div>
+      <p>
+        Ces options gardent la page comme un centre de décision: voir ce qui manque,
+        comprendre l'état des bâtiments, puis entrer dans le détail seulement si nécessaire.
+      </p>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 1 - Recommandée</span>
+          <h2>Centre quotidien avec bâtiments en cartes</h2>
+        </div>
+        <p>
+          Meilleur équilibre: la page montre les urgences, les chiffres importants,
+          puis chaque bâtiment avec un bouton clair. Simple pour desktop, tablette et mobile.
+        </p>
+      </div>
+
+      <div class="screen">
+        <div class="screen-bar">
+          <strong>Production & stock</strong>
+          <span class="user-pill"><span class="avatar">AD</span> Admin</span>
+        </div>
+        <div class="content">
+          <div class="grid-2">
+            <div>
+              <div class="metrics">
+                <div class="card metric">
+                  <span class="label">Oeufs disponibles</span>
+                  <strong class="number">18 420</strong>
+                  <span class="helper">Tous bâtiments confondus</span>
+                </div>
+                <div class="card metric">
+                  <span class="label">Cartons</span>
+                  <strong class="number">614</strong>
+                  <span class="helper">Prêts à vendre</span>
+                </div>
+                <div class="card metric">
+                  <span class="label">Aujourd'hui</span>
+                  <strong class="number">9 850</strong>
+                  <span class="helper">Production saisie</span>
+                </div>
+                <div class="card metric">
+                  <span class="label">Bâtiments actifs</span>
+                  <strong class="number">3</strong>
+                  <span class="helper">Lots en cours</span>
+                </div>
+              </div>
+
+              <div class="grid-3">
+                <article class="card building">
+                  <div class="building-top">
+                    <div>
+                      <h3>Bâtiment 1</h3>
+                      <p class="helper">Lot Hissex - semaine 47</p>
+                    </div>
+                    <span class="status">OK</span>
+                  </div>
+                  <div class="mini-grid">
+                    <div class="mini"><span>Oeufs jour</span><strong>3 240</strong></div>
+                    <div class="mini"><span>Poules</span><strong>11 420</strong></div>
+                    <div class="mini"><span>Stock</span><strong>6 840</strong></div>
+                    <div class="mini"><span>Ponte</span><strong>88%</strong></div>
+                  </div>
+                  <button class="button secondary">Ouvrir bâtiment</button>
+                </article>
+
+                <article class="card building">
+                  <div class="building-top">
+                    <div>
+                      <h3>Bâtiment 2</h3>
+                      <p class="helper">Lot IK01 - semaine 39</p>
+                    </div>
+                    <span class="status warn">À saisir</span>
+                  </div>
+                  <div class="mini-grid">
+                    <div class="mini"><span>Oeufs jour</span><strong>-</strong></div>
+                    <div class="mini"><span>Poules</span><strong>10 910</strong></div>
+                    <div class="mini"><span>Stock</span><strong>4 180</strong></div>
+                    <div class="mini"><span>Ponte</span><strong>-</strong></div>
+                  </div>
+                  <button class="button">Saisir production</button>
+                </article>
+
+                <article class="card building">
+                  <div class="building-top">
+                    <div>
+                      <h3>Bâtiment 3</h3>
+                      <p class="helper">Lot Hissex - semaine 62</p>
+                    </div>
+                    <span class="status danger">Attention</span>
+                  </div>
+                  <div class="mini-grid">
+                    <div class="mini"><span>Oeufs jour</span><strong>2 810</strong></div>
+                    <div class="mini"><span>Poules</span><strong>9 760</strong></div>
+                    <div class="mini"><span>Stock</span><strong>2 120</strong></div>
+                    <div class="mini"><span>Ponte</span><strong>76%</strong></div>
+                  </div>
+                  <button class="button secondary">Voir détail</button>
+                </article>
+              </div>
+            </div>
+
+            <aside class="card priority">
+              <span class="tag">À traiter maintenant</span>
+              <h2 style="margin-top:16px">2 actions demandent votre attention</h2>
+              <div class="todo">
+                <div class="todo-row">
+                  <span class="dot"></span>
+                  <div>
+                    <strong>Production du Bâtiment 2 non saisie</strong>
+                    <p class="helper">Le stock du jour ne sera pas juste tant que ce n'est pas rempli.</p>
+                  </div>
+                  <button class="button">Saisir</button>
+                </div>
+                <div class="todo-row">
+                  <span class="dot"></span>
+                  <div>
+                    <strong>Stock faible en gros calibre</strong>
+                    <p class="helper">À vérifier avant une vente client importante.</p>
+                  </div>
+                  <button class="button secondary">Voir stock</button>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:18px;background:#fff">
+                <h3>Stock par calibre</h3>
+                <div class="stock-row">
+                  <div><strong>Petit</strong><div class="bar"><span style="width:70%"></span></div></div>
+                  <strong>5 200</strong>
+                </div>
+                <div class="stock-row">
+                  <div><strong>Moyen</strong><div class="bar"><span style="width:82%"></span></div></div>
+                  <strong>7 800</strong>
+                </div>
+                <div class="stock-row">
+                  <div><strong>Gros</strong><div class="bar"><span style="width:28%;background:var(--amber)"></span></div></div>
+                  <strong>1 450</strong>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 2</span>
+          <h2>Page “actions d’abord”</h2>
+        </div>
+        <p>
+          Plus minimaliste encore: la page ne montre presque que les tâches utiles.
+          Très bon pour les utilisateurs terrain, moins bon si le manager veut scanner les chiffres vite.
+        </p>
+      </div>
+
+      <div class="screen">
+        <div class="screen-bar">
+          <strong>Production & stock</strong>
+          <span class="user-pill"><span class="avatar">AD</span> Admin</span>
+        </div>
+        <div class="content">
+          <div class="grid-2">
+            <div class="card priority">
+              <span class="tag">Aujourd'hui</span>
+              <h2 style="margin-top:14px">Que voulez-vous faire ?</h2>
+              <p class="helper">Les actions les plus fréquentes sont mises en avant.</p>
+              <div class="split-list" style="margin-top:22px">
+                <div class="large-action">
+                  <span class="icon">1</span>
+                  <div>
+                    <h3>Saisir la production du jour</h3>
+                    <p class="helper">Oeufs, mortalité, réforme, aliment, formule et grammage.</p>
+                  </div>
+                  <button class="button">Commencer</button>
+                </div>
+                <div class="large-action">
+                  <span class="icon">2</span>
+                  <div>
+                    <h3>Voir les stocks disponibles</h3>
+                    <p class="helper">Quantités par bâtiment et par calibre.</p>
+                  </div>
+                  <button class="button secondary">Voir</button>
+                </div>
+                <div class="large-action">
+                  <span class="icon">3</span>
+                  <div>
+                    <h3>Ouvrir un bâtiment</h3>
+                    <p class="helper">Consulter le lot, les performances et l'historique.</p>
+                  </div>
+                  <button class="button secondary">Choisir</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h2>Résumé rapide</h2>
+              <div class="metrics" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:18px">
+                <div class="mini"><span>Oeufs stock</span><strong>18 420</strong></div>
+                <div class="mini"><span>Cartons</span><strong>614</strong></div>
+                <div class="mini"><span>Saisies faites</span><strong>2 / 3</strong></div>
+                <div class="mini"><span>Alertes</span><strong>2</strong></div>
+              </div>
+              <div class="todo" style="margin-top:18px">
+                <div class="todo-row"><div><strong>Bâtiment 2</strong><p class="helper">Production non saisie</p></div><span class="status warn">À faire</span></div>
+                <div class="todo-row"><div><strong>Bâtiment 3</strong><p class="helper">Ponte en baisse</p></div><span class="status danger">Vérifier</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 3</span>
+          <h2>Tableau santé par bâtiment</h2>
+        </div>
+        <p>
+          Vue très rapide pour manager: on compare les bâtiments sur 4 indicateurs.
+          Simple visuellement, mais un peu plus “reporting” que “faire l’action”.
+        </p>
+      </div>
+
+      <div class="screen">
+        <div class="screen-bar">
+          <strong>Production & stock</strong>
+          <span class="user-pill"><span class="avatar">AD</span> Admin</span>
+        </div>
+        <div class="content">
+          <div class="metrics">
+            <div class="card metric"><span class="label">À saisir</span><strong class="number">1</strong><span class="helper">Bâtiment aujourd'hui</span></div>
+            <div class="card metric"><span class="label">Production</span><strong class="number">9 850</strong><span class="helper">Oeufs du jour</span></div>
+            <div class="card metric"><span class="label">Stock</span><strong class="number">18 420</strong><span class="helper">Oeufs disponibles</span></div>
+            <div class="card metric"><span class="label">Alertes</span><strong class="number">2</strong><span class="helper">À vérifier</span></div>
+          </div>
+          <div class="heatmap">
+            <div class="heat-head">Bâtiment</div>
+            <div class="heat-head">Saisie</div>
+            <div class="heat-head">Ponte</div>
+            <div class="heat-head">Stock</div>
+            <div class="heat-head">Lot</div>
+
+            <div><strong>Bâtiment 1</strong><p class="helper">Lot Hissex</p></div>
+            <div class="ok">Faite</div>
+            <div class="ok">88%</div>
+            <div class="ok">6 840</div>
+            <div class="ok">Semaine 47</div>
+
+            <div><strong>Bâtiment 2</strong><p class="helper">Lot IK01</p></div>
+            <div class="wait">À saisir</div>
+            <div class="wait">-</div>
+            <div class="ok">4 180</div>
+            <div class="ok">Semaine 39</div>
+
+            <div><strong>Bâtiment 3</strong><p class="helper">Lot Hissex</p></div>
+            <div class="ok">Faite</div>
+            <div class="bad">76%</div>
+            <div class="wait">2 120</div>
+            <div class="wait">Semaine 62</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <span class="tag">Option 4</span>
+          <h2>Mobile-first ultra simple</h2>
+        </div>
+        <p>
+          Une version pensée comme une application téléphone. Elle marche très bien sur mobile,
+          mais sur desktop elle peut sembler trop espacée si on l'utilise telle quelle.
+        </p>
+      </div>
+
+      <div class="phone-preview">
+        <div class="screen-bar">
+          <strong>Production</strong>
+          <span class="avatar">AD</span>
+        </div>
+        <div class="content phone-stack">
+          <div class="card priority">
+            <span class="tag">Priorité</span>
+            <h2 style="margin-top:12px">Bâtiment 2 à saisir</h2>
+            <p class="helper">Aucun oeuf enregistré aujourd'hui.</p>
+            <button class="button" style="margin-top:16px">Saisir maintenant</button>
+          </div>
+
+          <div class="metrics" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:0">
+            <div class="mini"><span>Oeufs</span><strong>18 420</strong></div>
+            <div class="mini"><span>Cartons</span><strong>614</strong></div>
+            <div class="mini"><span>Jour</span><strong>9 850</strong></div>
+            <div class="mini"><span>Alertes</span><strong>2</strong></div>
+          </div>
+
+          <article class="card building">
+            <div class="building-top"><h3>Bâtiment 1</h3><span class="status">OK</span></div>
+            <div class="mini-grid"><div class="mini"><span>Oeufs</span><strong>3 240</strong></div><div class="mini"><span>Stock</span><strong>6 840</strong></div></div>
+            <button class="button secondary">Ouvrir</button>
+          </article>
+
+          <article class="card building">
+            <div class="building-top"><h3>Bâtiment 2</h3><span class="status warn">À saisir</span></div>
+            <div class="mini-grid"><div class="mini"><span>Oeufs</span><strong>-</strong></div><div class="mini"><span>Stock</span><strong>4 180</strong></div></div>
+            <button class="button">Saisir</button>
+          </article>
+
+          <article class="card building">
+            <div class="building-top"><h3>Bâtiment 3</h3><span class="status danger">Attention</span></div>
+            <div class="mini-grid"><div class="mini"><span>Oeufs</span><strong>2 810</strong></div><div class="mini"><span>Stock</span><strong>2 120</strong></div></div>
+            <button class="button secondary">Voir détail</button>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

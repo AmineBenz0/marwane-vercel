@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: comptabilite_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-comptabilite_db}
+      POSTGRES_USER: ${POSTGRES_USER:-comptabilite_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - comptabilite_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-comptabilite_user} -d ${POSTGRES_DB:-comptabilite_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: comptabilite_backend
+    environment:
+      # Database connection - use service name 'postgres' instead of localhost
+      DATABASE_URL: postgresql://${POSTGRES_USER:-comptabilite_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-comptabilite_db}
+      POSTGRES_DB: ${POSTGRES_DB:-comptabilite_db}
+      POSTGRES_USER: ${POSTGRES_USER:-comptabilite_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # JWT Configuration
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      # Application Configuration
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-False}
+      API_V1_PREFIX: /api/v1
+      # CORS Configuration
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      # Rate Limiting
+      RATE_LIMIT_PER_MINUTE: 60
+      ENABLE_AUTH: ${ENABLE_AUTH:-True}
+      ENABLE_RATE_LIMITING: ${ENABLE_RATE_LIMITING:-True}
+      # The backend entrypoint requires these values explicitly. Keep bootstrap
+      # credentials in the ignored local env file, never in this compose file.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env before starting}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env before starting}
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/app
+      - ./backend/logs:/app/logs
+    networks:
+      - comptabilite_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+#   frontend:
+#     build:
+#       context: ./frontend
+#       dockerfile: Dockerfile
+#       args:
+#         VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+#     container_name: comptabilite_frontend
+#     restart: unless-stopped
+#     ports:
+#       - "3000:80"
+#     depends_on:
+#       - backend
+#     networks:
+#       - comptabilite_network
+#     healthcheck:
+#       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+#       interval: 30s
+#       timeout: 3s
+#       retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  comptabilite_network:
+    driver: bridge

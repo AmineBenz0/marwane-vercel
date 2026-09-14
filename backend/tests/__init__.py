@@ -1,0 +1,4 @@
+"""
+Tests de l'application.
+"""
+

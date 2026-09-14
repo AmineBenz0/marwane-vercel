@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Options UX - Produits</title>
+  <style>
+    :root {
+      --ink: #16211f;
+      --muted: #6d7a75;
+      --line: #dfe7e2;
+      --bg: #f5f1e8;
+      --panel: #fffdf8;
+      --green: #1f7a5b;
+      --green-soft: #e7f4ed;
+      --blue: #2563eb;
+      --blue-soft: #e8efff;
+      --orange: #c76b1c;
+      --orange-soft: #fff1dd;
+      --red: #b42318;
+      --shadow: 0 20px 60px rgba(31, 41, 35, .10);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 10%, rgba(31,122,91,.12), transparent 28%),
+        linear-gradient(135deg, #fbf8f1 0%, var(--bg) 100%);
+      padding: 28px;
+    }
+
+    .page { max-width: 1380px; margin: 0 auto; }
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-end;
+      margin-bottom: 24px;
+    }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 48px); letter-spacing: -.04em; }
+    .hero p { margin: 8px 0 0; color: var(--muted); max-width: 680px; font-size: 16px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-weight: 800;
+      color: var(--green);
+      box-shadow: var(--shadow);
+      white-space: nowrap;
+    }
+
+    .options {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .option {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      min-height: 760px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .option.recommended { border: 2px solid rgba(31,122,91,.45); }
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+    .note { color: var(--muted); font-size: 14px; margin: 5px 0 0; line-height: 1.45; }
+    .tag {
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 12px;
+      border-radius: 20px;
+      background: #f7faf6;
+      border: 1px solid var(--line);
+    }
+    .search {
+      flex: 1;
+      min-width: 160px;
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 14px;
+      padding: 12px 14px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-weight: 900;
+      background: var(--green);
+      color: white;
+      white-space: nowrap;
+    }
+    .btn.secondary {
+      background: white;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: white;
+    }
+    .stat b { display: block; font-size: 24px; letter-spacing: -.04em; }
+    .stat span { color: var(--muted); font-size: 12px; font-weight: 800; }
+
+    .cards { display: grid; gap: 10px; }
+    .product-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: white;
+    }
+    .product-card h3 { margin: 0; font-size: 16px; }
+    .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .pill {
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 900;
+      background: #eef2f7;
+      color: #475569;
+    }
+    .pill.client { background: var(--blue-soft); color: var(--blue); }
+    .pill.supplier { background: var(--orange-soft); color: var(--orange); }
+    .pill.active { background: var(--green-soft); color: var(--green); }
+    .pill.inactive { background: #f1f5f9; color: #64748b; }
+    .actions { display: flex; gap: 6px; align-items: flex-start; }
+    .icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-weight: 900;
+    }
+
+    .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .lane {
+      background: #f8faf8;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 12px;
+    }
+    .lane h3 { margin: 0 0 10px; font-size: 15px; }
+    .compact-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 16px;
+      background: white;
+      border: 1px solid var(--line);
+      margin-bottom: 8px;
+      font-weight: 800;
+    }
+
+    .table {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      overflow: hidden;
+      background: white;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1.1fr .8fr .55fr .55fr;
+      gap: 8px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .row.head { background: #f8faf8; color: var(--muted); font-weight: 900; font-size: 12px; }
+    .row:last-child { border-bottom: 0; }
+    .name { font-weight: 900; }
+
+    .modal {
+      margin-top: auto;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .modal-title {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 950;
+      display: flex;
+      justify-content: space-between;
+    }
+    .modal-body { padding: 16px; display: grid; gap: 12px; }
+    .field {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .choice {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fbfdfb;
+    }
+    .check {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: var(--green);
+      color: white;
+      font-weight: 900;
+    }
+    .choice strong { display: block; }
+    .choice small { color: var(--muted); font-weight: 700; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 16px;
+      border-top: 1px solid var(--line);
+      background: #fafaf7;
+    }
+
+    @media (max-width: 1100px) {
+      .options { grid-template-columns: 1fr; }
+      .option { min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <h1>Produits - options UX</h1>
+        <p>Objectif: garder toutes les informations actuelles, mais rendre la gestion des produits plus lisible pour une utilisation quotidienne non technique.</p>
+      </div>
+      <div class="badge">Recommandation: Option 1</div>
+    </section>
+
+    <section class="options">
+      <article class="option recommended">
+        <div class="option-head">
+          <div>
+            <h2>Option 1 - Catalogue simple</h2>
+            <p class="note">La plus claire pour le quotidien: cartes lisibles, recherche rapide, actions visibles, et statuts compréhensibles sans tableau technique.</p>
+          </div>
+          <span class="tag">Best UX</span>
+        </div>
+
+        <div class="toolbar">
+          <div class="search">Rechercher un produit...</div>
+          <button class="btn secondary">Actifs</button>
+          <button class="btn">+ Nouveau produit</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><b>24</b><span>Produits</span></div>
+          <div class="stat"><b>18</b><span>Clients</span></div>
+          <div class="stat"><b>9</b><span>Fournisseurs</span></div>
+        </div>
+
+        <div class="cards">
+          <div class="product-card">
+            <div>
+              <h3>Oeufs calibre moyen</h3>
+              <div class="meta">
+                <span class="pill active">Actif</span>
+                <span class="pill client">Vente client</span>
+                <span class="pill supplier">Achat fournisseur</span>
+              </div>
+            </div>
+            <div class="actions"><span class="icon">✎</span><span class="icon">⋯</span></div>
+          </div>
+          <div class="product-card">
+            <div>
+              <h3>Plateaux vides</h3>
+              <div class="meta">
+                <span class="pill active">Actif</span>
+                <span class="pill supplier">Achat fournisseur</span>
+              </div>
+            </div>
+            <div class="actions"><span class="icon">✎</span><span class="icon">⋯</span></div>
+          </div>
+          <div class="product-card">
+            <div>
+              <h3>Oeufs cassés</h3>
+              <div class="meta">
+                <span class="pill inactive">Inactif</span>
+                <span class="pill client">Vente client</span>
+              </div>
+            </div>
+            <div class="actions"><span class="icon">↻</span><span class="icon">⋯</span></div>
+          </div>
+        </div>
+
+        <div class="modal">
+          <div class="modal-title">Nouveau produit <span>×</span></div>
+          <div class="modal-body">
+            <div class="field">Nom du produit</div>
+            <div class="choice"><div class="check">✓</div><div><strong>Disponible pour les ventes client</strong><small>Le produit apparaitra dans les ventes.</small></div></div>
+            <div class="choice"><div class="check">✓</div><div><strong>Disponible pour les achats fournisseur</strong><small>Le produit apparaitra dans les achats.</small></div></div>
+          </div>
+          <div class="modal-actions"><button class="btn secondary">Annuler</button><button class="btn">Enregistrer</button></div>
+        </div>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div>
+            <h2>Option 2 - Séparation par usage</h2>
+            <p class="note">Très pratique si l'équipe pense toujours en “vente client” ou “achat fournisseur”. Moins direct pour les produits utilisés des deux côtés.</p>
+          </div>
+          <span class="tag">Usage-first</span>
+        </div>
+        <div class="toolbar">
+          <div class="search">Rechercher...</div>
+          <button class="btn">+ Ajouter</button>
+        </div>
+        <div class="columns">
+          <div class="lane">
+            <h3>Vente client</h3>
+            <div class="compact-row">Oeufs gros <span class="pill active">Actif</span></div>
+            <div class="compact-row">Oeufs moyen <span class="pill active">Actif</span></div>
+            <div class="compact-row">Oeufs cassés <span class="pill inactive">Inactif</span></div>
+          </div>
+          <div class="lane">
+            <h3>Achat fournisseur</h3>
+            <div class="compact-row">Plateaux vides <span class="pill active">Actif</span></div>
+            <div class="compact-row">Cartons <span class="pill active">Actif</span></div>
+            <div class="compact-row">Aliment poules <span class="pill active">Actif</span></div>
+          </div>
+        </div>
+        <div class="note"><strong>Avantage:</strong> très visuel. <strong>Risque:</strong> doublons visuels pour les produits client + fournisseur.</div>
+      </article>
+
+      <article class="option">
+        <div class="option-head">
+          <div>
+            <h2>Option 3 - Tableau compact</h2>
+            <p class="note">La plus proche de l'existant, avec une meilleure lisibilité. Adaptée si les utilisateurs ont beaucoup de produits et veulent scanner vite.</p>
+          </div>
+          <span class="tag">Dense</span>
+        </div>
+        <div class="toolbar">
+          <div class="search">Nom du produit...</div>
+          <button class="btn secondary">Exporter</button>
+          <button class="btn">+ Créer</button>
+        </div>
+        <div class="table">
+          <div class="row head"><div>Produit</div><div>Utilisation</div><div>Statut</div><div>Actions</div></div>
+          <div class="row"><div class="name">Oeufs gros</div><div><span class="pill client">Client</span></div><div><span class="pill active">Actif</span></div><div>✎ ⋯</div></div>
+          <div class="row"><div class="name">Plateaux vides</div><div><span class="pill supplier">Fournisseur</span></div><div><span class="pill active">Actif</span></div><div>✎ ⋯</div></div>
+          <div class="row"><div class="name">Oeufs moyen</div><div><span class="pill client">Client</span> <span class="pill supplier">Fournisseur</span></div><div><span class="pill active">Actif</span></div><div>✎ ⋯</div></div>
+          <div class="row"><div class="name">Oeufs cassés</div><div><span class="pill client">Client</span></div><div><span class="pill inactive">Inactif</span></div><div>↻ ⋯</div></div>
+        </div>
+        <div class="note"><strong>Avantage:</strong> rapide pour les gros volumes. <strong>Risque:</strong> moins confortable pour non-techniciens que les cartes.</div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
