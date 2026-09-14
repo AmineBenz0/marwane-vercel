@@ -402,9 +402,9 @@ function CategoryStockCard({ categories }) {
   return (
     <Card elevation={0} sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
       <CardContent>
-        <Typography variant="h6" fontWeight={900}>Oeufs disponibles par categorie</Typography>
+        <Typography variant="h6" fontWeight={900}>Production par categorie</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Pas de stock carton ici: on garde la lecture en nombre d'oeufs.
+          Les pertes et les ventes sont detaillees dans les mouvements; le stock net est resume ci-dessus.
         </Typography>
         <Stack spacing={1} sx={{ mt: 2 }}>
           {categories.length === 0 ? (

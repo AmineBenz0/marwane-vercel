@@ -1,4 +1,0 @@
-"""
-Application principale du backend.
-"""
-

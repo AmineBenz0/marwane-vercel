@@ -1,4 +1,0 @@
-"""
-Utilitaires et fonctions helper.
-"""
-

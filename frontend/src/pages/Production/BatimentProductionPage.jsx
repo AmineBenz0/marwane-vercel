@@ -106,14 +106,14 @@ function BatimentProductionPage() {
   );
 
   const todayProductionEntries = selectedDateProductions.filter((production) => production.type_oeuf !== 'perdu');
-  const latestTodayEntry = todayProductionEntries[0] || selectedDateProductions[0] || null;
+  const latestTodayEntry = todayProductionEntries[0] || null;
 
   const totalStats = useMemo(() => ({
     oeufs: productions.reduce((sum, item) => sum + (Number(item.nombre_oeufs) || 0), 0),
     cartons: productions.reduce((sum, item) => sum + (Number(item.nombre_cartons) || 0), 0),
     saisies: productions.length,
   }), [productions]);
-  const stockCategories = buildingStock?.categories || [];
+  const stockCategories = (buildingStock?.categories || []).filter((category) => category.type_oeuf !== 'perdu');
   const latestGrammage = latestTodayEntry?.grammage != null ? `${formatDecimal(latestTodayEntry.grammage, 1)} g` : '-';
   const latestAliment = latestTodayEntry?.consommation_aliment_kg != null
     ? `${formatDecimal(latestTodayEntry.consommation_aliment_kg, 2)} kg`
@@ -210,6 +210,7 @@ function BatimentProductionPage() {
           todayStats={todayStats}
           latestEntry={latestTodayEntry}
           onAddProduction={handleAddProduction}
+          onEdit={handleEdit}
         />
       </Box>
 
@@ -222,6 +223,7 @@ function BatimentProductionPage() {
         <QuickFact tone="blue" label="Grammage moyen" value={latestGrammage} />
         <QuickFact tone="amber" label="Aliment" value={latestAliment} />
         <QuickFact tone="red" label="Mortalite" value={formatNumber(buildingStock?.mortalite || 0)} />
+        <QuickFact tone="green" label="Stock disponible" value={`${formatNumber(todayStats.available)} oeufs`} />
       </Box>
 
       <Box sx={{ display: 'grid', gap: 2.5, minWidth: 0 }}>
@@ -280,6 +282,7 @@ function DailyHeroCard({
   todayStats,
   latestEntry,
   onAddProduction,
+  onEdit,
 }) {
   return (
     <Card
@@ -332,11 +335,11 @@ function DailyHeroCard({
 
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
-          onClick={onAddProduction}
+          startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
+          onClick={() => (hasProduction ? onEdit(latestEntry) : onAddProduction())}
           sx={{ mt: 'auto', borderRadius: 999, minHeight: 48, fontWeight: 950 }}
         >
-          {hasProduction ? 'Modifier la saisie' : "Saisir aujourd'hui"}
+          {hasProduction ? 'Modifier la production' : "Saisir aujourd'hui"}
         </Button>
       </CardContent>
     </Card>
