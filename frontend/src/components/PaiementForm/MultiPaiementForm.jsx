@@ -135,6 +135,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                     <TableCell>
                       <TextField
                         {...register(`paiements.${index}.type_paiement`)}
+                        value={type || 'cash'}
                         select
                         size="small"
                         fullWidth

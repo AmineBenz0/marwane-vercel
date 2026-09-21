@@ -61,6 +61,30 @@ Production promotion is a controlled release action. Do not promote a preview
 until every applicable item in the acceptance checklist has evidence attached
 to the release record.
 
+For this low-traffic development phase, it is acceptable to deploy directly to
+Vercel Production as long as the Vercel Production environment points to the
+staging/development Supabase project, authentication remains enabled, and the
+same readiness checks pass. The Vercel target name controls the deployment
+alias and environment scope; it does not make the database a customer-facing
+production database. To deploy directly, either merge the validated commit into
+the Production Branch configured in Vercel, or run `vercel --prod` from the
+linked repository. Both use Production-scoped variables, so configure and
+verify those values before triggering the deployment.
+
+If using a tested Preview deployment and promoting that exact build instead,
+use the guarded helper only after the candidate is ready:
+
+```powershell
+.\scripts\deploy-to-production.ps1 `
+  -DeploymentUrl "https://<ready-deployment>.vercel.app" `
+  -Scope "<vercel-team-or-scope>"
+```
+
+The helper refuses to promote an unready deployment or one that fails either
+the liveness or database-readiness endpoint. If Vercel Authentication protects
+the candidate URL, run the checks from an authenticated environment or perform
+the same two endpoint checks manually before promotion.
+
 ## 4. Rollback
 
 Roll back application code through the previous Vercel deployment. Handle
