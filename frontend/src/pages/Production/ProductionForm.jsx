@@ -128,19 +128,10 @@ function ProductionForm({
         await productionService.updateProduction(initialData.id_production, payload);
         notification.success('Saisie mise a jour');
       } else {
-        await productionService.createProduction(payload);
-        if (showDailyLossField && lostEggs > 0) {
-          await productionService.createProduction({
-            date_production: data.date_production,
-            id_batiment: data.id_batiment,
-            type_oeuf: 'perdu',
-            nombre_oeufs: lostEggs,
-            grammage: data.grammage || 0,
-            mortalite: null,
-            consommation_aliment_kg: null,
-            formule: null,
-          });
-        }
+        await productionService.createProduction({
+          ...payload,
+          oeufs_perdus: showDailyLossField ? lostEggs : 0,
+        });
         notification.success(lostEggs > 0 ? 'Production et pertes enregistrees' : 'Production enregistree avec succes');
       }
       onSuccess();

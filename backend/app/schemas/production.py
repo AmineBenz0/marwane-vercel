@@ -27,7 +27,17 @@ class ProductionCreate(ProductionBase):
     Schema pour la création d'une production.
     Le nombre de cartons est calculé côté serveur.
     """
-    pass
+    oeufs_perdus: int = Field(
+        default=0,
+        ge=0,
+        description="Nombre d'œufs perdus lors de cette collecte quotidienne",
+    )
+
+    @model_validator(mode='after')
+    def validate_daily_losses(self) -> 'ProductionCreate':
+        if self.type_oeuf == 'perdu' and self.oeufs_perdus > 0:
+            raise ValueError("Les pertes doivent accompagner une saisie de production")
+        return self
 
 
 class ProductionUpdate(BaseModel):

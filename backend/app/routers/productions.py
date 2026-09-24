@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from typing import List, Optional
+import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.production import Production
@@ -32,6 +34,7 @@ from app.utils.production_cycles import (
 from app.models.user import Utilisateur
 
 router = APIRouter(prefix="/productions", tags=["Productions"])
+logger = logging.getLogger(__name__)
 
 FORMULES_ALIMENT = [
     {"value": "demarrage", "label": "Démarrage", "description": "Formule pour les lots en démarrage"},
@@ -206,23 +209,63 @@ def create_production(
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
     calibre = _deduce_calibre(prod_in.type_oeuf, prod_in.grammage)
 
-    # Make the production category available in client transactions.
-    ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
-    
+    user_id = current_user.id_utilisateur if current_user else None
     db_prod = Production(
-        **{**prod_in.model_dump(), "id_cycle": cycle.id_cycle, "calibre": calibre},
+        **{
+            **prod_in.model_dump(exclude={"oeufs_perdus"}),
+            "id_cycle": cycle.id_cycle,
+            "calibre": calibre,
+        },
         nombre_cartons=nb_cartons,
-        id_utilisateur_creation=current_user.id_utilisateur if current_user else None
+        id_utilisateur_creation=user_id,
     )
-    
-    db.add(db_prod)
-    db.commit()
-    db.refresh(db_prod)
-    
-    # Ajouter le nom du bâtiment pour la réponse
-    res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
-    res["nom_batiment"] = batiment.nom
-    res["nom_cycle"] = cycle.nom_cycle
+
+    records = [db_prod]
+    if prod_in.oeufs_perdus > 0:
+        records.append(
+            Production(
+                date_production=prod_in.date_production,
+                id_batiment=prod_in.id_batiment,
+                id_cycle=cycle.id_cycle,
+                type_oeuf="perdu",
+                calibre=None,
+                nombre_oeufs=prod_in.oeufs_perdus,
+                grammage=prod_in.grammage,
+                mortalite=None,
+                consommation_aliment_kg=None,
+                formule=None,
+                nombre_cartons=Production.calculer_cartons(
+                    prod_in.oeufs_perdus,
+                    "perdu",
+                ),
+                id_utilisateur_creation=user_id,
+            )
+        )
+
+    try:
+        # Keep production, losses, and the sellable-product sync in one DB transaction.
+        ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
+        db.add_all(records)
+        db.flush()
+        db.refresh(db_prod)
+
+        # Build the response before commit so no DB read is needed after the commit.
+        res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
+        res["nom_batiment"] = batiment.nom
+        res["nom_cycle"] = cycle.nom_cycle
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "Atomic production save failed for building=%s date=%s",
+            prod_in.id_batiment,
+            prod_in.date_production,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="La production et les pertes n'ont pas été enregistrées.",
+        ) from exc
+
     return res
 
 
