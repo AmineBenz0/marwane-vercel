@@ -25,7 +25,6 @@ from app.schemas.transaction import (
 )
 from app.utils.dependencies import get_current_active_user
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
-from app.utils.production_cycles import require_active_cycle_for_date
 from app.services.inventory import record_transaction_movement, reverse_source_movements
 from app.services.financial_ledger import void_payment
 from app.services.ledger import record_correction
@@ -94,13 +93,9 @@ def _resolve_transaction_cycle(
             )
         return cycle.id_cycle
 
-    cycle = require_active_cycle_for_date(
-        db,
-        id_batiment,
-        date_transaction,
-        action_label="de saisir la vente",
-    )
-    return cycle.id_cycle
+    # A source building is sufficient for daily egg stock accounting. Lots
+    # remain optional and are only attached when explicitly supplied.
+    return None
 
 
 @router.post("/batch", response_model=List[TransactionRead], status_code=status.HTTP_201_CREATED)

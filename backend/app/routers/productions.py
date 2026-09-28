@@ -1,11 +1,10 @@
 import logging
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from typing import List, Optional
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
-from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.production import Production
@@ -28,7 +27,7 @@ from app.utils.egg_product_sync import ensure_sellable_egg_product, parse_sellab
 from app.utils.production_cycles import (
     ACTIVE_CYCLE_STATUSES,
     cycle_to_dict,
-    require_active_cycle_for_date,
+    find_active_cycle,
     refresh_cycle_status,
 )
 from app.models.user import Utilisateur
@@ -135,7 +134,7 @@ def get_productions(
         CycleProduction,
         Production.id_cycle == CycleProduction.id_cycle,
     ).filter(Production.est_actif.is_(True))
-    
+
     if date_debut:
         query = query.filter(Production.date_production >= date_debut)
     if date_fin:
@@ -144,9 +143,9 @@ def get_productions(
         query = query.filter(Production.id_batiment == id_batiment)
     if id_cycle:
         query = query.filter(Production.id_cycle == id_cycle)
-        
+
     results = query.order_by(Production.date_production.desc()).offset(skip).limit(limit).all()
-    
+
     final_results = []
     for prod, nom_batiment, nom_cycle in results:
         # On crée une copie pour ne pas modifier l'objet SQLAlchemy original dans la session
@@ -154,7 +153,7 @@ def get_productions(
         p_data["nom_batiment"] = nom_batiment
         p_data["nom_cycle"] = nom_cycle
         final_results.append(p_data)
-        
+
     return final_results
 
 
@@ -188,7 +187,8 @@ def create_production(
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
 
-    if prod_in.id_cycle:
+    cycle = None
+    if prod_in.id_cycle is not None:
         cycle = db.query(CycleProduction).filter(CycleProduction.id_cycle == prod_in.id_cycle).first()
         if not cycle or cycle.id_batiment != prod_in.id_batiment:
             raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
@@ -197,14 +197,6 @@ def create_production(
             raise HTTPException(status_code=400, detail="Ce lot est termine")
         if prod_in.date_production < cycle.date_debut or prod_in.date_production > cycle.date_fin_prevue:
             raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
-    else:
-        cycle = require_active_cycle_for_date(
-            db,
-            prod_in.id_batiment,
-            prod_in.date_production,
-            action_label="de saisir la production",
-        )
-
     # Calculer le nombre de cartons selon les règles métier
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
     calibre = _deduce_calibre(prod_in.type_oeuf, prod_in.grammage)
@@ -213,7 +205,7 @@ def create_production(
     db_prod = Production(
         **{
             **prod_in.model_dump(exclude={"oeufs_perdus"}),
-            "id_cycle": cycle.id_cycle,
+            "id_cycle": cycle.id_cycle if cycle else None,
             "calibre": calibre,
         },
         nombre_cartons=nb_cartons,
@@ -226,7 +218,7 @@ def create_production(
             Production(
                 date_production=prod_in.date_production,
                 id_batiment=prod_in.id_batiment,
-                id_cycle=cycle.id_cycle,
+                id_cycle=cycle.id_cycle if cycle else None,
                 type_oeuf="perdu",
                 calibre=None,
                 nombre_oeufs=prod_in.oeufs_perdus,
@@ -234,25 +226,21 @@ def create_production(
                 mortalite=None,
                 consommation_aliment_kg=None,
                 formule=None,
-                nombre_cartons=Production.calculer_cartons(
-                    prod_in.oeufs_perdus,
-                    "perdu",
-                ),
+                nombre_cartons=Production.calculer_cartons(prod_in.oeufs_perdus, "perdu"),
                 id_utilisateur_creation=user_id,
             )
         )
 
     try:
-        # Keep production, losses, and the sellable-product sync in one DB transaction.
+        # Production, losses, and product synchronization share one transaction.
         ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
         db.add_all(records)
         db.flush()
         db.refresh(db_prod)
 
-        # Build the response before commit so no DB read is needed after the commit.
         res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
         res["nom_batiment"] = batiment.nom
-        res["nom_cycle"] = cycle.nom_cycle
+        res["nom_cycle"] = cycle.nom_cycle if cycle else None
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -364,28 +352,11 @@ def get_daily_stock(
     """
     target_date = date_stock or date.today()
     batiments = db.query(Batiment).filter(Batiment.est_actif.is_(True)).order_by(Batiment.nom).all()
-    # Load active cycles for all buildings in one query. The previous
-    # implementation performed one lookup per building on every dashboard load.
-    building_ids = [batiment.id_batiment for batiment in batiments]
-    cycles = (
-        db.query(CycleProduction)
-        .filter(
-            CycleProduction.id_batiment.in_(building_ids),
-            CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES),
-            CycleProduction.date_debut <= target_date,
-        )
-        .order_by(
-            CycleProduction.id_batiment.asc(),
-            CycleProduction.date_debut.desc(),
-        )
-        .all()
-    )
-    cycles_by_batiment = {}
-    for cycle in cycles:
-        if cycle.id_batiment not in cycles_by_batiment:
-            refresh_cycle_status(db, cycle)
-            cycles_by_batiment[cycle.id_batiment] = cycle
-
+    cycles_by_batiment = {
+        batiment.id_batiment: find_active_cycle(db, batiment.id_batiment, target_date)
+        for batiment in batiments
+    }
+    db.flush()
     productions = db.query(Production).filter(
         Production.date_production == target_date,
         Production.est_actif.is_(True),
@@ -416,10 +387,6 @@ def get_daily_stock(
         building = stock_by_batiment.get(prod.id_batiment)
         if not building:
             continue
-        active_cycle = cycles_by_batiment.get(prod.id_batiment)
-        if not active_cycle or prod.id_cycle != active_cycle.id_cycle:
-            continue
-
         quantity = int(prod.nombre_oeufs or 0)
         building["mortalite"] += int(prod.mortalite or 0)
         building["consommation_aliment_kg"] += float(prod.consommation_aliment_kg or 0)
@@ -503,10 +470,6 @@ def get_daily_stock(
         building = stock_by_batiment.get(transaction.id_batiment)
         if not building:
             continue
-        active_cycle = cycles_by_batiment.get(transaction.id_batiment)
-        if not active_cycle or (transaction.id_cycle is not None and transaction.id_cycle != active_cycle.id_cycle):
-            continue
-
         type_key, calibre_key = category_from_product
         category_key = (type_key, calibre_key)
         category = building["categories"].setdefault(
@@ -736,7 +699,7 @@ def get_cycle_performance(
 
 @router.get("/{id}", response_model=ProductionRead)
 def get_production(
-    id: int, 
+    id: int,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -759,7 +722,7 @@ def get_production(
     ).first()
     if not result:
         raise HTTPException(status_code=404, detail="Production introuvable")
-    
+
     prod, nom_batiment, nom_cycle = result
     p_data = {c.name: getattr(prod, c.name) for c in prod.__table__.columns}
     p_data["nom_batiment"] = nom_batiment
@@ -783,47 +746,54 @@ def update_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
-    
+
     update_dict = prod_in.model_dump(exclude_unset=True)
+    final_batiment_id = update_dict.get("id_batiment", prod.id_batiment)
+    final_date = update_dict.get("date_production", prod.date_production)
+    cycle = None
+
+    # A lot is optional for normal daily production. Existing historical links
+    # are preserved unless the caller explicitly changes id_cycle.
+    if "id_cycle" in update_dict:
+        if update_dict["id_cycle"] is not None:
+            cycle = db.query(CycleProduction).filter(
+                CycleProduction.id_cycle == update_dict["id_cycle"]
+            ).first()
+            if not cycle or cycle.id_batiment != final_batiment_id:
+                raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
+            if final_date < cycle.date_debut or final_date > cycle.date_fin_prevue:
+                raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
+        # Explicit null detaches the production from its lot.
+    elif prod.id_cycle is not None:
+        cycle = db.query(CycleProduction).filter(
+            CycleProduction.id_cycle == prod.id_cycle
+        ).first()
+        if not cycle or cycle.id_batiment != final_batiment_id:
+            raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
+        if final_date < cycle.date_debut or final_date > cycle.date_fin_prevue:
+            raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
+
     for key, value in update_dict.items():
         setattr(prod, key, value)
 
-    if prod.id_cycle:
-        cycle = db.query(CycleProduction).filter(CycleProduction.id_cycle == prod.id_cycle).first()
-        if not cycle or cycle.id_batiment != prod.id_batiment:
-            raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
-        refresh_cycle_status(db, cycle)
-        if cycle.statut not in ACTIVE_CYCLE_STATUSES:
-            raise HTTPException(status_code=400, detail="Ce lot est termine")
-        if prod.date_production < cycle.date_debut or prod.date_production > cycle.date_fin_prevue:
-            raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
-    else:
-        cycle = require_active_cycle_for_date(
-            db,
-            prod.id_batiment,
-            prod.date_production,
-            action_label="de modifier la production",
-        )
-        prod.id_cycle = cycle.id_cycle
-
     prod.calibre = _deduce_calibre(prod.type_oeuf, prod.grammage)
-    
+
     # Recalculer les cartons si le nombre d'œufs ou le type a changé
     if 'nombre_oeufs' in update_dict or 'type_oeuf' in update_dict:
         prod.nombre_cartons = Production.calculer_cartons(prod.nombre_oeufs, prod.type_oeuf)
 
     ensure_sellable_egg_product(db, prod.type_oeuf, prod.calibre)
-    
+
     prod.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
-    
+
     db.commit()
     db.refresh(prod)
-    
+
     # Retourner avec le nom du bâtiment
     batiment = db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).first()
     res = {c.name: getattr(prod, c.name) for c in prod.__table__.columns}
     res["nom_batiment"] = batiment.nom if batiment else None
-    res["nom_cycle"] = cycle.nom_cycle
+    res["nom_cycle"] = cycle.nom_cycle if cycle else None
     return res
 
 
@@ -850,7 +820,7 @@ def delete_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
-    
+
     prod.est_actif = False
     prod.date_annulation = datetime.now(timezone.utc)
     prod.motif_annulation = raison.strip()
