@@ -396,8 +396,8 @@ api.interceptors.response.use(
           }
         });
 
-      } else if (shouldShowNotification(status)) {
-        // Afficher une notification pour les autres erreurs
+      } else if (shouldShowNotification(status) && !config?.silent) {
+        // Interactive inputs such as global search render their own error state.
         notificationStore.error(errorMessage);
       }
       

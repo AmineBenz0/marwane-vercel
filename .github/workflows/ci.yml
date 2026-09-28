@@ -107,6 +107,8 @@ jobs:
           ENABLE_AUTH: "true"
           ENABLE_RATE_LIMITING: "true"
         run: node scripts/check_vercel_environment.mjs
+      - name: Reject mojibake in frontend source
+        run: node ../scripts/check_frontend_encoding.mjs
       - run: npm ci
       - run: npm run lint
       - run: npm run test:unit:coverage

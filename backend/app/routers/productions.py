@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -32,6 +33,7 @@ from app.utils.production_cycles import (
 from app.models.user import Utilisateur
 
 router = APIRouter(prefix="/productions", tags=["Productions"])
+logger = logging.getLogger(__name__)
 
 FORMULES_ALIMENT = [
     {"value": "demarrage", "label": "Démarrage", "description": "Formule pour les lots en démarrage"},
@@ -132,7 +134,7 @@ def get_productions(
         CycleProduction,
         Production.id_cycle == CycleProduction.id_cycle,
     ).filter(Production.est_actif.is_(True))
-    
+
     if date_debut:
         query = query.filter(Production.date_production >= date_debut)
     if date_fin:
@@ -141,9 +143,9 @@ def get_productions(
         query = query.filter(Production.id_batiment == id_batiment)
     if id_cycle:
         query = query.filter(Production.id_cycle == id_cycle)
-        
+
     results = query.order_by(Production.date_production.desc()).offset(skip).limit(limit).all()
-    
+
     final_results = []
     for prod, nom_batiment, nom_cycle in results:
         # On crée une copie pour ne pas modifier l'objet SQLAlchemy original dans la session
@@ -151,7 +153,7 @@ def get_productions(
         p_data["nom_batiment"] = nom_batiment
         p_data["nom_cycle"] = nom_cycle
         final_results.append(p_data)
-        
+
     return final_results
 
 
@@ -199,23 +201,59 @@ def create_production(
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
     calibre = _deduce_calibre(prod_in.type_oeuf, prod_in.grammage)
 
-    # Make the production category available in client transactions.
-    ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
-    
+    user_id = current_user.id_utilisateur if current_user else None
     db_prod = Production(
-        **{**prod_in.model_dump(), "id_cycle": cycle.id_cycle if cycle else None, "calibre": calibre},
+        **{
+            **prod_in.model_dump(exclude={"oeufs_perdus"}),
+            "id_cycle": cycle.id_cycle if cycle else None,
+            "calibre": calibre,
+        },
         nombre_cartons=nb_cartons,
-        id_utilisateur_creation=current_user.id_utilisateur if current_user else None
+        id_utilisateur_creation=user_id,
     )
-    
-    db.add(db_prod)
-    db.commit()
-    db.refresh(db_prod)
-    
-    # Ajouter le nom du bâtiment pour la réponse
-    res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
-    res["nom_batiment"] = batiment.nom
-    res["nom_cycle"] = cycle.nom_cycle if cycle else None
+
+    records = [db_prod]
+    if prod_in.oeufs_perdus > 0:
+        records.append(
+            Production(
+                date_production=prod_in.date_production,
+                id_batiment=prod_in.id_batiment,
+                id_cycle=cycle.id_cycle if cycle else None,
+                type_oeuf="perdu",
+                calibre=None,
+                nombre_oeufs=prod_in.oeufs_perdus,
+                grammage=prod_in.grammage,
+                mortalite=None,
+                consommation_aliment_kg=None,
+                formule=None,
+                nombre_cartons=Production.calculer_cartons(prod_in.oeufs_perdus, "perdu"),
+                id_utilisateur_creation=user_id,
+            )
+        )
+
+    try:
+        # Production, losses, and product synchronization share one transaction.
+        ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
+        db.add_all(records)
+        db.flush()
+        db.refresh(db_prod)
+
+        res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
+        res["nom_batiment"] = batiment.nom
+        res["nom_cycle"] = cycle.nom_cycle if cycle else None
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "Atomic production save failed for building=%s date=%s",
+            prod_in.id_batiment,
+            prod_in.date_production,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="La production et les pertes n'ont pas été enregistrées.",
+        ) from exc
+
     return res
 
 
@@ -661,7 +699,7 @@ def get_cycle_performance(
 
 @router.get("/{id}", response_model=ProductionRead)
 def get_production(
-    id: int, 
+    id: int,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -684,7 +722,7 @@ def get_production(
     ).first()
     if not result:
         raise HTTPException(status_code=404, detail="Production introuvable")
-    
+
     prod, nom_batiment, nom_cycle = result
     p_data = {c.name: getattr(prod, c.name) for c in prod.__table__.columns}
     p_data["nom_batiment"] = nom_batiment
@@ -708,7 +746,7 @@ def update_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
-    
+
     update_dict = prod_in.model_dump(exclude_unset=True)
     final_batiment_id = update_dict.get("id_batiment", prod.id_batiment)
     final_date = update_dict.get("date_production", prod.date_production)
@@ -739,18 +777,18 @@ def update_production(
         setattr(prod, key, value)
 
     prod.calibre = _deduce_calibre(prod.type_oeuf, prod.grammage)
-    
+
     # Recalculer les cartons si le nombre d'œufs ou le type a changé
     if 'nombre_oeufs' in update_dict or 'type_oeuf' in update_dict:
         prod.nombre_cartons = Production.calculer_cartons(prod.nombre_oeufs, prod.type_oeuf)
 
     ensure_sellable_egg_product(db, prod.type_oeuf, prod.calibre)
-    
+
     prod.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
-    
+
     db.commit()
     db.refresh(prod)
-    
+
     # Retourner avec le nom du bâtiment
     batiment = db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).first()
     res = {c.name: getattr(prod, c.name) for c in prod.__table__.columns}
@@ -782,7 +820,7 @@ def delete_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
-    
+
     prod.est_actif = False
     prod.date_annulation = datetime.now(timezone.utc)
     prod.motif_annulation = raison.strip()

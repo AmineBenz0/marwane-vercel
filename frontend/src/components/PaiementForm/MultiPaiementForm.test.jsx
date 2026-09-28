@@ -28,6 +28,11 @@ describe('MultiPaiementForm', () => {
     const props = makeProps([{ id: 'payment-1' }, { id: 'payment-2' }]);
     render(<MultiPaiementForm {...props} />);
 
+    expect(screen.getAllByRole('combobox').map((select) => select.textContent)).toEqual([
+      '💵 Espèces',
+      '💵 Espèces',
+    ]);
+
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter une ligne de paiement' }));
     expect(props.append).toHaveBeenCalledWith(expect.objectContaining({ montant: 20, type_paiement: 'cash' }));
 

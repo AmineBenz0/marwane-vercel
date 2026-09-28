@@ -3,11 +3,11 @@
  * 
  * Affiche la liste des transactions avec :
  * - Registre Excel lisible
- * - Filtres avancÃ©s : date (range), client, fournisseur, produit, montant (min/max), statut
- * - Actions : crÃ©er, voir dÃ©tails, Ã©diter, supprimer (soft delete)
+ * - Filtres avancés : date (range), client, fournisseur, produit, montant (min/max), statut
+ * - Actions : créer, voir détails, éditer, supprimer (soft delete)
  * - Pagination
  * 
- * Chaque transaction reprÃ©sente une ligne de vente/achat avec un seul produit.
+ * Chaque transaction représente une ligne de vente/achat avec un seul produit.
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -73,30 +73,30 @@ function TransactionsList() {
   // Hook pour les notifications
   const notification = useNotification();
 
-  // Ã‰tat pour les transactions
+  // ðtat pour les transactions
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Ã‰tat pour les clients, fournisseurs et produits (pour les filtres et l'affichage)
+  // ðtat pour les clients, fournisseurs et produits (pour les filtres et l'affichage)
   const [clients, setClients] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [produits, setProduits] = useState([]);
   const [batiments, setBatiments] = useState([]);
 
-  // Ã‰tat pour la modal de crÃ©ation/Ã©dition
+  // ðtat pour la modal de création/édition
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [prefillBatimentId, setPrefillBatimentId] = useState(null);
 
-  // Ã‰tat pour la confirmation de suppression
+  // ðtat pour la confirmation de suppression
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Ã‰tat pour les filtres (objet unique)
+  // ðtat pour les filtres (objet unique)
   const [filters, setFilters] = useState({
     dateDebut: '',
     dateFin: '',
@@ -133,7 +133,7 @@ function TransactionsList() {
   };
 
   /**
-   * CrÃ©e des maps de lookup pour clients, fournisseurs et produits.
+   * Crée des maps de lookup pour clients, fournisseurs et produits.
    */
   const clientsMap = useMemo(() => {
     const map = new Map();
@@ -168,7 +168,7 @@ function TransactionsList() {
   }, [batiments]);
 
   /**
-   * DÃ©finitions des filtres pour SmartFilterPanel.
+   * Définitions des filtres pour SmartFilterPanel.
    */
   const filterDefinitions = useMemo(() => [
     {
@@ -270,7 +270,7 @@ function TransactionsList() {
       setProduits(produitsData || []);
       setBatiments(batimentsData || []);
     } catch (err) {
-      console.error('Erreur lors du chargement des donnÃ©es de rÃ©fÃ©rence:', err);
+      console.error('Erreur lors du chargement des données de référence:', err);
     }
   };
 
@@ -282,7 +282,7 @@ function TransactionsList() {
     setError(null);
 
     try {
-      // Construire les paramÃ¨tres de requÃªte
+      // Construire les paramètres de requête
       const params = {};
       
       if (filters.dateDebut) {
@@ -329,7 +329,7 @@ function TransactionsList() {
     }
   };
 
-  // Charger les donnÃ©es de rÃ©fÃ©rence au montage
+  // Charger les données de référence au montage
   useEffect(() => {
     fetchReferenceData();
   }, []);
@@ -351,7 +351,7 @@ function TransactionsList() {
   }, [location.pathname, location.state, navigate]);
 
   /**
-   * GÃ¨re l'ouverture de la modal pour crÃ©er une nouvelle transaction.
+   * Gère l'ouverture de la modal pour créer une nouvelle transaction.
    */
   const handleCreate = () => {
     setEditingTransaction(null);
@@ -361,31 +361,31 @@ function TransactionsList() {
   };
 
   /**
-   * GÃ¨re l'ouverture de la page de dÃ©tails d'une transaction.
+   * Gère l'ouverture de la page de détails d'une transaction.
    */
   const handleViewDetails = (transaction) => {
     navigate(`/transactions/${transaction.id_transaction}`);
   };
 
   /**
-   * GÃ¨re l'ouverture de la modal pour Ã©diter une transaction existante.
+   * Gère l'ouverture de la modal pour éditer une transaction existante.
    */
   const handleEdit = async (transaction) => {
     try {
-      // RÃ©cupÃ©rer les dÃ©tails complets de la transaction
+      // Récupérer les détails complets de la transaction
       const details = await get(`/transactions/${transaction.id_transaction}`);
       setEditingTransaction(details);
       setPrefillBatimentId(null);
       setFormError(null);
       setModalOpen(true);
     } catch (err) {
-      console.error('Erreur lors de la rÃ©cupÃ©ration des dÃ©tails:', err);
-      setError(err?.message || 'Erreur lors de la rÃ©cupÃ©ration des dÃ©tails');
+      console.error('Erreur lors de la récupération des détails:', err);
+      setError(err?.message || 'Erreur lors de la récupération des détails');
     }
   };
 
   /**
-   * GÃ¨re la soumission du formulaire (crÃ©ation ou Ã©dition).
+   * Gère la soumission du formulaire (création ou édition).
    */
   const handleSubmit = async (data) => {
     setFormLoading(true);
@@ -395,14 +395,14 @@ function TransactionsList() {
       let result = null;
       
       if (editingTransaction) {
-        // Mode Ã©dition : PUT (une seule transaction)
-        // Extraire les donnÃ©es de paiement si prÃ©sentes
+        // Mode édition : PUT (une seule transaction)
+        // Extraire les données de paiement si présentes
         const transactionData = { ...data };
         delete transactionData.paiement;
         
         result = await put(`/transactions/${editingTransaction.id_transaction}`, transactionData);
         
-        // GÃ©rer les paiements si prÃ©sents
+        // Gérer les paiements si présents
         if (data.paiements && data.paiements.length > 0) {
           const paymentsPromises = data.paiements.map(async (p) => {
             const pData = {
@@ -419,18 +419,18 @@ function TransactionsList() {
             await Promise.all(paymentsPromises);
           } catch (err) {
             console.error('Erreur lors de la gestion des paiements:', err);
-            notification.warning('Transaction modifiÃ©e mais certains paiements ont Ã©chouÃ©');
+            notification.warning('Transaction modifiée mais certains paiements ont échoué');
           }
         }
         
-        notification.success('Transaction modifiÃ©e avec succÃ¨s');
+        notification.success('Transaction modifiée avec succès');
       } else {
-        // Mode crÃ©ation : vÃ©rifier si c'est un batch ou une transaction simple
+        // Mode création : vérifier si c'est un batch ou une transaction simple
         if (data.batch && data.transactions) {
-          // CrÃ©ation batch : POST /transactions/batch
+          // Création batch : POST /transactions/batch
           result = await post('/transactions/batch', data.transactions);
           
-          // CrÃ©er les paiements pour les lignes qui ont ajouter_paiement = true
+          // Créer les paiements pour les lignes qui ont ajouter_paiement = true
           if (result && Array.isArray(result) && data.lignesData) {
             const allPaiementsInBatch = [];
             
@@ -456,22 +456,22 @@ function TransactionsList() {
             if (allPaiementsInBatch.length > 0) {
               try {
                 await post('/paiements/batch', { paiements: allPaiementsInBatch });
-                notification.success(`${result.length} transactions crÃ©Ã©es avec ${allPaiementsInBatch.length} paiements.`);
+                notification.success(`${result.length} transactions créées avec ${allPaiementsInBatch.length} paiements.`);
               } catch (err) {
-                console.error('Erreur lors de la crÃ©ation du batch de paiements:', err);
-                notification.warning(`${result.length} transactions crÃ©Ã©es mais Ã©chec de crÃ©ation des paiements.`);
+                console.error('Erreur lors de la création du batch de paiements:', err);
+                notification.warning(`${result.length} transactions créées mais échec de création des paiements.`);
               }
             } else {
-              notification.success(`${result.length} transaction(s) crÃ©Ã©e(s)`);
+              notification.success(`${result.length} transaction(s) créée(s)`);
             }
           }
         } else {
-          // CrÃ©ation simple : POST /transactions
+          // Création simple : POST /transactions
           result = await post('/transactions', data);
         }
       }
 
-      // Fermer la modal et rafraÃ®chir la liste
+      // Fermer la modal et rafraîchir la liste
       setModalOpen(false);
       setEditingTransaction(null);
       setPrefillBatimentId(null);
@@ -483,14 +483,14 @@ function TransactionsList() {
       setFormError(
         err?.message || 'Une erreur est survenue lors de l\'enregistrement'
       );
-      throw err; // Re-throw pour que le formulaire puisse gÃ©rer les erreurs de validation
+      throw err; // Re-throw pour que le formulaire puisse gérer les erreurs de validation
     } finally {
       setFormLoading(false);
     }
   };
 
   /**
-   * GÃ¨re la fermeture de la modal.
+   * Gère la fermeture de la modal.
    */
   const handleCloseModal = () => {
     if (!formLoading) {
@@ -502,7 +502,7 @@ function TransactionsList() {
   };
 
   /**
-   * GÃ¨re le clic sur le bouton de suppression.
+   * Gère le clic sur le bouton de suppression.
    */
   const handleDeleteClick = (transaction) => {
     setTransactionToDelete(transaction);
@@ -510,7 +510,7 @@ function TransactionsList() {
   };
 
   /**
-   * GÃ¨re la confirmation de suppression.
+   * Gère la confirmation de suppression.
    */
   const handleDeleteConfirm = async () => {
     if (!transactionToDelete) return;
@@ -521,7 +521,7 @@ function TransactionsList() {
       // Appeler l'API pour supprimer (soft delete)
       await del(`/transactions/${transactionToDelete.id_transaction}`);
 
-      // Fermer le dialogue et rafraÃ®chir la liste
+      // Fermer le dialogue et rafraîchir la liste
       setDeleteDialogOpen(false);
       setTransactionToDelete(null);
       await fetchTransactions();
@@ -538,7 +538,7 @@ function TransactionsList() {
   };
 
   /**
-   * GÃ¨re l'annulation de la suppression.
+   * Gère l'annulation de la suppression.
    */
   const handleDeleteCancel = () => {
     setDeleteDialogOpen(false);
@@ -546,22 +546,22 @@ function TransactionsList() {
   };
 
   /**
-   * GÃ¨re la rÃ©activation d'une transaction.
+   * Gère la réactivation d'une transaction.
    */
   const handleReactivate = async (transaction) => {
     try {
-      // Appeler l'API pour rÃ©activer (PATCH)
+      // Appeler l'API pour réactiver (PATCH)
       await patch(`/transactions/${transaction.id_transaction}/reactivate`, {});
       
-      // RafraÃ®chir la liste
+      // Rafraîchir la liste
       await fetchTransactions();
       
-      // Notification de succÃ¨s
-      notification.success('Transaction rÃ©activÃ©e avec succÃ¨s');
+      // Notification de succès
+      notification.success('Transaction réactivée avec succès');
     } catch (err) {
-      console.error('Erreur lors de la rÃ©activation:', err);
+      console.error('Erreur lors de la réactivation:', err);
       setError(
-        err?.message || 'Une erreur est survenue lors de la rÃ©activation'
+        err?.message || 'Une erreur est survenue lors de la réactivation'
       );
     }
   };
@@ -574,7 +574,7 @@ function TransactionsList() {
   };
 
   /**
-   * GÃ¨re l'export Excel des transactions filtrÃ©es.
+   * Gère l'export Excel des transactions filtrées.
    */
   const handleExportExcel = async () => {
     try {
@@ -612,7 +612,7 @@ function TransactionsList() {
 
       const dataForExcel = [...rowsForExport, spacerRow, totalRow];
 
-      // Utiliser des formatters personnalisÃ©s pour l'export
+      // Utiliser des formatters personnalisés pour l'export
       const customFormatters = {
         date_transaction: (value, row) => {
           if (row?.__summaryType) return '';
@@ -683,7 +683,7 @@ function TransactionsList() {
   };
 
   /**
-   * GÃ¨re l'export PDF des transactions filtrÃ©es.
+   * Gère l'export PDF des transactions filtrées.
    */
   const handleExportPDF = () => {
     try {
@@ -720,7 +720,7 @@ function TransactionsList() {
         reglement: (value, row) => getPaymentReglementSummary(row),
         montant_total: (value) => {
           if (value === null || value === undefined) return '-';
-          // Conserver les sÃ©parateurs de milliers et empÃªcher les retours Ã  la ligne
+          // Conserver les séparateurs de milliers et empêcher les retours à la ligne
           return (
             new Intl.NumberFormat('fr-FR', {
               minimumFractionDigits: 2,
@@ -762,7 +762,7 @@ function TransactionsList() {
         { 
           customFormatters,
           colorByType: (rowIndex) => {
-            // Retourne true si c'est une entrÃ©e (client), false si sortie (fournisseur)
+            // Retourne true si c'est une entrée (client), false si sortie (fournisseur)
             const transaction = rowsForExport[rowIndex];
             if (!transaction) return null;
             return transaction.id_client !== null;
@@ -795,7 +795,7 @@ function TransactionsList() {
   /**
    * Configuration des colonnes utilisées pour les exports.
    * Ordre : ID, Date, Client/Fournisseur, Produit, Bâtiment, Quantité, montants, règlement, statut.
-   * mobilePriority: true pour les colonnes Ã  afficher en prioritÃ© sur mobile
+   * mobilePriority: true pour les colonnes à afficher en priorité sur mobile
    */
   const columns = [
     {
@@ -885,7 +885,7 @@ function TransactionsList() {
       align: 'right',
       mobilePriority: true,
       format: (value, row) => {
-        // Vert pour les entrÃ©es d'argent (transactions clients)
+        // Vert pour les entrées d'argent (transactions clients)
         // Rouge pour les sorties d'argent (transactions fournisseurs)
         const isEntree = row.id_client !== null;
         const color = isEntree ? 'success.main' : 'error.main';
@@ -941,7 +941,7 @@ function TransactionsList() {
       filterable: false,
       mobilePriority: false,
       format: (value, row) => {
-        // DÃ©terminer le statut : si en retard, afficher "en_retard", sinon le statut normal
+        // Déterminer le statut : si en retard, afficher "en_retard", sinon le statut normal
         const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
         return <PaymentStatusBadge statut={statut} />;
       },
