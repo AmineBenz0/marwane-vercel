@@ -15,6 +15,7 @@ import {
   Typography,
   Divider,
   IconButton,
+  ButtonBase,
   ListItem,
   ListItemButton,
   ListItemIcon,
@@ -123,7 +124,7 @@ function SidebarContent({
                 px: 2.5,
                 pt: sIndex === 0 ? 0.5 : 1.5,
                 pb: 0.5,
-                color: 'rgba(255,255,255,0.28)',
+                color: '#94A3B8',
                 fontSize: '0.6375rem',
                 letterSpacing: '0.09em',
                 fontWeight: 600,
@@ -182,7 +183,7 @@ function SidebarContent({
                           sx={{
                             minWidth: 0,
                             mr: collapsed ? 0 : 1.5,
-                            color: isActive ? '#14B8A6' : 'rgba(255,255,255,0.5)',
+                            color: isActive ? '#14B8A6' : '#94A3B8',
                             transition: 'color 0.15s',
                           }}
                         >
@@ -392,58 +393,65 @@ function AppLayout({ children }) {
         borderTop: '1px solid rgba(255,255,255,0.06)',
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-          p: 1,
-          borderRadius: 2,
-          cursor: 'pointer',
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.06)' },
-          justifyContent: collapsed ? 'center' : 'flex-start',
-        }}
-        onClick={(e) => setAnchorEl(e.currentTarget)}
-      >
-        <Avatar
+      <Tooltip title={user?.email || 'Utilisateur'} placement="right" arrow>
+        <ButtonBase
+          onClick={(event) => setAnchorEl(event.currentTarget)}
+          aria-label={`Compte utilisateur : ${user?.email || 'Utilisateur'}, rôle ${user?.role || 'Utilisateur'}`}
+          aria-haspopup="menu"
+          aria-expanded={Boolean(anchorEl)}
           sx={{
-            width: 34,
-            height: 34,
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            background: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)',
-            flexShrink: 0,
+            display: 'flex',
+            width: '100%',
+            alignItems: 'center',
+            gap: 1.5,
+            p: 1,
+            borderRadius: 2,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            textAlign: 'left',
+            '&:hover': { backgroundColor: 'rgba(255,255,255,0.06)' },
+            '&.Mui-focusVisible': { outline: '2px solid #2DD4BF', outlineOffset: 2 },
           }}
         >
-          {userInitials}
-        </Avatar>
-        {!collapsed && (
-          <Box sx={{ overflow: 'hidden', flex: 1 }}>
-            <Typography
-              sx={{
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                color: '#FFFFFF',
-                noWrap: true,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {user?.email?.split('@')[0] || 'Utilisateur'}
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: '0.6875rem',
-                color: 'rgba(255,255,255,0.4)',
-                textTransform: 'capitalize',
-              }}
-            >
-              {user?.role || 'Utilisateur'}
-            </Typography>
-          </Box>
-        )}
-      </Box>
+          <Avatar
+            sx={{
+              width: 34,
+              height: 34,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)',
+              flexShrink: 0,
+            }}
+          >
+            {userInitials}
+          </Avatar>
+          {!collapsed && (
+            <Box sx={{ overflow: 'hidden', flex: 1 }}>
+              <Typography
+                sx={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  noWrap: true,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {user?.email?.split('@')[0] || 'Utilisateur'}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: '0.6875rem',
+                  color: '#94A3B8',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {user?.role || 'Utilisateur'}
+              </Typography>
+            </Box>
+          )}
+        </ButtonBase>
+      </Tooltip>
     </Box>
   );
 
@@ -529,6 +537,7 @@ function AppLayout({ children }) {
             width: DRAWER_WIDTH,
             boxSizing: 'border-box',
             background: '#0F172A',
+            borderRadius: '0 12px 12px 0',
           },
         }}
       >
@@ -546,6 +555,7 @@ function AppLayout({ children }) {
             width: collapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH,
             boxSizing: 'border-box',
             background: '#0F172A',
+            borderRadius: '0 12px 12px 0',
             overflowX: 'hidden',
             transition: theme.transitions.create('width', {
               duration: theme.transitions.duration.standard,
