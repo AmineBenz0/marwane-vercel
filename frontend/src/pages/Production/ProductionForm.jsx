@@ -11,6 +11,8 @@ import {
   Typography,
   Box,
   Divider,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { productionService } from '../../services/productionService';
@@ -37,6 +39,8 @@ function ProductionForm({
   title,
   description,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
   const [formules, setFormules] = useState([]);
   const [calibreThresholds, setCalibreThresholds] = useState([]);
@@ -144,12 +148,49 @@ function ProductionForm({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <DialogTitle sx={{ pb: 1, fontWeight: 'bold' }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      fullScreen={isMobile}
+      PaperProps={{
+        sx: {
+          borderRadius: { xs: 0, sm: 3 },
+          maxHeight: { xs: '100dvh', sm: 'calc(100dvh - 32px)' },
+          display: 'flex',
+          overflow: 'hidden',
+        },
+      }}
+    >
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        style={{ display: 'flex', flexDirection: 'column', minHeight: 0, width: '100%' }}
+      >
+        <DialogTitle sx={{ pb: 1, fontWeight: 'bold', flexShrink: 0 }}>
           {title || (initialData ? 'Modifier la saisie' : 'Saisir la production du jour')}
         </DialogTitle>
-        <DialogContent sx={{ py: 2 }}>
+        <DialogContent
+          sx={{
+            py: 2,
+            minHeight: 0,
+            flex: '1 1 auto',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            scrollbarGutter: 'stable',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(100, 116, 139, 0.45) transparent',
+            '&::-webkit-scrollbar': { width: 8 },
+            '&::-webkit-scrollbar-track': { background: 'transparent' },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: 'rgba(100, 116, 139, 0.35)',
+              borderRadius: 8,
+              border: '2px solid transparent',
+              backgroundClip: 'content-box',
+            },
+            '&::-webkit-scrollbar-thumb:hover': { backgroundColor: 'rgba(100, 116, 139, 0.6)' },
+          }}
+        >
           <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
             {description || 'Remplissez les informations de collecte pour le batiment selectionne.'}
           </Typography>
@@ -360,7 +401,7 @@ function ProductionForm({
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions sx={{ px: 3, pb: 2, flexShrink: 0, bgcolor: 'background.paper' }}>
           <Button onClick={onClose} color="inherit">Annuler</Button>
           <Button
             type="submit"
