@@ -108,3 +108,15 @@ class LettreCreditPayerFournisseur(BaseModel):
     id_fournisseur: int = Field(..., description="Fournisseur paye avec la LC")
     date_cession: date = Field(..., description="Date du paiement fournisseur")
     notes: Optional[str] = Field(None, description="Notes optionnelles")
+
+
+class LettreCreditAnnuler(BaseModel):
+    raison: str = Field(..., min_length=1, max_length=1000, description="Raison de l'annulation")
+
+    @field_validator("raison")
+    @classmethod
+    def validate_raison(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("La raison de l'annulation est obligatoire")
+        return value

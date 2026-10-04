@@ -47,6 +47,8 @@ const lettreCreditService = {
   verserBanque: (id, data) => post(`/lettres-credit/${id}/verser-banque`, data),
 
   payerFournisseur: (id, data) => post(`/lettres-credit/${id}/payer-fournisseur`, data),
+
+  annuler: (id, data) => post(`/lettres-credit/${id}/annuler`, data),
 };
 
 export default lettreCreditService;

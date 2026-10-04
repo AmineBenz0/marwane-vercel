@@ -55,7 +55,9 @@ def _validate_lc_payment(
             detail="L'ID de la Lettre de Crédit est requis pour ce type de paiement"
         )
 
-    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == paiement_data.id_lc).first()
+    lc = db.query(LettreDeCredit).filter(
+        LettreDeCredit.id_lc == paiement_data.id_lc,
+    ).with_for_update().first()
     if not lc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

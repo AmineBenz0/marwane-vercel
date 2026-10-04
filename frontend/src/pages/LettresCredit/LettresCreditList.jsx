@@ -28,6 +28,7 @@ import {
   Add as AddIcon,
   AssignmentTurnedIn as UsedIcon,
   Business as SupplierIcon,
+  Cancel as CancelIcon,
   Download as DownloadIcon,
   EventAvailable as AvailableIcon,
   Search as SearchIcon,
@@ -44,6 +45,7 @@ import LCFormModal from './LCFormModal';
 const FILTERS = [
   { value: 'disponibles', label: 'Disponibles' },
   { value: 'utilisees', label: 'Utilisées' },
+  { value: 'annulees', label: 'Annulées' },
   { value: 'toutes', label: 'Toutes' },
 ];
 
@@ -55,7 +57,8 @@ const formatDate = (value) => {
 };
 
 const isActiveLc = (lc) => lc?.statut === 'active';
-const isUsedLc = (lc) => !isActiveLc(lc);
+const isUsedLc = (lc) => ['utilisee', 'cedee'].includes(lc?.statut);
+const isCancelledLc = (lc) => lc?.statut === 'annulee';
 const canUseLc = (lc) => isActiveLc(lc) && Boolean(lc?.est_disponible);
 
 const getLcState = (lc) => {
@@ -65,6 +68,10 @@ const getLcState = (lc) => {
 
   if (isActiveLc(lc)) {
     return { label: `Le ${formatDate(lc.date_disponibilite)}`, tone: 'warning' };
+  }
+
+  if (isCancelledLc(lc)) {
+    return { label: 'Annulée', tone: 'error' };
   }
 
   return { label: 'Utilisée', tone: 'default' };
@@ -87,6 +94,8 @@ function LettresCreditList() {
   const [notes, setNotes] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [cancelDialogLc, setCancelDialogLc] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
@@ -134,6 +143,7 @@ function LettresCreditList() {
       .filter((lc) => {
         if (activeFilter === 'disponibles') return isActiveLc(lc);
         if (activeFilter === 'utilisees') return isUsedLc(lc);
+        if (activeFilter === 'annulees') return isCancelledLc(lc);
         return true;
       })
       .filter((lc) => {
@@ -189,6 +199,23 @@ function LettresCreditList() {
     } catch (error) {
       console.error('Erreur action LC:', error);
       notification.error(error?.message || 'Action impossible pour cette LC');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelLc = async () => {
+    if (!cancelDialogLc || !cancelReason.trim()) return;
+    setActionLoading(true);
+    try {
+      await lettreCreditService.annuler(cancelDialogLc.id_lc, { raison: cancelReason.trim() });
+      notification.success('LC annulée');
+      setCancelDialogLc(null);
+      setCancelReason('');
+      await fetchData();
+    } catch (error) {
+      console.error('Erreur annulation LC:', error);
+      notification.error(error?.message || 'Impossible d’annuler cette LC');
     } finally {
       setActionLoading(false);
     }
@@ -376,6 +403,7 @@ function LettresCreditList() {
                     onView={() => navigate(`/lettres-credit/${lc.id_lc}`)}
                     onBank={() => openActionDialog('bank', lc)}
                     onSupplier={() => openActionDialog('supplier', lc)}
+                    onCancel={() => { setCancelDialogLc(lc); setCancelReason(''); }}
                   />
                 </Grid>
               ))}
@@ -398,6 +426,44 @@ function LettresCreditList() {
         onConfirm={handleConfirmAction}
       />
 
+      <Dialog
+        open={Boolean(cancelDialogLc)}
+        onClose={() => { if (!actionLoading) setCancelDialogLc(null); }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>Annuler cette LC ?</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="warning" sx={{ borderRadius: 3 }}>
+              {cancelDialogLc?.numero_reference} sera marquée comme annulée. Tout paiement lié sera aussi annulé et ses mouvements financiers contrepassés. Un versement bancaire sera également contrepassé.
+            </Alert>
+            <TextField
+              label="Motif d’annulation"
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              fullWidth
+              required
+              multiline
+              minRows={2}
+              inputProps={{ maxLength: 1000 }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setCancelDialogLc(null)} disabled={actionLoading}>Retour</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleCancelLc}
+            disabled={!cancelReason.trim() || actionLoading}
+            startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <CancelIcon />}
+          >
+            Confirmer l’annulation
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <LCFormModal
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
@@ -410,6 +476,7 @@ function LettresCreditList() {
 function getFilterCount(filter, lcs) {
   if (filter === 'disponibles') return lcs.filter(isActiveLc).length;
   if (filter === 'utilisees') return lcs.filter(isUsedLc).length;
+  if (filter === 'annulees') return lcs.filter(isCancelledLc).length;
   return lcs.length;
 }
 
@@ -464,7 +531,7 @@ function SummaryCard({ title, value, helper, icon, tone }) {
   );
 }
 
-function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier }) {
+function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) {
   const state = getLcState(lc);
   const usable = canUseLc(lc);
 
@@ -579,6 +646,18 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier }) {
             >
               Voir détail
             </Button>
+            {isUsedLc(lc) && (
+              <Button
+                fullWidth
+                variant="outlined"
+                color="error"
+                startIcon={<CancelIcon />}
+                onClick={onCancel}
+                sx={{ minHeight: 44 }}
+              >
+                Annuler la LC
+              </Button>
+            )}
           </Stack>
         </Stack>
       </CardContent>
@@ -613,6 +692,8 @@ function EmptyLcState({ activeFilter, onCreate }) {
     ? 'Aucune LC disponible pour le moment.'
     : activeFilter === 'utilisees'
       ? 'Aucune LC utilisée pour le moment.'
+      : activeFilter === 'annulees'
+        ? 'Aucune LC annulée pour le moment.'
       : 'Aucune LC trouvée.';
 
   return (

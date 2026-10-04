@@ -11,6 +11,7 @@ from app.models.compte_bancaire import MouvementBancaire
 from app.models.cession_lc import CessionLC
 from app.models.user import Utilisateur
 from app.schemas.lettre_credit import (
+    LettreCreditAnnuler,
     LettreCreditCreate,
     LettreCreditPayerFournisseur,
     LettreCreditRead,
@@ -19,7 +20,9 @@ from app.schemas.lettre_credit import (
     LettreCreditVerserBanque,
 )
 from app.utils.dependencies import get_current_active_user
-from app.services.financial_ledger import record_bank_movement, validate_bank_idempotency
+from app.services.financial_ledger import record_bank_movement, validate_bank_idempotency, void_payment
+from app.services.ledger import record_correction, void_bank_movement
+from app.models.paiement import Paiement
 from app.utils.business_date import business_date
 
 router = APIRouter(prefix="/lettres-credit", tags=["Lettres de Crédit"])
@@ -201,6 +204,66 @@ def delete_lettre_credit(
     db.delete(lc)
     db.commit()
     return None
+
+
+@router.post("/{id}/annuler", response_model=LettreCreditRead)
+def annuler_lettre_credit(
+    id: int,
+    payload: LettreCreditAnnuler,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Annule une LC utilisée en conservant les traces de l'opération."""
+    lc = db.query(LettreDeCredit).filter(
+        LettreDeCredit.id_lc == id,
+    ).with_for_update().first()
+    if not lc:
+        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+    if lc.statut == "annulee":
+        raise HTTPException(status_code=400, detail="Cette LC est déjà annulée")
+    if lc.statut not in {"utilisee", "cedee"}:
+        raise HTTPException(status_code=400, detail="Seule une LC utilisée peut être annulée")
+
+    linked_payments = db.query(Paiement).filter(
+        Paiement.id_lc == id,
+        Paiement.statut != "annule",
+    ).with_for_update().all()
+
+    reason = payload.raison
+    previous_status = lc.statut
+    for payment in linked_payments:
+        void_payment(db, payment, current_user=current_user, reason=reason)
+
+    bank_movement = db.query(MouvementBancaire).filter(
+        MouvementBancaire.cle_idempotence == f"lc-bank-deposit-{id}",
+        MouvementBancaire.statut == "active",
+    ).with_for_update().first()
+    reversal = None
+    if bank_movement:
+        reversal = void_bank_movement(
+            db,
+            bank_movement,
+            raison=reason,
+            current_user=current_user,
+            create_reversal_record=True,
+        )
+
+    lc.statut = "annulee"
+    lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    record_correction(
+        db,
+        type_entite="lettre_credit",
+        id_entite=lc.id_lc,
+        action="annulation",
+        raison=reason,
+        current_user=current_user,
+        id_mouvement_original=bank_movement.id_mouvement if bank_movement else None,
+        id_mouvement_inverse=reversal.id_mouvement if reversal else None,
+        details={"numero_reference": lc.numero_reference, "statut_precedent": previous_status},
+    )
+    db.commit()
+    db.refresh(lc)
+    return format_lc_read(lc)
 
 
 def _get_active_lc_or_400(id: int, db: Session) -> LettreDeCredit:
