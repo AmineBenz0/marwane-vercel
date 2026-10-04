@@ -22,7 +22,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
 import {
   Dialog,
   DialogTitle,
@@ -45,7 +44,6 @@ import {
   Select,
   MenuItem,
   InputLabel,
-  Checkbox,
   Divider,
   Collapse,
   Grid,
@@ -63,65 +61,28 @@ import {
 } from '@mui/icons-material';
 import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
+import { transactionValidationSchema } from './transactionValidation';
 
-/**
- * Schéma de validation Yup pour une ligne de transaction.
- */
-const ligneValidationSchema = yup.object().shape({
-  id_produit: yup
-    .number()
-    .required('Le produit est requis')
-    .positive('Le produit est requis'),
-  id_batiment: yup
-    .number()
-    .nullable()
-    .transform((value, originalValue) => {
-      if (originalValue === '' || originalValue === null || originalValue === undefined) {
-        return null;
-      }
-      const num = Number(originalValue);
-      return isNaN(num) ? null : num;
-    }),
-  quantite: yup
-    .number()
-    .typeError('La quantité doit être un nombre')
-    .required('La quantité est requise')
-    .positive('La quantité doit être supérieure à 0')
-    .integer('La quantité doit être un nombre entier')
-    .transform((value, originalValue) => {
-      if (originalValue === '' || originalValue === null || originalValue === undefined) {
-        return undefined;
-      }
-      const num = Number(originalValue);
-      return isNaN(num) ? undefined : num;
-    }),
-  prix_unitaire: yup
-    .number()
-    .typeError('Le prix unitaire doit être un nombre')
-    .required('Le prix unitaire est requis')
-    .positive('Le prix unitaire doit être supérieur à 0')
-    .transform((value, originalValue) => {
-      if (originalValue === '' || originalValue === null || originalValue === undefined) {
-        return undefined;
-      }
-      const num = Number(originalValue);
-      return isNaN(num) ? undefined : num;
-    }),
-  // Un paiement individuel
-  paiements: yup.array().of(
-    yup.object().shape({
-      date: yup.string().required('La date est requise'),
-      montant: yup.number().required('Le montant est requis').positive('Le montant doit être positif'),
-      type: yup.string().required('Le type est requis'),
-      numero_cheque: yup.string().nullable(),
-      banque: yup.string().nullable(),
-      reference: yup.string().nullable(),
-      id_lc: yup.number().nullable(),
-      notes: yup.string().nullable(),
-      id_paiement: yup.number().nullable(),
-    })
-  ).min(0),
-  ajouter_paiement: yup.boolean(),
+const today = () => new Date().toISOString().split('T')[0];
+
+const createPaymentDefaults = (date = today()) => ({
+  date,
+  montant: '',
+  type: 'cash',
+  numero_cheque: '',
+  banque: '',
+  reference: '',
+  id_lc: '',
+  notes: '',
+});
+
+const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
+  id_produit: '',
+  id_batiment: prefillBatimentId || '',
+  quantite: undefined,
+  prix_unitaire: undefined,
+  ajouter_paiement: false,
+  paiements: [createPaymentDefaults(date)],
 });
 
 /**
@@ -206,51 +167,6 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
   );
 };
 
-/**
- * Schéma de validation Yup pour le formulaire transaction.
- */
-const transactionValidationSchema = yup.object().shape({
-  date_transaction: yup
-    .string()
-    .required('La date de transaction est requise')
-    .matches(/^\d{4}-\d{2}-\d{2}$/, 'La date doit être au format YYYY-MM-DD'),
-  date_echeance: yup
-    .string()
-    .nullable()
-    .matches(/^\d{4}-\d{2}-\d{2}$/, 'La date doit être au format YYYY-MM-DD')
-    .test('date-apres-transaction', 'La date d\'échéance doit être après la date de transaction', function(value) {
-      if (!value) return true; // Optionnel
-      const dateTransaction = this.parent.date_transaction;
-      if (!dateTransaction) return true;
-      return new Date(value) >= new Date(dateTransaction);
-    }),
-  type_entite: yup
-    .string()
-    .required('Vous devez sélectionner un client ou un fournisseur')
-    .oneOf(['client', 'fournisseur'], 'Vous devez sélectionner un client ou un fournisseur'),
-  id_client: yup
-    .number()
-    .nullable()
-    .when('type_entite', {
-      is: 'client',
-      then: (schema) => schema.required('Le client est requis').positive('Le client est requis'),
-      otherwise: (schema) => schema.nullable(),
-    }),
-  id_fournisseur: yup
-    .number()
-    .nullable()
-    .when('type_entite', {
-      is: 'fournisseur',
-      then: (schema) => schema.required('Le fournisseur est requis').positive('Le fournisseur est requis'),
-      otherwise: (schema) => schema.nullable(),
-    }),
-  lignes: yup
-    .array()
-    .of(ligneValidationSchema)
-    .min(1, 'Au moins une ligne est requise')
-    .required('Au moins une ligne est requise'),
-});
-
 const isEggProduct = (produit) => (
   produit?.nom_produit?.trim().toLowerCase().startsWith('oeufs -')
 );
@@ -290,34 +206,19 @@ function TransactionForm({
     formState: { errors, isDirty },
     reset,
     setError,
+    setFocus,
     clearErrors,
     watch,
     setValue,
   } = useForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
-      date_transaction: new Date().toISOString().split('T')[0],
+      date_transaction: today(),
       date_echeance: '',
       type_entite: 'client',
       id_client: '',
       id_fournisseur: '',
-      lignes: [{ 
-        id_produit: '', 
-        id_batiment: prefillBatimentId || '',
-        quantite: undefined, 
-        prix_unitaire: undefined,
-        ajouter_paiement: false,
-        paiements: [{
-          date: new Date().toISOString().split('T')[0],
-          montant: '',
-          type: 'cash',
-          numero_cheque: '',
-          banque: '',
-          reference: '',
-          id_lc: '',
-          notes: '',
-        }],
-      }],
+      lignes: [createLineDefaults(prefillBatimentId)],
     },
     mode: 'onChange',
   });
@@ -391,7 +292,7 @@ function TransactionForm({
           reset({
             date_transaction: initialValues.date_transaction
               ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
-              : new Date().toISOString().split('T')[0],
+              : today(),
             date_echeance: initialValues.date_echeance
               ? new Date(initialValues.date_echeance).toISOString().split('T')[0]
               : '',
@@ -399,12 +300,13 @@ function TransactionForm({
             id_client: initialValues.id_client || '',
             id_fournisseur: initialValues.id_fournisseur || '',
             lignes: [{
+              ...createLineDefaults(initialValues.id_batiment || ''),
               id_produit: initialValues.id_produit || '',
               id_batiment: initialValues.id_batiment || '',
               quantite: initialValues.quantite || undefined,
               prix_unitaire: initialValues.prix_unitaire || undefined,
               ajouter_paiement: paiements.length > 0,
-              paiements: paiements.map(p => ({
+              paiements: paiements.length > 0 ? paiements.map(p => ({
                 date: new Date(p.date_paiement).toISOString().split('T')[0],
                 montant: parseFloat(p.montant),
                 type: p.type_paiement,
@@ -414,7 +316,7 @@ function TransactionForm({
                 id_lc: p.id_lc || '',
                 notes: p.notes || '',
                 id_paiement: p.id_paiement,
-              })),
+              })) : [createPaymentDefaults()],
             }],
           });
         } else {
@@ -423,26 +325,12 @@ function TransactionForm({
           const hasPrefillFournisseur = prefillFournisseurId !== null && prefillFournisseurId !== undefined;
           
           reset({
-            date_transaction: new Date().toISOString().split('T')[0],
+            date_transaction: today(),
             date_echeance: '',
             type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : 'client',
             id_client: hasPrefillClient ? prefillClientId : '',
             id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : '',
-            lignes: [{ 
-              id_produit: '', 
-              id_batiment: prefillBatimentId || '',
-              quantite: undefined, 
-              prix_unitaire: undefined,
-              ajouter_paiement: false,
-              paiement_date: new Date().toISOString().split('T')[0],
-              paiement_montant: '',
-              paiement_type: 'cash',
-              paiement_numero_cheque: '',
-              paiement_banque: '',
-              paiement_reference: '',
-              paiement_id_lc: '',
-              paiement_notes: '',
-            }],
+            lignes: [createLineDefaults(prefillBatimentId)],
           });
         }
         clearErrors();
@@ -478,6 +366,7 @@ function TransactionForm({
    * Gère la soumission du formulaire.
    */
   const handleFormSubmit = async (data) => {
+    clearErrors('root');
     try {
       const isEditing = initialValues && initialValues.id_transaction;
       
@@ -575,6 +464,32 @@ function TransactionForm({
     }
   };
 
+  // RHF skips handleFormSubmit when schema validation fails. Without an
+  // invalid-submit callback, errors on conditionally hidden fields look like
+  // a dead submit button to the user.
+  const findFirstErrorPath = (node, prefix = '') => {
+    if (!node || typeof node !== 'object') return null;
+    if (typeof node.message === 'string') return prefix;
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'ref' || key === 'type' || key === 'types') continue;
+      const path = prefix ? `${prefix}.${key}` : key;
+      const result = findFirstErrorPath(value, path);
+      if (result) return result;
+    }
+    return null;
+  };
+
+  const handleInvalidSubmit = (formErrors) => {
+    const firstErrorPath = findFirstErrorPath(formErrors);
+    const lineMatch = firstErrorPath?.match(/^lignes\.(\d+)/);
+    if (lineMatch) setExpandedAccordion(Number(lineMatch[1]));
+    setError('root', {
+      type: 'validation',
+      message: 'Certains champs sont invalides. Vérifiez les champs signalés en rouge.',
+    });
+    if (firstErrorPath) setTimeout(() => setFocus(firstErrorPath), 0);
+  };
+
   /**
    * Gère la fermeture de la modal.
    */
@@ -591,21 +506,10 @@ function TransactionForm({
    */
   const handleAddLine = () => {
     const currentLignes = watch('lignes') || [];
-    setValue('lignes', [...currentLignes, { 
-      id_produit: '', 
-      id_batiment: prefillBatimentId || '',
-      quantite: undefined, 
-      prix_unitaire: undefined,
-      ajouter_paiement: false,
-      paiement_date: watch('date_transaction') || new Date().toISOString().split('T')[0],
-      paiement_montant: '',
-      paiement_type: 'cash',
-      paiement_numero_cheque: '',
-      paiement_banque: '',
-      paiement_reference: '',
-      paiement_id_lc: '',
-      paiement_notes: '',
-    }], {
+    setValue('lignes', [...currentLignes, createLineDefaults(
+      prefillBatimentId,
+      watch('date_transaction') || today()
+    )], {
       shouldDirty: true,
     });
     // Expand le nouvel accordion
@@ -672,7 +576,7 @@ function TransactionForm({
       fullWidth
       PaperProps={{
         component: 'form',
-        onSubmit: handleSubmit(handleFormSubmit),
+        onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
         sx: {
           minHeight: '640px',
           maxHeight: '90vh',
@@ -1175,7 +1079,7 @@ function TransactionForm({
                                       // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
-                                        setValue(`lignes.${index}.paiement_montant`, newTotal);
+                                        setValue(`lignes.${index}.paiements.0.montant`, newTotal);
                                       }
                                     }}
                                     onBlur={field.onBlur}
@@ -1206,7 +1110,7 @@ function TransactionForm({
                                       // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(ligne.quantite) || 0) * (parseFloat(value) || 0);
-                                        setValue(`lignes.${index}.paiement_montant`, newTotal);
+                                        setValue(`lignes.${index}.paiements.0.montant`, newTotal);
                                       }
                                     }}
                                     onBlur={field.onBlur}
@@ -1261,16 +1165,10 @@ function TransactionForm({
                                           if (option.value && ligneTotal > 0) {
                                             const existingPaiements = watch(`lignes.${index}.paiements`);
                                             if (!existingPaiements || existingPaiements.length === 0) {
-                                              setValue(`lignes.${index}.paiements`, [{
-                                                date: watch('date_transaction') || new Date().toISOString().split('T')[0],
-                                                montant: ligneTotal,
-                                                type: 'cash',
-                                                numero_cheque: '',
-                                                banque: '',
-                                                reference: '',
-                                                id_lc: '',
-                                                notes: '',
-                                              }]);
+                                              setValue(`lignes.${index}.paiements`, [createPaymentDefaults(
+                                                watch('date_transaction') || today()
+                                              )]);
+                                              setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
                                             } else {
                                               setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
                                               setValue(`lignes.${index}.paiements.0.date`, watch('date_transaction'));
@@ -1301,34 +1199,6 @@ function TransactionForm({
                                     );
                                   })}
                                 </Box>
-                                <FormControlLabel
-                                  sx={{ display: 'none' }}
-                                  control={
-                                    <Checkbox
-                                      {...field}
-                                      checked={field.value || false}
-                                      disabled={loading}
-                                      onChange={(e) => {
-                                        field.onChange(e.target.checked);
-                                        // Pré-remplir le montant avec le total de la ligne
-                                        if (e.target.checked && ligneTotal > 0) {
-                                          setValue(`lignes.${index}.paiement_montant`, ligneTotal);
-                                          setValue(`lignes.${index}.paiement_date`, watch('date_transaction'));
-                                        }
-                                      }}
-                                    />
-                                  }
-                                  label={
-                                    <Box>
-                                      <Typography variant="subtitle2" fontWeight="medium">
-                                        💰 Ajouter un paiement pour cette ligne
-                                      </Typography>
-                                      <Typography variant="caption" color="text.secondary">
-                                        Le paiement sera créé en même temps que la transaction
-                                      </Typography>
-                                    </Box>
-                                  }
-                                />
                                 </>
                               )}
                             />
