@@ -649,7 +649,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
             {isUsedLc(lc) && (
               <Button
                 fullWidth
-                variant="outlined"
+                variant="contained"
                 color="error"
                 startIcon={<CancelIcon />}
                 onClick={onCancel}
