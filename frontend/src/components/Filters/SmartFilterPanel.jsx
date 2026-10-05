@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 /**
  * Composant SmartFilterPanel - Panneau de filtres intelligent et réutilisable.
  * 
@@ -172,10 +173,10 @@ function SmartFilterPanel({
 
       case 'date':
         return (
-          <TextField
+          <DateField
             key={filter.id}
             label={filter.label}
-            type="date"
+
             value={value}
             onChange={(e) => handleFilterChange(filter.id, e.target.value)}
             InputLabelProps={{ shrink: true }}

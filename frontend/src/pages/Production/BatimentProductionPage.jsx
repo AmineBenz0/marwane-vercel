@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -162,9 +163,9 @@ function BatimentProductionPage() {
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/production')} variant="outlined" sx={{ borderRadius: 999, width: { xs: '100%', sm: 'auto' } }}>
           Vue globale
         </Button>
-        <TextField
+        <DateField
           label="Voir la journee du"
-          type="date"
+
           value={selectedDate}
           onChange={(event) => setSelectedDate(event.target.value)}
           InputLabelProps={{ shrink: true }}

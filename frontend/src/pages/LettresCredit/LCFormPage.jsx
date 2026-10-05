@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -147,10 +148,10 @@ function LCFormPage() {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
+              <DateField
                 {...register('date_emission', { required: 'Requis' })}
                 label="Date d'émission"
-                type="date"
+
                 fullWidth
                 required
                 InputLabelProps={{ shrink: true }}
@@ -158,10 +159,10 @@ function LCFormPage() {
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <TextField
+              <DateField
                 {...register('date_disponibilite', { required: 'Requis' })}
                 label="Date de disponibilité"
-                type="date"
+
                 fullWidth
                 required
                 InputLabelProps={{ shrink: true }}

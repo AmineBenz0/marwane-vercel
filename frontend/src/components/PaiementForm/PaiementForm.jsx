@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 /**
  * Formulaire d'ajout de paiement pour une transaction.
  * 
@@ -117,10 +118,10 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
       <Grid container spacing={2}>
         {/* Date du paiement */}
         <Grid item xs={12} sm={6}>
-          <TextField
+          <DateField
             {...register('date_paiement')}
             label="Date du paiement"
-            type="date"
+
             fullWidth
             required
             error={!!errors.date_paiement}
@@ -201,10 +202,10 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <TextField
+              <DateField
                 {...register('date_encaissement_prevue')}
                 label="Date d'encaissement prévue"
-                type="date"
+
                 fullWidth
                 error={!!errors.date_encaissement_prevue}
                 helperText={errors.date_encaissement_prevue?.message}

@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -197,10 +198,10 @@ function ProductionForm({
 
           <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6}>
-              <TextField
+              <DateField
                 {...register('date_production', { required: 'Date requise' })}
                 label="Date de production"
-                type="date"
+
                 fullWidth
                 InputLabelProps={{ shrink: true }}
                 error={!!errors.date_production}

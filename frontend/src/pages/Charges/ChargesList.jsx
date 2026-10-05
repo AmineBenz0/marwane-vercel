@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -632,10 +633,10 @@ function ChargeDialog({
                 value={formData.montant}
                 onChange={(event) => setFormData({ ...formData, montant: event.target.value })}
               />
-              <TextField
+              <DateField
                 fullWidth
                 label="Date"
-                type="date"
+
                 required
                 InputLabelProps={{ shrink: true }}
                 value={formData.date_charge}

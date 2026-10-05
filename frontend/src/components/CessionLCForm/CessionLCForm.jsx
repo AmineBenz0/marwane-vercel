@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import { useState, useEffect } from 'react';
 import {
   Box,
@@ -111,10 +112,10 @@ function CessionLCForm({ register, errors, watch, lc }) {
         </Grid>
 
         <Grid item xs={12} sm={6}>
-          <TextField
+          <DateField
             {...register('date_cession', { required: 'Ce champ est requis' })}
             label="Date de transfert"
-            type="date"
+
             fullWidth
             InputLabelProps={{ shrink: true }}
             error={!!errors.date_cession}

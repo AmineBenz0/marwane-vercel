@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMonthYear, formatShortDate, formatShortDateTime } from './dateFormatting';
+import { formatMonthYear, formatShortDate, formatShortDateTime, parseShortDateInput } from './dateFormatting';
 
 describe('date formatting', () => {
   it('formats ISO date-only values as dd/MM/yy without shifting the day', () => {
@@ -13,6 +13,11 @@ describe('date formatting', () => {
 
   it('formats month grouping labels consistently in French', () => {
     expect(formatMonthYear('2026-10')).toBe('oct. 2026');
+  });
+
+  it('parses the displayed date back to the ISO value used by forms', () => {
+    expect(parseShortDateInput('05/10/26')).toBe('2026-10-05');
+    expect(parseShortDateInput('31/02/26')).toBeNull();
   });
 
   it('uses a stable fallback for empty or invalid values', () => {

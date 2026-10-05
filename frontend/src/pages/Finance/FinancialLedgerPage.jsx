@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
@@ -100,7 +101,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
             Transaction #{item?.id_transaction} · reste {money(item?.montant_restant)}
           </Typography>
           {error && <Alert severity="error">{error}</Alert>}
-          <TextField label="Date" type="date" value={date} onChange={(event) => setDate(event.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
+          <DateField label="Date"  value={date} onChange={(event) => setDate(event.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
           <TextField label="Montant (MAD)" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} inputProps={{ min: 0.01, step: 0.01 }} fullWidth />
           <TextField label="Mode de paiement" select value={type} onChange={(event) => setType(event.target.value)} fullWidth>
             <MenuItem value="cash">Espèces</MenuItem>
@@ -265,8 +266,8 @@ function FinancialLedgerPage({ direction }) {
             <MenuItem value="">Tous</MenuItem>
             {Object.entries(statusLabel).map(([value, label]) => <MenuItem value={value} key={value}>{label}</MenuItem>)}
           </TextField>
-          <TextField label="Échéance à partir du" type="date" value={filters.echeance_debut} onChange={(event) => updateFilter('echeance_debut', event.target.value)} size="small" InputLabelProps={{ shrink: true }} />
-          <TextField label="Échéance jusqu’au" type="date" value={filters.echeance_fin} onChange={(event) => updateFilter('echeance_fin', event.target.value)} size="small" InputLabelProps={{ shrink: true }} />
+          <DateField label="Échéance à partir du"  value={filters.echeance_debut} onChange={(event) => updateFilter('echeance_debut', event.target.value)} size="small" InputLabelProps={{ shrink: true }} />
+          <DateField label="Échéance jusqu’au"  value={filters.echeance_fin} onChange={(event) => updateFilter('echeance_fin', event.target.value)} size="small" InputLabelProps={{ shrink: true }} />
           <TextField label="Trier par" select value={filters.sort_by} onChange={(event) => updateFilter('sort_by', event.target.value)} size="small" sx={{ minWidth: { md: 170 } }}>
             <MenuItem value="date_echeance">Échéance</MenuItem>
             <MenuItem value="date_transaction">Date</MenuItem>

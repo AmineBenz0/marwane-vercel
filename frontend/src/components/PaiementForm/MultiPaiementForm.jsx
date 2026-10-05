@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -123,9 +124,9 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                       </IconButton>
                     </TableCell>
                     <TableCell>
-                      <TextField
+                      <DateField
                         {...register(`paiements.${index}.date_paiement`)}
-                        type="date"
+
                         size="small"
                         fullWidth
                         InputLabelProps={{ shrink: true }}
@@ -195,10 +196,10 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                                   />
                                 </Grid>
                                 <Grid item xs={12} sm={4}>
-                                  <TextField
+                                  <DateField
                                     {...register(`paiements.${index}.date_encaissement_prevue`)}
                                     label="Échéance"
-                                    type="date"
+
                                     size="small"
                                     fullWidth
                                     InputLabelProps={{ shrink: true }}

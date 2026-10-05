@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 /**
  * ModalForm — Formulaire modal redesigné.
  *
@@ -280,10 +281,10 @@ function ModalForm({
               return (
                 <Box sx={{ mb: 2 }}>
                   <FieldLabel required={required}>{label}</FieldLabel>
-                  <TextField
+                  <DateField
                     {...rest}
                     fullWidth
-                    type="date"
+
                     size="small"
                     value={value || ''}
                     onChange={onChange}

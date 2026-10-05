@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 /**
  * Composant TransactionForm.
  * 
@@ -749,11 +750,11 @@ function TransactionForm({
                 name="date_transaction"
                 control={control}
                 render={({ field, fieldState: { error } }) => (
-                  <TextField
+                  <DateField
                     {...field}
                     fullWidth
                     label="Date de transaction"
-                    type="date"
+
                     error={!!error}
                     helperText={error?.message || ''}
                     required
@@ -772,11 +773,11 @@ function TransactionForm({
                 name="date_echeance"
                 control={control}
                 render={({ field, fieldState: { error } }) => (
-                  <TextField
+                  <DateField
                     {...field}
                     fullWidth
                     label="Date d'échéance du paiement (optionnel)"
-                    type="date"
+
                     error={!!error}
                     helperText={error?.message || 'Date limite pour le paiement'}
                     disabled={loading}
@@ -1247,11 +1248,11 @@ function TransactionForm({
                                           name={`lignes.${index}.paiements.${pIndex}.date`}
                                           control={control}
                                           render={({ field, fieldState: { error } }) => (
-                                            <TextField
+                                            <DateField
                                               {...field}
                                               fullWidth
                                               label="Date"
-                                              type="date"
+
                                               error={!!error}
                                               helperText={error?.message}
                                               disabled={loading}

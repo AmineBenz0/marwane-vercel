@@ -1,3 +1,4 @@
+import DateField from '../../utils/DateField';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -263,9 +264,9 @@ function HeroHeader({
                 maxWidth: 760,
               }}
             >
-              <TextField
+              <DateField
                 label="Jour"
-                type="date"
+
                 value={selectedDate}
                 onChange={(event) => onDateChange(event.target.value)}
                 InputLabelProps={{ shrink: true }}

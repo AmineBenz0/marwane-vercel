@@ -24,6 +24,29 @@ export const formatShortDateTime = (value, fallback = '-') => {
   return date ? format(date, 'dd/MM/yy HH:mm') : fallback;
 };
 
+/** Parse a user's dd/MM/yy entry to the ISO date value used by the API. */
+export const parseShortDateInput = (value) => {
+  if (!value) return '';
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(value.trim());
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const inputYear = Number(match[3]);
+  const year = match[3].length === 2
+    ? (inputYear >= 69 ? 1900 + inputYear : 2000 + inputYear)
+    : inputYear;
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) return null;
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
 /** Format a month grouping label in the app's French locale. */
 export const formatMonthYear = (value, fallback = '-') => {
   const monthMatch = typeof value === 'string' ? /^(\d{4})-(\d{2})$/.exec(value) : null;
