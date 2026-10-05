@@ -136,13 +136,14 @@ function LettreCreditDetail() {
                   <TableCell>Date</TableCell>
                   <TableCell>Depuis</TableCell>
                   <TableCell>Vers</TableCell>
+                  <TableCell>État</TableCell>
                   <TableCell>Motif</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {cessions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">Aucune utilisation enregistrée</TableCell>
+                    <TableCell colSpan={5} align="center">Aucune utilisation enregistrée</TableCell>
                   </TableRow>
                 ) : (
                   cessions.map((cession) => (
@@ -150,6 +151,13 @@ function LettreCreditDetail() {
                       <TableCell>{formatDate(cession.date_cession)}</TableCell>
                       <TableCell>{cession.nom_cedant}</TableCell>
                       <TableCell>{cession.nom_cessionnaire}</TableCell>
+                      <TableCell>
+                        {cession.statut === 'annulee'
+                          ? 'Annulée'
+                          : cession.id_cession_inverse
+                            ? 'Contrepassation'
+                            : 'Active'}
+                      </TableCell>
                       <TableCell>{cession.motif || '-'}</TableCell>
                     </TableRow>
                   ))
