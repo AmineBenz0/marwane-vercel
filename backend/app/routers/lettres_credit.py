@@ -1,5 +1,5 @@
 """
-Router FastAPI pour la gestion des Lettres de Crédit (LC).
+Router FastAPI pour la gestion des Lettres de Cr�dit (LC).
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -24,18 +24,18 @@ from app.services.financial_ledger import record_bank_movement, validate_bank_id
 from app.services.letter_credit_cancellation import cancel_letter_credit
 from app.utils.business_date import business_date
 
-router = APIRouter(prefix="/lettres-credit", tags=["Lettres de Crédit"])
+router = APIRouter(prefix="/lettres-credit", tags=["Lettres de Cr�dit"])
 
 
 def format_lc_read(lc: LettreDeCredit) -> LettreCreditRead:
-    """Formate une LC pour la lecture avec les champs calculés."""
+    """Formate une LC pour la lecture avec les champs calcul�s."""
     detenteur_nom = "Inconnu"
     if lc.type_detenteur == 'client' and lc.client:
         detenteur_nom = lc.client.nom_client
     elif lc.type_detenteur == 'fournisseur' and lc.fournisseur:
         detenteur_nom = lc.fournisseur.nom_fournisseur
     
-    # Utilisation du schéma pour la conversion
+    # Utilisation du sch�ma pour la conversion
     lc_read = LettreCreditRead.model_validate(lc)
     lc_read.detenteur_nom = detenteur_nom
     lc_read.est_disponible = lc.est_disponible
@@ -52,7 +52,7 @@ def get_lettres_credit(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Récupère la liste des LC avec filtres."""
+    """R�cup�re la liste des LC avec filtres."""
     query = db.query(LettreDeCredit)
     
     if statut:
@@ -87,7 +87,7 @@ def get_lettres_credit_disponibles(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Récupère les LC actives et disponibles (date OK)."""
+    """R�cup�re les LC actives et disponibles (date OK)."""
     today = business_date()
     query = db.query(LettreDeCredit).filter(
         LettreDeCredit.statut == 'active',
@@ -122,10 +122,10 @@ def get_lettre_credit(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Détails d'une LC."""
+    """D�tails d'une LC."""
     lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id).first()
     if not lc:
-        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+        raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
     return format_lc_read(lc)
 
 
@@ -135,15 +135,15 @@ def create_lettre_credit(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Crée une nouvelle LC. Le détenteur est toujours un client."""
-    # Vérifier l'unicité de la référence
+    """Cr�e une nouvelle LC. Le d�tenteur est toujours un client."""
+    # V�rifier l'unicit� de la r�f�rence
     existing = db.query(LettreDeCredit).filter(LettreDeCredit.numero_reference == lc_data.numero_reference).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Cette référence de LC existe déjà")
+        raise HTTPException(status_code=400, detail="Cette r�f�rence de LC existe d�j�")
     
-    # Vérifier que le client est fourni
+    # V�rifier que le client est fourni
     if not lc_data.id_client:
-        raise HTTPException(status_code=400, detail="ID Client requis pour une Lettre de Crédit")
+        raise HTTPException(status_code=400, detail="ID Client requis pour une Lettre de Cr�dit")
 
     new_lc = LettreDeCredit(
         numero_reference=lc_data.numero_reference,
@@ -170,10 +170,10 @@ def update_lettre_credit(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Met à jour une LC."""
+    """Met � jour une LC."""
     lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id).first()
     if not lc:
-        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+        raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
     
     update_data = lc_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -192,13 +192,13 @@ def delete_lettre_credit(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """Supprime une LC (seulement si non utilisée)."""
+    """Supprime une LC (seulement si non utilis�e)."""
     lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id).first()
     if not lc:
-        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+        raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
     
     if lc.statut == 'utilisee':
-        raise HTTPException(status_code=400, detail="Impossible de supprimer une LC déjà utilisée")
+        raise HTTPException(status_code=400, detail="Impossible de supprimer une LC d�j� utilis�e")
     
     db.delete(lc)
     db.commit()
@@ -212,21 +212,27 @@ def annuler_lettre_credit(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
-    """Annule une LC utilisée en conservant les traces de l'opération."""
-    lc = cancel_letter_credit(db, id, current_user=current_user, reason=payload.raison)
+    """Annule une LC utilis�e en conservant les traces de l'op�ration."""
+    lc = cancel_letter_credit(
+        db,
+        id,
+        current_user=current_user,
+        reason=payload.raison,
+        version_utilisation=payload.version_utilisation,
+    )
     return format_lc_read(lc)
 
 
 def _get_active_lc_or_400(id: int, db: Session) -> LettreDeCredit:
     lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id).with_for_update().first()
     if not lc:
-        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+        raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
     if lc.statut != 'active':
-        raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
+        raise HTTPException(status_code=400, detail="Cette LC est d�j� utilis�e")
     if not lc.est_disponible:
         raise HTTPException(
             status_code=400,
-            detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
+            detail=f"Cette LC ne sera disponible qu'� partir du {lc.date_disponibilite}"
         )
     return lc
 
@@ -240,13 +246,13 @@ def verser_lc_banque(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Verse la valeur d'une LC disponible dans un compte bancaire."""
-    idempotency_key = f"lc-bank-deposit-{id}"
     lc = db.query(LettreDeCredit).filter(
         LettreDeCredit.id_lc == id,
     ).with_for_update().first()
     if not lc:
-        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+        raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
 
+    idempotency_key = f"lc-bank-deposit-{id}-{payload.version_utilisation + 1}"
     existing = db.query(MouvementBancaire).filter(
         MouvementBancaire.cle_idempotence == idempotency_key,
     ).first()
@@ -260,15 +266,23 @@ def verser_lc_banque(
             "id_paiement": None,
             "id_charge": None,
         })
+        if existing.statut != "active":
+            raise HTTPException(
+                status_code=409,
+                detail="Cette demande correspond � une utilisation d�j� annul�e. Actualisez la page.",
+            )
         response.status_code = status.HTTP_200_OK
         return format_lc_read(lc)
 
+    if payload.version_utilisation != lc.version_utilisation:
+        raise HTTPException(status_code=409, detail="La LC a chang� depuis l'ouverture du formulaire. Actualisez la page.")
+
     if lc.statut != "active":
-        raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
+        raise HTTPException(status_code=400, detail="Cette LC est d�j� utilis�e")
     if not lc.est_disponible:
         raise HTTPException(
             status_code=400,
-            detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}",
+            detail=f"Cette LC ne sera disponible qu'� partir du {lc.date_disponibilite}",
         )
     record_bank_movement(
         db,
@@ -282,6 +296,7 @@ def verser_lc_banque(
         current_user=current_user,
     )
     lc.statut = 'utilisee'
+    lc.version_utilisation += 1
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
     db.commit()
@@ -298,6 +313,8 @@ def payer_fournisseur_lc(
 ):
     """Marque une LC disponible comme utilisee pour payer un fournisseur."""
     lc = _get_active_lc_or_400(id, db)
+    if payload.version_utilisation != lc.version_utilisation:
+        raise HTTPException(status_code=409, detail="La LC a chang� depuis l'ouverture du formulaire. Actualisez la page.")
     fournisseur = db.query(Fournisseur).filter(Fournisseur.id_fournisseur == payload.id_fournisseur).first()
     if not fournisseur:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable")
@@ -317,6 +334,7 @@ def payer_fournisseur_lc(
     lc.id_client = None
     lc.id_fournisseur = fournisseur.id_fournisseur
     lc.statut = 'utilisee'
+    lc.version_utilisation += 1
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
     db.add(cession)
