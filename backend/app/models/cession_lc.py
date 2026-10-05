@@ -1,5 +1,5 @@
 """
-Mod�le SQLAlchemy pour la table Cessions de LC.
+Modèle SQLAlchemy pour la table Cessions de LC.
 """
 from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
@@ -9,19 +9,19 @@ from app.database import Base
 
 class CessionLC(Base):
     """
-    Mod�le repr�sentant un transfert (cession) d'une Lettre de Cr�dit entre deux entit�s.
+    Modèle représentant un transfert (cession) d'une Lettre de Crédit entre deux entités.
     """
     __tablename__ = "cessions_lc"
     
     id_cession = Column(Integer, primary_key=True, index=True)
     id_lc = Column(Integer, ForeignKey("lettres_credit.id_lc"), nullable=False, index=True)
     
-    # C�dant (celui qui donne la LC)
+    # Cédant (celui qui donne la LC)
     type_cedant = Column(String(20), nullable=False) # client ou fournisseur
     id_cedant_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True)
     id_cedant_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True)
     
-    # Cessionnaire (celui qui re�oit la LC)
+    # Cessionnaire (celui qui reçoit la LC)
     type_cessionnaire = Column(String(20), nullable=False) # client ou fournisseur
     id_cessionnaire_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True)
     id_cessionnaire_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True)
@@ -36,7 +36,7 @@ class CessionLC(Base):
         index=False,
     )
     
-    # M�tadonn�es
+    # Métadonnées
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     id_utilisateur_creation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
     
