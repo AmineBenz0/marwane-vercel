@@ -632,7 +632,7 @@ function TransactionForm({
           </Box>
         </DialogTitle>
 
-        <DialogContent dividers sx={{ backgroundColor: '#f7f3ea', px: { xs: 2, md: 3 }, py: 2.5 }}>
+        <DialogContent dividers sx={{ backgroundColor: 'background.default', px: { xs: 2, md: 3 }, py: 2.5 }}>
           {/* Afficher l'erreur serveur générale si présente */}
           {(errorMessage || errors.root) && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -680,16 +680,16 @@ function TransactionForm({
                         title: 'Vente client',
                         subtitle: "Oeufs vendus, argent qui entre",
                         disabled: prefillFournisseurId !== null && prefillFournisseurId !== undefined,
-                        activeColor: 'success.main',
-                        activeBg: 'rgba(46, 125, 50, 0.08)',
+                        activeColor: 'primary.main',
+                        activeBg: 'rgba(13, 148, 136, 0.05)',
                       },
                       {
                         value: 'fournisseur',
                         title: 'Achat fournisseur',
                         subtitle: "Produits achetés, argent qui sort",
                         disabled: prefillClientId !== null && prefillClientId !== undefined,
-                        activeColor: 'warning.dark',
-                        activeBg: 'rgba(237, 108, 2, 0.08)',
+                        activeColor: 'primary.main',
+                        activeBg: 'rgba(13, 148, 136, 0.05)',
                       },
                     ].map((option) => {
                       const isSelected = field.value === option.value;
@@ -1121,7 +1121,7 @@ function TransactionForm({
 
                           {/* Total de cette ligne */}
                           <Grid item xs={12}>
-                            <Box sx={{ p: 2, bgcolor: 'primary.50', borderRadius: 2, border: '1px solid', borderColor: 'primary.light' }}>
+                            <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                               <Typography variant="body2" color="text.secondary">
                                 Total de cette ligne
                               </Typography>
@@ -1185,8 +1185,8 @@ function TransactionForm({
                                           p: 2,
                                           borderRadius: 2.5,
                                           border: '2px solid',
-                                          borderColor: isSelected ? 'success.main' : 'divider',
-                                          backgroundColor: isSelected ? 'rgba(46, 125, 50, 0.08)' : 'background.paper',
+                                          borderColor: isSelected ? 'primary.main' : 'divider',
+                                          backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.05)' : 'background.paper',
                                           cursor: loading ? 'not-allowed' : 'pointer',
                                           opacity: loading ? 0.6 : 1,
                                         }}
@@ -1205,9 +1205,9 @@ function TransactionForm({
 
                             {/* Champs de paiement conditionnels */}
                             <Collapse in={ligne.ajouter_paiement}>
-                              <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderRadius: 2, border: '1px solid', borderColor: 'success.light' }}>
+                              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                  <Typography variant="subtitle2" color="success.dark">
+                                  <Typography variant="subtitle2" color="text.primary">
                                     📋 Liste des paiements
                                   </Typography>
                                   <Button 
@@ -1409,7 +1409,7 @@ function TransactionForm({
                     mt: 3,
                     p: 2,
                     borderRadius: 3,
-                    background: 'linear-gradient(135deg, rgba(240,253,250,0.96), rgba(255,251,235,0.9))',
+                    backgroundColor: 'background.paper',
                   }}
                 >
                   <Typography sx={{ fontWeight: 900, mb: 1 }}>
