@@ -246,7 +246,12 @@ CREATE TABLE cessions_lc (
 	id_cessionnaire_client INTEGER, 
 	id_cessionnaire_fournisseur INTEGER, 
 	date_cession DATE NOT NULL, 
-	motif TEXT, 
+	motif TEXT,
+	statut VARCHAR(20) DEFAULT 'active' NOT NULL,
+	id_cession_inverse INTEGER,
+	motif_annulation TEXT,
+	date_annulation TIMESTAMP WITH TIME ZONE,
+	id_utilisateur_annulation INTEGER, 
 	date_creation TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	id_utilisateur_creation INTEGER, 
 	PRIMARY KEY (id_cession), 
@@ -255,7 +260,10 @@ CREATE TABLE cessions_lc (
 	FOREIGN KEY(id_cedant_fournisseur) REFERENCES fournisseurs (id_fournisseur), 
 	FOREIGN KEY(id_cessionnaire_client) REFERENCES clients (id_client), 
 	FOREIGN KEY(id_cessionnaire_fournisseur) REFERENCES fournisseurs (id_fournisseur), 
-	FOREIGN KEY(id_utilisateur_creation) REFERENCES utilisateurs (id_utilisateur)
+	FOREIGN KEY(id_utilisateur_creation) REFERENCES utilisateurs (id_utilisateur),
+	FOREIGN KEY(id_cession_inverse) REFERENCES cessions_lc (id_cession) ON DELETE SET NULL,
+	FOREIGN KEY(id_utilisateur_annulation) REFERENCES utilisateurs (id_utilisateur),
+	CONSTRAINT check_cessions_lc_statut_valide CHECK (statut IN ('active', 'annulee'))
 )
 
 ;
