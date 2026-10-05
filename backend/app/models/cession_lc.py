@@ -28,6 +28,20 @@ class CessionLC(Base):
     
     date_cession = Column(Date, nullable=False, index=True)
     motif = Column(Text, nullable=True)
+    statut = Column(String(20), nullable=False, default="active", server_default="active")
+    id_cession_inverse = Column(
+        Integer,
+        ForeignKey("cessions_lc.id_cession", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    motif_annulation = Column(Text, nullable=True)
+    date_annulation = Column(DateTime(timezone=True), nullable=True)
+    id_utilisateur_annulation = Column(
+        Integer,
+        ForeignKey("utilisateurs.id_utilisateur"),
+        nullable=True,
+    )
     
     # Métadonnées
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
