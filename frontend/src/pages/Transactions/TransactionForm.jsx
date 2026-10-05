@@ -827,29 +827,27 @@ function TransactionForm({
                   name="id_client"
                   control={control}
                   render={({ field, fieldState: { error } }) => (
-                    <FormControl
+                    <TextField
+                      {...field}
+                      select
                       fullWidth
+                      required
+                      label="Client"
                       margin="normal"
                       error={!!error}
+                      helperText={error?.message}
                       disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
+                      value={field.value || ''}
                     >
-                      <InputLabel required>Client</InputLabel>
-                      <Select
-                        {...field}
-                        label="Client"
-                        value={field.value || ''}
-                      >
-                        <MenuItem value="">
-                          <em>Sélectionner un client</em>
+                      <MenuItem value="">
+                        <em>Sélectionner un client</em>
+                      </MenuItem>
+                      {clients.map((client) => (
+                        <MenuItem key={client.id_client} value={client.id_client}>
+                          {client.nom_client}
                         </MenuItem>
-                        {clients.map((client) => (
-                          <MenuItem key={client.id_client} value={client.id_client}>
-                            {client.nom_client}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      {error && <FormHelperText>{error.message}</FormHelperText>}
-                    </FormControl>
+                      ))}
+                    </TextField>
                   )}
                 />
               )}
@@ -860,32 +858,30 @@ function TransactionForm({
                   name="id_fournisseur"
                   control={control}
                   render={({ field, fieldState: { error } }) => (
-                    <FormControl
+                    <TextField
+                      {...field}
+                      select
                       fullWidth
+                      required
+                      label="Fournisseur"
                       margin="normal"
                       error={!!error}
+                      helperText={error?.message}
                       disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
+                      value={field.value || ''}
                     >
-                      <InputLabel required>Fournisseur</InputLabel>
-                      <Select
-                        {...field}
-                        label="Fournisseur"
-                        value={field.value || ''}
-                      >
-                        <MenuItem value="">
-                          <em>Sélectionner un fournisseur</em>
+                      <MenuItem value="">
+                        <em>Sélectionner un fournisseur</em>
+                      </MenuItem>
+                      {fournisseurs.map((fournisseur) => (
+                        <MenuItem
+                          key={fournisseur.id_fournisseur}
+                          value={fournisseur.id_fournisseur}
+                        >
+                          {fournisseur.nom_fournisseur}
                         </MenuItem>
-                        {fournisseurs.map((fournisseur) => (
-                          <MenuItem
-                            key={fournisseur.id_fournisseur}
-                            value={fournisseur.id_fournisseur}
-                          >
-                            {fournisseur.nom_fournisseur}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      {error && <FormHelperText>{error.message}</FormHelperText>}
-                    </FormControl>
+                      ))}
+                    </TextField>
                   )}
                 />
               )}
