@@ -127,7 +127,7 @@ function LCFormModal({ open, onClose, onSuccess }) {
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ backgroundColor: '#f7f3ea', p: 3 }}>
+      <DialogContent dividers sx={{ backgroundColor: 'background.default', p: 3 }}>
         {loadingClients ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress />
