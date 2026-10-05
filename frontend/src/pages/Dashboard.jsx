@@ -17,7 +17,6 @@ import {
   Add as AddIcon,
   AccountBalanceWallet as WalletIcon,
   AssignmentTurnedIn as TaskIcon,
-  CreditScore as PaymentIcon,
   Egg as EggIcon,
   Factory as FactoryIcon,
   MoneyOff as ExpenseIcon,
@@ -67,14 +66,6 @@ const ACTIONS = [
     color: '#A96522',
     background: '#F8E8CC',
     path: '/production',
-  },
-  {
-    title: 'Ajouter paiement',
-    description: 'Encaisser un client ou payer un fournisseur.',
-    icon: <PaymentIcon />,
-    color: '#315F85',
-    background: '#DCECF7',
-    path: '/transactions',
   },
   {
     title: 'Nouvelle d\u00e9pense',
