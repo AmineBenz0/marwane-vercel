@@ -2,7 +2,7 @@ import { Chip } from '@mui/material';
 
 const LCStatusBadge = ({ statut, estDisponible = false, size = 'small' }) => {
   const isActive = statut === 'active';
-  const label = isActive ? (estDisponible ? 'Disponible' : 'A venir') : 'Utilis�e';
+  const label = isActive ? (estDisponible ? 'Disponible' : 'À venir') : 'Utilisée';
   const color = isActive ? (estDisponible ? 'success' : 'warning') : 'default';
 
   return (
