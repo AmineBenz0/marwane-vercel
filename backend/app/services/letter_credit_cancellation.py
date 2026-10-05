@@ -30,13 +30,13 @@ def cancel_letter_credit(
         LettreDeCredit.id_lc == id_lc,
     ).with_for_update().first()
     if not lc:
-        raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
+        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
     if lc.statut != "utilisee":
-        raise HTTPException(status_code=400, detail="Seule une LC utilis�e peut �tre annul�e")
+        raise HTTPException(status_code=400, detail="Seule une LC utilisée peut être annulée")
     if lc.version_utilisation != version_utilisation:
         raise HTTPException(
             status_code=409,
-            detail="Cette LC a �t� r�utilis�e depuis l'ouverture de la confirmation. Actualisez la page.",
+            detail="Cette LC a été réutilisée depuis l'ouverture de la confirmation. Actualisez la page.",
         )
 
     linked_payments = db.query(Paiement).filter(
