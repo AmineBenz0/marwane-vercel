@@ -54,33 +54,46 @@ def create_cession_lc(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Effectue une cession de LC (transfert complet)."""
-    # 1. Vérifier la LC
-    lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == cession_data.id_lc).first()
+    # 1. V�rifier la LC
+    lc = db.query(LettreDeCredit).filter(
+        LettreDeCredit.id_lc == cession_data.id_lc,
+    ).with_for_update().first()
     if not lc:
-        raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
+        raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
     
+    if lc.statut == 'active' and not lc.est_disponible:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cette LC ne sera disponible qu'a partir du "
+                f"{lc.date_disponibilite}"
+            ),
+        )
     if lc.statut != 'active':
-        raise HTTPException(status_code=400, detail=f"La LC doit être active pour être cédée (Statut actuel: {lc.statut})")
+        raise HTTPException(status_code=400, detail=f"La LC doit �tre active pour �tre c�d�e (Statut actuel: {lc.statut})")
+    if lc.version_utilisation != cession_data.version_utilisation:
+        raise HTTPException(status_code=409, detail="La LC a chang� depuis l'ouverture du formulaire. Actualisez la page.")
 
-    # 3. Vérifier que le cédant est bien le détenteur
+    # 3. V�rifier que le c�dant est bien le d�tenteur
     if lc.type_detenteur != cession_data.type_cedant:
-         raise HTTPException(status_code=400, detail="Le type du cédant ne correspond pas au détenteur actuel")
+         raise HTTPException(status_code=400, detail="Le type du c�dant ne correspond pas au d�tenteur actuel")
     if lc.type_detenteur == 'client' and lc.id_client != cession_data.id_cedant_client:
-         raise HTTPException(status_code=400, detail="Le client cédant n'est pas le détenteur actuel")
+         raise HTTPException(status_code=400, detail="Le client c�dant n'est pas le d�tenteur actuel")
     if lc.type_detenteur == 'fournisseur' and lc.id_fournisseur != cession_data.id_cedant_fournisseur:
-         raise HTTPException(status_code=400, detail="Le fournisseur cédant n'est pas le détenteur actuel")
+         raise HTTPException(status_code=400, detail="Le fournisseur c�dant n'est pas le d�tenteur actuel")
 
-    # 2. Créer la cession
+    # 2. Cr�er la cession
     nouvelle_cession = CessionLC(
-        **cession_data.model_dump(),
+        **cession_data.model_dump(exclude={"version_utilisation"}),
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )
     
-    # 3. Mettre à jour la LC (Changement de détenteur)
+    # 3. Mettre � jour la LC (Changement de d�tenteur)
     lc.type_detenteur = cession_data.type_cessionnaire
     lc.id_client = cession_data.id_cessionnaire_client
     lc.id_fournisseur = cession_data.id_cessionnaire_fournisseur
     lc.statut = 'utilisee'
+    lc.version_utilisation += 1
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     
     db.add(nouvelle_cession)
