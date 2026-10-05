@@ -44,7 +44,7 @@ import LCFormModal from './LCFormModal';
 
 const FILTERS = [
   { value: 'disponibles', label: 'Disponibles' },
-  { value: 'utilisees', label: 'Utilis�es' },
+  { value: 'utilisees', label: 'Utilisées' },
   { value: 'toutes', label: 'Toutes' },
 ];
 
@@ -69,7 +69,7 @@ const getLcState = (lc) => {
   }
 
 
-  return { label: 'Utilis�e', tone: 'default' };
+  return { label: 'Utilisée', tone: 'default' };
 };
 
 function LettresCreditList() {
@@ -178,7 +178,7 @@ function LettresCreditList() {
           notes: payloadNotes,
           version_utilisation: actionDialog.lc.version_utilisation,
         });
-        notification.success('LC vers�e en banque');
+        notification.success('LC versée en banque');
       } else {
         await lettreCreditService.payerFournisseur(actionDialog.lc.id_lc, {
           id_fournisseur: Number(targetId),
@@ -186,7 +186,7 @@ function LettresCreditList() {
           notes: payloadNotes,
           version_utilisation: actionDialog.lc.version_utilisation,
         });
-        notification.success('Fournisseur pay� avec la LC');
+        notification.success('Fournisseur payé avec la LC');
       }
 
       closeActionDialog();
@@ -204,7 +204,7 @@ function LettresCreditList() {
     setActionLoading(true);
     try {
       await lettreCreditService.annuler(cancelDialogLc.id_lc, {
-        raison: 'Annulation confirm�e par l'utilisateur depuis l'application',
+        raison: 'Annulation confirmée par l’utilisateur depuis l’application',
         version_utilisation: cancelDialogLc.version_utilisation,
       });
       notification.success('Utilisation annullee. La LC est de nouveau disponible.');
@@ -212,7 +212,7 @@ function LettresCreditList() {
       await fetchData();
     } catch (error) {
       console.error('Erreur annulation LC:', error);
-      notification.error(error?.message || 'Impossible d'annuler cette LC');
+      notification.error(error?.message || 'Impossible d’annuler cette LC');
     } finally {
       setActionLoading(false);
     }
@@ -220,19 +220,19 @@ function LettresCreditList() {
 
   const handleExport = async () => {
     if (filteredLcs.length === 0) {
-      notification.warning('Aucune LC � exporter');
+      notification.warning('Aucune LC à exporter');
       return;
     }
 
     await exportToExcelAdvanced(
       filteredLcs,
       [
-        { id: 'numero_reference', label: 'R�f�rence' },
+        { id: 'numero_reference', label: 'Référence' },
         { id: 'detenteur_nom', label: 'Client' },
         { id: 'banque_emettrice', label: 'Banque' },
         { id: 'montant', label: 'Montant' },
         { id: 'date_disponibilite', label: 'Date disponible' },
-        { id: 'etat_export', label: '�tat' },
+        { id: 'etat_export', label: 'État' },
       ],
       `lettres-credit-${format(new Date(), 'yyyy-MM-dd')}`,
       'LC',
@@ -255,10 +255,10 @@ function LettresCreditList() {
       >
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 900, letterSpacing: '-0.04em' }}>
-            Lettres de cr�dit
+            Lettres de crédit
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 720, lineHeight: 1.6 }}>
-            Les LC disponibles sont compt�es dans la caisse jusqu'� leur versement en banque ou leur utilisation pour payer un fournisseur.
+            Les LC disponibles sont comptées dans la caisse jusqu'à leur versement en banque ou leur utilisation pour payer un fournisseur.
           </Typography>
         </Box>
 
@@ -295,14 +295,14 @@ function LettresCreditList() {
           <SummaryCard
             title="LC disponibles"
             value={stats.activeCount}
-            helper={stats.futureCount > 0 ? `${stats.futureCount} � venir` : 'Pr�tes � suivre'}
+            helper={stats.futureCount > 0 ? `${stats.futureCount} à venir` : 'Prêtes à suivre'}
             tone="info"
             icon={<BankIcon />}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <SummaryCard
-            title="D�j� utilis�es"
+            title="Déjà utilisées"
             value={stats.usedCount}
             helper={formatMontant(stats.totalUsed, { useCompactNotation: false })}
             tone="neutral"
@@ -325,7 +325,7 @@ function LettresCreditList() {
             <TextField
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Rechercher r�f�rence, client ou banque"
+              placeholder="Rechercher référence, client ou banque"
               sx={{ flex: 1 }}
               InputProps={{
                 startAdornment: (
@@ -374,11 +374,11 @@ function LettresCreditList() {
                 Registre des LC
               </Typography>
               <Typography color="text.secondary">
-                {filteredLcs.length} r�sultat(s), avec le montant visible sur chaque LC.
+                {filteredLcs.length} résultat(s), avec le montant visible sur chaque LC.
               </Typography>
             </Box>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 360 }}>
-              Une LC active reste dans la caisse. D�s qu'elle est vers�e ou utilis�e, elle passe en utilis�e.
+              Une LC active reste dans la caisse. Dès qu'elle est versée ou utilisée, elle passe en utilisée.
             </Typography>
           </Stack>
         </Box>
@@ -546,7 +546,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
                 />
                 {lc.numero_serie && (
                   <Typography variant="caption" color="text.secondary">
-                    S�rie {lc.numero_serie}
+                    Série {lc.numero_serie}
                   </Typography>
                 )}
               </Stack>
@@ -554,7 +554,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
                 {lc.numero_reference}
               </Typography>
               <Typography color="text.secondary" sx={{ mt: 0.25 }}>
-                {lc.detenteur_nom || 'Client non pr�cis�'}
+                {lc.detenteur_nom || 'Client non précisé'}
               </Typography>
             </Box>
 
@@ -581,7 +581,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
 
           {isActiveLc(lc) && !usable && (
             <Alert severity="info" sx={{ borderRadius: 3 }}>
-              Cette LC est enregistr�e, mais pas encore utilisable.
+              Cette LC est enregistrée, mais pas encore utilisable.
             </Alert>
           )}
 
@@ -592,7 +592,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
           >
             {isActiveLc(lc) && (
               <>
-                <Tooltip title={usable ? '' : 'La date de disponibilit� n'est pas encore atteinte'}>
+                <Tooltip title={usable ? '' : 'La date de disponibilité n’est pas encore atteinte'}>
                   <span>
                     <Button
                       fullWidth
@@ -606,7 +606,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
                     </Button>
                   </span>
                 </Tooltip>
-                <Tooltip title={usable ? '' : 'La date de disponibilit� n'est pas encore atteinte'}>
+                <Tooltip title={usable ? '' : 'La date de disponibilité n’est pas encore atteinte'}>
                   <span>
                     <Button
                       fullWidth
@@ -630,7 +630,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
               onClick={onView}
               sx={{ minHeight: 44 }}
             >
-              Voir d�tail
+              Voir détail
             </Button>
             {isUsedLc(lc) && (
               <Button
@@ -677,8 +677,8 @@ function EmptyLcState({ activeFilter, onCreate }) {
   const message = activeFilter === 'disponibles'
     ? 'Aucune LC disponible pour le moment.'
     : activeFilter === 'utilisees'
-      ? 'Aucune LC utilis�e pour le moment.'
-      : 'Aucune LC trouv�e.';
+      ? 'Aucune LC utilisée pour le moment.'
+      : 'Aucune LC trouvée.';
 
   return (
     <Box
@@ -695,7 +695,7 @@ function EmptyLcState({ activeFilter, onCreate }) {
           {message}
         </Typography>
         <Typography color="text.secondary" sx={{ mt: 1.25, mb: 3 }}>
-          Ajoutez une LC d�s qu'un client vous la remet. Elle sera compt�e dans la caisse quand elle devient disponible.
+          Ajoutez une LC dès qu’un client vous la remet. Elle sera comptée dans la caisse quand elle devient disponible.
         </Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
           Nouvelle LC
@@ -740,7 +740,7 @@ function ActionDialog({
               }}
             >
               <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
-                LC s�lectionn�e
+                LC sélectionnée
               </Typography>
               <Typography sx={{ fontWeight: 900 }}>{lc.numero_reference}</Typography>
               <Typography variant="h5" sx={{ fontWeight: 950, mt: 0.5 }}>
@@ -776,7 +776,7 @@ function ActionDialog({
               fullWidth
               multiline
               minRows={2}
-              placeholder="Ex: d�p�t du matin, paiement aliment..."
+              placeholder="Ex: dépôt du matin, paiement aliment..."
             />
           </Stack>
         )}
