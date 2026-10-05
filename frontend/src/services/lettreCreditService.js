@@ -1,31 +1,31 @@
 /**
- * Service pour la gestion des Lettres de Cr�dit (LC).
+ * Service pour la gestion des Lettres de Crédit (LC).
  */
 import { get, post, put, del } from './api';
 
 const lettreCreditService = {
   /**
-   * R�cup�re la liste des LC avec filtres.
+   * Récupère la liste des LC avec filtres.
    */
   getAll: (params = {}) => get('/lettres-credit', { params }),
 
   /**
-   * R�cup�re les LC disponibles (actives et utilisables).
+   * Récupère les LC disponibles (actives et utilisables).
    */
   getAvailable: (params = {}) => get('/lettres-credit/disponibles', { params }),
 
   /**
-   * R�cup�re une LC par son ID.
+   * Récupère une LC par son ID.
    */
   getById: (id) => get(`/lettres-credit/${id}`),
 
   /**
-   * Cr�e une nouvelle LC.
+   * Crée une nouvelle LC.
    */
   create: (data) => post('/lettres-credit', data),
 
   /**
-   * Met � jour une LC.
+   * Met à jour une LC.
    */
   update: (id, data) => put(`/lettres-credit/${id}`, data),
 
