@@ -27,7 +27,7 @@ import {
 import { productionService, batimentService } from '../../services/productionService';
 import useNotification from '../../hooks/useNotification';
 import ProductionForm from './ProductionForm';
-import { format } from 'date-fns';
+import { formatShortDate } from '../../utils/dateFormatting';
 
 function ProductionList() {
   const [productions, setProductions] = useState([]);
@@ -167,7 +167,7 @@ function ProductionList() {
               ) : (
                 productions.map((p) => (
                   <TableRow key={p.id_production} hover>
-                    <TableCell>{format(new Date(p.date_production), 'dd/MM/yyyy')}</TableCell>
+            <TableCell>{formatShortDate(p.date_production)}</TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <FactoryIcon fontSize="inherit" color="action" />

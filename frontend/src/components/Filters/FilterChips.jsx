@@ -3,6 +3,7 @@
  */
 
 import React from 'react';
+import { formatShortDate } from '../../utils/dateFormatting';
 import { Box, Chip, Button } from '@mui/material';
 
 function FilterChips({
@@ -50,7 +51,7 @@ function FilterChips({
 
     if (definition.type === 'date') {
       try {
-        return new Date(value).toLocaleDateString('fr-FR');
+    return formatShortDate(value, String(value));
       } catch {
         return value;
       }

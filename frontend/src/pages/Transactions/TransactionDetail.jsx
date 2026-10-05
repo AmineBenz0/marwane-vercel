@@ -47,7 +47,7 @@ import {
 } from '@mui/material';
 import { get, post, put, del } from '../../services/api';
 import { format } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import PaymentTypeBadge from '../../components/PaymentTypeBadge';
@@ -221,7 +221,7 @@ function TransactionDetail() {
   const formatDate = (dateValue) => {
     if (!dateValue) return '-';
     try {
-      return format(new Date(dateValue), 'dd/MM/yyyy', { locale: fr });
+    return formatShortDate(dateValue);
     } catch {
       return dateValue;
     }

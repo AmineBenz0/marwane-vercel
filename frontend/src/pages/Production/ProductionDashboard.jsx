@@ -21,8 +21,7 @@ import {
   LocalShipping as LocalShippingIcon,
   TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { formatShortDate } from '../../utils/dateFormatting';
 import { useNavigate } from 'react-router-dom';
 import { productionService, batimentService } from '../../services/productionService';
 import ProductionForm from './ProductionForm';
@@ -122,7 +121,7 @@ function ProductionDashboard() {
   );
   const selectedDateLabel = useMemo(() => {
     try {
-      return format(new Date(selectedDate), 'EEEE dd MMMM yyyy', { locale: fr });
+      return formatShortDate(selectedDate, String(selectedDate));
     } catch {
       return selectedDate;
     }

@@ -5,12 +5,14 @@
  * application bundle smaller while avoiding the unmaintained SheetJS runtime.
  */
 
+import { formatShortDate } from './dateFormatting';
+
 const EXCEL_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const normaliseCellValue = (value) => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
-  if (value instanceof Date) return value.toLocaleDateString('fr-FR');
+  if (value instanceof Date) return formatShortDate(value);
   if (typeof value === 'number') return value;
   return String(value);
 };

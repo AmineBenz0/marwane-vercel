@@ -22,6 +22,7 @@ import {
 } from '@mui/icons-material';
 import * as yup from 'yup';
 import { format } from 'date-fns';
+import { formatShortDate } from '../../utils/dateFormatting';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post, put } from '../../services/api';
@@ -166,7 +167,7 @@ function ClientsList() {
         `clients_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
         'Clients',
         {
-          date_creation: (value) => value ? new Date(value).toLocaleDateString('fr-FR') : '-',
+    date_creation: formatShortDate,
         }
       );
     } catch (err) {

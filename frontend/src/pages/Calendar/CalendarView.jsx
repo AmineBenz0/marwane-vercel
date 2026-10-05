@@ -38,7 +38,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { formatCalendarMonth, formatShortDate } from '../../utils/dateFormatting';
 import TaskModal from '../../components/Tasks/TaskModal';
 import taskService from '../../services/taskService';
 import useNotification from '../../hooks/useNotification';
@@ -59,7 +59,7 @@ const getTaskTimeLabel = (task) => {
   return format(date, 'HH:mm');
 };
 
-const formatDayTitle = (date) => format(date, 'EEEE d MMMM', { locale: fr });
+const formatDayTitle = (date) => formatShortDate(date);
 
 function CalendarView() {
   const theme = useTheme();
@@ -476,7 +476,7 @@ function MobileAgenda({ days, tasks, onTaskClick, onNewTask }) {
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
             <Box>
               <Typography sx={{ fontWeight: 900, fontSize: '1.15rem', textTransform: 'capitalize' }}>
-                {format(today, 'MMMM yyyy', { locale: fr })}
+                {formatCalendarMonth(today)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Vue rapide du mois.
@@ -667,7 +667,7 @@ function TaskCard({ task, onClick, compact = false }) {
       }}
     >
       <Typography sx={{ color: '#129B89', fontWeight: 900, fontSize: '0.8rem' }}>
-        {compact ? format(getTaskDate(task), 'dd MMM', { locale: fr }) : getTaskTimeLabel(task)}
+              {compact ? formatShortDate(getTaskDate(task)) : getTaskTimeLabel(task)}
       </Typography>
       <Box>
         <Typography sx={{ fontWeight: 900, lineHeight: 1.25 }}>

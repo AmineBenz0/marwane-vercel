@@ -34,6 +34,7 @@ import {
   ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import { del, get, patch, put } from '../../services/api';
+import { formatShortDate } from '../../utils/dateFormatting';
 import useNotification from '../../hooks/useNotification';
 import ProduitForm from './ProduitForm';
 
@@ -48,7 +49,7 @@ const formatCurrency = (value, maximumFractionDigits = 2) => {
 
 const formatDate = (value) => {
   if (!value) return 'Aucun achat';
-  return new Intl.DateTimeFormat('fr-FR').format(new Date(value));
+  return formatShortDate(value);
 };
 
 const formatQuantity = (value) => Number(value || 0).toLocaleString('fr-FR');

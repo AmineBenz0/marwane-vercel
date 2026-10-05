@@ -10,8 +10,8 @@
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format, parseISO } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { format } from 'date-fns';
+import { formatShortDate, formatShortDateTime } from './dateFormatting';
 
 /**
  * Exporte les données vers PDF avec formatage de tableau professionnel.
@@ -55,7 +55,7 @@ export const exportToPDF = (
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
     doc.text(
-      `Exporté le ${format(new Date(), 'dd MMMM yyyy à HH:mm', { locale: fr })}`,
+      `Exporté le ${formatShortDateTime(new Date())}`,
       margin,
       28
     );
@@ -85,7 +85,7 @@ export const exportToPDF = (
         } else if (typeof cellValue === 'boolean') {
           return cellValue ? 'Actif' : 'Inactif';
         } else if (cellValue instanceof Date) {
-          return format(new Date(cellValue), 'dd/MM/yyyy', { locale: fr });
+          return formatShortDate(cellValue);
         } else {
           return String(cellValue);
         }
@@ -243,14 +243,14 @@ export const exportCaisseReport = (mouvements, solde, dateDebut, dateFin) => {
 
     if (dateDebut && dateFin) {
       doc.text(
-        `Période : ${format(new Date(dateDebut), 'dd/MM/yyyy', { locale: fr })} - ${format(new Date(dateFin), 'dd/MM/yyyy', { locale: fr })}`,
+        `Période : ${formatShortDate(dateDebut)} - ${formatShortDate(dateFin)}`,
         margin,
         53
       );
     }
 
     doc.text(
-      `Exporté le ${format(new Date(), 'dd MMMM yyyy à HH:mm', { locale: fr })}`,
+      `Exporté le ${formatShortDateTime(new Date())}`,
       margin,
       61
     );
@@ -260,7 +260,7 @@ export const exportCaisseReport = (mouvements, solde, dateDebut, dateFin) => {
       const headers = ['Date', 'Type', 'Montant', 'Transaction ID'];
       
       const tableData = mouvements.map((mouvement) => [
-        format(parseISO(mouvement.date_mouvement), 'dd/MM/yyyy HH:mm', { locale: fr }),
+        formatShortDateTime(mouvement.date_mouvement),
         mouvement.type_mouvement,
         new Intl.NumberFormat('fr-FR', {
           style: 'currency',

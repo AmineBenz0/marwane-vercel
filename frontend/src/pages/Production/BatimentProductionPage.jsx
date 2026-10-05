@@ -18,8 +18,7 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { formatShortDate } from '../../utils/dateFormatting';
 import { productionService, batimentService } from '../../services/productionService';
 import useNotificationStore from '../../store/notificationStore';
 import ProductionForm from './ProductionForm';
@@ -77,7 +76,7 @@ function BatimentProductionPage() {
 
   const selectedDateLabel = useMemo(() => {
     try {
-      return format(new Date(selectedDate), 'EEEE dd MMMM yyyy', { locale: fr });
+      return formatShortDate(selectedDate, String(selectedDate));
     } catch {
       return selectedDate;
     }
@@ -571,7 +570,7 @@ function HistoryCard({ productions, onEdit, onDelete, onAddProduction }) {
               <Box key={production.id_production} sx={{ p: 1.75, borderRadius: 3, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider' }}>
                 <Stack direction="row" justifyContent="space-between" spacing={1.5} sx={{ minWidth: 0 }}>
                   <Typography fontWeight={950} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-                    {format(new Date(production.date_production), 'dd MMMM yyyy', { locale: fr })}
+                    {formatShortDate(production.date_production)}
                   </Typography>
                   <Stack direction="row" spacing={0.25}>
                     <IconButton size="small" color="primary" onClick={() => onEdit(production)}><EditIcon fontSize="small" /></IconButton>

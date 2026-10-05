@@ -23,6 +23,7 @@ from app.schemas.production import (
     CalibreThreshold,
 )
 from app.utils.dependencies import get_current_active_user
+from app.utils.date_formatting import DISPLAY_DATE_FORMAT
 from app.utils.egg_product_sync import ensure_sellable_egg_product, parse_sellable_egg_product_name
 from app.utils.production_cycles import (
     ACTIVE_CYCLE_STATUSES,
@@ -650,7 +651,10 @@ def get_cycle_performance(
             rows.append({
                 "id": f"week-{week_key}",
                 "rowType": "week",
-                "date": f"Semaine {week_start.strftime('%d/%m')} - {week_end.strftime('%d/%m')}",
+                "date": (
+                    f"Semaine {week_start.strftime(DISPLAY_DATE_FORMAT)} - "
+                    f"{week_end.strftime(DISPLAY_DATE_FORMAT)}"
+                ),
             })
 
         effectif_debut = effectif_running
@@ -662,7 +666,7 @@ def get_cycle_performance(
         rows.append({
             "id": f"day-{day_date.isoformat()}",
             "rowType": "day",
-            "date": day_date.strftime("%d/%m/%Y"),
+            "date": day_date.strftime(DISPLAY_DATE_FORMAT),
             "mort": day["mort"],
             "mort_pct": _ratio_percent(day["mort"], effectif_debut) if effectif_debut else "-",
             "oeufs": day["oeufs"],

@@ -36,6 +36,7 @@ import {
   TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
+import { formatShortDate, formatShortDateTime } from '../../utils/dateFormatting';
 import compteBancaireService from '../../services/compteBancaireService';
 import lettreCreditService from '../../services/lettreCreditService';
 import useNotification from '../../hooks/useNotification';
@@ -61,14 +62,7 @@ const SOURCE_LABELS = {
 const parseAmount = (value) => Number(value || 0);
 
 const formatDate = (value, withTime = false) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-  }).format(date);
+  return withTime ? formatShortDateTime(value) : formatShortDate(value);
 };
 
 const getSignedAmount = (movement) => {

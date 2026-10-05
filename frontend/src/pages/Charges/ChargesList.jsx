@@ -34,6 +34,7 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
+import { formatShortDate } from '../../utils/dateFormatting';
 import chargeService from '../../services/chargeService';
 import compteBancaireService from '../../services/compteBancaireService';
 import useNotification from '../../hooks/useNotification';
@@ -68,15 +69,8 @@ const cleanText = (value = '') => (
 
 const toDateKey = (date) => format(date, 'yyyy-MM-dd');
 
-const parseDateKey = (value) => new Date(`${value}T00:00:00`);
-
 const formatDate = (value) => {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(parseDateKey(value));
+  return formatShortDate(value);
 };
 
 const formatExpenseAmount = (value) => `- ${formatMontant(Number(value || 0), { maximumFractionDigits: 0 })}`;

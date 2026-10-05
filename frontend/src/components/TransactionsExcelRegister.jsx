@@ -25,7 +25,7 @@ import {
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { formatShortDate } from '../utils/dateFormatting';
 import PaymentStatusBadge from './PaymentStatusBadge';
 
 const PAYMENT_TYPE_LABELS = {
@@ -44,12 +44,7 @@ const isClientTransaction = (transaction) => (
   transaction?.id_client !== null && transaction?.id_client !== undefined
 );
 
-const formatDateSafe = (value, pattern = 'dd/MM/yyyy') => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return format(date, pattern, { locale: fr });
-};
+const formatDateSafe = (value) => formatShortDate(value);
 
 const getDateKey = (value) => {
   if (!value) return 'sans-date';
@@ -471,7 +466,7 @@ function TransactionExcelRow({
       }}
     >
       <TableCell sx={{ ...stickyDateBodySx, bgcolor: rowBackground }}>
-        {formatDateSafe(transaction.date_transaction, 'dd/MM')}
+        {formatDateSafe(transaction.date_transaction)}
       </TableCell>
       <TableCell>
         <Chip

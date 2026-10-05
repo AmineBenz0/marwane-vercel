@@ -20,8 +20,7 @@ import {
   Typography,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
-import { format } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { formatShortDate } from '../../utils/dateFormatting';
 import LCStatusBadge from '../../components/LCStatusBadge';
 import useNotification from '../../hooks/useNotification';
 import lettreCreditService from '../../services/lettreCreditService';
@@ -57,7 +56,7 @@ function LettreCreditDetail() {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
-    return format(new Date(dateStr), 'dd/MM/yyyy', { locale: fr });
+    return formatShortDate(dateStr);
   };
 
   if (loading) {

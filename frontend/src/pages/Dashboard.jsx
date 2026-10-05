@@ -38,7 +38,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subDays } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { formatShortDate } from '../utils/dateFormatting';
 import { get } from '../services/api';
 import { formatMontant, formatSimpleNumber } from '../utils/formatNumber';
 import { formatNumberForAxis, formatMontantForTooltip } from '../utils/formatNumberForChart';
@@ -87,11 +87,7 @@ const ACTIONS = [
 ];
 
 const formatDate = (date) => {
-  try {
-    return format(date, 'dd MMM', { locale: fr });
-  } catch {
-    return format(date, 'dd/MM');
-  }
+  return formatShortDate(date);
 };
 
 const groupTransactionsByDay = (transactions) => {
@@ -654,7 +650,7 @@ function Dashboard() {
                             {isSale ? 'Vente client' : 'Achat fournisseur'} #{transaction.id_transaction}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {format(new Date(transaction.date_transaction), 'dd/MM/yyyy')}
+                  {formatShortDate(transaction.date_transaction)}
                           </Typography>
                         </Box>
                         <Typography

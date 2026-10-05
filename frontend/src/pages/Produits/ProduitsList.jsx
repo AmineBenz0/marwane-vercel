@@ -25,6 +25,7 @@ import {
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
+import { formatShortDate } from '../../utils/dateFormatting';
 import ProduitForm from './ProduitForm';
 import { get, post, put } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -40,7 +41,7 @@ const formatMoney = (value, maximumFractionDigits = 2) => {
 
 const formatDate = (value) => {
   if (!value) return 'Aucun achat';
-  return new Intl.DateTimeFormat('fr-FR').format(new Date(value));
+  return formatShortDate(value);
 };
 
 const pluralize = (count, singular, plural = `${singular}s`) => (

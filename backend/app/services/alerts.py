@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.alert import Alerte
 from app.models.transaction import Transaction
 from app.utils.business_date import business_date
+from app.utils.date_formatting import DISPLAY_DATE_FORMAT
 
 
 def create_overdue_alerts(db: Session, reference_date: date | None = None) -> int:
@@ -38,7 +39,10 @@ def create_overdue_alerts(db: Session, reference_date: date | None = None) -> in
                     id_transaction=transaction.id_transaction,
                     type_alerte="paiement_en_retard",
                     titre="Paiement en retard",
-                    message=f"La transaction #{transaction.id_transaction} est échue depuis le {transaction.date_echeance}.",
+                    message=(
+                        f"La transaction #{transaction.id_transaction} est échue depuis le "
+                        f"{transaction.date_echeance.strftime(DISPLAY_DATE_FORMAT)}."
+                    ),
                     date_reference=transaction.date_echeance,
                 ))
                 db.flush()

@@ -57,7 +57,7 @@ import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import { get, post, put, patch, del } from '../../services/api';
 import { format } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportToPDF } from '../../utils/exportToPDF';
 import useNotification from '../../hooks/useNotification';
@@ -178,7 +178,7 @@ function TransactionsList() {
       alwaysInline: true, // Toujours visible
       formatChipValue: (value) => {
         try {
-          return new Date(value).toLocaleDateString('fr-FR');
+          return formatShortDate(value, String(value));
         } catch {
           return value;
         }
@@ -191,7 +191,7 @@ function TransactionsList() {
       alwaysInline: true, // Toujours visible
       formatChipValue: (value) => {
         try {
-          return new Date(value).toLocaleDateString('fr-FR');
+          return formatShortDate(value, String(value));
         } catch {
           return value;
         }
@@ -618,7 +618,7 @@ function TransactionsList() {
           if (row?.__summaryType) return '';
           if (!value) return '-';
           try {
-            return format(new Date(value), 'dd/MM/yyyy', { locale: fr });
+            return formatShortDate(value, String(value));
           } catch {
             return value;
           }
@@ -704,7 +704,7 @@ function TransactionsList() {
         date_transaction: (value) => {
           if (!value) return '-';
           try {
-            return format(new Date(value), 'dd/MM/yyyy', { locale: fr });
+            return formatShortDate(value, String(value));
           } catch {
             return value;
           }
@@ -815,7 +815,7 @@ function TransactionsList() {
       format: (value) => {
         if (!value) return '-';
         try {
-          return format(new Date(value), 'dd/MM/yyyy', { locale: fr });
+    return formatShortDate(value, String(value));
         } catch {
           return value;
         }
@@ -1251,12 +1251,7 @@ const PAYMENT_TYPE_LABELS = {
 
 const REFERENCE_PAYMENT_TYPES = new Set(['cheque', 'virement', 'lc']);
 
-const formatDateSafe = (value, pattern = 'dd/MM/yyyy') => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return format(date, pattern, { locale: fr });
-};
+const formatDateSafe = (value) => formatShortDate(value);
 
 const getDateKey = (value) => {
   if (!value) return 'sans-date';
@@ -1650,7 +1645,7 @@ function TransactionExcelRow({
       }}
     >
       <TableCell sx={{ ...stickyDateBodySx, bgcolor: rowBackground }}>
-        {formatDateSafe(transaction.date_transaction, 'dd/MM')}
+        {formatDateSafe(transaction.date_transaction)}
       </TableCell>
       <TableCell>
         <Chip

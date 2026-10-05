@@ -32,6 +32,7 @@ import {
   WarningAmber as WarningIcon,
 } from '@mui/icons-material';
 import { format, subDays } from 'date-fns';
+import { formatShortDate, formatShortDateTime } from '../../utils/dateFormatting';
 import { get } from '../../services/api';
 import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -55,13 +56,7 @@ const toNumber = (value) => Number(value || 0);
 const toDateKey = (date) => format(date, 'yyyy-MM-dd');
 
 const formatDate = (value, withTime = false) => {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-  }).format(new Date(value));
+  return withTime ? formatShortDateTime(value) : formatShortDate(value);
 };
 
 const getPeriodParams = (period) => {

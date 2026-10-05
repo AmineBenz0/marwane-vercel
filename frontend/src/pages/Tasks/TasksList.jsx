@@ -19,8 +19,8 @@ import {
   Edit as EditIcon,
   TaskAlt as TaskAltIcon,
 } from '@mui/icons-material';
-import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { isSameDay, parseISO, startOfDay } from 'date-fns';
+import { formatShortDate, formatShortDateTime } from '../../utils/dateFormatting';
 import TaskModal from '../../components/Tasks/TaskModal';
 import taskService from '../../services/taskService';
 import useNotification from '../../hooks/useNotification';
@@ -58,8 +58,8 @@ const getTaskDate = (task) => {
 const formatTaskDate = (task) => {
   const date = getTaskDate(task);
   if (!date) return 'Date non definie';
-  if (task.est_toute_la_journee) return format(date, 'dd MMMM yyyy', { locale: fr });
-  return format(date, 'dd MMMM yyyy HH:mm', { locale: fr });
+  if (task.est_toute_la_journee) return formatShortDate(date);
+  return formatShortDateTime(date);
 };
 
 const isTaskDone = (task) => task.statut === 'complete' || task.statut === 'annule';

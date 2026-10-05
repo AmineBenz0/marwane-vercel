@@ -59,7 +59,7 @@ import {
   Bar,
 } from 'recharts';
 import { format, startOfMonth, startOfWeek, startOfYear } from 'date-fns';
-import fr from 'date-fns/locale/fr';
+import { formatMonthYear, formatShortDate } from '../../utils/dateFormatting';
 import StatCard from '../../components/StatCard/StatCard';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import TransactionForm from '../Transactions/TransactionForm';
@@ -79,7 +79,7 @@ import * as yup from 'yup';
 const formatDate = (dateValue) => {
   if (!dateValue) return '-';
   try {
-    return format(new Date(dateValue), 'dd/MM/yyyy', { locale: fr });
+    return formatShortDate(dateValue);
   } catch {
     return dateValue;
   }
@@ -89,13 +89,7 @@ const formatDate = (dateValue) => {
  * Formate un mois pour l'affichage dans le graphique.
  */
 const formatMonth = (monthStr) => {
-  try {
-    const [year, month] = monthStr.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-    return format(date, 'MMM yyyy', { locale: fr });
-  } catch {
-    return monthStr;
-  }
+  return formatMonthYear(monthStr, monthStr);
 };
 
 /**
