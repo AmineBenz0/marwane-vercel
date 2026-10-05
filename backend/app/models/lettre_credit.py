@@ -1,5 +1,5 @@
 """
-Mod�le SQLAlchemy pour la table Lettres de Cr�dit (LC).
+Modèle SQLAlchemy pour la table Lettres de Crédit (LC).
 """
 from sqlalchemy import Column, Integer, String, Date, Numeric, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
@@ -9,35 +9,35 @@ from app.database import Base
 
 class LettreDeCredit(Base):
     """
-    Mod�le repr�sentant une Lettre de Cr�dit (LC).
+    Modèle représentant une Lettre de Crédit (LC).
     
-    Une LC est un instrument financier utilis� comme mode de paiement.
-    Elle est toujours d�tenue par un client et peut �tre c�d�e (transf�r�e).
+    Une LC est un instrument financier utilisé comme mode de paiement.
+    Elle est toujours détenue par un client et peut être cédée (transférée).
     """
     __tablename__ = "lettres_credit"
     
     id_lc = Column(Integer, primary_key=True, index=True)
     numero_reference = Column(String(50), nullable=False, unique=True, index=True)
-    numero_serie = Column(String(50), nullable=True, index=True) # Num�ro de s�rie interne ou suppl�mentaire
+    numero_serie = Column(String(50), nullable=True, index=True) # Numéro de série interne ou supplémentaire
     banque_emettrice = Column(String(100), nullable=True)  # Rendu optionnel
     montant = Column(Numeric(15, 2), nullable=False)
     
     date_emission = Column(Date, nullable=False)
     date_disponibilite = Column(Date, nullable=False, index=True)
-    # date_expiration supprim�
+    # date_expiration supprimé
     
     # active (available) or utilisee. A canceled use returns the LC to active.
     statut = Column(String(20), nullable=False, default='active', index=True)
     version_utilisation = Column(Integer, nullable=False, default=0, server_default='0')
     
-    # Toujours 'client' - le champ est conserv� pour compatibilit� des donn�es existantes
+    # Toujours 'client' - le champ est conservé pour compatibilité des données existantes
     type_detenteur = Column(String(20), nullable=False, default='client', index=True)
     id_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True, index=True)
     id_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True, index=True)
     
     notes = Column(Text, nullable=True)
     
-    # M�tadonn�es de tra�abilit�
+    # Métadonnées de traçabilité
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     date_modification = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     id_utilisateur_creation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
@@ -79,7 +79,7 @@ class LettreDeCredit(Base):
 
     @property
     def est_disponible(self):
-        """V�rifie si la LC peut �tre utilis�e comme paiement."""
+        """Vérifie si la LC peut être utilisée comme paiement."""
         from app.utils.business_date import business_date
         today = business_date()
         return (
