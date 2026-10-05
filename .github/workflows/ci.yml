@@ -35,6 +35,8 @@ jobs:
           app/models/financial_correction.py
           app/models/inventory.py app/models/job_execution.py
           app/models/nomenclature.py app/models/production.py
+          scripts/check_database_schema.py tests/test_database_schema.py
+          tests/test_lc_schema_migration.py
           app/schemas/batiment.py
           app/schemas/compte_bancaire.py app/schemas/cycle_production.py
           app/schemas/production.py app/utils/egg_product_sync.py
@@ -82,6 +84,16 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
           ENVIRONMENT: development
           SECRET_KEY: ci-only-secret
+      - name: Check model compatibility after migrations
+        run: python scripts/check_database_schema.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: development
+          SECRET_KEY: ci-only-secret
+      - name: Verify LC maintenance migration and replay
+        run: python -m pytest --override-ini addopts='' tests/test_lc_schema_migration.py -q
+        env:
+          POSTGRES_MIGRATION_TEST_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
 
   frontend:
     runs-on: ubuntu-latest
