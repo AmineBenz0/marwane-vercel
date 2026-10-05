@@ -95,7 +95,6 @@ function LettresCreditList() {
   const [actionLoading, setActionLoading] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [cancelDialogLc, setCancelDialogLc] = useState(null);
-  const [cancelReason, setCancelReason] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
@@ -205,13 +204,14 @@ function LettresCreditList() {
   };
 
   const handleCancelLc = async () => {
-    if (!cancelDialogLc || !cancelReason.trim()) return;
+    if (!cancelDialogLc) return;
     setActionLoading(true);
     try {
-      await lettreCreditService.annuler(cancelDialogLc.id_lc, { raison: cancelReason.trim() });
+      await lettreCreditService.annuler(cancelDialogLc.id_lc, {
+        raison: 'Annulation confirmée par l’utilisateur depuis l’application',
+      });
       notification.success('LC annulée');
       setCancelDialogLc(null);
-      setCancelReason('');
       await fetchData();
     } catch (error) {
       console.error('Erreur annulation LC:', error);
@@ -403,7 +403,7 @@ function LettresCreditList() {
                     onView={() => navigate(`/lettres-credit/${lc.id_lc}`)}
                     onBank={() => openActionDialog('bank', lc)}
                     onSupplier={() => openActionDialog('supplier', lc)}
-                    onCancel={() => { setCancelDialogLc(lc); setCancelReason(''); }}
+                    onCancel={() => setCancelDialogLc(lc)}
                   />
                 </Grid>
               ))}
@@ -436,18 +436,8 @@ function LettresCreditList() {
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="warning" sx={{ borderRadius: 3 }}>
-              {cancelDialogLc?.numero_reference} sera marquée comme annulée. Tout paiement lié sera aussi annulé et ses mouvements financiers contrepassés. Un versement bancaire sera également contrepassé.
+              Confirmez-vous l’annulation de la LC {cancelDialogLc?.numero_reference} ? Tout paiement lié sera aussi annulé et ses mouvements financiers contrepassés. Un versement bancaire sera également contrepassé.
             </Alert>
-            <TextField
-              label="Motif d’annulation"
-              value={cancelReason}
-              onChange={(event) => setCancelReason(event.target.value)}
-              fullWidth
-              required
-              multiline
-              minRows={2}
-              inputProps={{ maxLength: 1000 }}
-            />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
@@ -456,7 +446,7 @@ function LettresCreditList() {
             color="error"
             variant="contained"
             onClick={handleCancelLc}
-            disabled={!cancelReason.trim() || actionLoading}
+            disabled={actionLoading}
             startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <CancelIcon />}
           >
             Confirmer l’annulation
