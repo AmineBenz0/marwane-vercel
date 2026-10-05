@@ -37,6 +37,11 @@ class CessionLCRead(CessionLCBase):
     id_cession: int
     date_creation: datetime
     id_utilisateur_creation: Optional[int]
+    statut: str = "active"
+    id_cession_inverse: Optional[int] = None
+    motif_annulation: Optional[str] = None
+    date_annulation: Optional[datetime] = None
+    id_utilisateur_annulation: Optional[int] = None
     
     # Noms pour l'affichage
     nom_cedant: Optional[str] = None
