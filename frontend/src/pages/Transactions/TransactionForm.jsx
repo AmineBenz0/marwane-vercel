@@ -1381,12 +1381,12 @@ function TransactionForm({
                             <Grid item xs={12}>
                               <Button
                                 startIcon={<DeleteIcon />}
-                                  onClick={() => handleRemoveLine(index)}
+                                onClick={() => handleRemoveLine(index)}
                                 disabled={loading}
-                                  color="error"
+                                color="error"
                                 size="small"
                                 fullWidth
-                                variant="outlined"
+                                variant="contained"
                               >
                                 Supprimer cette ligne
                               </Button>
