@@ -1,5 +1,5 @@
 """
-Schémas Pydantic pour la validation des données des Cessions de LC.
+Sch�mas Pydantic pour la validation des donn�es des Cessions de LC.
 """
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
@@ -8,10 +8,10 @@ from datetime import datetime, date
 
 class CessionLCBase(BaseModel):
     """
-    Schéma de base pour une cession de LC.
+    Sch�ma de base pour une cession de LC.
     """
-    id_lc: int = Field(..., description="ID de la Lettre de Crédit à céder")
-    type_cedant: str = Field(..., description="Type du cédant (client ou fournisseur)")
+    id_lc: int = Field(..., description="ID de la Lettre de Cr�dit � c�der")
+    type_cedant: str = Field(..., description="Type du c�dant (client ou fournisseur)")
     id_cedant_client: Optional[int] = Field(None)
     id_cedant_fournisseur: Optional[int] = Field(None)
     
@@ -25,23 +25,19 @@ class CessionLCBase(BaseModel):
 
 class CessionLCCreate(CessionLCBase):
     """
-    Schéma pour créer une nouvelle cession.
+    Sch�ma pour cr�er une nouvelle cession.
     """
-    pass
+    version_utilisation: int = Field(..., ge=0, description="Version de la LC affich�e au moment de l'action")
 
 
 class CessionLCRead(CessionLCBase):
     """
-    Schéma pour lire une cession.
+    Sch�ma pour lire une cession.
     """
     id_cession: int
     date_creation: datetime
     id_utilisateur_creation: Optional[int]
-    statut: str = "active"
-    id_cession_inverse: Optional[int] = None
-    motif_annulation: Optional[str] = None
-    date_annulation: Optional[datetime] = None
-    id_utilisateur_annulation: Optional[int] = None
+    id_cession_origine: Optional[int] = None
     
     # Noms pour l'affichage
     nom_cedant: Optional[str] = None
