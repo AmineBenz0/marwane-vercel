@@ -1,7 +1,7 @@
 """
-Modèle SQLAlchemy pour la table Cessions de LC.
+Mod�le SQLAlchemy pour la table Cessions de LC.
 """
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -9,41 +9,34 @@ from app.database import Base
 
 class CessionLC(Base):
     """
-    Modèle représentant un transfert (cession) d'une Lettre de Crédit entre deux entités.
+    Mod�le repr�sentant un transfert (cession) d'une Lettre de Cr�dit entre deux entit�s.
     """
     __tablename__ = "cessions_lc"
     
     id_cession = Column(Integer, primary_key=True, index=True)
     id_lc = Column(Integer, ForeignKey("lettres_credit.id_lc"), nullable=False, index=True)
     
-    # Cédant (celui qui donne la LC)
+    # C�dant (celui qui donne la LC)
     type_cedant = Column(String(20), nullable=False) # client ou fournisseur
     id_cedant_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True)
     id_cedant_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True)
     
-    # Cessionnaire (celui qui reçoit la LC)
+    # Cessionnaire (celui qui re�oit la LC)
     type_cessionnaire = Column(String(20), nullable=False) # client ou fournisseur
     id_cessionnaire_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True)
     id_cessionnaire_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True)
     
     date_cession = Column(Date, nullable=False, index=True)
     motif = Column(Text, nullable=True)
-    statut = Column(String(20), nullable=False, default="active", server_default="active")
-    id_cession_inverse = Column(
+    # Set only on a compensating row; original cessions stay immutable.
+    id_cession_origine = Column(
         Integer,
         ForeignKey("cessions_lc.id_cession", ondelete="SET NULL"),
         nullable=True,
-        index=True,
-    )
-    motif_annulation = Column(Text, nullable=True)
-    date_annulation = Column(DateTime(timezone=True), nullable=True)
-    id_utilisateur_annulation = Column(
-        Integer,
-        ForeignKey("utilisateurs.id_utilisateur"),
-        nullable=True,
+        index=False,
     )
     
-    # Métadonnées
+    # M�tadonn�es
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     id_utilisateur_creation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"), nullable=True)
     
@@ -60,4 +53,8 @@ class CessionLC(Base):
         "Utilisateur", 
         foreign_keys=[id_utilisateur_creation],
         backref="cessions_lc_crees"
+    )
+
+    __table_args__ = (
+        Index("uq_cessions_lc_one_reversal", "id_cession_origine", unique=True),
     )
