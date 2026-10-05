@@ -1,9 +1,7 @@
 """Coordinate an audited, atomic cancellation of a used letter of credit."""
 
-from datetime import datetime, timezone
-
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.models.compte_bancaire import MouvementBancaire
 from app.models.cession_lc import CessionLC
@@ -21,6 +19,7 @@ def cancel_letter_credit(
     *,
     current_user: Utilisateur | None,
     reason: str,
+    version_utilisation: int,
 ) -> LettreDeCredit:
     """Reverse an LC's active effects while preserving linked audit history."""
     reason = reason.strip()
@@ -32,30 +31,45 @@ def cancel_letter_credit(
     ).with_for_update().first()
     if not lc:
         raise HTTPException(status_code=404, detail="Lettre de Cr�dit introuvable")
-    if lc.statut == "annulee":
-        raise HTTPException(status_code=400, detail="Cette LC est d�j� annul�e")
-    if lc.statut not in {"utilisee", "cedee"}:
+    if lc.statut != "utilisee":
         raise HTTPException(status_code=400, detail="Seule une LC utilis�e peut �tre annul�e")
+    if lc.version_utilisation != version_utilisation:
+        raise HTTPException(
+            status_code=409,
+            detail="Cette LC a �t� r�utilis�e depuis l'ouverture de la confirmation. Actualisez la page.",
+        )
 
     linked_payments = db.query(Paiement).filter(
         Paiement.id_lc == id_lc,
         Paiement.statut != "annule",
     ).order_by(Paiement.id_paiement).with_for_update().all()
-    linked_cessions = db.query(CessionLC).filter(
-        CessionLC.id_lc == id_lc,
-        CessionLC.statut == "active",
+    source_cession = aliased(CessionLC)
+    reversal_cession = aliased(CessionLC)
+    has_reversal = db.query(reversal_cession.id_cession).filter(
+        reversal_cession.id_cession_origine == source_cession.id_cession,
+    ).exists()
+    linked_cessions = db.query(source_cession).filter(
+        source_cession.id_lc == id_lc,
+        source_cession.id_cession_origine.is_(None),
+        ~has_reversal,
     ).order_by(
-        CessionLC.date_creation.desc(),
-        CessionLC.id_cession.desc(),
+        source_cession.date_creation.desc(),
+        source_cession.id_cession.desc(),
     ).with_for_update().all()
     bank_movement = db.query(MouvementBancaire).filter(
-        MouvementBancaire.cle_idempotence == f"lc-bank-deposit-{id_lc}",
+        MouvementBancaire.cle_idempotence == f"lc-bank-deposit-{id_lc}-{version_utilisation}",
         MouvementBancaire.statut == "active",
     ).with_for_update().first()
+    if bank_movement is None and version_utilisation == 1:
+        # First-use deposits created before per-use idempotency keys were added.
+        bank_movement = db.query(MouvementBancaire).filter(
+            MouvementBancaire.cle_idempotence == f"lc-bank-deposit-{id_lc}",
+            MouvementBancaire.statut == "active",
+        ).with_for_update().first()
 
     previous_status = lc.statut
     for payment in linked_payments:
-        void_payment(db, payment, current_user=current_user, reason=reason)
+        void_payment(db, payment, current_user=current_user, reason=reason, release_lc=False)
 
     reversal = None
     if bank_movement:
@@ -83,13 +97,7 @@ def cancel_letter_credit(
         db.add(reversal_cession)
         db.flush()
 
-        now = datetime.now(timezone.utc)
-        cession.statut = "annulee"
-        cession.motif_annulation = reason[:1000]
-        cession.date_annulation = now
-        cession.id_utilisateur_annulation = current_user.id_utilisateur if current_user else None
-        cession.id_cession_inverse = reversal_cession.id_cession
-        reversal_cession.id_cession_inverse = cession.id_cession
+        reversal_cession.id_cession_origine = cession.id_cession
 
         # Reverse in newest-first order to restore the original LC holder.
         lc.type_detenteur = cession.type_cedant
@@ -109,7 +117,7 @@ def cancel_letter_credit(
             },
         )
 
-    lc.statut = "annulee"
+    lc.statut = "active"
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     record_correction(
         db,
@@ -120,7 +128,11 @@ def cancel_letter_credit(
         current_user=current_user,
         id_mouvement_original=bank_movement.id_mouvement if bank_movement else None,
         id_mouvement_inverse=reversal.id_mouvement if reversal else None,
-        details={"numero_reference": lc.numero_reference, "statut_precedent": previous_status},
+        details={
+            "numero_reference": lc.numero_reference,
+            "version_utilisation": version_utilisation,
+            "statut_precedent": previous_status,
+        },
     )
     db.commit()
     db.refresh(lc)
