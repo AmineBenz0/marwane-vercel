@@ -80,7 +80,7 @@ export default function DateField({
           const isoValue = parseShortDateInput(nextDraft);
           if (isoValue !== null) emitChange(isoValue);
         }}
-        onBlur={(event) => {
+        onBlur={() => {
           onBlur?.({ target: { name, type: 'date', value: isoValueRef.current }, currentTarget: { name, type: 'date', value: isoValueRef.current } });
           if (draft && parseShortDateInput(draft) === null) {
             setDraft(formatShortDate(isoValueRef.current, ''));
