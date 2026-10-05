@@ -51,6 +51,8 @@ def main() -> int:
     except Exception as error:
         # Driver/config exceptions may contain a connection URL or password.
         print(f"Database schema preflight could not complete ({type(error).__name__}).", file=sys.stderr)
+        if isinstance(error, ModuleNotFoundError):
+            print(f"Missing Python module: {error.name}", file=sys.stderr)
         return 1
 
 

@@ -24,7 +24,7 @@ locks; retry after the traffic has subsided.
 To run the same read-only preflight with configured environment variables:
 
 ```sh
-uv run --no-project --python 3.12 --with-requirements requirements.txt python backend/scripts/check_database_schema.py
+uv run --no-project --python 3.12 --with-requirements requirements.txt python -I backend/scripts/check_database_schema.py
 ```
 
 CI also runs the check after Alembic migration and runs the maintenance SQL's
