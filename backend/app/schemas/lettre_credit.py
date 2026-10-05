@@ -1,5 +1,5 @@
 """
-Sch�mas Pydantic pour la validation des donn�es des Lettres de Cr�dit (LC).
+Schémas Pydantic pour la validation des données des Lettres de Crédit (LC).
 """
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
@@ -9,29 +9,29 @@ from decimal import Decimal
 
 class LettreCreditBase(BaseModel):
     """
-    Sch�ma de base pour une Lettre de Cr�dit.
+    Schéma de base pour une Lettre de Crédit.
     """
-    numero_reference: str = Field(..., max_length=50, description="Num�ro de r�f�rence unique")
-    numero_serie: Optional[str] = Field(None, max_length=50, description="Num�ro de s�rie interne ou suppl�mentaire")
-    banque_emettrice: Optional[str] = Field(None, max_length=100, description="Banque �mettrice (optionnel)")
+    numero_reference: str = Field(..., max_length=50, description="Numéro de référence unique")
+    numero_serie: Optional[str] = Field(None, max_length=50, description="Numéro de série interne ou supplémentaire")
+    banque_emettrice: Optional[str] = Field(None, max_length=100, description="Banque émettrice (optionnel)")
     montant: Decimal = Field(..., gt=0, description="Montant total de la LC")
-    date_emission: date = Field(..., description="Date d'�mission")
-    date_disponibilite: date = Field(..., description="Date � laquelle la LC devient utilisable")
-    id_client: Optional[int] = Field(None, description="ID du client d�tenteur")
+    date_emission: date = Field(..., description="Date d'émission")
+    date_disponibilite: date = Field(..., description="Date à laquelle la LC devient utilisable")
+    id_client: Optional[int] = Field(None, description="ID du client détenteur")
     notes: Optional[str] = Field(None, description="Notes additionnelles")
 
 
 class LettreCreditCreate(LettreCreditBase):
     """
-    Sch�ma pour cr�er une nouvelle LC.
-    Le type_detenteur est toujours 'client', pas besoin de le sp�cifier.
+    Schéma pour créer une nouvelle LC.
+    Le type_detenteur est toujours 'client', pas besoin de le spécifier.
     """
     pass
 
 
 class LettreCreditUpdate(BaseModel):
     """
-    Sch�ma pour mettre � jour une LC.
+    Schéma pour mettre à jour une LC.
     """
     numero_reference: Optional[str] = Field(None, max_length=50)
     numero_serie: Optional[str] = Field(None, max_length=50)
@@ -44,7 +44,7 @@ class LettreCreditUpdate(BaseModel):
 
 class LettreCreditRead(BaseModel):
     """
-    Sch�ma pour lire une LC.
+    Schéma pour lire une LC.
     """
     id_lc: int
     numero_reference: str
@@ -73,7 +73,7 @@ class LettreCreditRead(BaseModel):
 
 class LettreCreditSummary(BaseModel):
     """
-    R�sum� d'une LC pour les listes.
+    Résumé d'une LC pour les listes.
     """
     id_lc: int
     numero_reference: str
@@ -92,20 +92,20 @@ class LettreCreditSummary(BaseModel):
 
 class LettreCreditVerserBanque(BaseModel):
     id_compte: int = Field(..., description="Compte bancaire qui recoit la valeur de la LC")
-    version_utilisation: int = Field(..., ge=0, description="Version de la LC affich�e au moment de l'action")
+    version_utilisation: int = Field(..., ge=0, description="Version de la LC affichée au moment de l'action")
     notes: Optional[str] = Field(None, description="Notes optionnelles")
 
 
 class LettreCreditPayerFournisseur(BaseModel):
     id_fournisseur: int = Field(..., description="Fournisseur paye avec la LC")
     date_cession: date = Field(..., description="Date du paiement fournisseur")
-    version_utilisation: int = Field(..., ge=0, description="Version de la LC affich�e au moment de l'action")
+    version_utilisation: int = Field(..., ge=0, description="Version de la LC affichée au moment de l'action")
     notes: Optional[str] = Field(None, description="Notes optionnelles")
 
 
 class LettreCreditAnnuler(BaseModel):
     raison: str = Field(..., min_length=1, max_length=1000, description="Raison de l'annulation")
-    version_utilisation: int = Field(..., ge=1, description="Version de l'utilisation � annuler")
+    version_utilisation: int = Field(..., ge=1, description="Version de l'utilisation à annuler")
 
     @field_validator("raison")
     @classmethod
