@@ -1,6 +1,6 @@
 """
 Router FastAPI pour la gestion des paiements.
-G�re les endpoints pour cr�er, lire, modifier et supprimer des paiements.
+Gère les endpoints pour créer, lire, modifier et supprimer des paiements.
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -52,7 +52,7 @@ def _validate_lc_payment(
     if not paiement_data.id_lc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="L'ID de la Lettre de Cr�dit est requis pour ce type de paiement"
+            detail="L'ID de la Lettre de Crédit est requis pour ce type de paiement"
         )
 
     lc = db.query(LettreDeCredit).filter(
@@ -61,7 +61,7 @@ def _validate_lc_payment(
     if not lc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lettre de Cr�dit avec l'ID {paiement_data.id_lc} introuvable"
+            detail=f"Lettre de Crédit avec l'ID {paiement_data.id_lc} introuvable"
         )
 
     linked_payment = db.query(Paiement).filter(
@@ -77,14 +77,14 @@ def _validate_lc_payment(
     if linked_payment and not is_same_payment:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cette LC est d�j� utilis�e par un autre paiement"
+            detail="Cette LC est déjà utilisée par un autre paiement"
         )
 
     if not is_same_payment:
         if lc.statut != 'active':
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"La Lettre de Cr�dit n'est pas active (Statut: {lc.statut})"
+                detail=f"La Lettre de Crédit n'est pas active (Statut: {lc.statut})"
             )
 
         if not lc.est_disponible:
@@ -92,7 +92,7 @@ def _validate_lc_payment(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        "Cette LC ne sera disponible qu'� partir du "
+                        "Cette LC ne sera disponible qu'à partir du "
                         f"{lc.date_disponibilite}"
                     )
                 )
@@ -102,7 +102,7 @@ def _validate_lc_payment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"Le montant du paiement ({paiement_data.montant} MAD) doit correspondre "
-                f"au montant total de la LC ({lc.montant} MAD) car elle doit �tre utilis�e en totalit�."
+                f"au montant total de la LC ({lc.montant} MAD) car elle doit être utilisée en totalité."
             )
         )
 
@@ -135,7 +135,7 @@ def _release_lc_if_unused(
     current_user: Utilisateur,
     exclude_payment_id: Optional[int] = None,
 ) -> None:
-    """Remet une LC en active si le paiement qui l'utilisait est retir�."""
+    """Remet une LC en active si le paiement qui l'utilisait est retiré."""
     release_letter_of_credit_if_unused(
         db,
         id_lc,
@@ -150,7 +150,7 @@ def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> Non
         if update_data.get("statut_cheque") is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Le statut de ch�que ne peut �tre renseign� que pour un paiement par ch�que",
+                detail="Le statut de chèque ne peut être renseigné que pour un paiement par chèque",
             )
         return
 
@@ -174,7 +174,7 @@ def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> Non
     if next_state != current_state and next_state not in allowed_transitions.get(current_state, set()):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Transition de ch�que impossible: {current_state or 'non d�fini'} -> {next_state}",
+            detail=f"Transition de chèque impossible: {current_state or 'non défini'} -> {next_state}",
         )
 
     if next_state == "encaisse":
@@ -189,7 +189,7 @@ def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> Non
     if effective_date is not None and effective_date < paiement.date_paiement:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La date d'encaissement ne peut pas �tre ant�rieure � la date du paiement",
+            detail="La date d'encaissement ne peut pas être antérieure à la date du paiement",
         )
 
 
@@ -204,16 +204,16 @@ def get_paiements(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    R�cup�re la liste des paiements avec filtres optionnels.
+    Récupère la liste des paiements avec filtres optionnels.
     
     Args:
-        skip: Nombre de paiements � sauter (pour la pagination)
-        limit: Nombre maximum de paiements � retourner
+        skip: Nombre de paiements à sauter (pour la pagination)
+        limit: Nombre maximum de paiements à retourner
         id_transaction: Filtre optionnel par ID de transaction
         type_paiement: Filtre optionnel par type de paiement
         statut: Filtre optionnel par statut
-        db: Session de base de donn�es
-        current_user: Utilisateur actuel authentifi�
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié
         
     Returns:
         Liste des paiements (PaiementRead)
@@ -232,7 +232,7 @@ def get_paiements(
     if statut:
         query = query.filter(Paiement.statut == statut.lower())
     
-    # Pagination et tri par date d�croissante
+    # Pagination et tri par date décroissante
     paiements = query.order_by(Paiement.date_paiement.desc()).offset(skip).limit(limit).all()
     
     return paiements
@@ -245,15 +245,15 @@ def get_paiement(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    R�cup�re les d�tails d'un paiement par son ID.
+    Récupère les détails d'un paiement par son ID.
     
     Args:
-        id: ID du paiement � r�cup�rer
-        db: Session de base de donn�es
-        current_user: Utilisateur actuel authentifi�
+        id: ID du paiement à récupérer
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié
         
     Returns:
-        D�tails du paiement (PaiementRead)
+        Détails du paiement (PaiementRead)
         
     Raises:
         HTTPException 404: Si le paiement n'existe pas
@@ -277,19 +277,19 @@ def create_paiement(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Cr�e un nouveau paiement pour une transaction.
+    Crée un nouveau paiement pour une transaction.
     
-    V�rifie que:
+    Vérifie que:
     - La transaction existe
-    - Le montant du paiement ne d�passe pas le montant restant d�
+    - Le montant du paiement ne dépasse pas le montant restant dû
     
     Args:
-        paiement_data: Donn�es du nouveau paiement (PaiementCreate)
-        db: Session de base de donn�es
-        current_user: Utilisateur actuel authentifi�
+        paiement_data: Données du nouveau paiement (PaiementCreate)
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié
         
     Returns:
-        Paiement cr�� (PaiementRead)
+        Paiement créé (PaiementRead)
         
     Raises:
         HTTPException 400: Si la transaction n'existe pas ou si le montant est invalide
@@ -302,7 +302,7 @@ def create_paiement(
             response.status_code = status.HTTP_200_OK
             return existing
 
-    # V�rifier que la transaction existe
+    # Vérifier que la transaction existe
     transaction = db.query(Transaction).filter(
         Transaction.id_transaction == paiement_data.id_transaction
     ).first()
@@ -315,11 +315,11 @@ def create_paiement(
 
     validate_payment_date(transaction, paiement_data.date_paiement)
     
-    # Note: Les paiements d�passant le montant restant sont autoris�s (avances, surpaiements)
+    # Note: Les paiements dépassant le montant restant sont autorisés (avances, surpaiements)
     
     _validate_lc_payment(db, paiement_data, transaction, current_user)
     
-    # D�terminer le statut initial
+    # Déterminer le statut initial
     statut_initial = 'valide'
     if paiement_data.type_paiement == 'cheque':
         # An encashed cheque is already effective. Pending cheque statuses do
@@ -331,7 +331,7 @@ def create_paiement(
         else:
             statut_initial = 'en_attente'
     
-    # Cr�er le nouveau paiement
+    # Créer le nouveau paiement
     nouveau_paiement = Paiement(
         id_transaction=paiement_data.id_transaction,
         date_paiement=paiement_data.date_paiement,
@@ -364,16 +364,16 @@ def create_paiement(
                 return existing
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Le paiement n'a pas pu �tre enregistr� en raison d'un conflit d'int�grit�",
+            detail="Le paiement n'a pas pu être enregistré en raison d'un conflit d'intégrité",
         ) from exc
     
-    # Mettre � jour la caisse
+    # Mettre à jour la caisse
     sync_payment_cash_movement(
         db,
         nouveau_paiement,
         transaction,
         current_user=current_user,
-        reason="Cr�ation du paiement",
+        reason="Création du paiement",
     )
     
     db.commit()
@@ -390,16 +390,16 @@ def update_paiement(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Met � jour un paiement existant.
+    Met à jour un paiement existant.
     
     Args:
-        id: ID du paiement � mettre � jour
-        paiement_data: Donn�es � mettre � jour (PaiementUpdate)
-        db: Session de base de donn�es
-        current_user: Utilisateur actuel authentifi�
+        id: ID du paiement à mettre à jour
+        paiement_data: Données à mettre à jour (PaiementUpdate)
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié
         
     Returns:
-        Paiement mis � jour (PaiementRead)
+        Paiement mis à jour (PaiementRead)
         
     Raises:
         HTTPException 404: Si le paiement n'existe pas
@@ -413,7 +413,7 @@ def update_paiement(
         )
 
     if paiement.statut == "annule":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un paiement annul� est immuable")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un paiement annulé est immuable")
     
     transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
     old_lc_id = paiement.id_lc
@@ -431,15 +431,15 @@ def update_paiement(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "Les attributs financiers d'un paiement sont immuables. "
-                "Annulez le paiement avec une raison puis cr�ez un nouveau paiement."
+                "Annulez le paiement avec une raison puis créez un nouveau paiement."
             ),
         )
 
-    reason = update_data.pop("raison", None) or "Correction op�rationnelle du paiement"
+    reason = update_data.pop("raison", None) or "Correction opérationnelle du paiement"
     if update_data.get("statut") == "annule":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="L'annulation d'un paiement doit utiliser l'op�ration de void avec une raison.",
+            detail="L'annulation d'un paiement doit utiliser l'opération de void avec une raison.",
         )
 
     _apply_cheque_state_transition(paiement, update_data)
@@ -464,13 +464,13 @@ def update_paiement(
     for field, value in update_data.items():
         setattr(paiement, field, value)
     
-    # Mettre � jour l'utilisateur de modification
+    # Mettre à jour l'utilisateur de modification
     paiement.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     
     if old_lc_id and old_lc_id != paiement.id_lc:
         _release_lc_if_unused(db, old_lc_id, current_user, exclude_payment_id=id)
 
-    # Mettre � jour la caisse si n�cessaire (ex: ch�que pass� � 'encaisse')
+    # Mettre à jour la caisse si nécessaire (ex: chèque passé à 'encaisse')
     if transaction:
         sync_payment_cash_movement(
             db,
@@ -501,7 +501,7 @@ def update_paiement(
 def delete_paiement(
     id: int,
     raison: str = Query(
-        "Annulation demand�e par l'utilisateur",
+        "Annulation demandée par l'utilisateur",
         min_length=3,
         max_length=1000,
     ),
@@ -512,9 +512,9 @@ def delete_paiement(
     Supprime un paiement.
     
     Args:
-        id: ID du paiement � supprimer
-        db: Session de base de donn�es
-        current_user: Utilisateur actuel authentifi�
+        id: ID du paiement à supprimer
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié
         
     Raises:
         HTTPException 404: Si le paiement n'existe pas
@@ -540,20 +540,20 @@ def get_statut_paiement_transaction(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    R�cup�re le statut de paiement complet d'une transaction.
+    Récupère le statut de paiement complet d'une transaction.
     
-    Retourne des informations d�taill�es sur l'�tat des paiements:
+    Retourne des informations détaillées sur l'état des paiements:
     - Montant total de la transaction
-    - Montant d�j� pay�
-    - Montant restant � payer
-    - Pourcentage pay�
+    - Montant déjà payé
+    - Montant restant à payer
+    - Pourcentage payé
     - Statut global
-    - Nombre de paiements effectu�s
+    - Nombre de paiements effectués
     
     Args:
         id_transaction: ID de la transaction
-        db: Session de base de donn�es
-        current_user: Utilisateur actuel authentifi�
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié
         
     Returns:
         Statut de paiement de la transaction (StatutPaiementTransaction)
@@ -592,15 +592,15 @@ def get_statistiques_paiements_par_type(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    R�cup�re des statistiques sur les paiements group�s par type.
+    Récupère des statistiques sur les paiements groupés par type.
     
     Retourne pour chaque type de paiement:
     - Nombre total de paiements
     - Montant total des paiements
     
     Args:
-        db: Session de base de donn�es
-        current_user: Utilisateur actuel authentifi�
+        db: Session de base de données
+        current_user: Utilisateur actuel authentifié
         
     Returns:
         Liste des statistiques par type de paiement (PaiementSummary)
@@ -610,7 +610,7 @@ def get_statistiques_paiements_par_type(
         func.count(Paiement.id_paiement).label('nombre_paiements'),
         func.sum(Paiement.montant).label('montant_total')
     ).filter(
-        Paiement.statut.in_(['valide', 'en_attente'])  # Exclure les annul�s et rejet�s
+        Paiement.statut.in_(['valide', 'en_attente'])  # Exclure les annulés et rejetés
     ).group_by(
         Paiement.type_paiement
     ).all()
@@ -632,8 +632,8 @@ def create_paiements_batch(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Cr�e plusieurs paiements de mani�re atomique.
-    Id�al pour le nouveau formulaire de paiement multi-lignes.
+    Crée plusieurs paiements de manière atomique.
+    Idéal pour le nouveau formulaire de paiement multi-lignes.
     """
     if not batch_data.paiements:
         raise HTTPException(status_code=400, detail="Liste de paiements vide")
@@ -649,7 +649,7 @@ def create_paiements_batch(
                     created_paiements.append(existing)
                     continue
 
-            # R�cup�rer la transaction
+            # Récupérer la transaction
             transaction = db.query(Transaction).filter(Transaction.id_transaction == p_data.id_transaction).first()
             if not transaction:
                 raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
@@ -658,7 +658,7 @@ def create_paiements_batch(
                 
             _validate_lc_payment(db, p_data, transaction, current_user)
             
-            # D�terminer le statut initial
+            # Déterminer le statut initial
             statut_initial = 'valide'
             if p_data.type_paiement == 'cheque':
                 if p_data.statut_cheque == 'encaisse':
@@ -668,7 +668,7 @@ def create_paiements_batch(
                 else:
                     statut_initial = 'en_attente'
                 
-            # Cr�er le paiement
+            # Créer le paiement
             nouveau_paiement = Paiement(
                 **p_data.model_dump(),
                 statut=statut_initial,
@@ -683,7 +683,7 @@ def create_paiements_batch(
                 nouveau_paiement,
                 transaction,
                 current_user=current_user,
-                reason="Cr�ation du paiement en lot",
+                reason="Création du paiement en lot",
             )
             created_paiements.append(nouveau_paiement)
             
