@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Cessions de LC.
 """
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -28,19 +28,12 @@ class CessionLC(Base):
     
     date_cession = Column(Date, nullable=False, index=True)
     motif = Column(Text, nullable=True)
-    statut = Column(String(20), nullable=False, default="active", server_default="active")
-    id_cession_inverse = Column(
+    # Set only on a compensating row; original cessions stay immutable.
+    id_cession_origine = Column(
         Integer,
         ForeignKey("cessions_lc.id_cession", ondelete="SET NULL"),
         nullable=True,
-        index=True,
-    )
-    motif_annulation = Column(Text, nullable=True)
-    date_annulation = Column(DateTime(timezone=True), nullable=True)
-    id_utilisateur_annulation = Column(
-        Integer,
-        ForeignKey("utilisateurs.id_utilisateur"),
-        nullable=True,
+        index=False,
     )
     
     # Métadonnées
@@ -60,4 +53,8 @@ class CessionLC(Base):
         "Utilisateur", 
         foreign_keys=[id_utilisateur_creation],
         backref="cessions_lc_crees"
+    )
+
+    __table_args__ = (
+        Index("uq_cessions_lc_one_reversal", "id_cession_origine", unique=True),
     )

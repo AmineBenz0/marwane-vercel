@@ -27,7 +27,7 @@ class CessionLCCreate(CessionLCBase):
     """
     Schéma pour créer une nouvelle cession.
     """
-    pass
+    version_utilisation: int = Field(..., ge=0, description="Version de la LC affichée au moment de l'action")
 
 
 class CessionLCRead(CessionLCBase):
@@ -37,11 +37,7 @@ class CessionLCRead(CessionLCBase):
     id_cession: int
     date_creation: datetime
     id_utilisateur_creation: Optional[int]
-    statut: str = "active"
-    id_cession_inverse: Optional[int] = None
-    motif_annulation: Optional[str] = None
-    date_annulation: Optional[datetime] = None
-    id_utilisateur_annulation: Optional[int] = None
+    id_cession_origine: Optional[int] = None
     
     # Noms pour l'affichage
     nom_cedant: Optional[str] = None

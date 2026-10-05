@@ -26,8 +26,9 @@ class LettreDeCredit(Base):
     date_disponibilite = Column(Date, nullable=False, index=True)
     # date_expiration supprimé
     
-    # active, utilisee, cedee, expiree, annulee
+    # active (available) or utilisee. A canceled use returns the LC to active.
     statut = Column(String(20), nullable=False, default='active', index=True)
+    version_utilisation = Column(Integer, nullable=False, default=0, server_default='0')
     
     # Toujours 'client' - le champ est conservé pour compatibilité des données existantes
     type_detenteur = Column(String(20), nullable=False, default='client', index=True)
@@ -46,7 +47,7 @@ class LettreDeCredit(Base):
     __table_args__ = (
         CheckConstraint('montant > 0', name='check_lc_montant_positif'),
         CheckConstraint(
-            "statut IN ('active', 'utilisee', 'cedee', 'expiree', 'annulee')",
+            "statut IN ('active', 'utilisee')",
             name='check_lc_statut_valide'
         ),
         CheckConstraint(

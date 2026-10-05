@@ -45,7 +45,6 @@ import LCFormModal from './LCFormModal';
 const FILTERS = [
   { value: 'disponibles', label: 'Disponibles' },
   { value: 'utilisees', label: 'Utilisées' },
-  { value: 'annulees', label: 'Annulées' },
   { value: 'toutes', label: 'Toutes' },
 ];
 
@@ -57,8 +56,7 @@ const formatDate = (value) => {
 };
 
 const isActiveLc = (lc) => lc?.statut === 'active';
-const isUsedLc = (lc) => ['utilisee', 'cedee'].includes(lc?.statut);
-const isCancelledLc = (lc) => lc?.statut === 'annulee';
+const isUsedLc = (lc) => lc?.statut === 'utilisee';
 const canUseLc = (lc) => isActiveLc(lc) && Boolean(lc?.est_disponible);
 
 const getLcState = (lc) => {
@@ -70,9 +68,6 @@ const getLcState = (lc) => {
     return { label: `Le ${formatDate(lc.date_disponibilite)}`, tone: 'warning' };
   }
 
-  if (isCancelledLc(lc)) {
-    return { label: 'Annulée', tone: 'error' };
-  }
 
   return { label: 'Utilisée', tone: 'default' };
 };
@@ -142,7 +137,6 @@ function LettresCreditList() {
       .filter((lc) => {
         if (activeFilter === 'disponibles') return isActiveLc(lc);
         if (activeFilter === 'utilisees') return isUsedLc(lc);
-        if (activeFilter === 'annulees') return isCancelledLc(lc);
         return true;
       })
       .filter((lc) => {
@@ -182,6 +176,7 @@ function LettresCreditList() {
         await lettreCreditService.verserBanque(actionDialog.lc.id_lc, {
           id_compte: Number(targetId),
           notes: payloadNotes,
+          version_utilisation: actionDialog.lc.version_utilisation,
         });
         notification.success('LC versée en banque');
       } else {
@@ -189,6 +184,7 @@ function LettresCreditList() {
           id_fournisseur: Number(targetId),
           date_cession: format(new Date(), 'yyyy-MM-dd'),
           notes: payloadNotes,
+          version_utilisation: actionDialog.lc.version_utilisation,
         });
         notification.success('Fournisseur payé avec la LC');
       }
@@ -209,8 +205,9 @@ function LettresCreditList() {
     try {
       await lettreCreditService.annuler(cancelDialogLc.id_lc, {
         raison: 'Annulation confirmée par l’utilisateur depuis l’application',
+        version_utilisation: cancelDialogLc.version_utilisation,
       });
-      notification.success('LC annulée');
+      notification.success('Utilisation annullee. La LC est de nouveau disponible.');
       setCancelDialogLc(null);
       await fetchData();
     } catch (error) {
@@ -432,11 +429,11 @@ function LettresCreditList() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 900 }}>Annuler cette LC ?</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900 }}>Annuler l'utilisation de cette LC ?</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="warning" sx={{ borderRadius: 3 }}>
-              Confirmez-vous l’annulation de la LC {cancelDialogLc?.numero_reference} ? Tout paiement lié sera aussi annulé et ses mouvements financiers contrepassés. Un versement bancaire sera également contrepassé.
+              Confirmez-vous l'annulation de l'utilisation de la LC {cancelDialogLc?.numero_reference} ? Les paiements et mouvements bancaires associes seront inverses, toute cession sera contre-passee. La LC redeviendra disponible.
             </Alert>
           </Stack>
         </DialogContent>
@@ -449,7 +446,7 @@ function LettresCreditList() {
             disabled={actionLoading}
             startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <CancelIcon />}
           >
-            Confirmer l’annulation
+            Annuler l'utilisation
           </Button>
         </DialogActions>
       </Dialog>
@@ -466,7 +463,6 @@ function LettresCreditList() {
 function getFilterCount(filter, lcs) {
   if (filter === 'disponibles') return lcs.filter(isActiveLc).length;
   if (filter === 'utilisees') return lcs.filter(isUsedLc).length;
-  if (filter === 'annulees') return lcs.filter(isCancelledLc).length;
   return lcs.length;
 }
 
@@ -645,7 +641,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
                 onClick={onCancel}
                 sx={{ minHeight: 44 }}
               >
-                Annuler la LC
+                Annuler l'utilisation
               </Button>
             )}
           </Stack>
@@ -682,8 +678,6 @@ function EmptyLcState({ activeFilter, onCreate }) {
     ? 'Aucune LC disponible pour le moment.'
     : activeFilter === 'utilisees'
       ? 'Aucune LC utilisée pour le moment.'
-      : activeFilter === 'annulees'
-        ? 'Aucune LC annulée pour le moment.'
       : 'Aucune LC trouvée.';
 
   return (

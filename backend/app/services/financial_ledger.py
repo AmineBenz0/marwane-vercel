@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import case, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
@@ -47,7 +47,17 @@ def release_letter_of_credit_if_unused(
     )
     if exclude_payment_id is not None:
         query = query.filter(Paiement.id_paiement != exclude_payment_id)
-    if query.first() or db.query(CessionLC).filter(CessionLC.id_lc == id_lc).first():
+    source_cession = aliased(CessionLC)
+    reversal_cession = aliased(CessionLC)
+    has_reversal = db.query(reversal_cession.id_cession).filter(
+        reversal_cession.id_cession_origine == source_cession.id_cession,
+    ).exists()
+    active_cession = db.query(source_cession.id_cession).filter(
+        source_cession.id_lc == id_lc,
+        source_cession.id_cession_origine.is_(None),
+        ~has_reversal,
+    ).first()
+    if query.first() or active_cession:
         return
 
     lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id_lc).first()
@@ -62,6 +72,7 @@ def void_payment(
     *,
     current_user: Optional[Utilisateur] = None,
     reason: str,
+    release_lc: bool = True,
 ) -> Paiement:
     """Void a payment and its active ledger impact without deleting history."""
     reason = reason.strip()
@@ -87,12 +98,13 @@ def void_payment(
             current_user=current_user,
             reason=reason,
         )
-    release_letter_of_credit_if_unused(
-        db,
-        original_lc_id,
-        current_user=current_user,
-        exclude_payment_id=payment.id_paiement,
-    )
+    if release_lc:
+        release_letter_of_credit_if_unused(
+            db,
+            original_lc_id,
+            current_user=current_user,
+            exclude_payment_id=payment.id_paiement,
+        )
     record_correction(
         db,
         type_entite="paiement",

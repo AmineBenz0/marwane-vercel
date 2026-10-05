@@ -91,7 +91,10 @@ def _validate_lc_payment(
             if lc.date_disponibilite > business_date():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cette LC ne sera disponible qu'à partir du {lc.date_disponibilite}"
+                    detail=(
+                        "Cette LC ne sera disponible qu'à partir du "
+                        f"{lc.date_disponibilite}"
+                    )
                 )
 
     if Decimal(str(paiement_data.montant)) != Decimal(str(lc.montant)):
@@ -119,6 +122,8 @@ def _validate_lc_payment(
             detail="Cette LC n'appartient pas au fournisseur de cette transaction"
         )
 
+    if not is_same_payment:
+        lc.version_utilisation += 1
     lc.statut = 'utilisee'
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     return lc

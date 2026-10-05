@@ -39,19 +39,8 @@ class LettreCreditUpdate(BaseModel):
     montant: Optional[Decimal] = Field(None, gt=0)
     date_emission: Optional[date] = Field(None)
     date_disponibilite: Optional[date] = Field(None)
-    statut: Optional[str] = Field(None)
     id_client: Optional[int] = Field(None)
     notes: Optional[str] = Field(None)
-
-    @field_validator('statut')
-    @classmethod
-    def validate_statut(cls, v: Optional[str]) -> Optional[str]:
-        if v is None: return v
-        statuts_valides = ['active', 'utilisee', 'cedee', 'expiree', 'annulee']
-        if v.lower() not in statuts_valides:
-            raise ValueError(f"Statut invalide. Doit être: {', '.join(statuts_valides)}")
-        return v.lower()
-
 
 class LettreCreditRead(BaseModel):
     """
@@ -69,6 +58,7 @@ class LettreCreditRead(BaseModel):
     id_fournisseur: Optional[int] = None
     notes: Optional[str] = None
     statut: str
+    version_utilisation: int = 0
     date_creation: datetime
     date_modification: datetime
     id_utilisateur_creation: Optional[int]
@@ -91,6 +81,7 @@ class LettreCreditSummary(BaseModel):
     banque_emettrice: Optional[str] = None
     montant: Decimal
     statut: str
+    version_utilisation: int = 0
     date_disponibilite: date
     type_detenteur: str = 'client'
     detenteur_nom: Optional[str] = None
@@ -101,17 +92,20 @@ class LettreCreditSummary(BaseModel):
 
 class LettreCreditVerserBanque(BaseModel):
     id_compte: int = Field(..., description="Compte bancaire qui recoit la valeur de la LC")
+    version_utilisation: int = Field(..., ge=0, description="Version de la LC affichée au moment de l'action")
     notes: Optional[str] = Field(None, description="Notes optionnelles")
 
 
 class LettreCreditPayerFournisseur(BaseModel):
     id_fournisseur: int = Field(..., description="Fournisseur paye avec la LC")
     date_cession: date = Field(..., description="Date du paiement fournisseur")
+    version_utilisation: int = Field(..., ge=0, description="Version de la LC affichée au moment de l'action")
     notes: Optional[str] = Field(None, description="Notes optionnelles")
 
 
 class LettreCreditAnnuler(BaseModel):
     raison: str = Field(..., min_length=1, max_length=1000, description="Raison de l'annulation")
+    version_utilisation: int = Field(..., ge=1, description="Version de l'utilisation à annuler")
 
     @field_validator("raison")
     @classmethod

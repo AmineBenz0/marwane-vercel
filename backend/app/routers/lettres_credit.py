@@ -213,7 +213,13 @@ def annuler_lettre_credit(
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
     """Annule une LC utilisée en conservant les traces de l'opération."""
-    lc = cancel_letter_credit(db, id, current_user=current_user, reason=payload.raison)
+    lc = cancel_letter_credit(
+        db,
+        id,
+        current_user=current_user,
+        reason=payload.raison,
+        version_utilisation=payload.version_utilisation,
+    )
     return format_lc_read(lc)
 
 
@@ -240,13 +246,13 @@ def verser_lc_banque(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Verse la valeur d'une LC disponible dans un compte bancaire."""
-    idempotency_key = f"lc-bank-deposit-{id}"
     lc = db.query(LettreDeCredit).filter(
         LettreDeCredit.id_lc == id,
     ).with_for_update().first()
     if not lc:
         raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
 
+    idempotency_key = f"lc-bank-deposit-{id}-{payload.version_utilisation + 1}"
     existing = db.query(MouvementBancaire).filter(
         MouvementBancaire.cle_idempotence == idempotency_key,
     ).first()
@@ -260,8 +266,16 @@ def verser_lc_banque(
             "id_paiement": None,
             "id_charge": None,
         })
+        if existing.statut != "active":
+            raise HTTPException(
+                status_code=409,
+                detail="Cette demande correspond à une utilisation déjà annulée. Actualisez la page.",
+            )
         response.status_code = status.HTTP_200_OK
         return format_lc_read(lc)
+
+    if payload.version_utilisation != lc.version_utilisation:
+        raise HTTPException(status_code=409, detail="La LC a changé depuis l'ouverture du formulaire. Actualisez la page.")
 
     if lc.statut != "active":
         raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
@@ -282,6 +296,7 @@ def verser_lc_banque(
         current_user=current_user,
     )
     lc.statut = 'utilisee'
+    lc.version_utilisation += 1
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
     db.commit()
@@ -298,6 +313,8 @@ def payer_fournisseur_lc(
 ):
     """Marque une LC disponible comme utilisee pour payer un fournisseur."""
     lc = _get_active_lc_or_400(id, db)
+    if payload.version_utilisation != lc.version_utilisation:
+        raise HTTPException(status_code=409, detail="La LC a changé depuis l'ouverture du formulaire. Actualisez la page.")
     fournisseur = db.query(Fournisseur).filter(Fournisseur.id_fournisseur == payload.id_fournisseur).first()
     if not fournisseur:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable")
@@ -317,6 +334,7 @@ def payer_fournisseur_lc(
     lc.id_client = None
     lc.id_fournisseur = fournisseur.id_fournisseur
     lc.statut = 'utilisee'
+    lc.version_utilisation += 1
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
     db.add(cession)
