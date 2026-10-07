@@ -38,6 +38,7 @@ function BatimentProductionPage() {
   const [productions, setProductions] = useState([]);
   const [batiments, setBatiments] = useState([]);
   const [stockData, setStockData] = useState(null);
+  const [cumulativeStock, setCumulativeStock] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
@@ -52,14 +53,16 @@ function BatimentProductionPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [batData, stock, productionData] = await Promise.all([
+      const [batData, stock, cumulative, productionData] = await Promise.all([
         batimentService.getBatiments(),
         productionService.getDailyStock(selectedDate),
+        productionService.getStock(selectedDate),
         productionService.getBuildingProductions(selectedBatimentId),
       ]);
 
       setBatiments(batData || []);
       setStockData(stock);
+      setCumulativeStock(cumulative);
       setProductions(productionData || []);
     } catch (err) {
       notifyError('Erreur lors du chargement des donnees du batiment');
@@ -72,9 +75,13 @@ function BatimentProductionPage() {
     loadData();
   }, [loadData]);
 
-  const buildingStock = useMemo(
+  const dailyBuildingStock = useMemo(
     () => (stockData?.batiments || []).find((item) => Number(item.id_batiment) === selectedBatimentId),
     [stockData, selectedBatimentId],
+  );
+  const buildingStock = useMemo(
+    () => (cumulativeStock?.batiments || []).find((item) => Number(item.id_batiment) === selectedBatimentId),
+    [cumulativeStock, selectedBatimentId],
   );
 
   const buildingMovements = useMemo(
@@ -83,11 +90,10 @@ function BatimentProductionPage() {
   );
 
   const todayStats = useMemo(() => ({
-    produced: Number(buildingStock?.produced_eggs || 0),
-    sold: Number(buildingStock?.sold_eggs || 0),
-    lost: Number(buildingStock?.lost_eggs || 0),
-    available: Number(buildingStock?.available_eggs || 0),
-  }), [buildingStock]);
+    produced: Number(dailyBuildingStock?.produced_eggs || 0),
+    sold: Number(dailyBuildingStock?.sold_eggs || 0),
+    lost: Number(dailyBuildingStock?.lost_eggs || 0),
+  }), [dailyBuildingStock]);
 
   const dailyHistory = useMemo(() => groupDailyProductions(productions), [productions]);
   const selectedDay = dailyHistory.find((day) => day.date === selectedDate) || null;
@@ -97,10 +103,10 @@ function BatimentProductionPage() {
     cartons: dailyHistory.reduce((sum, day) => sum + day.cartons, 0),
     saisies: dailyHistory.length,
   }), [dailyHistory]);
-  const stockCategories = (buildingStock?.categories || []).filter((category) => category.type_oeuf !== 'perdu');
+  const stockCategories = (buildingStock?.categories || []).filter((category) => !['casse', 'perdu'].includes(category.type_oeuf));
   const latestGrammage = selectedDay?.grammage != null ? `${formatDecimal(selectedDay.grammage, 1)} g` : '-';
-  const latestAliment = buildingStock?.consommation_aliment_kg != null
-    ? `${formatDecimal(buildingStock.consommation_aliment_kg, 2)} kg`
+  const latestAliment = dailyBuildingStock?.consommation_aliment_kg != null
+    ? `${formatDecimal(dailyBuildingStock.consommation_aliment_kg, 2)} kg`
     : '-';
   const lowStockCategory = stockCategories.find((category) => Number(category.available_eggs || 0) <= 0)
     || stockCategories.find((category) => Number(category.available_eggs || 0) < 200);
@@ -161,7 +167,7 @@ function BatimentProductionPage() {
           Vue globale
         </Button>
         <DateField
-          label="Voir la journee du"
+          label="Stock au"
 
           value={selectedDate}
           onChange={(event) => setSelectedDate(event.target.value)}
@@ -196,7 +202,7 @@ function BatimentProductionPage() {
               {batiment?.nom || 'Batiment'}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1.5, fontSize: { md: '1.1rem' }, maxWidth: 760 }}>
-              Saisissez la production du jour et consultez l'historique complet de ce bâtiment.
+              Consultez le stock cumulé de ce bâtiment et saisissez sa production du jour.
             </Typography>
           </CardContent>
         </Card>
@@ -212,15 +218,15 @@ function BatimentProductionPage() {
       </Box>
 
       <AlertStack
-        mortalite={Number(buildingStock?.mortalite || 0)}
+        mortalite={Number(dailyBuildingStock?.mortalite || 0)}
         lowStockCategory={lowStockCategory}
       />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2.5 }}>
         <QuickFact tone="blue" label="Grammage moyen" value={latestGrammage} />
         <QuickFact tone="amber" label="Aliment" value={latestAliment} />
-        <QuickFact tone="red" label="Mortalite" value={formatNumber(buildingStock?.mortalite || 0)} />
-        <QuickFact tone="green" label="Stock disponible" value={`${formatNumber(todayStats.available)} oeufs`} />
+        <QuickFact tone="red" label="Mortalite" value={formatNumber(dailyBuildingStock?.mortalite || 0)} />
+        <QuickFact tone="green" label="Stock cumulé disponible" value={`${formatNumber(buildingStock?.available_eggs)} oeufs`} />
       </Box>
 
       <Box sx={{ display: 'grid', gap: 2.5, minWidth: 0 }}>
@@ -425,9 +431,9 @@ function StockCategoryCard({ categories }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-        <Typography variant="h5" fontWeight={950}>Stock du batiment</Typography>
+        <Typography variant="h5" fontWeight={950}>Stock cumulé du bâtiment</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Quantités produites, vendues et disponibles pour la journée sélectionnée.
+          Cumul des productions vendables et ventes de ce bâtiment jusqu'à la date choisie.
         </Typography>
 
         <Box

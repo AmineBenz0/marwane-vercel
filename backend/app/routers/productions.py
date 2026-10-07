@@ -21,6 +21,7 @@ from app.schemas.production import (
     ProductionUpdate,
     ProductionDailyStats,
     ProductionStockDaily,
+    ProductionStockSnapshot,
     ProductionPerformanceResponse,
     FormuleAliment,
     CalibreThreshold,
@@ -536,36 +537,31 @@ def get_daily_stats(
     ]
 
 
-@router.get("/stock/daily", response_model=ProductionStockDaily)
-def get_daily_stock(
-    date_stock: Optional[date] = None,
-    db: Session = Depends(get_db),
-    current_user: Utilisateur = Depends(get_current_active_user)
-):
-    """
-    Returns the daily building stock board.
+def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
+    """Sellable production minus client sales, optionally over all recorded history.
 
-    Stock is shown in eggs:
-    produced today - sold from the building - lost eggs = available stock.
-    Sales without a source building are surfaced separately so operators can
-    fix them instead of silently hiding inaccurate stock.
+    Broken eggs are separate counts, already excluded from produced_eggs.
+    Negative balances remain visible so incomplete records can be corrected.
     """
-    target_date = date_stock or date.today()
-    batiments = db.query(Batiment).filter(Batiment.est_actif.is_(True)).order_by(Batiment.nom).all()
+    buildings_query = db.query(Batiment)
+    if not cumulative:
+        buildings_query = buildings_query.filter(Batiment.est_actif.is_(True))
+    batiments = buildings_query.order_by(Batiment.nom).all()
     cycles_by_batiment = {
         batiment.id_batiment: find_active_cycle(db, batiment.id_batiment, target_date)
         for batiment in batiments
     }
     db.flush()
     productions = db.query(Production).filter(
-        Production.date_production == target_date,
+        (Production.date_production <= target_date) if cumulative else (Production.date_production == target_date),
         Production.est_actif.is_(True),
-    ).all()
+    ).yield_per(1000)
 
     stock_by_batiment = {
         batiment.id_batiment: {
             "id_batiment": batiment.id_batiment,
             "nom_batiment": batiment.nom,
+            "est_actif": batiment.est_actif,
             "cycle": cycle_to_dict(db, cycles_by_batiment[batiment.id_batiment], target_date)
             if cycles_by_batiment[batiment.id_batiment]
             else None,
@@ -582,6 +578,10 @@ def get_daily_stock(
     }
 
     movements = []
+
+    def add_movement(movement):
+        if not cumulative:
+            movements.append(movement)
 
     for prod in productions:
         building = stock_by_batiment.get(prod.id_batiment)
@@ -623,7 +623,7 @@ def get_daily_stock(
 
         building["entries_count"] += 1
 
-        movements.append({
+        add_movement({
             "time": prod.date_creation.strftime("%H:%M") if prod.date_creation else None,
             "type": movement_type,
             "label": movement_label,
@@ -644,21 +644,23 @@ def get_daily_stock(
         Batiment,
         Transaction.id_batiment == Batiment.id_batiment,
     ).filter(
-        Transaction.date_transaction == target_date,
+        (Transaction.date_transaction <= target_date) if cumulative else (Transaction.date_transaction == target_date),
         Transaction.est_actif.is_(True),
         Transaction.id_client.isnot(None),
-    ).all()
+    ).yield_per(1000)
 
     unassigned_sold_eggs = 0
+    unassigned_by_category = {}
     for transaction, product_name, nom_batiment in sales_rows:
         category_from_product = parse_sellable_egg_product_name(product_name)
-        if not category_from_product:
+        if not category_from_product or category_from_product[0] in {"casse", "perdu"}:
             continue
 
         quantity = int(transaction.quantite or 0)
         if transaction.id_batiment is None:
             unassigned_sold_eggs += quantity
-            movements.append({
+            unassigned_by_category[category_from_product] = unassigned_by_category.get(category_from_product, 0) + quantity
+            add_movement({
                 "time": transaction.date_creation.strftime("%H:%M") if transaction.date_creation else None,
                 "type": "sale_unassigned",
                 "label": "Vente non attribuee",
@@ -687,7 +689,7 @@ def get_daily_stock(
         )
         building["sold_eggs"] += quantity
         category["sold_eggs"] += quantity
-        movements.append({
+        add_movement({
             "time": transaction.date_creation.strftime("%H:%M") if transaction.date_creation else None,
             "type": "sale",
             "label": "Vente client",
@@ -704,18 +706,14 @@ def get_daily_stock(
     missing_count = 0
 
     for building in stock_by_batiment.values():
-        available = building["produced_eggs"] - building["sold_eggs"] - building["lost_eggs"]
-        status_value = _stock_status(building["produced_eggs"], available, building["entries_count"])
+        available = building["produced_eggs"] - building["sold_eggs"]
+        status_value = _stock_status(0 if cumulative else building["produced_eggs"], available, building["entries_count"])
         if status_value == "missing":
             missing_count += 1
 
         categories = []
         for category in building["categories"].values():
-            category_available = (
-                0
-                if category["produced_eggs"] == 0 and category["lost_eggs"] > 0
-                else category["produced_eggs"] - category["sold_eggs"] - category["lost_eggs"]
-            )
+            category_available = category["produced_eggs"] - category["sold_eggs"]
             categories.append({
                 **category,
                 "available_eggs": category_available,
@@ -724,6 +722,7 @@ def get_daily_stock(
         building_payload.append({
             "id_batiment": building["id_batiment"],
             "nom_batiment": building["nom_batiment"],
+            "est_actif": building["est_actif"],
             "produced_eggs": building["produced_eggs"],
             "sold_eggs": building["sold_eggs"],
             "lost_eggs": building["lost_eggs"],
@@ -741,22 +740,61 @@ def get_daily_stock(
         total_sold += building["sold_eggs"]
         total_lost += building["lost_eggs"]
 
+    global_categories = {}
+    for building in building_payload:
+        for category in building["categories"]:
+            key = (category["type_oeuf"], category["calibre"])
+            total = global_categories.setdefault(key, {
+                "type_oeuf": key[0], "calibre": key[1], "label": category["label"],
+                "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0, "available_eggs": 0,
+            })
+            for field in ("produced_eggs", "sold_eggs", "lost_eggs", "available_eggs"):
+                total[field] += category[field]
+    for key, quantity in unassigned_by_category.items():
+        total = global_categories.setdefault(key, {
+            "type_oeuf": key[0], "calibre": key[1], "label": _category_label(*key),
+            "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0, "available_eggs": 0,
+        })
+        total["sold_eggs"] += quantity
+        total["available_eggs"] -= quantity
+
     movements.sort(key=lambda item: item["time"] or "", reverse=True)
 
     return {
         "date": target_date,
         "totals": {
             "produced_eggs": total_produced,
-            "sold_eggs": total_sold,
+            "sold_eggs": total_sold + unassigned_sold_eggs,
             "lost_eggs": total_lost,
-            "available_eggs": total_produced - total_sold - total_lost,
+            "available_eggs": total_produced - total_sold - unassigned_sold_eggs,
             "unassigned_sold_eggs": unassigned_sold_eggs,
             "buildings_count": len(batiments),
             "missing_buildings_count": missing_count,
         },
         "batiments": building_payload,
-        "movements": movements[:12],
+        "movements": [] if cumulative else movements[:12],
+        "categories": sorted(global_categories.values(), key=lambda item: item["label"]),
     }
+
+
+@router.get("/stock/daily", response_model=ProductionStockDaily)
+def get_daily_stock(
+    date_stock: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Daily production and sales; this is not the carried stock balance."""
+    return _stock_report(db, date_stock or date.today())
+
+
+@router.get("/stock", response_model=ProductionStockSnapshot)
+def get_cumulative_stock(
+    date_stock: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Stock across all buildings and recorded history up to the chosen date."""
+    return _stock_report(db, date_stock or date.today(), cumulative=True)
 
 
 @router.get("/performance", response_model=ProductionPerformanceResponse)

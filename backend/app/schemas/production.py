@@ -119,6 +119,7 @@ class ProductionStockCategory(BaseModel):
 
 
 class ProductionStockBuilding(BaseModel):
+    est_actif: bool = True
     id_batiment: int
     nom_batiment: str
     cycle: Optional[dict] = None
@@ -149,6 +150,10 @@ class ProductionStockDaily(BaseModel):
     totals: ProductionStockTotals
     batiments: List[ProductionStockBuilding]
     movements: List[ProductionStockMovement]
+
+
+class ProductionStockSnapshot(ProductionStockDaily):
+    categories: List[ProductionStockCategory]
 
 
 class ProductionPerformanceRow(BaseModel):

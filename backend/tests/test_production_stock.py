@@ -10,6 +10,7 @@ from app.models.client import Client
 from app.models.cycle_production import CycleProduction
 from app.models.produit import Produit
 from app.models.production import Production
+from app.models.transaction import Transaction
 from app.utils.dependencies import get_current_active_user
 from app.utils.egg_product_sync import build_sellable_egg_product_name
 from app.main import app
@@ -83,7 +84,7 @@ def test_daily_stock_counts_production_sales_and_losses(client, db_session, auth
     assert stock_row["produced_eggs"] == 100
     assert stock_row["sold_eggs"] == 40
     assert stock_row["lost_eggs"] == 5
-    assert stock_row["available_eggs"] == 55
+    assert stock_row["available_eggs"] == 60
 
 
 def test_daily_production_and_losses_roll_back_together_on_database_failure(
@@ -241,7 +242,7 @@ def test_daily_stock_and_egg_sales_work_without_a_lot(
     assert stock_row["produced_eggs"] == 100
     assert stock_row["sold_eggs"] == 40
     assert stock_row["lost_eggs"] == 5
-    assert stock_row["available_eggs"] == 55
+    assert stock_row["available_eggs"] == 60
 
 
 def test_lotless_production_can_be_updated_without_being_attached(
@@ -348,3 +349,94 @@ def test_production_delete_is_audited_and_removed_from_active_stock(
         headers=auth_headers,
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_cumulative_stock_carries_history_and_deducts_only_sellable_sales(
+    client, db_session, auth_headers,
+):
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
+    first = Batiment(nom="Stock A", est_actif=True)
+    second = Batiment(nom="Stock B", est_actif=True)
+    archived = Batiment(nom="Stock archive", est_actif=False)
+    buyer = Client(nom_client="Stock buyer", est_actif=True)
+    normal = Produit(nom_produit="Oeufs - Gros", est_actif=True)
+    double = Produit(nom_produit="Oeufs - Double Jaune", est_actif=True)
+    broken = Produit(nom_produit="Oeufs - Casses", est_actif=True)
+    db_session.add_all([first, second, archived, buyer, normal, double, broken])
+    db_session.flush()
+
+    def production(building, day, quantity, egg_type="normal", active=True):
+        return Production(
+            id_batiment=building.id_batiment, date_production=day,
+            type_oeuf=egg_type, calibre="gros" if egg_type == "normal" else None,
+            nombre_oeufs=quantity, grammage=62,
+            nombre_cartons=Production.calculer_cartons(quantity, egg_type),
+            est_actif=active,
+        )
+
+    def sale(building, day, quantity, product=normal, active=True):
+        return Transaction(
+            id_batiment=building.id_batiment if building else None,
+            date_transaction=day, id_produit=product.id_produit,
+            id_client=buyer.id_client, quantite=quantity,
+            prix_unitaire=1, montant_total=quantity, est_actif=active,
+        )
+
+    db_session.add_all([
+        production(first, yesterday, 100),
+        production(first, today, 50),
+        production(first, yesterday, 20, "double_jaune"),
+        production(first, today, 5, "casse"),
+        production(first, yesterday, 3, "perdu"),
+        production(second, yesterday, 80),
+        production(archived, yesterday, 10),
+        production(first, tomorrow, 999),
+        production(first, yesterday, 999, active=False),
+        sale(first, yesterday, 30),
+        sale(first, today, 10),
+        sale(first, yesterday, 5, double),
+        sale(second, today, 20),
+        sale(None, today, 7),
+        sale(first, tomorrow, 999),
+        sale(first, yesterday, 999, active=False),
+        sale(first, today, 2, broken),
+    ])
+    db_session.commit()
+
+    response = client.get("/api/v1/productions/stock", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["date"] == str(today)
+    assert data["totals"]["produced_eggs"] == 260
+    assert data["totals"]["sold_eggs"] == 72
+    assert data["totals"]["lost_eggs"] == 8
+    assert data["totals"]["available_eggs"] == 188
+    assert data["totals"]["unassigned_sold_eggs"] == 7
+    buildings = {row["id_batiment"]: row for row in data["batiments"]}
+    assert buildings[first.id_batiment]["available_eggs"] == 125
+    assert buildings[second.id_batiment]["available_eggs"] == 60
+    assert buildings[archived.id_batiment]["available_eggs"] == 10
+    assert buildings[archived.id_batiment]["est_actif"] is False
+    categories = {row["type_oeuf"]: row for row in data["categories"]}
+    assert categories["normal"]["available_eggs"] == 173
+    assert categories["double_jaune"]["available_eggs"] == 15
+    assert categories["casse"]["lost_eggs"] == 8
+    assert categories["casse"]["available_eggs"] == 0
+    assert sum(row["available_eggs"] for row in data["categories"]) == 188
+
+    historical = client.get(
+        "/api/v1/productions/stock", params={"date_stock": str(yesterday)},
+        headers=auth_headers,
+    ).json()
+    assert historical["totals"]["available_eggs"] == 175
+    assert historical["totals"]["lost_eggs"] == 3
+
+    daily = client.get("/api/v1/productions/stock/daily", headers=auth_headers).json()
+    assert daily["totals"]["produced_eggs"] == 50
+    assert daily["totals"]["available_eggs"] == 13
+    assert daily["totals"]["lost_eggs"] == 5
+    second_daily = next(row for row in daily["batiments"] if row["id_batiment"] == second.id_batiment)
+    assert second_daily["entries_count"] == 0
+    assert second_daily["available_eggs"] == -20

@@ -57,6 +57,10 @@ export const productionService = {
   /**
    * Recupere le tableau de stock par batiment pour une journee.
    */
+  getStock: (dateStock) => get('/productions/stock', {
+    params: dateStock ? { date_stock: dateStock } : {},
+  }),
+
   getDailyStock: (dateStock) => get('/productions/stock/daily', {
     params: dateStock ? { date_stock: dateStock } : {},
   }),

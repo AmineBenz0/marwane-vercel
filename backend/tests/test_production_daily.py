@@ -43,7 +43,7 @@ def test_daily_types_feed_stock_and_stats_once(client, db_session, auth_headers)
     building = next(row for row in stock["batiments"] if row["id_batiment"] == payload["id_batiment"])
     assert building["produced_eggs"] == 160
     assert building["lost_eggs"] == 10
-    assert building["available_eggs"] == 150
+    assert building["available_eggs"] == 160
     assert building["mortalite"] == 2
     assert Decimal(building["consommation_aliment_kg"]) == 12
     categories = {row["type_oeuf"]: row for row in building["categories"]}

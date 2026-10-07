@@ -43,45 +43,12 @@ const MOVEMENT_CONFIG = {
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
 const formatEggs = (value) => `${formatNumber(value)} oeufs`;
 
-const getCategoryStocks = (buildings) => {
-  const byCategory = new Map();
-
-  buildings.forEach((building) => {
-    (building.categories || []).forEach((category) => {
-      if (category.type_oeuf === 'perdu') return;
-      const key = `${category.type_oeuf}-${category.calibre || 'none'}`;
-      const existing = byCategory.get(key) || {
-        key,
-        label: category.label,
-        available_eggs: 0,
-        produced_eggs: 0,
-        sold_eggs: 0,
-        lost_eggs: 0,
-      };
-
-      existing.available_eggs += Number(category.available_eggs || 0);
-      existing.produced_eggs += Number(category.produced_eggs || 0);
-      existing.sold_eggs += Number(category.sold_eggs || 0);
-      existing.lost_eggs += Number(category.lost_eggs || 0);
-      byCategory.set(key, existing);
-    });
-  });
-
-  return [...byCategory.values()]
-    .filter((category) => (
-      category.available_eggs !== 0 ||
-      category.produced_eggs !== 0 ||
-      category.sold_eggs !== 0 ||
-      category.lost_eggs !== 0
-    ))
-    .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
-};
-
 function ProductionDashboard() {
   const navigate = useNavigate();
   const notifyError = useNotificationStore((state) => state.error);
 
   const [stockData, setStockData] = useState(null);
+  const [cumulativeStock, setCumulativeStock] = useState(null);
   const [batiments, setBatiments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
@@ -94,11 +61,13 @@ function ProductionDashboard() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [stock, batimentData] = await Promise.all([
+      const [stock, cumulative, batimentData] = await Promise.all([
         productionService.getDailyStock(selectedDate),
+        productionService.getStock(selectedDate),
         batimentService.getBatiments(),
       ]);
       setStockData(stock);
+      setCumulativeStock(cumulative);
       setBatiments(batimentData || []);
     } catch (err) {
       notifyError(err?.message || "Erreur lors du chargement du stock de production");
@@ -112,8 +81,18 @@ function ProductionDashboard() {
   }, [loadData]);
 
   const totals = stockData?.totals || {};
-  const buildingRows = useMemo(() => stockData?.batiments || [], [stockData]);
-  const categoryStocks = useMemo(() => getCategoryStocks(buildingRows), [buildingRows]);
+  const cumulativeTotals = cumulativeStock?.totals || {};
+  const buildingRows = useMemo(() => {
+    const dailyById = new Map((stockData?.batiments || []).map((building) => [building.id_batiment, building]));
+    return (cumulativeStock?.batiments || []).map((stock) => ({
+      ...stock,
+      daily: dailyById.get(stock.id_batiment),
+    }));
+  }, [stockData, cumulativeStock]);
+  const categoryStocks = useMemo(() => (cumulativeStock?.categories || [])
+    .filter((category) => !['casse', 'perdu'].includes(category.type_oeuf))
+    .map((category) => ({ ...category, key: `${category.type_oeuf}-${category.calibre || 'none'}` })),
+  [cumulativeStock]);
   const completedBuildingsCount = Math.max(
     0,
     Number(totals.buildings_count || 0) - Number(totals.missing_buildings_count || 0),
@@ -151,11 +130,18 @@ function ProductionDashboard() {
         }}
       >
         <SummaryCard icon={<FactoryIcon />} label="Batiments saisis" value={`${completedBuildingsCount}/${totals.buildings_count || 0}`} tone="amber" />
-        <SummaryCard icon={<EggIcon />} label="Oeufs produits aujourd'hui" value={totals.produced_eggs} tone="green" />
-        <SummaryCard icon={<InventoryIcon />} label="Oeufs disponibles" value={totals.available_eggs} tone="dark" />
-        <SummaryCard icon={<LocalShippingIcon />} label="Oeufs vendus" value={totals.sold_eggs} tone="blue" />
-        <SummaryCard icon={<TrendingDownIcon />} label="Oeufs perdus" value={totals.lost_eggs} tone="red" />
+        <SummaryCard icon={<EggIcon />} label="Production du jour" value={totals.produced_eggs} tone="green" />
+        <SummaryCard icon={<InventoryIcon />} label="Stock global cumulé" value={Number(cumulativeTotals.available_eggs || 0)} tone="dark" />
+        <SummaryCard icon={<LocalShippingIcon />} label="Ventes du jour" value={totals.sold_eggs} tone="blue" />
+        <SummaryCard icon={<TrendingDownIcon />} label="Cassés du jour" value={totals.lost_eggs} tone="red" />
       </Box>
+
+      {Number(cumulativeTotals.unassigned_sold_eggs || 0) > 0 && (
+        <Alert severity="warning" sx={{ mb: 2.5, borderRadius: 3 }}>
+          {formatNumber(cumulativeTotals.unassigned_sold_eggs)} oeufs vendus sans bâtiment source.
+          Ces ventes sont déduites du stock global. Attribuez-les pour fiabiliser le stock de chaque bâtiment.
+        </Alert>
+      )}
 
       <Box
         sx={{
@@ -239,8 +225,8 @@ function HeroHeader({
               Production & stock
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 720 }}>
-              Saisissez la production quotidienne et consultez les stocks en oeufs.
-              Les tableaux detailles restent dans chaque batiment.
+              Stock cumulé des productions et ventes enregistrées jusqu'à la date choisie.
+              Les chiffres du jour restent visibles pour suivre la saisie quotidienne.
             </Typography>
 
             <Box
@@ -254,7 +240,7 @@ function HeroHeader({
               }}
             >
               <DateField
-                label="Jour"
+                label="Stock au"
 
                 value={selectedDate}
                 onChange={(event) => onDateChange(event.target.value)}
@@ -305,8 +291,9 @@ function SummaryCard({ icon, label, value, tone }) {
 
 function BuildingStockCard({ batiment, onAddProduction, onOpenDetail }) {
   const status = STATUS_CONFIG[batiment.status] || STATUS_CONFIG.ok;
-  const showEmpty = batiment.entries_count === 0;
-  const hasDailyAlert = Number(batiment.mortalite || 0) > 0;
+  const showEmpty = !batiment.daily?.entries_count;
+  const canAddProduction = showEmpty && batiment.est_actif !== false;
+  const hasDailyAlert = Number(batiment.daily?.mortalite || 0) > 0;
 
   return (
     <Card
@@ -326,10 +313,10 @@ function BuildingStockCard({ batiment, onAddProduction, onOpenDetail }) {
           <Box>
             <Typography variant="h5" fontWeight={900}>{batiment.nom_batiment}</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-              Suivi quotidien
+              Stock cumulé
             </Typography>
           </Box>
-          <Chip label={status.label} color={status.color} sx={{ fontWeight: 900, borderRadius: 2 }} />
+          <Chip label={batiment.est_actif === false ? 'Archivé' : status.label} color={batiment.est_actif === false ? 'default' : status.color} sx={{ fontWeight: 900, borderRadius: 2 }} />
         </Stack>
 
         <Box
@@ -342,23 +329,23 @@ function BuildingStockCard({ batiment, onAddProduction, onOpenDetail }) {
           }}
         >
           <Typography variant="h5" fontWeight={950} sx={{ letterSpacing: '-0.04em', lineHeight: 1.08 }}>
-            {showEmpty ? 'Saisir la production' : `${formatNumber(batiment.produced_eggs)} oeufs saisis`}
+            {formatEggs(batiment.available_eggs)}
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }}>
-            Production et stock du jour
+            {showEmpty ? 'Aucune saisie pour le jour choisi' : `${formatNumber(batiment.daily.produced_eggs)} oeufs produits ce jour`}
           </Typography>
         </Box>
 
         {hasDailyAlert && (
           <Alert severity="warning" sx={{ mt: 1.5, borderRadius: 2.5 }}>
-            Mortalite {formatNumber(batiment.mortalite || 0)}
+            Mortalite {formatNumber(batiment.daily?.mortalite || 0)}
           </Alert>
         )}
 
         <Divider sx={{ my: 1.5 }} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          {showEmpty && (
+          {canAddProduction && (
             <Button
               variant="contained"
               onClick={onAddProduction}
@@ -388,9 +375,9 @@ function CategoryStockCard({ categories }) {
   return (
     <Card elevation={0} sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
       <CardContent>
-        <Typography variant="h6" fontWeight={900}>Production par categorie</Typography>
+        <Typography variant="h6" fontWeight={900}>Stock global par catégorie</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Les pertes et les ventes sont detaillees dans les mouvements; le stock net est resume ci-dessus.
+          Cumul de toutes les productions vendables, moins toutes les ventes jusqu'à la date choisie.
         </Typography>
         <Stack spacing={1} sx={{ mt: 2 }}>
           {categories.length === 0 ? (
