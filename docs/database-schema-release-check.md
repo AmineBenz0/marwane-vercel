@@ -13,6 +13,14 @@ are alternative migration paths; do not blindly run Alembic from an untracked
 existing Supabase schema. This project's existing production schema was created
 through SQL and has no `alembic_version` table.
 
+For a new, empty database, use `supabase_bootstrap.sql`. It creates all 27
+current application tables, applies the SQL compatibility changes (including LC
+usage/reversal constraints), and seeds the three known buildings in one
+transaction. It intentionally creates no default administrator credentials;
+provision the first user through a controlled setup process. This file is for
+fresh databases only. For an existing database, apply the reviewed incremental
+migration instead of rerunning the bootstrap.
+
 For the LC reuse release, apply `supabase_migrations/0004_lc_usage_reuse.sql` as one
 transaction. It is safe to replay, retains legacy cancellation audit columns,
 converts each cancelled cession's bilateral links to one reversal pointer, and
