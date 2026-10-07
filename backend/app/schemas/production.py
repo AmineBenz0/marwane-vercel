@@ -51,7 +51,7 @@ class ProductionUpdate(BaseModel):
     calibre: Optional[Literal["demarrage", "moyen", "gros"]] = None
     nombre_oeufs: Optional[int] = None
     grammage: Optional[Decimal] = None
-    mortalite: Optional[int] = None
+    mortalite: Optional[int] = Field(None, ge=0, description="Nombre de mortalites dans le batiment")
     consommation_aliment_kg: Optional[Decimal] = None
     formule: Optional[str] = None
 
