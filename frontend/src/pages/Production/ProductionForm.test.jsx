@@ -49,4 +49,24 @@ describe('ProductionForm', () => {
     expect(post.mock.calls[0][1]).not.toHaveProperty('id_cycle');
     expect(post.mock.calls[0][1]).not.toHaveProperty('nom_cycle');
   });
+
+  it('does not allow negative mortality in daily production', async () => {
+    render(
+      <ProductionForm
+        open
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+        batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]}
+        preselectedBatimentId={7}
+        preselectedDate="2026-09-01"
+      />,
+    );
+
+    const mortalityInput = screen.getByLabelText('Mortalité');
+    expect(mortalityInput).toHaveAttribute('min', '0');
+    expect(mortalityInput).toHaveAttribute('step', '1');
+
+    fireEvent.change(mortalityInput, { target: { value: '-2' } });
+    expect(mortalityInput).toHaveValue(0);
+  });
 });
