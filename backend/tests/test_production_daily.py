@@ -138,3 +138,68 @@ def test_daily_cancel_is_atomic_and_checks_versions(client, db_session, auth_hea
     assert db_session.query(Production).filter(Production.est_actif.is_(True)).count() == 0
     assert db_session.query(Production).count() == 4
     assert all(row.date_annulation for row in db_session.query(Production).all())
+
+
+@pytest.mark.parametrize("egg_type", [
+    "normal", "double_jaune", "blanc", "casse", "perdu", "double_jaune_demarrage",
+])
+@pytest.mark.parametrize("method", ["post", "put"])
+def test_negative_count_cannot_be_hidden_by_other_positive_types(
+    client, db_session, auth_headers, egg_type, method,
+):
+    payload = daily_payload(db_session)
+    if method == "put":
+        created = client.post("/api/v1/productions/daily", json=payload, headers=auth_headers)
+        assert created.status_code == 201, created.text
+        payload["versions"] = created.json()["versions"]
+    before = {
+        row.id_production: (row.nombre_oeufs, row.est_actif, row.nombre_cartons)
+        for row in db_session.query(Production).all()
+    }
+    response = getattr(client, method)("/api/v1/productions/daily", json={
+        **payload, "quantites": {"normal": 120, "blanc": 10, egg_type: -1},
+    }, headers=auth_headers)
+    assert response.status_code == 422, response.text
+    db_session.expire_all()
+    after = {
+        row.id_production: (row.nombre_oeufs, row.est_actif, row.nombre_cartons)
+        for row in db_session.query(Production).all()
+    }
+    assert after == before
+
+
+@pytest.mark.parametrize("quantity", [-1, 0, None])
+def test_single_production_update_rejects_invalid_count_before_writing(
+    client, db_session, auth_headers, quantity,
+):
+    payload = daily_payload(db_session)
+    created = client.post("/api/v1/productions", json={
+        "date_production": payload["date_production"],
+        "id_batiment": payload["id_batiment"],
+        "type_oeuf": "normal", "nombre_oeufs": 120, "grammage": "63.25",
+    }, headers=auth_headers)
+    assert created.status_code == 201, created.text
+    record = created.json()
+    response = client.put(
+        f"/api/v1/productions/{record['id_production']}",
+        json={"nombre_oeufs": quantity}, headers=auth_headers,
+    )
+    assert response.status_code == 422, response.text
+    db_session.expire_all()
+    saved = db_session.get(Production, record["id_production"])
+    assert saved.nombre_oeufs == 120
+    assert saved.nombre_cartons == record["nombre_cartons"]
+
+
+@pytest.mark.parametrize("egg_type", ["normal", "double_jaune", "blanc", "casse", "perdu"])
+def test_single_production_create_rejects_negative_count(
+    client, db_session, auth_headers, egg_type,
+):
+    payload = daily_payload(db_session)
+    response = client.post("/api/v1/productions", json={
+        "date_production": payload["date_production"],
+        "id_batiment": payload["id_batiment"],
+        "type_oeuf": egg_type, "nombre_oeufs": -1, "grammage": "63.25",
+    }, headers=auth_headers)
+    assert response.status_code == 422, response.text
+    assert db_session.query(Production).count() == 0

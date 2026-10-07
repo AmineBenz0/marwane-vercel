@@ -87,6 +87,25 @@ describe('ProductionForm', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it.each(['Oeufs normaux', 'Double jaune', 'Oeufs blancs', 'Oeufs casses'])(
+    'rejects a negative count for %s without reducing the collection preview',
+    async (label) => {
+      render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
+        batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
+      fireEvent.change(screen.getByLabelText('Oeufs normaux'), { target: { value: '120' } });
+      fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '10' } });
+      fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '55' } });
+      fireEvent.change(screen.getByLabelText(label), { target: { value: '-5' } });
+      expect(await screen.findByText('Minimum 0')).toBeVisible();
+      const total = label === 'Oeufs normaux' ? 10 : label === 'Oeufs blancs' ? 120 : 130;
+      expect(screen.getByText(`Total collecté (hors cassés) : ${total} œufs`)).toBeVisible();
+      fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
+      await waitFor(() => expect(screen.getByText('Minimum 0')).toBeVisible());
+      expect(post).not.toHaveBeenCalled();
+      expect(put).not.toHaveBeenCalled();
+    },
+  );
+
   it('loads and updates every type in the selected building day', async () => {
     const rows = [
       { id_production: 1, id_batiment: 7, date_production: '2026-09-01', type_oeuf: 'normal', nombre_oeufs: 120, grammage: '63', mortalite: 2, consommation_aliment_kg: '12', formule: '' },

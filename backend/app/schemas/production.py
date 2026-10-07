@@ -49,11 +49,17 @@ class ProductionUpdate(BaseModel):
     id_batiment: Optional[int] = None
     type_oeuf: Optional[Literal["normal", "double_jaune", "double_jaune_demarrage", "casse", "blanc", "perdu"]] = None
     calibre: Optional[Literal["demarrage", "moyen", "gros"]] = None
-    nombre_oeufs: Optional[int] = None
+    nombre_oeufs: Optional[int] = Field(None, gt=0, description="Nombre d'œufs collectés")
     grammage: Optional[Decimal] = None
     mortalite: Optional[int] = Field(None, ge=0, description="Nombre de mortalites dans le batiment")
     consommation_aliment_kg: Optional[Decimal] = None
     formule: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_egg_count(self) -> "ProductionUpdate":
+        if "nombre_oeufs" in self.model_fields_set and self.nombre_oeufs is None:
+            raise ValueError("Le nombre d'oeufs ne peut pas etre nul")
+        return self
 
 
 class ProductionRead(ProductionBase):

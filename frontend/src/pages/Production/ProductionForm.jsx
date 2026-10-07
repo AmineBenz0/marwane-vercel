@@ -27,6 +27,11 @@ const EGG_TYPES = [
   { value: 'casse', label: 'Oeufs casses' },
 ];
 
+const previewCount = (value) => {
+  const count = Number(value || 0);
+  return Number.isInteger(count) && count >= 0 ? count : 0;
+};
+
 function ProductionForm({
   open,
   onClose,
@@ -66,10 +71,10 @@ function ProductionForm({
     ? [...EGG_TYPES, { value: 'double_jaune_demarrage', label: 'Double jaune démarrage (historique)' }]
     : EGG_TYPES;
   const totalEggs = eggTypeOptions.reduce(
-    (sum, type) => sum + (type.value === 'casse' ? 0 : Number(quantities[type.value] || 0)), 0,
+    (sum, type) => sum + (type.value === 'casse' ? 0 : previewCount(quantities[type.value])), 0,
   );
   const cartonPreview = eggTypeOptions.reduce((sum, type) => {
-    const count = Number(quantities[type.value] || 0);
+    const count = previewCount(quantities[type.value]);
     if (count <= 0 || type.value === 'casse') return sum;
     const cartons = Math.ceil(count / 30);
     return sum + (type.value.startsWith('double_jaune')
@@ -289,6 +294,10 @@ function ProductionForm({
                       Number.isInteger(Number(value)) && Number(value) >= 0
                     ) || 'Indiquez un nombre entier positif ou nul',
                   })}
+                  onChange={(event) => setValue(
+                    `quantites.${type.value}`, event.target.value,
+                    { shouldValidate: true, shouldDirty: true },
+                  )}
                   label={type.label}
                   type="number"
                   inputProps={{ min: 0, step: 1 }}
