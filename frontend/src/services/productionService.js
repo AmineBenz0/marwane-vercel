@@ -4,6 +4,26 @@ import { get, post, put, del } from './api';
  * Service pour la gestion des productions.
  */
 export const productionService = {
+  getBuildingProductions: async (idBatiment) => {
+    const rows = [];
+    const pageSize = 500;
+    let page;
+    do {
+      page = await get('/productions', { params: {
+        id_batiment: idBatiment, skip: rows.length, limit: pageSize,
+      } });
+      rows.push(...page);
+    } while (page.length === pageSize);
+    return rows;
+  },
+  deleteDailyProduction: (data) => del('/productions/daily', { data }),
+
+  getDailyProduction: (idBatiment, dateProduction) => get('/productions/daily', {
+    params: { id_batiment: idBatiment, date_production: dateProduction },
+  }),
+  createDailyProduction: (data) => post('/productions/daily', data),
+  updateDailyProduction: (data) => put('/productions/daily', data),
+
   /**
    * Récupère la liste des productions avec filtres.
    */

@@ -14,6 +14,9 @@ from app.models.transaction import Transaction
 from app.models.produit import Produit
 from app.schemas.production import (
     ProductionRead,
+    ProductionDailyInput,
+    ProductionDailyCancel,
+    ProductionDailyRead,
     ProductionCreate,
     ProductionUpdate,
     ProductionDailyStats,
@@ -150,7 +153,7 @@ def get_productions(
     if id_cycle:
         query = query.filter(Production.id_cycle == id_cycle)
 
-    results = query.order_by(Production.date_production.desc()).offset(skip).limit(limit).all()
+    results = query.order_by(Production.date_production.desc(), Production.id_production.desc()).offset(skip).limit(limit).all()
 
     final_results = []
     for prod, nom_batiment, nom_cycle in results:
@@ -177,6 +180,189 @@ def get_calibre_thresholds(
 ):
     """Seuils de deduction automatique du calibre depuis le grammage moyen."""
     return CALIBRE_THRESHOLDS
+
+
+
+def _daily_records(db: Session, id_batiment: int, production_date: date):
+    return db.query(Production).filter(
+        Production.id_batiment == id_batiment,
+        Production.date_production == production_date,
+        Production.est_actif.is_(True),
+    ).order_by(Production.id_production).all()
+
+
+def _daily_response(records, batiment):
+    return {
+        "records": [
+            {
+                **{column.name: getattr(record, column.name) for column in record.__table__.columns},
+                "nom_batiment": batiment.nom,
+            }
+            for record in records
+        ],
+        "versions": {
+            record.id_production: record.date_modification.isoformat()
+            for record in records
+        },
+    }
+
+
+@router.get("/daily", response_model=ProductionDailyRead)
+def get_daily_production(
+    id_batiment: int,
+    date_production: date,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    batiment = db.query(Batiment).filter(Batiment.id_batiment == id_batiment).first()
+    if not batiment:
+        raise HTTPException(status_code=404, detail="Batiment introuvable")
+    return _daily_response(_daily_records(db, id_batiment, date_production), batiment)
+
+
+def _save_daily_production(prod_in, db, current_user, *, updating):
+    try:
+        # Serialize daily writes for this building, including simultaneous creates.
+        batiment = db.query(Batiment).filter(
+            Batiment.id_batiment == prod_in.id_batiment,
+            Batiment.est_actif.is_(True),
+        ).with_for_update().first()
+        if not batiment:
+            raise HTTPException(status_code=404, detail="Batiment introuvable")
+
+        existing = _daily_records(db, prod_in.id_batiment, prod_in.date_production)
+        versions = {record.id_production: record.date_modification.isoformat() for record in existing}
+        if updating:
+            if not existing:
+                raise HTTPException(status_code=404, detail="Saisie quotidienne introuvable")
+            if prod_in.versions != versions:
+                raise HTTPException(status_code=409, detail="La saisie a change. Fermez puis rouvrez le formulaire.")
+        elif existing:
+            raise HTTPException(status_code=409, detail="Cette journee est deja saisie. Modifiez la saisie existante.")
+
+        if prod_in.quantites.get("double_jaune_demarrage", 0) and not any(
+            record.type_oeuf == "double_jaune_demarrage" for record in existing
+        ):
+            raise HTTPException(status_code=400, detail="Ce type historique ne peut plus etre ajoute.")
+
+        user_id = current_user.id_utilisateur if current_user else None
+        cycle_ids = {record.id_cycle for record in existing if record.id_cycle is not None}
+        if len(cycle_ids) > 1:
+            raise HTTPException(status_code=409, detail="Cette journee contient plusieurs lots et doit etre corrigee separement.")
+        cycle_id = next(iter(cycle_ids), None)
+        by_type = {}
+        for record in existing:
+            by_type.setdefault(record.type_oeuf, []).append(record)
+
+        records = []
+        # Losses are last so operational fields normally belong to a produced type.
+        for egg_type in ("normal", "double_jaune", "casse", "blanc", "double_jaune_demarrage", "perdu"):
+            quantity = prod_in.quantites.get(egg_type, 0)
+            candidates = by_type.get(egg_type, [])
+            retained = candidates[0] if quantity and candidates else None
+            for record in candidates:
+                if record is not retained:
+                    record.est_actif = False
+                    record.date_annulation = datetime.now(timezone.utc)
+                    record.motif_annulation = "Correction de la saisie quotidienne"
+                    record.id_utilisateur_annulation = user_id
+                    record.id_utilisateur_modification = user_id
+            if not quantity:
+                continue
+
+            if retained is None:
+                retained = Production(
+                    date_production=prod_in.date_production,
+                    id_batiment=prod_in.id_batiment,
+                    id_cycle=cycle_id,
+                    type_oeuf=egg_type,
+                    id_utilisateur_creation=user_id,
+                )
+                db.add(retained)
+            else:
+                retained.id_utilisateur_modification = user_id
+
+            retained.nombre_oeufs = quantity
+            retained.grammage = prod_in.grammage
+            retained.calibre = _deduce_calibre(egg_type, prod_in.grammage)
+            retained.nombre_cartons = Production.calculer_cartons(quantity, egg_type)
+            # Building-level facts are counted only once across the type rows.
+            retained.mortalite = prod_in.mortalite if not records else None
+            retained.consommation_aliment_kg = prod_in.consommation_aliment_kg if not records else None
+            retained.formule = prod_in.formule if not records else None
+            ensure_sellable_egg_product(db, egg_type, retained.calibre)
+            records.append(retained)
+
+        db.flush()
+        for record in records:
+            db.refresh(record)
+        response = _daily_response(records, batiment)
+        db.commit()
+        return response
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Daily production save failed for building=%s date=%s", prod_in.id_batiment, prod_in.date_production)
+        raise HTTPException(
+            status_code=500,
+            detail="La saisie quotidienne n'a pas ete enregistree.",
+        ) from exc
+
+
+@router.post("/daily", response_model=ProductionDailyRead, status_code=status.HTTP_201_CREATED)
+def create_daily_production(
+    prod_in: ProductionDailyInput,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    return _save_daily_production(prod_in, db, current_user, updating=False)
+
+
+@router.put("/daily", response_model=ProductionDailyRead)
+def update_daily_production(
+    prod_in: ProductionDailyInput,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    return _save_daily_production(prod_in, db, current_user, updating=True)
+
+
+
+@router.delete("/daily", status_code=status.HTTP_204_NO_CONTENT)
+def delete_daily_production(
+    prod_in: ProductionDailyCancel,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    try:
+        batiment = db.query(Batiment).filter(
+            Batiment.id_batiment == prod_in.id_batiment,
+        ).with_for_update().first()
+        if not batiment:
+            raise HTTPException(status_code=404, detail="Batiment introuvable")
+        records = _daily_records(db, prod_in.id_batiment, prod_in.date_production)
+        if not records:
+            raise HTTPException(status_code=404, detail="Saisie quotidienne introuvable")
+        versions = {record.id_production: record.date_modification.isoformat() for record in records}
+        if versions != prod_in.versions:
+            raise HTTPException(status_code=409, detail="La saisie a change. Actualisez la page.")
+        user_id = current_user.id_utilisateur if current_user else None
+        for record in records:
+            record.est_actif = False
+            record.date_annulation = datetime.now(timezone.utc)
+            record.motif_annulation = "Desactivation de la saisie quotidienne"
+            record.id_utilisateur_annulation = user_id
+            record.id_utilisateur_modification = user_id
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Daily production cancellation failed")
+        raise HTTPException(status_code=500, detail="La saisie quotidienne n'a pas ete desactivee.") from exc
 
 
 @router.post("", response_model=ProductionRead, status_code=status.HTTP_201_CREATED)
@@ -283,7 +469,8 @@ def get_daily_stats(
         func.sum(Production.nombre_oeufs).label("total")
     ).filter(
         Production.est_actif.is_(True),
-        Production.date_production >= date_debut
+        Production.date_production >= date_debut,
+        Production.type_oeuf != "perdu",
     ).group_by(
         Production.date_production, Production.type_oeuf
     ).all()
@@ -295,7 +482,8 @@ def get_daily_stats(
         func.sum(Production.nombre_oeufs).label("total")
     ).join(Batiment).filter(
         Production.est_actif.is_(True),
-        Production.date_production >= date_debut
+        Production.date_production >= date_debut,
+        Production.type_oeuf != "perdu",
     ).group_by(
         Production.date_production, Batiment.nom
     ).all()
@@ -307,7 +495,8 @@ def get_daily_stats(
         func.sum(Production.nombre_cartons).label("total_cartons")
     ).filter(
         Production.est_actif.is_(True),
-        Production.date_production >= date_debut
+        Production.date_production >= date_debut,
+        Production.type_oeuf != "perdu",
     ).group_by(
         Production.date_production
     ).order_by(

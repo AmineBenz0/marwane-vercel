@@ -22,6 +22,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { productionService, batimentService } from '../../services/productionService';
 import useNotificationStore from '../../store/notificationStore';
 import ProductionForm from './ProductionForm';
+import { EGG_TYPE_LABELS, groupDailyProductions } from '../../utils/dailyProduction';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
 const formatDecimal = (value, decimals = 2) => Number(value || 0).toLocaleString('fr-FR', {
@@ -54,10 +55,7 @@ function BatimentProductionPage() {
       const [batData, stock, productionData] = await Promise.all([
         batimentService.getBatiments(),
         productionService.getDailyStock(selectedDate),
-        productionService.getProductions({
-          limit: 500,
-          id_batiment: selectedBatimentId,
-        }),
+        productionService.getBuildingProductions(selectedBatimentId),
       ]);
 
       setBatiments(batData || []);
@@ -91,27 +89,22 @@ function BatimentProductionPage() {
     available: Number(buildingStock?.available_eggs || 0),
   }), [buildingStock]);
 
-  const selectedDateProductions = useMemo(
-    () => productions.filter((production) => String(production.date_production || '').slice(0, 10) === selectedDate),
-    [productions, selectedDate],
-  );
-
-  const todayProductionEntries = selectedDateProductions.filter((production) => production.type_oeuf !== 'perdu');
-  const latestTodayEntry = todayProductionEntries[0] || null;
-
+  const dailyHistory = useMemo(() => groupDailyProductions(productions), [productions]);
+  const selectedDay = dailyHistory.find((day) => day.date === selectedDate) || null;
+  const latestTodayEntry = selectedDay?.representative || null;
   const totalStats = useMemo(() => ({
-    oeufs: productions.reduce((sum, item) => sum + (Number(item.nombre_oeufs) || 0), 0),
-    cartons: productions.reduce((sum, item) => sum + (Number(item.nombre_cartons) || 0), 0),
-    saisies: productions.length,
-  }), [productions]);
+    oeufs: dailyHistory.reduce((sum, day) => sum + day.collected, 0),
+    cartons: dailyHistory.reduce((sum, day) => sum + day.cartons, 0),
+    saisies: dailyHistory.length,
+  }), [dailyHistory]);
   const stockCategories = (buildingStock?.categories || []).filter((category) => category.type_oeuf !== 'perdu');
-  const latestGrammage = latestTodayEntry?.grammage != null ? `${formatDecimal(latestTodayEntry.grammage, 1)} g` : '-';
-  const latestAliment = latestTodayEntry?.consommation_aliment_kg != null
-    ? `${formatDecimal(latestTodayEntry.consommation_aliment_kg, 2)} kg`
+  const latestGrammage = selectedDay?.grammage != null ? `${formatDecimal(selectedDay.grammage, 1)} g` : '-';
+  const latestAliment = buildingStock?.consommation_aliment_kg != null
+    ? `${formatDecimal(buildingStock.consommation_aliment_kg, 2)} kg`
     : '-';
   const lowStockCategory = stockCategories.find((category) => Number(category.available_eggs || 0) <= 0)
     || stockCategories.find((category) => Number(category.available_eggs || 0) < 200);
-  const hasProduction = todayProductionEntries.length > 0;
+  const hasProduction = !!selectedDay;
 
   const handleAddProduction = () => {
     setEditingProduction(null);
@@ -125,18 +118,31 @@ function BatimentProductionPage() {
     setEditingProduction(production);
     setPreselectedEggType(production.type_oeuf || 'normal');
     setFormTitle('Modifier la saisie');
-    setFormDescription('Mettez a jour cette saisie pour corriger les totaux du batiment.');
+    setFormDescription('Mettez à jour les quantités par type et le grammage global de cette journée.');
     setOpenForm(true);
   };
 
-  const handleDelete = async (production) => {
-    if (!window.confirm('Desactiver cette saisie de production ?')) return;
+  const handleDelete = async (day) => {
     try {
-      await productionService.deleteProduction(production.id_production);
-      notifySuccess('Saisie desactivee');
-      loadData();
+      const daily = await productionService.getDailyProduction(day.id_batiment, day.date);
+      const currentDay = groupDailyProductions(daily.records)[0];
+      if (!currentDay) {
+        notifyError('Cette journée a déjà été désactivée.');
+        await loadData();
+        return;
+      }
+      if (!window.confirm(
+        `Désactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} œufs collectés et ${formatNumber(currentDay.lost)} perdus ?`,
+      )) return;
+      await productionService.deleteDailyProduction({
+        id_batiment: day.id_batiment,
+        date_production: day.date,
+        versions: daily.versions,
+      });
+      notifySuccess('Saisie quotidienne désactivée');
+      await loadData();
     } catch (err) {
-      notifyError('Erreur lors de la desactivation');
+      notifyError(err?.message || 'Erreur lors de la désactivation');
     }
   };
 
@@ -199,6 +205,7 @@ function BatimentProductionPage() {
           hasProduction={hasProduction}
           todayStats={todayStats}
           latestEntry={latestTodayEntry}
+          day={selectedDay}
           onAddProduction={handleAddProduction}
           onEdit={handleEdit}
         />
@@ -234,7 +241,7 @@ function BatimentProductionPage() {
         >
           <MovementListCard movements={buildingMovements} />
           <HistoryCard
-            productions={productions}
+            days={dailyHistory}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onAddProduction={handleAddProduction}
@@ -270,6 +277,7 @@ function DailyHeroCard({
   hasProduction,
   todayStats,
   latestEntry,
+  day,
   onAddProduction,
   onEdit,
 }) {
@@ -308,13 +316,13 @@ function DailyHeroCard({
         {latestEntry && (
           <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.72)', border: '1px solid', borderColor: 'divider' }}>
             <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
-              Derniere saisie
+              Collecte de la journée
             </Typography>
             <Typography fontWeight={950}>
-              {formatNumber(latestEntry.nombre_oeufs)} oeufs
+              {formatNumber(day.collected)} œufs collectés
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Mortalite {latestEntry.mortalite ?? '-'} - Grammage {latestEntry.grammage ?? '-'} g
+              Mortalité {formatNumber(day.mortality)} · Grammage global {day.grammage != null ? `${formatDecimal(day.grammage, 1)} g` : '-'}
             </Typography>
           </Box>
         )}
@@ -419,7 +427,7 @@ function StockCategoryCard({ categories }) {
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography variant="h5" fontWeight={950}>Stock du batiment</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Lecture par categories disponibles, uniquement pour ce batiment.
+          Quantités produites, vendues et disponibles pour la journée sélectionnée.
         </Typography>
 
         <Box
@@ -457,14 +465,13 @@ function StockCategoryCard({ categories }) {
                 <Box sx={{ minWidth: 0 }}>
                   <Typography fontWeight={950} sx={{ overflowWrap: 'anywhere' }}>{category.label}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Produit {formatNumber(category.produced_eggs)} oeufs
-                    {Number(category.sold_eggs || 0) > 0 ? ` - vendu ${formatNumber(category.sold_eggs)}` : ''}
+                    Produits : {formatNumber(category.produced_eggs)} · Vendus : {formatNumber(category.sold_eggs)}
                     {Number(category.lost_eggs || 0) > 0 ? ` - pertes ${formatNumber(category.lost_eggs)}` : ''}
                   </Typography>
                 </Box>
                 <Chip
                   color={tone}
-                  label={`${formatNumber(available)} oeufs`}
+                  label={`Disponible : ${formatNumber(available)}`}
                   sx={{ fontWeight: 950, justifySelf: { xs: 'start', sm: 'end' }, maxWidth: '100%' }}
                 />
               </Box>
@@ -532,16 +539,16 @@ function MovementListCard({ movements }) {
   );
 }
 
-function HistoryCard({ productions, onEdit, onDelete, onAddProduction }) {
+function HistoryCard({ days, onEdit, onDelete, onAddProduction }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0, height: '100%' }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography variant="h5" fontWeight={950}>Historique recent</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Dernieres saisies modifiables.
+          Une carte par journée, avec le détail de la collecte.
         </Typography>
 
-        {productions.length === 0 ? (
+        {days.length === 0 ? (
           <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'grey.50', textAlign: 'center', minWidth: 0 }}>
             <Typography fontWeight={900}>Aucune saisie pour ce batiment</Typography>
             <Typography color="text.secondary" sx={{ mt: 0.75, mb: 1.5 }}>
@@ -553,22 +560,29 @@ function HistoryCard({ productions, onEdit, onDelete, onAddProduction }) {
           </Box>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: '1fr' }, gap: 1.25, maxHeight: { xs: 360, md: 430 }, overflow: 'auto', pr: 0.25, minWidth: 0 }}>
-            {productions.slice(0, 24).map((production) => (
-              <Box key={production.id_production} sx={{ p: 1.75, borderRadius: 3, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider' }}>
+            {days.slice(0, 24).map((day) => (
+              <Box key={day.key} sx={{ p: 1.75, borderRadius: 3, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider' }}>
                 <Stack direction="row" justifyContent="space-between" spacing={1.5} sx={{ minWidth: 0 }}>
                   <Typography fontWeight={950} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-                    {formatShortDate(production.date_production)}
+                    {formatShortDate(day.date)}
                   </Typography>
                   <Stack direction="row" spacing={0.25}>
-                    <IconButton size="small" color="primary" onClick={() => onEdit(production)}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" color="error" onClick={() => onDelete(production)}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton aria-label={`Modifier la journée du ${formatShortDate(day.date)}`} size="small" color="primary" onClick={() => onEdit(day.representative)}><EditIcon fontSize="small" /></IconButton>
+                    <IconButton aria-label={`Désactiver la journée du ${formatShortDate(day.date)}`} size="small" color="error" onClick={() => onDelete(day)}><DeleteIcon fontSize="small" /></IconButton>
                   </Stack>
                 </Stack>
+                <Typography fontWeight={950} sx={{ mt: 1 }}>
+                  {formatNumber(day.collected)} œufs collectés
+                </Typography>
                 <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-                  <Chip label={`${formatNumber(production.nombre_oeufs)} oeufs`} size="small" sx={{ fontWeight: 900, bgcolor: 'background.paper' }} />
-                  <Chip label={production.type_oeuf} color={production.type_oeuf === 'normal' ? 'success' : 'warning'} size="small" sx={{ fontWeight: 900 }} />
-                  <Chip label={`${production.nombre_cartons} cartons`} size="small" sx={{ fontWeight: 900, bgcolor: 'background.paper' }} />
+                  {Object.entries(day.counts).filter(([type, count]) => type !== 'perdu' && count > 0).map(([type, count]) => (
+                    <Chip key={type} label={`${EGG_TYPE_LABELS[type] || type} : ${formatNumber(count)}`} size="small" sx={{ fontWeight: 900, bgcolor: 'background.paper' }} />
+                  ))}
+                  {day.lost > 0 && <Chip label={`Perdus : ${formatNumber(day.lost)}`} color="error" variant="outlined" size="small" sx={{ fontWeight: 900 }} />}
                 </Stack>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Grammage global : {day.grammage != null ? `${formatDecimal(day.grammage, 1)} g` : '-'} · {formatNumber(day.cartons)} cartons
+                </Typography>
               </Box>
             ))}
           </Box>
@@ -584,12 +598,12 @@ function SummaryHistoryCard({ totalStats }) {
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography variant="h5" fontWeight={950}>Resume historique</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Total des saisies enregistrées pour ce bâtiment.
+          Totaux des collectes et nombre de journées enregistrées.
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))', xl: '1fr' }, gap: 1 }}>
           <Fact label="Total oeufs" value={`${formatNumber(totalStats.oeufs)} oeufs`} />
           <Fact label="Cartons" value={totalStats.cartons} />
-          <Fact label="Saisies" value={totalStats.saisies} />
+          <Fact label="Journées saisies" value={totalStats.saisies} />
         </Box>
       </CardContent>
     </Card>
@@ -600,7 +614,7 @@ function Fact({ label, value }) {
   return (
     <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: 'grey.50' }}>
       <Typography variant="caption" color="text.secondary" fontWeight={800}>{label}</Typography>
-      <Typography fontWeight={900}>{value || '-'}</Typography>
+      <Typography fontWeight={900}>{value ?? '-'}</Typography>
     </Box>
   );
 }

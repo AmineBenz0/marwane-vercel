@@ -1,6 +1,7 @@
 import DateField from '../../utils/DateField';
 import { useState, useEffect } from 'react';
 import {
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -34,7 +35,6 @@ function ProductionForm({
   initialData,
   batiments,
   preselectedBatimentId = '',
-  preselectedEggType = 'normal',
   preselectedDate = new Date().toISOString().split('T')[0],
   title,
   description,
@@ -44,33 +44,78 @@ function ProductionForm({
   const notification = useNotification();
   const [formules, setFormules] = useState([]);
   const [calibreThresholds, setCalibreThresholds] = useState([]);
-  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: initialData ? {
-      ...initialData,
-      date_production: initialData.date_production ? initialData.date_production.split('T')[0] : new Date().toISOString().split('T')[0],
-    } : {
-      date_production: preselectedDate,
-      id_batiment: preselectedBatimentId || '',
-      type_oeuf: preselectedEggType,
-      nombre_oeufs: '',
+  const [loadingDaily, setLoadingDaily] = useState(!!initialData);
+  const [loadError, setLoadError] = useState('');
+  const [versions, setVersions] = useState({});
+  const [hasLegacyType, setHasLegacyType] = useState(false);
+  const { register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: {
+      date_production: initialData?.date_production?.slice(0, 10) || preselectedDate,
+      id_batiment: initialData?.id_batiment || preselectedBatimentId || '',
+      quantites: Object.fromEntries(EGG_TYPES.map((type) => [type.value, ''])),
       grammage: '',
       mortalite: '',
       consommation_aliment_kg: '',
       formule: '',
-      oeufs_perdus: '',
     },
   });
 
-  const watchedNombre = watch('nombre_oeufs');
-  const watchedType = watch('type_oeuf');
+  const quantities = watch('quantites') || {};
   const watchedBatiment = watch('id_batiment');
   const watchedGrammage = watch('grammage');
-  const showDailyLossField = !initialData && watchedType !== 'perdu';
-  const eggTypeOptions = initialData?.type_oeuf === 'perdu'
-    ? EGG_TYPES
-    : EGG_TYPES.filter((type) => type.value !== 'perdu');
+  const eggTypeOptions = hasLegacyType
+    ? [...EGG_TYPES, { value: 'double_jaune_demarrage', label: 'Double jaune démarrage (historique)' }]
+    : EGG_TYPES;
+  const totalEggs = eggTypeOptions.reduce(
+    (sum, type) => sum + (type.value === 'perdu' ? 0 : Number(quantities[type.value] || 0)), 0,
+  );
+  const cartonPreview = eggTypeOptions.reduce((sum, type) => {
+    const count = Number(quantities[type.value] || 0);
+    if (count <= 0 || type.value === 'perdu') return sum;
+    const cartons = Math.ceil(count / 30);
+    return sum + (type.value.startsWith('double_jaune')
+      ? (cartons * 2) + 1
+      : cartons + Math.ceil(cartons / 10));
+  }, 0);
 
-  const [cartonPreview, setCartonPreview] = useState(0);
+  useEffect(() => {
+    if (!open || !initialData) return undefined;
+    let cancelled = false;
+    setLoadingDaily(true);
+    setLoadError('');
+    productionService.getDailyProduction(
+      initialData.id_batiment, initialData.date_production.slice(0, 10),
+    ).then((daily) => {
+      if (cancelled) return;
+      const rows = daily.records || [];
+      const counts = Object.fromEntries(EGG_TYPES.map((type) => [type.value, 0]));
+      rows.forEach((row) => {
+        counts[row.type_oeuf] = (counts[row.type_oeuf] || 0) + Number(row.nombre_oeufs);
+      });
+      const producedRows = rows.filter((row) => row.type_oeuf !== 'perdu');
+      const weightRows = producedRows.length ? producedRows : rows;
+      const weightCount = weightRows.reduce((sum, row) => sum + Number(row.nombre_oeufs), 0);
+      const avgWeight = weightCount
+        ? weightRows.reduce((sum, row) => sum + Number(row.grammage) * Number(row.nombre_oeufs), 0) / weightCount
+        : 0;
+      reset({
+        date_production: initialData.date_production.slice(0, 10),
+        id_batiment: initialData.id_batiment,
+        quantites: counts,
+        grammage: Number(avgWeight.toFixed(2)),
+        mortalite: rows.reduce((sum, row) => sum + Number(row.mortalite || 0), 0),
+        consommation_aliment_kg: Number(rows.reduce((sum, row) => sum + Number(row.consommation_aliment_kg || 0), 0).toFixed(2)),
+        formule: rows.find((row) => row.formule)?.formule || '',
+      });
+      setVersions(daily.versions || {});
+      setHasLegacyType(counts.double_jaune_demarrage > 0);
+    }).catch(() => {
+      if (!cancelled) setLoadError('Impossible de charger la saisie quotidienne. Fermez puis rouvrez le formulaire.');
+    }).finally(() => {
+      if (!cancelled) setLoadingDaily(false);
+    });
+    return () => { cancelled = true; };
+  }, [open, initialData, reset]);
 
   useEffect(() => {
     const fetchFormules = async () => {
@@ -89,23 +134,7 @@ function ProductionForm({
     if (open) fetchFormules();
   }, [open]);
 
-  useEffect(() => {
-    const nb = parseInt(watchedNombre, 10);
-    if (!Number.isNaN(nb) && nb > 0) {
-      const fullCartons = Math.ceil(nb / 30);
-      if (watchedType === 'double_jaune' || watchedType === 'double_jaune_demarrage') {
-        setCartonPreview((fullCartons * 2) + 1);
-      } else {
-        const safetyCartons = Math.ceil(fullCartons / 10);
-        setCartonPreview(fullCartons + safetyCartons);
-      }
-    } else {
-      setCartonPreview(0);
-    }
-  }, [watchedNombre, watchedType]);
-
   const deducedCalibre = (() => {
-    if (watchedType !== 'normal') return null;
     const gramValue = Number(watchedGrammage);
     if (!Number.isFinite(gramValue) || gramValue <= 0) return null;
     const match = calibreThresholds.find((threshold) => {
@@ -117,33 +146,39 @@ function ProductionForm({
   })();
 
   const onSubmit = async (data) => {
+    if (loadingDaily || loadError) return;
+    const counts = Object.fromEntries(Object.entries(data.quantites).map(
+      ([type, count]) => [type, Number(count || 0)],
+    ));
+    if (!Object.values(counts).some((count) => count > 0)) {
+      setError('root', { message: "Indiquez au moins un nombre d'œufs." });
+      return;
+    }
     try {
-      const lostEggs = Number(data.oeufs_perdus || 0);
       const payload = {
         date_production: data.date_production,
         id_batiment: Number(data.id_batiment),
-        type_oeuf: data.type_oeuf,
-        nombre_oeufs: Number(data.nombre_oeufs),
+        quantites: counts,
         grammage: Number(data.grammage),
-        mortalite: data.mortalite === '' || data.mortalite === null ? null : Number(data.mortalite),
-        consommation_aliment_kg: data.consommation_aliment_kg === '' || data.consommation_aliment_kg === null
-          ? null
-          : Number(data.consommation_aliment_kg),
+        mortalite: data.mortalite === '' ? null : Number(data.mortalite),
+        consommation_aliment_kg: data.consommation_aliment_kg === ''
+          ? null : Number(data.consommation_aliment_kg),
         formule: data.formule || null,
+        ...(initialData ? { versions } : {}),
       };
       if (initialData) {
-        await productionService.updateProduction(initialData.id_production, payload);
-        notification.success('Saisie mise a jour');
+        await productionService.updateDailyProduction(payload);
+        notification.success('Saisie quotidienne mise à jour');
       } else {
-        await productionService.createProduction({
-          ...payload,
-          oeufs_perdus: showDailyLossField ? lostEggs : 0,
-        });
-        notification.success(lostEggs > 0 ? 'Production et pertes enregistrees' : 'Production enregistree avec succes');
+        await productionService.createDailyProduction(payload);
+        notification.success('Production quotidienne enregistrée');
       }
       onSuccess();
     } catch (err) {
-      notification.error(err.response?.data?.detail || 'Une erreur est survenue');
+      const detail = err.data?.detail || err.response?.data?.detail;
+      const message = typeof detail === 'string' ? detail : (err.message || 'Une erreur est survenue');
+      setError('root', { message });
+      notification.error(message);
     }
   };
 
@@ -192,14 +227,24 @@ function ProductionForm({
           }}
         >
           <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
-            {description || 'Remplissez les informations de collecte pour le batiment selectionne.'}
+            {description || 'Indiquez le nombre de chaque type et un grammage moyen commun à toute la collecte.'}
           </Typography>
 
+          {initialData && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              La modification porte sur tous les types de ce bâtiment pour cette journée.
+            </Alert>
+          )}
+          {(loadError || errors.root?.message) && (
+            <Alert severity="error" sx={{ mb: 2 }}>{loadError || errors.root.message}</Alert>
+          )}
+          {loadingDaily && <Typography sx={{ mb: 2 }}>Chargement de la saisie...</Typography>}
           <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6}>
               <DateField
                 {...register('date_production', { required: 'Date requise' })}
                 label="Date de production"
+                inputProps={{ readOnly: !!initialData }}
 
                 fullWidth
                 InputLabelProps={{ shrink: true }}
@@ -215,7 +260,7 @@ function ProductionForm({
                 onChange={(event) => setValue('id_batiment', event.target.value, { shouldValidate: true })}
                 label="Batiment"
                 fullWidth
-                disabled={!!preselectedBatimentId && !initialData}
+                SelectProps={{ readOnly: !!preselectedBatimentId || !!initialData }}
                 error={!!errors.id_batiment}
                 helperText={errors.id_batiment?.message}
               >
@@ -228,31 +273,35 @@ function ProductionForm({
 
             <Grid item xs={12}><Divider sx={{ my: 1 }} /></Grid>
 
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('type_oeuf', { required: true })}
-                select
-                value={watchedType || ''}
-                label="Type de saisie"
-                fullWidth
-              >
-                {eggTypeOptions.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
-                ))}
-              </TextField>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" fontWeight={900}>Nombre d'œufs par type</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés et perdus sont distincts.
+              </Typography>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('nombre_oeufs', {
-                  required: 'Champ requis',
-                  min: { value: 1, message: 'Minimum 1' },
-                })}
-                label="Nombre d'oeufs"
-                type="number"
-                fullWidth
-                error={!!errors.nombre_oeufs}
-                helperText={errors.nombre_oeufs?.message}
-              />
+            {eggTypeOptions.map((type) => (
+              <Grid item xs={12} sm={6} key={type.value}>
+                <TextField
+                  {...register(`quantites.${type.value}`, {
+                    min: { value: 0, message: 'Minimum 0' },
+                    validate: (value) => value === '' || (
+                      Number.isInteger(Number(value)) && Number(value) >= 0
+                    ) || 'Indiquez un nombre entier positif ou nul',
+                  })}
+                  label={type.label}
+                  type="number"
+                  inputProps={{ min: 0, step: 1 }}
+                  fullWidth
+                  disabled={loadingDaily || !!loadError}
+                  error={!!errors.quantites?.[type.value]}
+                  helperText={errors.quantites?.[type.value]?.message}
+                />
+              </Grid>
+            ))}
+            <Grid item xs={12}>
+              <Typography fontWeight={900}>
+                Total collecté : {totalEggs.toLocaleString('fr-FR')} œufs
+              </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -260,15 +309,15 @@ function ProductionForm({
                   required: 'Champ requis',
                   min: { value: 0, message: 'Doit etre positif' },
                 })}
-                label="Grammage moyen (g)"
+                label="Grammage moyen global (g)"
                 type="number"
-                inputProps={{ step: '0.1' }}
+                inputProps={{ min: 0, step: '0.01' }}
                 fullWidth
                 error={!!errors.grammage}
                 helperText={errors.grammage?.message}
               />
             </Grid>
-            {watchedType === 'normal' && (
+            {Number(quantities.normal || 0) > 0 && (
               <Grid item xs={12} sm={6}>
                 <Box
                   sx={{
@@ -287,7 +336,7 @@ function ProductionForm({
                     {deducedCalibre?.label || 'Saisir le grammage'}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Seuils faciles à modifier plus tard.
+                    Calibre des œufs normaux déduit du grammage global.
                   </Typography>
                 </Box>
               </Grid>
@@ -321,32 +370,6 @@ function ProductionForm({
             </Grid>
 
             <Grid item xs={12}><Divider sx={{ my: 1 }} /></Grid>
-
-            {showDailyLossField && (
-              <>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" fontWeight={900}>
-                    Pertes du jour
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Si des oeufs sont perdus ou casses aujourd'hui, indiquez-les ici. Sinon laissez vide.
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    {...register('oeufs_perdus', {
-                      min: { value: 0, message: 'Doit etre positif' },
-                    })}
-                    label="Oeufs perdus"
-                    type="number"
-                    fullWidth
-                    error={!!errors.oeufs_perdus}
-                    helperText={errors.oeufs_perdus?.message || 'Optionnel'}
-                  />
-                </Grid>
-                <Grid item xs={12}><Divider sx={{ my: 1 }} /></Grid>
-              </>
-            )}
 
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>
@@ -418,7 +441,7 @@ function ProductionForm({
           <Button
             type="submit"
             variant="contained"
-            disabled={isSubmitting}
+            disabled={isSubmitting || loadingDaily || !!loadError}
             sx={{ px: 4, borderRadius: 2 }}
           >
             {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre a jour' : 'Enregistrer')}

@@ -173,3 +173,34 @@ class ProductionPerformanceRow(BaseModel):
 class ProductionPerformanceResponse(BaseModel):
     cycle: dict
     rows: List[ProductionPerformanceRow]
+
+
+class ProductionDailyInput(BaseModel):
+    """One collection for a building, with a shared average egg weight."""
+    date_production: date
+    id_batiment: int = Field(..., gt=0)
+    quantites: dict[Literal["normal", "double_jaune", "casse", "blanc", "perdu", "double_jaune_demarrage"], int] = Field(default_factory=dict)
+    grammage: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
+    mortalite: Optional[int] = Field(None, ge=0)
+    consommation_aliment_kg: Optional[Decimal] = Field(None, ge=0)
+    formule: Optional[str] = Field(None, max_length=100)
+    versions: dict[int, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_quantities(self) -> "ProductionDailyInput":
+        if any(value < 0 for value in self.quantites.values()):
+            raise ValueError("Les quantites doivent etre positives ou nulles")
+        if not any(self.quantites.values()):
+            raise ValueError("Indiquez au moins un nombre d'oeufs")
+        return self
+
+
+class ProductionDailyRead(BaseModel):
+    records: List[ProductionRead]
+    versions: dict[int, str]
+
+
+class ProductionDailyCancel(BaseModel):
+    date_production: date
+    id_batiment: int = Field(..., gt=0)
+    versions: dict[int, str]

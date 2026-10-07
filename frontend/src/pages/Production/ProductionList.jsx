@@ -81,9 +81,9 @@ function ProductionList() {
 
   // Calculs rapides pour le dashboard
   const stats = useMemo(() => {
-    if (productions.length === 0) return { today: 0, cartons: 0 };
+    if (productions.length === 0) return { total_oeufs: 0, total_cartons: 0 };
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayProds = productions.filter(p => p.date_production.startsWith(todayStr));
+    const todayProds = productions.filter(p => p.type_oeuf !== 'perdu' && p.date_production.startsWith(todayStr));
     return {
       total_oeufs: todayProds.reduce((sum, p) => sum + p.nombre_oeufs, 0),
       total_cartons: todayProds.reduce((sum, p) => sum + p.nombre_cartons, 0),
