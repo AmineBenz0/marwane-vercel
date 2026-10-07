@@ -22,10 +22,11 @@ export function groupDailyProductions(productions = []) {
     const group = groups.get(key);
     const count = Number(row.nombre_oeufs || 0);
     group.rows.push(row);
-    group.counts[row.type_oeuf] = (group.counts[row.type_oeuf] || 0) + count;
+    const displayType = row.type_oeuf === 'perdu' ? 'casse' : row.type_oeuf;
+    group.counts[displayType] = (group.counts[displayType] || 0) + count;
     group.mortality += Number(row.mortalite || 0);
     group.feed += Number(row.consommation_aliment_kg || 0);
-    if (row.type_oeuf === 'perdu') {
+    if (['casse', 'perdu'].includes(row.type_oeuf)) {
       group.lost += count;
     } else {
       group.collected += count;
@@ -36,6 +37,6 @@ export function groupDailyProductions(productions = []) {
   return [...groups.values()].map((group) => ({
     ...group,
     grammage: group.collected ? group.weightedGrams / group.collected : null,
-    representative: group.rows.find((row) => row.type_oeuf !== 'perdu') || group.rows[0],
+    representative: group.rows.find((row) => !['casse', 'perdu'].includes(row.type_oeuf)) || group.rows[0],
   })).sort((a, b) => b.date.localeCompare(a.date) || Number(a.id_batiment) - Number(b.id_batiment));
 }

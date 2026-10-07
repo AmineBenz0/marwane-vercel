@@ -24,7 +24,7 @@ const EGG_TYPES = [
   { value: 'normal', label: 'Oeufs normaux' },
   { value: 'double_jaune', label: 'Double jaune' },
   { value: 'blanc', label: 'Oeufs blancs' },
-  { value: 'perdu', label: 'Oeufs perdus' },
+  { value: 'casse', label: 'Oeufs casses' },
 ];
 
 function ProductionForm({
@@ -47,7 +47,6 @@ function ProductionForm({
   const [loadError, setLoadError] = useState('');
   const [versions, setVersions] = useState({});
   const [hasLegacyType, setHasLegacyType] = useState(false);
-  const [legacyCasseCount, setLegacyCasseCount] = useState(0);
   const { register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       date_production: initialData?.date_production?.slice(0, 10) || preselectedDate,
@@ -67,11 +66,11 @@ function ProductionForm({
     ? [...EGG_TYPES, { value: 'double_jaune_demarrage', label: 'Double jaune démarrage (historique)' }]
     : EGG_TYPES;
   const totalEggs = eggTypeOptions.reduce(
-    (sum, type) => sum + (type.value === 'perdu' ? 0 : Number(quantities[type.value] || 0)), 0,
+    (sum, type) => sum + (type.value === 'casse' ? 0 : Number(quantities[type.value] || 0)), 0,
   );
   const cartonPreview = eggTypeOptions.reduce((sum, type) => {
     const count = Number(quantities[type.value] || 0);
-    if (count <= 0 || type.value === 'perdu') return sum;
+    if (count <= 0 || type.value === 'casse') return sum;
     const cartons = Math.ceil(count / 30);
     return sum + (type.value.startsWith('double_jaune')
       ? (cartons * 2) + 1
@@ -90,11 +89,10 @@ function ProductionForm({
       const rows = daily.records || [];
       const counts = Object.fromEntries(EGG_TYPES.map((type) => [type.value, 0]));
       rows.forEach((row) => {
-        counts[row.type_oeuf] = (counts[row.type_oeuf] || 0) + Number(row.nombre_oeufs);
+        const type = row.type_oeuf === 'perdu' ? 'casse' : row.type_oeuf;
+        counts[type] = (counts[type] || 0) + Number(row.nombre_oeufs);
       });
-      setLegacyCasseCount(counts.casse || 0);
-      const producedRows = rows.filter((row) => row.type_oeuf !== 'perdu');
-      const weightRows = producedRows.length ? producedRows : rows;
+      const weightRows = rows.filter((row) => !['casse', 'perdu'].includes(row.type_oeuf));
       const weightCount = weightRows.reduce((sum, row) => sum + Number(row.nombre_oeufs), 0);
       const avgWeight = weightCount
         ? weightRows.reduce((sum, row) => sum + Number(row.grammage) * Number(row.nombre_oeufs), 0) / weightCount
@@ -103,7 +101,7 @@ function ProductionForm({
         date_production: initialData.date_production.slice(0, 10),
         id_batiment: initialData.id_batiment,
         quantites: counts,
-        grammage: Number(avgWeight.toFixed(2)),
+        grammage: Number((weightCount ? avgWeight : 0).toFixed(2)),
         mortalite: rows.reduce((sum, row) => sum + Number(row.mortalite || 0), 0),
         consommation_aliment_kg: Number(rows.reduce((sum, row) => sum + Number(row.consommation_aliment_kg || 0), 0).toFixed(2)),
         formule: rows.find((row) => row.formule)?.formule || '',
@@ -151,7 +149,6 @@ function ProductionForm({
     const counts = Object.fromEntries(Object.entries(data.quantites).map(
       ([type, count]) => [type, Number(count || 0)],
     ));
-    if (initialData && legacyCasseCount > 0) counts.casse = legacyCasseCount;
     if (!Object.values(counts).some((count) => count > 0)) {
       setError('root', { message: "Indiquez au moins un nombre d'œufs." });
       return;
@@ -280,7 +277,7 @@ function ProductionForm({
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>Nombre d'œufs par type</Typography>
               <Typography variant="caption" color="text.secondary">
-                Laissez vide ou indiquez 0 pour les types absents. Les œufs perdus sont comptabilisés à part.
+                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés sont comptabilisés à part.
               </Typography>
             </Grid>
             {eggTypeOptions.map((type) => (
@@ -304,7 +301,7 @@ function ProductionForm({
             ))}
             <Grid item xs={12}>
               <Typography fontWeight={900}>
-                Total collecté : {totalEggs.toLocaleString('fr-FR')} œufs
+                Total collecté (hors cassés) : {totalEggs.toLocaleString('fr-FR')} œufs
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>

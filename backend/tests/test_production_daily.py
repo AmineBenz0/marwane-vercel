@@ -30,25 +30,32 @@ def test_daily_types_feed_stock_and_stats_once(client, db_session, auth_headers)
     response = client.post("/api/v1/productions/daily", json=payload, headers=auth_headers)
     assert response.status_code == 201, response.text
     rows = response.json()["records"]
-    assert len(rows) == 5
-    assert {row["type_oeuf"]: row["nombre_oeufs"] for row in rows} == payload["quantites"]
+    assert len(rows) == 4
+    assert {row["type_oeuf"]: row["nombre_oeufs"] for row in rows} == {
+        "normal": 120, "double_jaune": 30, "casse": 10, "blanc": 10,
+    }
+    casse_row = next(row for row in rows if row["type_oeuf"] == "casse")
+    assert casse_row["nombre_cartons"] == 0
     assert {Decimal(row["grammage"]) for row in rows} == {Decimal("63.25")}
     assert sum(row["mortalite"] or 0 for row in rows) == 2
     assert sum(Decimal(row["consommation_aliment_kg"] or 0) for row in rows) == 12
     stock = client.get("/api/v1/productions/stock/daily", headers=auth_headers).json()
     building = next(row for row in stock["batiments"] if row["id_batiment"] == payload["id_batiment"])
-    assert building["produced_eggs"] == 164
-    assert building["lost_eggs"] == 6
-    assert building["available_eggs"] == 158
+    assert building["produced_eggs"] == 160
+    assert building["lost_eggs"] == 10
+    assert building["available_eggs"] == 150
     assert building["mortalite"] == 2
     assert Decimal(building["consommation_aliment_kg"]) == 12
-    assert {row["type_oeuf"]: row["produced_eggs"] for row in building["categories"] if row["type_oeuf"] != "perdu"} == {
-        "normal": 120, "double_jaune": 30, "casse": 4, "blanc": 10,
+    categories = {row["type_oeuf"]: row for row in building["categories"]}
+    assert {key: value["produced_eggs"] for key, value in categories.items()} == {
+        "normal": 120, "double_jaune": 30, "casse": 0, "blanc": 10,
     }
+    assert categories["casse"]["lost_eggs"] == 10
+    assert categories["casse"]["available_eggs"] == 0
     stats = client.get("/api/v1/productions/stats/daily", headers=auth_headers).json()[0]
-    assert stats["total_oeufs"] == 164
+    assert stats["total_oeufs"] == 160
     assert {row["type"]: row["count"] for row in stats["par_type"]} == {
-        "normal": 120, "double_jaune": 30, "casse": 4, "blanc": 10,
+        "normal": 120, "double_jaune": 30, "casse": 10, "blanc": 10,
     }
 
 
@@ -68,6 +75,9 @@ def test_daily_update_removes_zero_types_and_preserves_audit(client, db_session,
     assert response.status_code == 200, response.text
     rows = response.json()["records"]
     assert len(rows) == 3
+    assert {row["type_oeuf"]: row["nombre_oeufs"] for row in rows} == {
+        "double_jaune": 20, "blanc": 50, "casse": 2,
+    }
     assert all(Decimal(row["grammage"]) == 58 for row in rows)
     assert sum(row["mortalite"] or 0 for row in rows) == 3
     removed = db_session.get(Production, normal_id)

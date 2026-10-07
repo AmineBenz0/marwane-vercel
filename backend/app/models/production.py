@@ -71,9 +71,9 @@ class Production(Base):
         - Normal: 10 cartons = 1 carton en plus (sécurité à la base de la pile)
         - Double Jaune: 2 fois plus de cartons + 1
         """
-        if nombre_oeufs <= 0:
+        if nombre_oeufs <= 0 or type_oeuf.lower() in {"casse", "perdu"}:
             return 0
-            
+
         # Nombre de cartons pleins
         nb_pleins = math.ceil(nombre_oeufs / 30)
         

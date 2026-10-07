@@ -73,9 +73,9 @@ def _category_label(type_oeuf: str, calibre: Optional[str] = None) -> str:
         "normal": "Normal",
         "double_jaune": "Double jaune",
         "double_jaune_demarrage": "Double jaune demarrage",
-        "casse": "Casse",
+        "casse": "Oeufs casses",
         "blanc": "Blanc",
-        "perdu": "Perdu",
+        "perdu": "Perdus (historique)",
     }
     type_label = labels.get(type_oeuf, (type_oeuf or "").replace("_", " ").title())
     if type_oeuf == "normal" and calibre:
@@ -245,6 +245,9 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         ):
             raise HTTPException(status_code=400, detail="Ce type historique ne peut plus etre ajoute.")
 
+        quantities = dict(prod_in.quantites)
+        quantities["casse"] = quantities.get("casse", 0) + quantities.pop("perdu", 0)
+
         user_id = current_user.id_utilisateur if current_user else None
         cycle_ids = {record.id_cycle for record in existing if record.id_cycle is not None}
         if len(cycle_ids) > 1:
@@ -257,7 +260,7 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         records = []
         # Losses are last so operational fields normally belong to a produced type.
         for egg_type in ("normal", "double_jaune", "casse", "blanc", "double_jaune_demarrage", "perdu"):
-            quantity = prod_in.quantites.get(egg_type, 0)
+            quantity = quantities.get(egg_type, 0)
             candidates = by_type.get(egg_type, [])
             retained = candidates[0] if quantity and candidates else None
             for record in candidates:
@@ -290,7 +293,8 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             retained.mortalite = prod_in.mortalite if not records else None
             retained.consommation_aliment_kg = prod_in.consommation_aliment_kg if not records else None
             retained.formule = prod_in.formule if not records else None
-            ensure_sellable_egg_product(db, egg_type, retained.calibre)
+            if egg_type not in {"casse", "perdu"}:
+                ensure_sellable_egg_product(db, egg_type, retained.calibre)
             records.append(retained)
 
         db.flush()
@@ -425,7 +429,8 @@ def create_production(
 
     try:
         # Production, losses, and product synchronization share one transaction.
-        ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
+        if prod_in.type_oeuf not in {"casse", "perdu"}:
+            ensure_sellable_egg_product(db, prod_in.type_oeuf, calibre)
         db.add_all(records)
         db.flush()
         db.refresh(db_prod)
@@ -470,7 +475,6 @@ def get_daily_stats(
     ).filter(
         Production.est_actif.is_(True),
         Production.date_production >= date_debut,
-        Production.type_oeuf != "perdu",
     ).group_by(
         Production.date_production, Production.type_oeuf
     ).all()
@@ -483,7 +487,7 @@ def get_daily_stats(
     ).join(Batiment).filter(
         Production.est_actif.is_(True),
         Production.date_production >= date_debut,
-        Production.type_oeuf != "perdu",
+        Production.type_oeuf.notin_(("casse", "perdu")),
     ).group_by(
         Production.date_production, Batiment.nom
     ).all()
@@ -496,7 +500,7 @@ def get_daily_stats(
     ).filter(
         Production.est_actif.is_(True),
         Production.date_production >= date_debut,
-        Production.type_oeuf != "perdu",
+        Production.type_oeuf.notin_(("casse", "perdu")),
     ).group_by(
         Production.date_production
     ).order_by(
@@ -506,11 +510,9 @@ def get_daily_stats(
     # Regrouper en dicts indexés par date
     type_map = {}
     for row in par_type_rows:
-        if row.date_production not in type_map:
-            type_map[row.date_production] = []
-        type_map[row.date_production].append(
-            {"type": row.type_oeuf, "count": int(row.total or 0)}
-        )
+        types_for_date = type_map.setdefault(row.date_production, {})
+        display_type = "casse" if row.type_oeuf == "perdu" else row.type_oeuf
+        types_for_date[display_type] = types_for_date.get(display_type, 0) + int(row.total or 0)
 
     batiment_map = {}
     for row in par_batiment_rows:
@@ -525,7 +527,10 @@ def get_daily_stats(
             date=s.date_production,
             total_oeufs=int(s.total_oeufs or 0),
             total_cartons=int(s.total_cartons or 0),
-            par_type=type_map.get(s.date_production, []),
+            par_type=[
+                {"type": type_name, "count": count}
+                for type_name, count in type_map.get(s.date_production, {}).items()
+            ],
             par_batiment=batiment_map.get(s.date_production, [])
         ) for s in totaux
     ]
@@ -588,6 +593,8 @@ def get_daily_stock(
         if prod.formule:
             building["formules"].add(prod.formule)
         type_key, calibre_key = _category_key(prod.type_oeuf, prod.calibre)
+        if type_key == "perdu":
+            type_key = "casse"
         category_key = (type_key, calibre_key)
         category = building["categories"].setdefault(
             category_key,
@@ -604,11 +611,11 @@ def get_daily_stock(
         movement_type = "production"
         movement_label = "Production ajoutee"
         movement_quantity = quantity
-        if type_key == "perdu":
+        if type_key in {"casse", "perdu"}:
             building["lost_eggs"] += quantity
             category["lost_eggs"] += quantity
             movement_type = "loss"
-            movement_label = "Oeufs perdus"
+            movement_label = "Oeufs casses"
             movement_quantity = -quantity
         else:
             building["produced_eggs"] += quantity
@@ -783,14 +790,14 @@ def get_cycle_performance(
 
         day["mort"] += int(prod.mortalite or 0)
         day["aliment_kg"] += Decimal(str(prod.consommation_aliment_kg or 0))
-        if prod.grammage is not None:
+        if prod.grammage is not None and prod.type_oeuf not in {"casse", "perdu"}:
             day["grammage_total"] += Decimal(str(prod.grammage or 0))
             day["grammage_count"] += 1
         if prod.formule:
             day["formules"].add(prod.formule)
         if prod.calibre:
             day["calibres"].add(prod.calibre)
-        if prod.type_oeuf != "perdu":
+        if prod.type_oeuf not in {"casse", "perdu"}:
             day["oeufs"] += int(prod.nombre_oeufs or 0)
 
     rows = []

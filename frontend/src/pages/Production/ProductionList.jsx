@@ -83,7 +83,7 @@ function ProductionList() {
   const stats = useMemo(() => {
     if (productions.length === 0) return { total_oeufs: 0, total_cartons: 0 };
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayProds = productions.filter(p => p.type_oeuf !== 'perdu' && p.date_production.startsWith(todayStr));
+    const todayProds = productions.filter(p => !['casse', 'perdu'].includes(p.type_oeuf) && p.date_production.startsWith(todayStr));
     return {
       total_oeufs: todayProds.reduce((sum, p) => sum + p.nombre_oeufs, 0),
       total_cartons: todayProds.reduce((sum, p) => sum + p.nombre_cartons, 0),
@@ -187,7 +187,7 @@ function ProductionList() {
                     <TableCell align="right">{p.nombre_oeufs.toLocaleString()}</TableCell>
                     <TableCell align="right">{p.grammage}g</TableCell>
                     <TableCell align="right">
-                      <Chip label={p.nombre_cartons} size="small" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }} />
+                      <Chip label={['casse', 'perdu'].includes(p.type_oeuf) ? 0 : p.nombre_cartons} size="small" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }} />
                     </TableCell>
                     <TableCell align="center">
                       <IconButton size="small" onClick={() => handleEdit(p)} color="primary">

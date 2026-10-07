@@ -132,7 +132,7 @@ function BatimentProductionPage() {
         return;
       }
       if (!window.confirm(
-        `Désactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} œufs collectés et ${formatNumber(currentDay.lost)} perdus ?`,
+        `Désactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} œufs collectés et ${formatNumber(currentDay.lost)} cassés ?`,
       )) return;
       await productionService.deleteDailyProduction({
         id_batiment: day.id_batiment,
@@ -309,7 +309,7 @@ function DailyHeroCard({
           <Typography color="text.secondary" sx={{ mt: 1.25 }}>
             {hasProduction
               ? 'Les pertes du jour sont incluses dans la meme saisie quotidienne.'
-              : 'La saisie quotidienne inclut aussi les oeufs perdus.'}
+              : 'La saisie quotidienne inclut aussi les oeufs cassés.'}
           </Typography>
         </Box>
 
@@ -575,10 +575,10 @@ function HistoryCard({ days, onEdit, onDelete, onAddProduction }) {
                   {formatNumber(day.collected)} œufs collectés
                 </Typography>
                 <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-                  {Object.entries(day.counts).filter(([type, count]) => type !== 'perdu' && count > 0).map(([type, count]) => (
+                  {Object.entries(day.counts).filter(([type, count]) => !['casse', 'perdu'].includes(type) && count > 0).map(([type, count]) => (
                     <Chip key={type} label={`${EGG_TYPE_LABELS[type] || type} : ${formatNumber(count)}`} size="small" sx={{ fontWeight: 900, bgcolor: 'background.paper' }} />
                   ))}
-                  {day.lost > 0 && <Chip label={`Perdus : ${formatNumber(day.lost)}`} color="error" variant="outlined" size="small" sx={{ fontWeight: 900 }} />}
+                  {day.lost > 0 && <Chip label={`Cassés : ${formatNumber(day.lost)}`} color="error" variant="outlined" size="small" sx={{ fontWeight: 900 }} />}
                 </Stack>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Grammage global : {day.grammage != null ? `${formatDecimal(day.grammage, 1)} g` : '-'} · {formatNumber(day.cartons)} cartons
