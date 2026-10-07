@@ -362,8 +362,20 @@ function ProductionForm({
                 {...register('mortalite', {
                   min: { value: 0, message: 'Doit etre positif' },
                 })}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === '') {
+                    setValue('mortalite', '');
+                    return;
+                  }
+                  const parsedValue = Number(value);
+                  setValue('mortalite', Number.isFinite(parsedValue) ? Math.max(0, Math.trunc(parsedValue)) : 0, {
+                    shouldValidate: true,
+                  });
+                }}
                 label="Mortalité"
                 type="number"
+                inputProps={{ min: 0, step: 1 }}
                 fullWidth
                 error={!!errors.mortalite}
                 helperText={errors.mortalite?.message || 'Optionnel'}
