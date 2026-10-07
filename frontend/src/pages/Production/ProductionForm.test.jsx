@@ -33,7 +33,7 @@ describe('ProductionForm', () => {
       />,
     );
 
-    expect(await screen.findByDisplayValue('2026-09-01')).toBeVisible();
+    expect(await screen.findByDisplayValue('01/09/26')).toBeVisible();
     fireEvent.change(screen.getByLabelText("Oeufs normaux"), { target: { value: '120' } });
     fireEvent.change(screen.getByLabelText("Double jaune"), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText("Oeufs blancs"), { target: { value: '10' } });
@@ -43,7 +43,7 @@ describe('ProductionForm', () => {
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       date_production: '2026-09-01',
       id_batiment: 7,
-      quantites: { normal: 120, double_jaune: 30, blanc: 10, casse: 0, perdu: 0 },
+      quantites: { normal: 120, double_jaune: 30, blanc: 10, perdu: 0 },
       grammage: 63,
     })));
 
@@ -88,6 +88,7 @@ describe('ProductionForm', () => {
     const rows = [
       { id_production: 1, id_batiment: 7, date_production: '2026-09-01', type_oeuf: 'normal', nombre_oeufs: 120, grammage: '63', mortalite: 2, consommation_aliment_kg: '12', formule: '' },
       { id_production: 2, id_batiment: 7, date_production: '2026-09-01', type_oeuf: 'blanc', nombre_oeufs: 20, grammage: '63', mortalite: null, consommation_aliment_kg: null },
+      { id_production: 3, id_batiment: 7, date_production: '2026-09-01', type_oeuf: 'casse', nombre_oeufs: 7, grammage: '63', mortalite: null, consommation_aliment_kg: null },
     ];
     get.mockImplementation((path) => Promise.resolve(
       path === '/productions/daily' ? { records: rows, versions: { 1: 'v1', 2: 'v2' } } : [],
@@ -97,12 +98,13 @@ describe('ProductionForm', () => {
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} />);
     await waitFor(() => expect(screen.getByLabelText('Oeufs normaux')).toHaveValue(120));
     expect(screen.getByLabelText('Oeufs blancs')).toHaveValue(20);
+    expect(screen.queryByLabelText(/cass/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Grammage moyen global (g)')).toHaveValue(63);
     fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Mettre a jour' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       date_production: '2026-09-01', id_batiment: 7, grammage: 63,
-      quantites: { normal: 120, blanc: 25, casse: 0, double_jaune: 0, perdu: 0 },
+      quantites: { normal: 120, blanc: 25, double_jaune: 0, perdu: 0, casse: 7 },
       mortalite: 2, consommation_aliment_kg: 12, versions: { 1: 'v1', 2: 'v2' },
     })));
   });

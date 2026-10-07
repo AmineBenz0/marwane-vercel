@@ -23,7 +23,6 @@ import useNotification from '../../hooks/useNotification';
 const EGG_TYPES = [
   { value: 'normal', label: 'Oeufs normaux' },
   { value: 'double_jaune', label: 'Double jaune' },
-  { value: 'casse', label: 'Oeufs casses' },
   { value: 'blanc', label: 'Oeufs blancs' },
   { value: 'perdu', label: 'Oeufs perdus' },
 ];
@@ -48,6 +47,7 @@ function ProductionForm({
   const [loadError, setLoadError] = useState('');
   const [versions, setVersions] = useState({});
   const [hasLegacyType, setHasLegacyType] = useState(false);
+  const [legacyCasseCount, setLegacyCasseCount] = useState(0);
   const { register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       date_production: initialData?.date_production?.slice(0, 10) || preselectedDate,
@@ -92,6 +92,7 @@ function ProductionForm({
       rows.forEach((row) => {
         counts[row.type_oeuf] = (counts[row.type_oeuf] || 0) + Number(row.nombre_oeufs);
       });
+      setLegacyCasseCount(counts.casse || 0);
       const producedRows = rows.filter((row) => row.type_oeuf !== 'perdu');
       const weightRows = producedRows.length ? producedRows : rows;
       const weightCount = weightRows.reduce((sum, row) => sum + Number(row.nombre_oeufs), 0);
@@ -150,6 +151,7 @@ function ProductionForm({
     const counts = Object.fromEntries(Object.entries(data.quantites).map(
       ([type, count]) => [type, Number(count || 0)],
     ));
+    if (initialData && legacyCasseCount > 0) counts.casse = legacyCasseCount;
     if (!Object.values(counts).some((count) => count > 0)) {
       setError('root', { message: "Indiquez au moins un nombre d'œufs." });
       return;
@@ -243,6 +245,8 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <DateField
                 {...register('date_production', { required: 'Date requise' })}
+                value={watch('date_production') || ''}
+                onChange={(event) => setValue('date_production', event.target.value, { shouldValidate: true })}
                 label="Date de production"
                 inputProps={{ readOnly: !!initialData }}
 
@@ -276,7 +280,7 @@ function ProductionForm({
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>Nombre d'œufs par type</Typography>
               <Typography variant="caption" color="text.secondary">
-                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés et perdus sont distincts.
+                Laissez vide ou indiquez 0 pour les types absents. Les œufs perdus sont comptabilisés à part.
               </Typography>
             </Grid>
             {eggTypeOptions.map((type) => (
