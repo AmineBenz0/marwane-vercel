@@ -27,6 +27,13 @@ const EGG_TYPES = [
   { value: 'casse', label: 'Oeufs casses' },
 ];
 
+const quantityError = (value) => {
+  if (value === '' || value === undefined) return '';
+  const count = Number(value);
+  if (count < 0) return 'Minimum 0';
+  return Number.isInteger(count) ? '' : 'Indiquez un nombre entier positif ou nul';
+};
+
 const previewCount = (value) => {
   const count = Number(value || 0);
   return Number.isInteger(count) && count >= 0 ? count : 0;
@@ -289,22 +296,15 @@ function ProductionForm({
               <Grid item xs={12} sm={6} key={type.value}>
                 <TextField
                   {...register(`quantites.${type.value}`, {
-                    min: { value: 0, message: 'Minimum 0' },
-                    validate: (value) => value === '' || (
-                      Number.isInteger(Number(value)) && Number(value) >= 0
-                    ) || 'Indiquez un nombre entier positif ou nul',
+                    validate: (value) => quantityError(value) || true,
                   })}
-                  onChange={(event) => setValue(
-                    `quantites.${type.value}`, event.target.value,
-                    { shouldValidate: true, shouldDirty: true },
-                  )}
                   label={type.label}
                   type="number"
                   inputProps={{ min: 0, step: 1 }}
                   fullWidth
                   disabled={loadingDaily || !!loadError}
-                  error={!!errors.quantites?.[type.value]}
-                  helperText={errors.quantites?.[type.value]?.message}
+                  error={!!quantityError(quantities[type.value])}
+                  helperText={quantityError(quantities[type.value])}
                 />
               </Grid>
             ))}
