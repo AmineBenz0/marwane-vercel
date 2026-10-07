@@ -74,14 +74,6 @@ function BatimentProductionPage() {
     loadData();
   }, [loadData]);
 
-  const selectedDateLabel = useMemo(() => {
-    try {
-      return formatShortDate(selectedDate, String(selectedDate));
-    } catch {
-      return selectedDate;
-    }
-  }, [selectedDate]);
-
   const buildingStock = useMemo(
     () => (stockData?.batiments || []).find((item) => Number(item.id_batiment) === selectedBatimentId),
     [stockData, selectedBatimentId],
@@ -205,7 +197,6 @@ function BatimentProductionPage() {
 
         <DailyHeroCard
           hasProduction={hasProduction}
-          selectedDateLabel={selectedDateLabel}
           todayStats={todayStats}
           latestEntry={latestTodayEntry}
           onAddProduction={handleAddProduction}
@@ -277,7 +268,6 @@ function BatimentProductionPage() {
 
 function DailyHeroCard({
   hasProduction,
-  selectedDateLabel,
   todayStats,
   latestEntry,
   onAddProduction,
@@ -312,9 +302,6 @@ function DailyHeroCard({
             {hasProduction
               ? 'Les pertes du jour sont incluses dans la meme saisie quotidienne.'
               : 'La saisie quotidienne inclut aussi les oeufs perdus.'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" fontWeight={900} sx={{ display: 'block', mt: 1.5, textTransform: 'capitalize' }}>
-            {selectedDateLabel}
           </Typography>
         </Box>
 
