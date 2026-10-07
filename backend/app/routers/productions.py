@@ -37,10 +37,15 @@ router = APIRouter(prefix="/productions", tags=["Productions"])
 logger = logging.getLogger(__name__)
 
 FORMULES_ALIMENT = [
-    {"value": "demarrage", "label": "Démarrage", "description": "Formule pour les lots en démarrage"},
-    {"value": "ponte", "label": "Ponte", "description": "Formule standard pour pondeuses"},
-    {"value": "finition", "label": "Finition", "description": "Formule de fin de cycle"},
-    {"value": "speciale", "label": "Spéciale", "description": "Formule spéciale ou corrigée"},
+    {"value": "17-1% Sem vita", "label": "17-1% Sem vita", "description": ""},
+    {"value": "25-1% Sem vita", "label": "25-1% Sem vita", "description": ""},
+    {"value": "26-35 Sem", "label": "26-35 Sem", "description": ""},
+    {"value": "36-45 Sem", "label": "36-45 Sem", "description": ""},
+    {"value": "46-55 Sem", "label": "46-55 Sem", "description": ""},
+    {"value": "56-65 Sem", "label": "56-65 Sem", "description": ""},
+    {"value": "66-75 Sem", "label": "66-75 Sem", "description": ""},
+    {"value": "76-85 Sem", "label": "76-85 Sem", "description": ""},
+    {"value": "86-Réforme", "label": "86-Réforme", "description": ""},
 ]
 
 # Placeholder business thresholds. Tweak these ranges once the client confirms
