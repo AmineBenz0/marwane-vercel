@@ -21,7 +21,6 @@ import {
   LocalShipping as LocalShippingIcon,
   TrendingDown as TrendingDownIcon,
 } from '@mui/icons-material';
-import { formatShortDate } from '../../utils/dateFormatting';
 import { useNavigate } from 'react-router-dom';
 import { productionService, batimentService } from '../../services/productionService';
 import ProductionForm from './ProductionForm';
@@ -119,13 +118,6 @@ function ProductionDashboard() {
     0,
     Number(totals.buildings_count || 0) - Number(totals.missing_buildings_count || 0),
   );
-  const selectedDateLabel = useMemo(() => {
-    try {
-      return formatShortDate(selectedDate, String(selectedDate));
-    } catch {
-      return selectedDate;
-    }
-  }, [selectedDate]);
 
   const handleOpenProduction = (batimentId = '', eggType = 'normal', title = '', description = '') => {
     setSelectedBatimentId(batimentId || '');
@@ -147,7 +139,6 @@ function ProductionDashboard() {
     <Box sx={{ pb: 4 }}>
         <HeroHeader
         selectedDate={selectedDate}
-        selectedDateLabel={selectedDateLabel}
         onDateChange={setSelectedDate}
       />
 
@@ -220,7 +211,6 @@ function ProductionDashboard() {
 
 function HeroHeader({
   selectedDate,
-  selectedDateLabel,
   onDateChange,
 }) {
   return (
@@ -279,9 +269,6 @@ function HeroHeader({
             </Box>
           </Box>
         </Box>
-        <Typography sx={{ mt: 2, fontWeight: 800, color: 'text.secondary', textTransform: 'capitalize' }}>
-          {selectedDateLabel}
-        </Typography>
       </CardContent>
     </Card>
   );
