@@ -22,7 +22,6 @@ import useNotification from '../../hooks/useNotification';
 const EGG_TYPES = [
   { value: 'normal', label: 'Oeufs normaux' },
   { value: 'double_jaune', label: 'Double jaune' },
-  { value: 'double_jaune_demarrage', label: 'Double jaune demarrage' },
   { value: 'casse', label: 'Oeufs casses' },
   { value: 'blanc', label: 'Oeufs blancs' },
   { value: 'perdu', label: 'Oeufs perdus' },
