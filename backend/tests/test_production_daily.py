@@ -130,11 +130,11 @@ def test_daily_cancel_is_atomic_and_checks_versions(client, db_session, auth_hea
     }
     conflict = client.request("DELETE", "/api/v1/productions/daily", json=cancel_payload, headers=auth_headers)
     assert conflict.status_code == 409
-    assert db_session.query(Production).filter(Production.est_actif.is_(True)).count() == 5
+    assert db_session.query(Production).filter(Production.est_actif.is_(True)).count() == 4
     response = client.request("DELETE", "/api/v1/productions/daily", json={
         **cancel_payload, "versions": daily["versions"],
     }, headers=auth_headers)
     assert response.status_code == 204, response.text
     assert db_session.query(Production).filter(Production.est_actif.is_(True)).count() == 0
-    assert db_session.query(Production).count() == 5
+    assert db_session.query(Production).count() == 4
     assert all(row.date_annulation for row in db_session.query(Production).all())

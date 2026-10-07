@@ -712,9 +712,9 @@ def get_daily_stock(
         categories = []
         for category in building["categories"].values():
             category_available = (
-                category["produced_eggs"] -
-                category["sold_eggs"] -
-                category["lost_eggs"]
+                0
+                if category["produced_eggs"] == 0 and category["lost_eggs"] > 0
+                else category["produced_eggs"] - category["sold_eggs"] - category["lost_eggs"]
             )
             categories.append({
                 **category,
