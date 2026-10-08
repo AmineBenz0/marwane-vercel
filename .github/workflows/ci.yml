@@ -33,7 +33,7 @@ jobs:
           app/routers/alerts.py app/routers/jobs.py app/routers/product_boms.py
           app/routers/stock.py app/routers/search.py app/routers/reports.py
           app/routers/transformations.py app/routers/productions.py
-          app/routers/batiments.py
+          app/routers/batiments.py app/routers/cycles_production.py
           app/models/financial_correction.py
           app/models/inventory.py app/models/job_execution.py
           app/models/nomenclature.py app/models/production.py
@@ -42,7 +42,7 @@ jobs:
           app/schemas/batiment.py
           app/schemas/compte_bancaire.py app/schemas/cycle_production.py
           app/schemas/production.py app/utils/egg_product_sync.py
-          app/utils/production_cycles.py app/utils/security.py tests/test_config.py
+          app/utils/production_cycles.py app/utils/cycle_insights.py app/utils/security.py tests/test_config.py
           tests/test_production_stock.py tests/test_enterprise_remediation.py
           scripts/check_database_security.py alembic/versions/job_execution_audit.py
           scripts/backfill_inventory.py
@@ -129,7 +129,7 @@ jobs:
       - run: npm run build
       - name: Install Chromium for deterministic contact UI checks
         run: npx playwright install --with-deps chromium
-      - name: Verify contact layout, keyboard access and forms
+      - name: Verify contacts and flock lifecycle on desktop and mobile
         run: npx playwright test --config playwright.contacts.config.ts
       - name: Save contact UI screenshots and failure traces
         if: always()

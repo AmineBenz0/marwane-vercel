@@ -9,7 +9,7 @@ class ProductionBase(BaseModel):
     id_batiment: int = Field(..., description="ID du bâtiment")
     type_oeuf: Literal["normal", "double_jaune", "double_jaune_demarrage", "casse", "blanc", "perdu"] = Field(..., description="Type d'œuf")
     calibre: Optional[Literal["demarrage", "moyen", "gros"]] = Field(None, description="Calibre deduit automatiquement depuis le grammage")
-    nombre_oeufs: int = Field(..., gt=0, description="Nombre d'œufs collectés")
+    nombre_oeufs: int = Field(..., ge=0, description="Nombre d'œufs collectés")
     grammage: Decimal = Field(..., ge=0, description="Poids moyen en grammes")
     mortalite: Optional[int] = Field(None, ge=0, description="Nombre de mortalites dans le batiment")
     consommation_aliment_kg: Optional[Decimal] = Field(None, ge=0, description="Aliment consomme en kg")
@@ -23,6 +23,7 @@ class ProductionBase(BaseModel):
 
 
 class ProductionCreate(ProductionBase):
+    nombre_oeufs: int = Field(..., gt=0)
     """
     Schema pour la création d'une production.
     Le nombre de cartons est calculé côté serveur.
@@ -91,6 +92,8 @@ class ProductionDailyStats(BaseModel):
 
 
 class FormuleAliment(BaseModel):
+    age_min: Optional[int] = None
+    age_max: Optional[int] = None
     value: str
     label: str
     description: Optional[str] = None
@@ -191,7 +194,7 @@ class ProductionDailyInput(BaseModel):
     date_production: date
     id_batiment: int = Field(..., gt=0)
     quantites: dict[Literal["normal", "double_jaune", "casse", "blanc", "perdu", "double_jaune_demarrage"], int] = Field(default_factory=dict)
-    grammage: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
+    grammage: Decimal = Field(default=0, ge=0, max_digits=10, decimal_places=2)
     mortalite: Optional[int] = Field(None, ge=0)
     consommation_aliment_kg: Optional[Decimal] = Field(None, ge=0)
     formule: Optional[str] = Field(None, max_length=100)
@@ -201,7 +204,7 @@ class ProductionDailyInput(BaseModel):
     def validate_quantities(self) -> "ProductionDailyInput":
         if any(value < 0 for value in self.quantites.values()):
             raise ValueError("Les quantites doivent etre positives ou nulles")
-        if not any(self.quantites.values()):
+        if not any(self.quantites.values()) and not (self.mortalite or self.consommation_aliment_kg):
             raise ValueError("Indiquez au moins un nombre d'oeufs")
         return self
 

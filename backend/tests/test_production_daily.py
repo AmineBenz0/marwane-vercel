@@ -99,7 +99,7 @@ def test_daily_update_removes_zero_types_and_preserves_audit(client, db_session,
 def test_invalid_daily_quantities_do_not_write(client, db_session, auth_headers, counts):
     payload = daily_payload(db_session)
     response = client.post("/api/v1/productions/daily", json={
-        **payload, "quantites": counts,
+        **payload, "quantites": counts, "mortalite": 0, "consommation_aliment_kg": 0,
     }, headers=auth_headers)
     assert response.status_code == 422
     assert db_session.query(Production).count() == 0

@@ -1,5 +1,5 @@
 import DateField from '../../utils/DateField';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Alert,
   Dialog,
@@ -17,7 +17,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
-import { productionService } from '../../services/productionService';
+import { productionService, cycleProductionService } from '../../services/productionService';
 import useNotification from '../../hooks/useNotification';
 
 const EGG_TYPES = [
@@ -53,6 +53,10 @@ function ProductionForm({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
+  const [cycleContext, setCycleContext] = useState(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [contextError, setContextError] = useState('');
+  const manualFormula = useRef(false);
   const [formules, setFormules] = useState([]);
   const [calibreThresholds, setCalibreThresholds] = useState([]);
   const [loadingDaily, setLoadingDaily] = useState(!!initialData);
@@ -74,6 +78,7 @@ function ProductionForm({
   const quantities = watch('quantites') || {};
   const watchedBatiment = watch('id_batiment');
   const watchedGrammage = watch('grammage');
+  const watchedDate = watch('date_production');
   const eggTypeOptions = hasLegacyType
     ? [...EGG_TYPES, { value: 'double_jaune_demarrage', label: 'Double jaune démarrage (historique)' }]
     : EGG_TYPES;
@@ -145,6 +150,26 @@ function ProductionForm({
     if (open) fetchFormules();
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !watchedBatiment || !watchedDate) return undefined;
+    let cancelled = false;
+    setContextLoading(true);
+    setCycleContext(null);
+    setContextError('');
+    cycleProductionService.getContext(watchedBatiment, watchedDate).then((data) => {
+      if (!cancelled) setCycleContext(data);
+    }).catch(() => {
+      if (!cancelled) setContextError('Impossible de charger le cycle. Réessayez en rouvrant le formulaire.');
+    }).finally(() => { if (!cancelled) setContextLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, watchedBatiment, watchedDate]);
+
+  useEffect(() => {
+    if (initialData || manualFormula.current || contextLoading) return;
+    setValue('formule', cycleContext?.cycle?.formule_suggeree || '');
+  }, [cycleContext, contextLoading, initialData, setValue]);
+
+  const missingCycle = !!cycleContext?.has_cycles && !cycleContext?.cycle;
   const deducedCalibre = (() => {
     const gramValue = Number(watchedGrammage);
     if (!Number.isFinite(gramValue) || gramValue <= 0) return null;
@@ -157,11 +182,11 @@ function ProductionForm({
   })();
 
   const onSubmit = async (data) => {
-    if (loadingDaily || loadError) return;
+    if (loadingDaily || loadError || contextLoading || contextError || missingCycle) return;
     const counts = Object.fromEntries(Object.entries(data.quantites).map(
       ([type, count]) => [type, Number(count || 0)],
     ));
-    if (!Object.values(counts).some((count) => count > 0)) {
+    if (!Object.values(counts).some((count) => count > 0) && !Number(data.mortalite || 0) && !Number(data.consommation_aliment_kg || 0)) {
       setError('root', { message: "Indiquez au moins un nombre d'œufs." });
       return;
     }
@@ -250,6 +275,15 @@ function ProductionForm({
             <Alert severity="error" sx={{ mb: 2 }}>{loadError || errors.root.message}</Alert>
           )}
           {loadingDaily && <Typography sx={{ mb: 2 }}>Chargement de la saisie...</Typography>}
+          {contextLoading && <Typography sx={{ mb: 2 }}>Chargement du cycle...</Typography>}
+          {contextError && <Alert severity="error" sx={{ mb: 2 }}>{contextError}</Alert>}
+          {missingCycle && <Alert severity="warning" sx={{ mb: 2 }}>Aucun cycle pour cette date. Démarrez un cycle depuis la page du bâtiment.</Alert>}
+          {cycleContext?.cycle && <Box sx={{ p: 1.5, mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+            <Typography fontWeight={800}>{cycleContext.cycle.nom_cycle}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {cycleContext.cycle.age_semaines} semaines · {Number(cycleContext.cycle.effectif_actuel || 0).toLocaleString('fr-FR')} volailles restantes à cette date
+            </Typography>
+          </Box>}
           <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6}>
               <DateField
@@ -316,7 +350,7 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('grammage', {
-                  required: 'Champ requis',
+                  validate: (value) => totalEggs > 0 && value === '' ? 'Champ requis' : true,
                   min: { value: 0, message: 'Doit etre positif' },
                 })}
                 label="Grammage moyen global (g)"
@@ -324,7 +358,7 @@ function ProductionForm({
                 inputProps={{ min: 0, step: '0.01' }}
                 fullWidth
                 error={!!errors.grammage}
-                helperText={errors.grammage?.message}
+                helperText={errors.grammage?.message || (totalEggs === 0 ? 'Facultatif en l’absence de collecte' : '')}
               />
             </Grid>
             {Number(quantities.normal || 0) > 0 && (
@@ -432,9 +466,11 @@ function ProductionForm({
                 select
                 label="Formule"
                 value={watch('formule') || ''}
-                onChange={(event) => setValue('formule', event.target.value)}
+                onChange={(event) => { manualFormula.current = true; setValue('formule', event.target.value); }}
                 fullWidth
-                helperText="Optionnel"
+                helperText={cycleContext?.cycle && !initialData
+                  ? 'Préselection selon l’âge du lot. Vous pouvez la modifier.'
+                  : 'Formule utilisée ce jour'}
               >
                 <MenuItem value="">Non précisée</MenuItem>
                 {formules.map((formule) => (
@@ -451,7 +487,7 @@ function ProductionForm({
           <Button
             type="submit"
             variant="contained"
-            disabled={isSubmitting || loadingDaily || !!loadError}
+            disabled={isSubmitting || loadingDaily || !!loadError || contextLoading || !!contextError || missingCycle}
             sx={{ px: 4, borderRadius: 2 }}
           >
             {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre a jour' : 'Enregistrer')}
