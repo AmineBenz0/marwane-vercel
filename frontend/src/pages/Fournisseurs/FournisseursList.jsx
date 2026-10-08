@@ -15,7 +15,6 @@ import {
 import {
   Add as AddIcon,
   Business as BusinessIcon,
-  Edit as EditIcon,
   FileDownload as FileDownloadIcon,
   PersonAdd as PersonAddIcon,
   Visibility as VisibilityIcon,
@@ -25,7 +24,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
-import { get, post, put } from '../../services/api';
+import { get, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
 
@@ -59,7 +58,6 @@ function FournisseursList() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingFournisseur, setEditingFournisseur] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [filters, setFilters] = useState({ nom: '' });
@@ -109,13 +107,6 @@ function FournisseursList() {
   };
 
   const handleCreate = () => {
-    setEditingFournisseur(null);
-    setFormError(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (fournisseur) => {
-    setEditingFournisseur(fournisseur);
     setFormError(null);
     setModalOpen(true);
   };
@@ -123,7 +114,6 @@ function FournisseursList() {
   const handleCloseModal = () => {
     if (!formLoading) {
       setModalOpen(false);
-      setEditingFournisseur(null);
       setFormError(null);
     }
   };
@@ -133,15 +123,10 @@ function FournisseursList() {
     setFormError(null);
     try {
       const payload = { ...data, est_actif: true };
-      if (editingFournisseur) {
-        await put(`/fournisseurs/${editingFournisseur.id_fournisseur}`, payload);
-      } else {
-        await post('/fournisseurs', payload);
-      }
+      await post('/fournisseurs', payload);
       setModalOpen(false);
-      setEditingFournisseur(null);
       await fetchFournisseurs();
-      notification.success(editingFournisseur ? 'Fournisseur modifié avec succès' : 'Fournisseur créé avec succès');
+      notification.success('Fournisseur créé avec succès');
     } catch (err) {
       const message = err?.message || "Une erreur est survenue lors de l'enregistrement";
       setFormError(message);
@@ -311,9 +296,6 @@ function FournisseursList() {
                   <Button variant="contained" startIcon={<VisibilityIcon />} onClick={() => handleViewProfile(fournisseur)} fullWidth>
                     Profil
                   </Button>
-                  <Button variant="outlined" startIcon={<EditIcon />} onClick={() => handleEdit(fournisseur)} fullWidth>
-                    Modifier
-                  </Button>
                 </Stack>
               </CardContent>
             </Card>
@@ -325,11 +307,11 @@ function FournisseursList() {
         open={modalOpen}
         onClose={handleCloseModal}
         onSubmit={handleSubmit}
-        initialValues={{ nom_fournisseur: editingFournisseur?.nom_fournisseur || '' }}
+        initialValues={{ nom_fournisseur: '' }}
         validationSchema={fournisseurValidationSchema}
         fields={fournisseurFields}
-        title={editingFournisseur ? 'Modifier ce fournisseur' : 'Nouveau fournisseur'}
-        submitLabel={editingFournisseur ? 'Enregistrer' : 'Créer le fournisseur'}
+        title="Nouveau fournisseur"
+        submitLabel="Créer le fournisseur"
         loading={formLoading}
         errorMessage={formError}
       />
