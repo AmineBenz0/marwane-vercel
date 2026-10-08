@@ -25,6 +25,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
   const [values, setValues] = useState({});
   const [counts, setCounts] = useState({});
   const [saving, setSaving] = useState(false);
+  const [allocationErrorBuildingId, setAllocationErrorBuildingId] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +57,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
 
   const open = (kind) => {
     setError('');
+    setAllocationErrorBuildingId('');
     setValues(kind === 'create' ? {
       nom_lot: 'Lot du ' + formatShortDate(localToday()), date_debut: localToday(),
       effectif_initial: '', age_depart_semaines: 0, souche: '', notes: '',
@@ -145,18 +147,28 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
               </> : <>
                 <TextField label="Nom du lot" required inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => field('nom_lot', event.target.value)} />
                 <DateField label="Date d’arrivée" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
-                <TextField label="Nombre total de poussins entrants" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
+                <TextField label="Nombre total de poussins entrants" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => { setAllocationErrorBuildingId(''); field('effectif_initial', event.target.value); }} />
                 <TextField label="Âge à l’arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="Le même âge et la même formule suggérée pour tous les bâtiments." />
                 <Typography fontWeight={800}>Répartition par bâtiment</Typography>
                 {distributionBuildings.map((building) => {
                   const limit = allocationLimit(building.id_batiment);
                   const overLimit = Number(counts[building.id_batiment] || 0) > limit;
+                  const attemptedOvershoot = allocationErrorBuildingId === String(building.id_batiment);
                   return <TextField key={building.id_batiment} label={'Poussins · ' + building.nom} type="number"
                     inputProps={{ min: dialog === 'edit' ? 1 : 0, max: limit, step: 1 }}
                     value={counts[building.id_batiment] ?? ''}
-                    error={allocationError(building)}
-                    helperText={overLimit ? 'La quantité dépasse le nombre de poussins disponibles pour ce bâtiment. Maximum autorisé : ' + number(limit) + ' poussins.' : undefined}
-                    onChange={(event) => setCounts((old) => ({ ...old, [building.id_batiment]: event.target.value }))} />;
+                    error={allocationError(building) || attemptedOvershoot}
+                    helperText={overLimit || attemptedOvershoot ? 'La quantité dépasse le nombre total de poussins entrants.' : undefined}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      const nextCount = nextValue === '' ? 0 : Number(nextValue);
+                      if (Number.isFinite(nextCount) && nextCount > limit) {
+                        setAllocationErrorBuildingId(String(building.id_batiment));
+                        return;
+                      }
+                      setAllocationErrorBuildingId('');
+                      setCounts((old) => ({ ...old, [building.id_batiment]: nextValue }));
+                    }} />;
                 })}
                 <Typography role="status" color={balanced ? 'success.main' : 'text.secondary'}>{number(assigned)} / {number(values.effectif_initial || 0)} poussins répartis{assigned !== Number(values.effectif_initial || 0) ? ' · écart : ' + number(Number(values.effectif_initial || 0) - assigned) : ''}</Typography>
                 {dialog === 'create' && occupied.size > 0 && <Typography variant="caption" color="text.secondary">Les bâtiments ayant déjà un lot actif sont indisponibles pour cette arrivée.</Typography>}
