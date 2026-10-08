@@ -33,7 +33,9 @@ describe('LotPanel allocation limits', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Démarrer un lot' }));
+    const startButton = await screen.findByRole('button', { name: 'Démarrer un lot' });
+    await waitFor(() => expect(startButton).toBeEnabled());
+    fireEvent.click(startButton);
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Nombre total de poussins entrants' }), {
       target: { value: '100' },
     });
