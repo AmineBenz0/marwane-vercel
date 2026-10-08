@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -17,11 +16,12 @@ import {
   Business as BusinessIcon,
   FileDownload as FileDownloadIcon,
   PersonAdd as PersonAddIcon,
-  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import * as yup from 'yup';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
+import ContactCard from '../../components/ContactCard';
+import { contactGridSx } from '../../components/contactGrid';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post } from '../../services/api';
@@ -50,7 +50,6 @@ const fournisseurFields = [
 
 function FournisseursList() {
   const notification = useNotification();
-  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -79,6 +78,7 @@ function FournisseursList() {
       const params = {
         est_actif: true,
         limit: 1000,
+        include_balance: true,
       };
       if (filters.nom.trim()) {
         params.recherche = filters.nom.trim();
@@ -135,10 +135,6 @@ function FournisseursList() {
     } finally {
       setFormLoading(false);
     }
-  };
-
-  const handleViewProfile = (fournisseur) => {
-    navigate(`/fournisseurs/${fournisseur.id_fournisseur}/profile`);
   };
 
   const handleExportExcel = async () => {
@@ -232,7 +228,7 @@ function FournisseursList() {
       </Box>
 
       {loading ? (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 2 }}>
+        <Box sx={contactGridSx}>
           {[1, 2, 3, 4, 5, 6].map((item) => (
             <Skeleton key={item} variant="rounded" height={150} sx={{ borderRadius: 3 }} />
           ))}
@@ -248,57 +244,16 @@ function FournisseursList() {
           </Button>
         </Card>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 2 }}>
+        <Box sx={contactGridSx} data-testid="contact-grid">
           {fournisseurs.map((fournisseur) => (
-            <Card
+            <ContactCard
               key={fournisseur.id_fournisseur}
-              variant="outlined"
-              sx={{
-                borderRadius: 4,
-                transition: 'transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 14px 34px rgba(15, 23, 42, 0.10)',
-                  borderColor: 'primary.light',
-                },
-              }}
-            >
-              <CardContent sx={{ p: 2.25, '&:last-child': { pb: 2.25 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography
-                      variant="h6"
-                      component="button"
-                      onClick={() => handleViewProfile(fournisseur)}
-                      sx={{
-                        display: 'block',
-                        width: '100%',
-                        p: 0,
-                        border: 0,
-                        bgcolor: 'transparent',
-                        color: 'text.primary',
-                        font: 'inherit',
-                        fontWeight: 900,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        '&:hover': { color: 'primary.main' },
-                      }}
-                    >
-                      {fournisseur.nom_fournisseur}
-                    </Typography>
-                  </Box>
-                </Stack>
-
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
-                  <Button variant="contained" startIcon={<VisibilityIcon />} onClick={() => handleViewProfile(fournisseur)} fullWidth>
-                    Profil
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
+              to={`/fournisseurs/${fournisseur.id_fournisseur}/profile`}
+              name={fournisseur.nom_fournisseur}
+              createdAt={fournisseur.date_creation}
+              balance={fournisseur.outstanding_balance}
+              type="fournisseur"
+            />
           ))}
         </Box>
       )}

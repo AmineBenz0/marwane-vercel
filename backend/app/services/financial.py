@@ -97,6 +97,37 @@ def _payment_totals_subquery(db: Session):
     )
 
 
+def contact_balances(db: Session, *, direction: str, contact_ids: list[int]) -> dict[int, Decimal]:
+    """Return net balances for one contact page in a single aggregate query.
+
+    IDs come from the already filtered/paginated contact list. A successful
+    query confirms zero for contacts without active transactions. Failures
+    propagate rather than returning misleading zero balances.
+    """
+    columns = {"receivable": Transaction.id_client, "payable": Transaction.id_fournisseur}
+    if direction not in columns:
+        raise ValueError("direction invalide")
+    if not contact_ids:
+        return {}
+
+    contact_id = columns[direction]
+    payment_totals = _payment_totals_subquery(db)
+    paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0")))
+    rows = (
+        db.query(
+            contact_id.label("contact_id"),
+            func.sum(Transaction.montant_total - paid).label("balance"),
+        )
+        .outerjoin(payment_totals, payment_totals.c.id_transaction == Transaction.id_transaction)
+        .filter(Transaction.est_actif.is_(True), contact_id.in_(contact_ids))
+        .group_by(contact_id)
+        .all()
+    )
+    balances = dict.fromkeys(contact_ids, Decimal("0"))
+    balances.update({row.contact_id: Decimal(str(row.balance)) for row in rows})
+    return balances
+
+
 def _payment_expressions(payment_totals, today: date):
     """Build SQL expressions matching Transaction's payment properties."""
     paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0")))
