@@ -1,7 +1,8 @@
 import DateField from '../../utils/DateField';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -22,6 +23,8 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { productionService, batimentService } from '../../services/productionService';
 import useNotificationStore from '../../store/notificationStore';
 import ProductionForm from './ProductionForm';
+import useProductionView, { productionLink } from './useProductionView';
+import { ProductionTabs, ProductionPanel, StockSummary } from './ProductionViews';
 import { EGG_TYPE_LABELS, groupDailyProductions } from '../../utils/dailyProduction';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
@@ -39,7 +42,10 @@ function BatimentProductionPage() {
   const [batiments, setBatiments] = useState([]);
   const [stockData, setStockData] = useState(null);
   const [cumulativeStock, setCumulativeStock] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const { view, setView, selectedDate, setSelectedDate } = useProductionView();
+  const [loadError, setLoadError] = useState('');
+  const [loadedDate, setLoadedDate] = useState(null);
+  const loadRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
   const [editingProduction, setEditingProduction] = useState(null);
@@ -51,7 +57,9 @@ function BatimentProductionPage() {
   const batiment = batiments.find((item) => Number(item.id_batiment) === selectedBatimentId);
 
   const loadData = useCallback(async () => {
+    const request = ++loadRequest.current;
     setLoading(true);
+    setLoadError('');
     try {
       const [batData, stock, cumulative, productionData] = await Promise.all([
         batimentService.getBatiments(),
@@ -60,19 +68,25 @@ function BatimentProductionPage() {
         productionService.getBuildingProductions(selectedBatimentId),
       ]);
 
+      if (request !== loadRequest.current) return;
       setBatiments(batData || []);
       setStockData(stock);
       setCumulativeStock(cumulative);
+      setLoadedDate(selectedDate);
       setProductions(productionData || []);
     } catch (err) {
-      notifyError('Erreur lors du chargement des donnees du batiment');
+      if (request !== loadRequest.current) return;
+      const message = err?.message || 'Erreur lors du chargement des données du bâtiment';
+      setLoadError(message);
+      notifyError(message);
     } finally {
-      setLoading(false);
+      if (request === loadRequest.current) setLoading(false);
     }
   }, [notifyError, selectedBatimentId, selectedDate]);
 
   useEffect(() => {
     loadData();
+    return () => { loadRequest.current += 1; };
   }, [loadData]);
 
   const dailyBuildingStock = useMemo(
@@ -95,7 +109,7 @@ function BatimentProductionPage() {
     lost: Number(dailyBuildingStock?.lost_eggs || 0),
   }), [dailyBuildingStock]);
 
-  const dailyHistory = useMemo(() => groupDailyProductions(productions), [productions]);
+  const dailyHistory = useMemo(() => groupDailyProductions(productions).filter((day) => day.date <= selectedDate), [productions, selectedDate]);
   const selectedDay = dailyHistory.find((day) => day.date === selectedDate) || null;
   const latestTodayEntry = selectedDay?.representative || null;
   const totalStats = useMemo(() => ({
@@ -152,109 +166,66 @@ function BatimentProductionPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const header = (
+    <Box sx={{ mb: 2.5 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(productionLink(null, view, selectedDate))} variant="outlined" sx={{ borderRadius: 999, width: { xs: '100%', sm: 'auto' } }}>
+          Vue globale
+        </Button>
+        <DateField label="Date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} InputLabelProps={{ shrink: true }}
+          sx={{ width: { xs: '100%', sm: 210 }, '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: 'background.paper' } }} />
+      </Stack>
+      <Typography component="h1" variant="h3" fontWeight={900} sx={{ fontSize: { xs: '2rem', md: '3rem' }, letterSpacing: '-0.04em', overflowWrap: 'anywhere' }}>
+        {batiment?.nom || 'Bâtiment'}
+      </Typography>
+      <Typography color="text.secondary" sx={{ mt: 1 }}>La collecte du jour et les œufs disponibles de ce bâtiment.</Typography>
+    </Box>
+  );
+  if (loading || (!loadError && loadedDate !== selectedDate)) return <Box>{header}<Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}><CircularProgress /></Box></Box>;
+  if (loadError) return <Box>{header}<Alert severity="error" action={<Button color="inherit" onClick={loadData}>Réessayer</Button>}>{loadError}</Alert></Box>;
+  if (!batiment || !buildingStock) return <Box>{header}<Alert severity="warning">Bâtiment introuvable pour cette date.</Alert></Box>;
 
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2.75 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/production')} variant="outlined" sx={{ borderRadius: 999, width: { xs: '100%', sm: 'auto' } }}>
-          Vue globale
-        </Button>
-        <DateField
-          label="Stock au"
-
-          value={selectedDate}
-          onChange={(event) => setSelectedDate(event.target.value)}
-          InputLabelProps={{ shrink: true }}
-          sx={{
-            width: { xs: '100%', sm: 210 },
-            '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: 'background.paper' },
-          }}
-        />
-      </Stack>
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.1fr) minmax(360px, 0.9fr)' }, gap: 2.5, mb: 2.5 }}>
-        <Card
-          variant="outlined"
-          sx={{
-            borderRadius: 4,
-            overflow: 'hidden',
-            background: 'radial-gradient(circle at top right, rgba(17, 148, 127, 0.14), transparent 24rem), #fffdf7',
-          }}
-        >
-          <CardContent sx={{ p: { xs: 2.25, md: 3.5 } }}>
-            <Typography
-              component="h1"
-              sx={{
-                fontWeight: 950,
-                fontSize: { xs: '2.35rem', md: '4.5rem' },
-                lineHeight: 0.92,
-                letterSpacing: '-0.07em',
-                overflowWrap: 'anywhere',
-              }}
-            >
-              {batiment?.nom || 'Batiment'}
-            </Typography>
-            <Typography color="text.secondary" sx={{ mt: 1.5, fontSize: { md: '1.1rem' }, maxWidth: 760 }}>
-              Consultez le stock cumulé de ce bâtiment et saisissez sa production du jour.
-            </Typography>
-          </CardContent>
-        </Card>
-
-        <DailyHeroCard
-          hasProduction={hasProduction}
-          todayStats={todayStats}
-          latestEntry={latestTodayEntry}
-          day={selectedDay}
-          onAddProduction={handleAddProduction}
-          onEdit={handleEdit}
-        />
-      </Box>
-
-      <AlertStack
-        mortalite={Number(dailyBuildingStock?.mortalite || 0)}
-        lowStockCategory={lowStockCategory}
-      />
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2.5 }}>
-        <QuickFact tone="blue" label="Grammage moyen" value={latestGrammage} />
-        <QuickFact tone="amber" label="Aliment" value={latestAliment} />
-        <QuickFact tone="red" label="Mortalite" value={formatNumber(dailyBuildingStock?.mortalite || 0)} />
-        <QuickFact tone="green" label="Stock cumulé disponible" value={`${formatNumber(buildingStock?.available_eggs)} oeufs`} />
-      </Box>
-
-      <Box sx={{ display: 'grid', gap: 2.5, minWidth: 0 }}>
-        <StockCategoryCard categories={stockCategories} />
-
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              lg: 'repeat(2, minmax(0, 1fr))',
-              xl: 'minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(280px, 0.75fr)',
-            },
-            gap: 2.5,
-            alignItems: 'stretch',
-            minWidth: 0,
-          }}
-        >
-          <MovementListCard movements={buildingMovements} />
-          <HistoryCard
-            days={dailyHistory}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onAddProduction={handleAddProduction}
-          />
-          <SummaryHistoryCard totalStats={totalStats} />
-        </Box>
-      </Box>
+      {header}
+      <StockSummary label="Stock disponible du bâtiment" available={buildingStock.available_eggs} selectedDate={selectedDate} />
+      {Number(cumulativeStock?.totals?.unassigned_sold_eggs || 0) > 0 && (
+        <Alert severity="warning" sx={{ mb: 2.5, borderRadius: 3 }}>
+          Certaines ventes ne sont pas attribuées à un bâtiment. Elles sont déduites du stock global, mais le stock de ce bâtiment peut être surestimé.
+        </Alert>
+      )}
+      <ProductionTabs view={view} onChange={setView} />
+      <ProductionPanel view={view}>
+        {view === 'journee' ? (
+          <>
+            <AlertStack mortalite={Number(dailyBuildingStock?.mortalite || 0)} />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2.5, mb: 2.5 }}>
+              <DailyHeroCard hasProduction={hasProduction} todayStats={todayStats} latestEntry={latestTodayEntry} day={selectedDay}
+                onAddProduction={handleAddProduction} onEdit={handleEdit} />
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
+                <QuickFact tone="blue" label="Grammage global du jour" value={latestGrammage} />
+                <QuickFact tone="amber" label="Aliment du jour" value={latestAliment} />
+                <QuickFact tone="red" label="Mortalité du jour" value={hasProduction ? formatNumber(dailyBuildingStock?.mortalite || 0) : '-'} />
+                <QuickFact tone="blue" label="Ventes du jour" value={formatNumber(todayStats.sold) + ' œufs'} />
+                <QuickFact tone="red" label="Cassés du jour" value={hasProduction ? formatNumber(todayStats.lost) + ' œufs' : '-'} />
+                <QuickFact tone="green" label="Cartons du jour" value={hasProduction ? formatNumber(selectedDay.cartons) : '-'} />
+              </Box>
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.6fr) minmax(0, 0.7fr)' }, gap: 2.5, alignItems: 'start' }}>
+              <HistoryCard days={dailyHistory} onEdit={handleEdit} onDelete={handleDelete} onAddProduction={handleAddProduction} />
+              <SummaryHistoryCard totalStats={totalStats} />
+            </Box>
+          </>
+        ) : (
+          <>
+            <AlertStack lowStockCategory={lowStockCategory} />
+            <StockCategoryCard categories={stockCategories} />
+            <Box sx={{ mt: 2.5 }}>
+              <MovementListCard movements={buildingMovements.filter((movement) => movement.type !== 'loss')} />
+            </Box>
+          </>
+        )}
+      </ProductionPanel>
 
       {openForm && (
         <ProductionForm
@@ -301,7 +272,7 @@ function DailyHeroCard({
       <CardContent sx={{ p: { xs: 2.25, md: 3.25 }, height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <Box>
           <Chip
-            label={hasProduction ? 'Journee saisie' : 'A saisir'}
+            label={hasProduction ? 'Journée saisie' : 'À saisir'}
             color={hasProduction ? 'success' : 'warning'}
             sx={{ mb: 1.5, fontWeight: 950, borderRadius: 2 }}
           />
@@ -310,26 +281,23 @@ function DailyHeroCard({
             fontWeight={950}
             sx={{ lineHeight: 1, letterSpacing: '-0.06em', fontSize: { xs: '2rem', md: '2.65rem' } }}
           >
-            {hasProduction ? `${formatNumber(todayStats.produced)} oeufs saisis` : "Production non saisie"}
+            {hasProduction ? `${formatNumber(todayStats.produced)} œufs produits` : "Production non saisie"}
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1.25 }}>
             {hasProduction
-              ? 'Les pertes du jour sont incluses dans la meme saisie quotidienne.'
-              : 'La saisie quotidienne inclut aussi les oeufs cassés.'}
+              ? 'Collecte vendable du jour, hors œufs cassés.'
+              : 'La saisie quotidienne inclut aussi les œufs cassés.'}
           </Typography>
         </Box>
 
         {latestEntry && (
           <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.72)', border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
-              Collecte de la journée
-            </Typography>
-            <Typography fontWeight={950}>
-              {formatNumber(day.collected)} œufs collectés
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Mortalité {formatNumber(day.mortality)} · Grammage global {day.grammage != null ? `${formatDecimal(day.grammage, 1)} g` : '-'}
-            </Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={900}>Collecte par type</Typography>
+            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+              {Object.entries(day.counts).filter(([type, count]) => !['casse', 'perdu'].includes(type) && count > 0).map(([type, count]) => (
+                <Chip key={type} label={(EGG_TYPE_LABELS[type] || type) + ' : ' + formatNumber(count)} size="small" sx={{ bgcolor: 'background.paper', fontWeight: 800 }} />
+              ))}
+            </Stack>
           </Box>
         )}
 
@@ -339,7 +307,7 @@ function DailyHeroCard({
           onClick={() => (hasProduction ? onEdit(latestEntry) : onAddProduction())}
           sx={{ mt: 'auto', borderRadius: 999, minHeight: 48, fontWeight: 950 }}
         >
-          {hasProduction ? 'Modifier la production' : "Saisir aujourd'hui"}
+          {hasProduction ? 'Modifier la production' : 'Saisir la journée'}
         </Button>
       </CardContent>
     </Card>
@@ -351,7 +319,7 @@ function AlertStack({ mortalite, lowStockCategory }) {
   if (mortalite > 0) {
     alerts.push({
       severity: mortalite >= 10 ? 'error' : 'warning',
-      title: mortalite >= 10 ? 'Mortalite elevee aujourd’hui' : 'Mortalite declaree aujourd’hui',
+      title: mortalite >= 10 ? 'Mortalité élevée pour cette journée' : 'Mortalité déclarée pour cette journée',
       description: `${formatNumber(mortalite)} mortalite(s) enregistree(s) pour ce batiment.`,
     });
   }
@@ -431,9 +399,9 @@ function StockCategoryCard({ categories }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-        <Typography variant="h5" fontWeight={950}>Stock cumulé du bâtiment</Typography>
+        <Typography variant="h5" fontWeight={950}>Répartition du stock par type</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Cumul des productions vendables et ventes de ce bâtiment jusqu'à la date choisie.
+          Collectes vendables, moins les ventes attribuées jusqu’à la date choisie. Œufs cassés exclus.
         </Typography>
 
         <Box
@@ -472,7 +440,7 @@ function StockCategoryCard({ categories }) {
                   <Typography fontWeight={950} sx={{ overflowWrap: 'anywhere' }}>{category.label}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     Produits : {formatNumber(category.produced_eggs)} · Vendus : {formatNumber(category.sold_eggs)}
-                    {Number(category.lost_eggs || 0) > 0 ? ` - pertes ${formatNumber(category.lost_eggs)}` : ''}
+                    
                   </Typography>
                 </Box>
                 <Chip
@@ -500,9 +468,9 @@ function MovementListCard({ movements }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0, height: '100%' }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-        <Typography variant="h5" fontWeight={950}>Mouvements du jour</Typography>
+        <Typography variant="h5" fontWeight={950}>Mouvements du jour sélectionné</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Production, ventes et pertes attribuees au batiment.
+          Collectes et ventes attribuées à ce bâtiment pour cette journée.
         </Typography>
         <Stack spacing={1.25} sx={{ maxHeight: { xs: 340, md: 430 }, overflow: 'auto', pr: 0.25, minWidth: 0 }}>
           {movements.length === 0 ? (
@@ -604,10 +572,10 @@ function SummaryHistoryCard({ totalStats }) {
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography variant="h5" fontWeight={950}>Resume historique</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-          Totaux des collectes et nombre de journées enregistrées.
+          Totaux des collectes jusqu’à la date choisie. Ce résumé ne représente pas le stock disponible.
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))', xl: '1fr' }, gap: 1 }}>
-          <Fact label="Total oeufs" value={`${formatNumber(totalStats.oeufs)} oeufs`} />
+          <Fact label="Total collecté" value={`${formatNumber(totalStats.oeufs)} oeufs`} />
           <Fact label="Cartons" value={totalStats.cartons} />
           <Fact label="Journées saisies" value={totalStats.saisies} />
         </Box>
