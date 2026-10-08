@@ -36,12 +36,12 @@ describe('ContactCard', () => {
   it.each([undefined, null, '', ' ', 'invalid', Infinity, true])('shows unavailable for missing or invalid balance %s', (balance) => {
     renderCard({ balance });
     expect(screen.getByText('Indisponible')).toBeVisible();
-    expect(screen.queryByText(formatMontantComplet(0))).not.toBeInTheDocument();
+    expect(screen.queryByText(formatMontantComplet(0), { normalizer: (value) => value })).not.toBeInTheDocument();
   });
 
   it.each([0, '0', '0.00'])('displays a confirmed zero balance %s', (balance) => {
     renderCard({ balance });
-    expect(screen.getByText(formatMontantComplet(0))).toBeVisible();
+    expect(screen.getByText(formatMontantComplet(0), { normalizer: (value) => value })).toBeVisible();
     expect(screen.queryByText('Indisponible')).not.toBeInTheDocument();
   });
 
@@ -53,13 +53,13 @@ describe('ContactCard', () => {
   ])('labels the %s net balance %s correctly', (type, balance, label) => {
     renderCard({ type, balance });
     expect(screen.getByText(label)).toBeVisible();
-    expect(screen.getByText(formatMontantComplet(42.5))).toBeVisible();
+    expect(screen.getByText(formatMontantComplet(42.5), { normalizer: (value) => value })).toBeVisible();
   });
 
   it('retains the complete name and exact large amount', () => {
     const name = 'Un nom particulièrement long '.repeat(8);
     renderCard({ name, balance: '9999999999999.99' });
     expect(screen.getByRole('heading', { level: 2 })).toHaveAttribute('title', name);
-    expect(screen.getByText(formatMontantComplet(9999999999999.99))).toBeVisible();
+    expect(screen.getByText(formatMontantComplet(9999999999999.99), { normalizer: (value) => value })).toBeVisible();
   });
 });
