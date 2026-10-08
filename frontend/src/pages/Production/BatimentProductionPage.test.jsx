@@ -39,7 +39,7 @@ describe('Building production views', () => {
     expect(await screen.findByText('Stock disponible maintenant')).toBeVisible();
     expect(await screen.findByText('Production non saisie')).toBeVisible();
     expect(screen.getAllByText('125 œufs')).toHaveLength(2);
-    expect(screen.getByText(/Normal - Gros :/)).toBeVisible();
+    expect(screen.getByText(/^Normal - Gros :/)).toBeVisible();
     expect(screen.getByText('Aliment consommé')).toBeVisible();
     expect(screen.getByText('Historique des saisies')).toBeVisible();
     expect(screen.queryByText('Oeufs casses')).not.toBeInTheDocument();

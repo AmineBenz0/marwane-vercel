@@ -128,12 +128,14 @@ for (const width of [390, 1200]) {
     await page.getByRole('button', { name: 'Modifier la journée du 05/10/26' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Annuler', exact: true }).click();
-    page.once('dialog', (confirmation) => confirmation.dismiss());
+    const cancelledDeactivation = page.waitForEvent('dialog');
     await page.getByRole('button', { name: 'Désactiver la journée du 05/10/26' }).click();
+    await (await cancelledDeactivation).dismiss();
     await expect(page.getByRole('button', { name: 'Modifier la saisie', exact: true })).toBeVisible();
     expect(state.writes.filter((entry) => entry.path === '/productions/daily')).toHaveLength(1);
-    page.once('dialog', (confirmation) => confirmation.accept());
+    const confirmedDeactivation = page.waitForEvent('dialog');
     await page.getByRole('button', { name: 'Désactiver la journée du 05/10/26' }).click();
+    await (await confirmedDeactivation).accept();
     await expect(page.getByRole('button', { name: 'Saisir la journée', exact: true })).toBeVisible();
     const deactivation = state.writes.filter((entry) => entry.path === '/productions/daily')[1];
     expect(deactivation.body).toEqual({ id_batiment: 7, date_production: '2026-10-05', versions: { 1: 'v1' } });
