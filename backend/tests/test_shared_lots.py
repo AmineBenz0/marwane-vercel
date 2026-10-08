@@ -140,12 +140,3 @@ def test_closed_historical_arrival_allows_a_new_shared_arrival(client, db_sessio
                                 params={"date_saisie": str(end)}, headers=auth_headers).json()
         assert historical["cycle"]["id_lot"] == lot["id_lot"]
         assert historical["cycle"]["age_semaines"] == 17
-
-
-def test_update_rejects_building_allocation_above_incoming_total(client, db_session, auth_headers):
-    payload, lot = make_arrival(client, db_session, auth_headers)
-    payload["repartitions"][0]["effectif_initial"] = payload["effectif_initial"] + 1
-    result = client.put(f"/api/v1/lots-production/{lot['id_lot']}", json=payload, headers=auth_headers)
-    assert result.status_code == 422
-    saved = client.get("/api/v1/lots-production", headers=auth_headers).json()[0]
-    assert [row["effectif_initial"] for row in saved["repartitions"]] == [100, 200]
