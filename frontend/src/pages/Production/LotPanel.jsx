@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, Link, Stack, TextField, Typography,
+  Divider, Stack, TextField, Typography,
 } from '@mui/material';
-import { ChevronRight, EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
+import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { lotProductionService } from '../../services/productionService';
@@ -140,24 +139,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
           <Fact label="Âge" value={selected.age_semaines == null ? '—' : selected.age_semaines + ' semaines'} />
           <Fact label="Formule d’aliment" value={selected.formule_suggeree || '—'} />
         </Box>
-        {(selected.repartitions || []).length > 0 && <>
-          <Divider sx={{ mt: 2.5, mb: 1 }} />
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))' }, columnGap: 3 }}>
-            {selected.repartitions.map((row) => <Link key={row.id_cycle} component={RouterLink} to={'/production/batiment/' + row.id_batiment}
-              underline="none" color="text.primary" sx={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minWidth: 0, py: 1.5, px: 1, borderRadius: 1,
-                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
-                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
-              }}>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{row.nom_batiment}</Typography>
-                <Typography variant="body2" color="text.secondary">{number(row.effectif_actuel)} volailles</Typography>
-              </Box>
-              <ChevronRight fontSize="small" sx={{ flexShrink: 0 }} />
-            </Link>)}
-          </Box>
-        </>}
-        <Divider sx={{ mt: 1, mb: 2 }} />
+        <Divider sx={{ mt: 2.5, mb: 2 }} />
         {selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
           <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}

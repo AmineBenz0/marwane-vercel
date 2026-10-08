@@ -64,6 +64,7 @@ async function mockFlock(page: Page, started = true) {
         formules: ['25-1% Sem vita'], jours_aliment: 2, jours_saisis: 2, jours_attendus: 7, ponte_pct: 60, g_poule_jour: 40 }],
     };
     else if (path === '/batiments') data = buildings;
+    else if (path === '/productions/daily') data = { records, versions: { 1: 'v1' } };
     else if (path === '/productions') data = records.filter((row) => row.id_batiment === Number(url.searchParams.get('id_batiment')));
     else if (path === '/productions/stock' || path === '/productions/stock/daily') data = {
       totals: { available_eggs: 240, buildings_count: 2, missing_buildings_count: records.length ? 1 : 2 },
@@ -92,9 +93,15 @@ for (const width of [390, 1200]) {
     await page.setViewportSize({ width, height: 1000 });
     const state = await mockFlock(page);
     await page.goto('/production/batiment/7?date=2026-10-05');
-    await expect(page.getByText('998 / 1 000')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Cycle des volailles' }).getByText('998', { exact: true })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Progression hebdomadaire des volailles' })).toBeVisible();
     await expect(page.getByText('2/7', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Détails de la semaine 19' }).click();
+    await expect(page.getByText('Formule utilisée', { exact: true })).toBeVisible();
+    await expect(page.getByText('Aliment (g / volaille / jour)', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Détails de la semaine 19' }).click();
+    await expect(page.getByText('Formule utilisée', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Activité de la journée' })).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByRole('button', { name: 'Démarrer un cycle' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Gérer les lots' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -112,6 +119,14 @@ for (const width of [390, 1200]) {
     expect(daily.body.grammage).toBe(0);
     expect(daily.body.consommation_aliment_kg).toBe(12);
     expect(Object.values(daily.body.quantites).every((count) => count === 0)).toBe(true);
+    await expect(page.getByRole('button', { name: 'Modifier la saisie', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Journée sélectionnée' }).getByText('0 œufs', { exact: true })).toHaveCount(3);
+    await expect(page.getByRole('table', { name: 'Saisies quotidiennes' })).toBeVisible();
+    await page.getByRole('button', { name: 'Modifier la journée du 05/10/26' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Annuler', exact: true }).click();
+    await page.getByRole('button', { name: 'Vue globale', exact: true }).click();
+    await expect(page).toHaveURL(/\/production\?date=2026-10-05$/);
     expect(state.errors).toEqual([]);
   });
 
@@ -137,8 +152,11 @@ for (const width of [390, 1200]) {
     await expect(panel.getByText('sur 300 entrants')).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Démarrer un lot' })).toHaveCount(0);
     await expect(panel.getByText('18 semaines')).toBeVisible();
-    await expect(panel.getByRole('link', { name: /Bâtiment A.*100 volailles/ })).toBeVisible();
-    await expect(panel.getByRole('link', { name: /Bâtiment B.*200 volailles/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bâtiment A', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Bâtiment B', exact: true })).toHaveCount(1);
+    const overview = page.getByRole('region', { name: 'Journée sélectionnée' });
+    await expect(overview.getByText('100', { exact: true })).toBeVisible();
+    await expect(overview.getByText('200', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/shared-lot-${width}.png`, fullPage: true });
     await panel.getByRole('button', { name: 'Terminer le lot' }).click();

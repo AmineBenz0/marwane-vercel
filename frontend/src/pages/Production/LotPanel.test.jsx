@@ -86,7 +86,7 @@ describe('LotPanel single active lot and history', () => {
     renderPanel();
     expect(await screen.findByRole('heading', { name: 'Lot en cours' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Démarrer un lot' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /A.*99 volailles/ })).toHaveAttribute('href', '/production/batiment/1');
+    expect(screen.queryByRole('link', { name: /A.*99 volailles/ })).not.toBeInTheDocument();
     expect(screen.getByText('Effectif restant')).toBeVisible();
     expect(screen.getByText('sur 100 entrants')).toBeVisible();
   });

@@ -32,13 +32,16 @@ describe('ProductionDashboard single page', () => {
   beforeEach(() => { vi.clearAllMocks(); mockData(); });
   it('shows current stock, type breakdown and daily activity together without tabs', async () => {
     renderPage();
-    expect(await screen.findByText('Stock global disponible actuellement')).toBeVisible();
+    expect(await screen.findByText('Stock disponible maintenant')).toBeVisible();
     expect(await screen.findByText('Non saisie')).toBeVisible();
     expect(screen.getAllByText('120 œufs')).toHaveLength(2);
     expect(screen.getByText('125 œufs')).toBeVisible();
-    expect(screen.getByText('Normal - Gros')).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Production du jour' })).toBeVisible();
+    expect(screen.getByText(/Normal - Gros :/)).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Suivi des bâtiments' })).toBeVisible();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Batiment 7' })).toBeVisible();
+    expect(screen.getAllByRole('heading', { name: 'Batiment 7' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Activité de la journée' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByRole('alert')).toHaveTextContent('5 œufs vendus sans bâtiment source');
   });
   it('keeps current stock on today and preserves only the daily date in building links', async () => {
@@ -46,7 +49,7 @@ describe('ProductionDashboard single page', () => {
     await screen.findByText('Non saisie');
     expect(get).toHaveBeenCalledWith('/productions/stock', { params: { date_stock: localToday() } });
     expect(get).toHaveBeenCalledWith('/productions/stock/daily', { params: { date_stock: '2026-10-05' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Voir le bâtiment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le bâtiment Batiment 7' }));
     expect(navigate).toHaveBeenCalledWith('/production/batiment/7?date=2026-10-05');
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
   });
@@ -56,9 +59,9 @@ describe('ProductionDashboard single page', () => {
       categories: [{ type_oeuf: 'normal', label: 'Normaux', produced_eggs: 30 }, { type_oeuf: 'casse', label: 'Broken category', produced_eggs: 8 }],
     }] });
     renderPage();
-    await screen.findByText('Normaux');
-    expect(screen.getByText('Normaux : 30')).toBeVisible();
-    expect(screen.getByText('Normal - Gros')).toBeVisible();
+    await screen.findByText(/Normaux :/);
+    expect(within(screen.getByRole('region', { name: 'Collecte par type' })).getByText('30 œufs')).toBeVisible();
+    expect(screen.getByText(/Normal - Gros :/)).toBeVisible();
     expect(screen.getAllByText('30 œufs')).toHaveLength(3);
     expect(screen.queryByText('Broken category')).not.toBeInTheDocument();
   });
@@ -74,7 +77,7 @@ describe('ProductionDashboard single page', () => {
     renderPage('/production?date=2026-10-05');
     await screen.findByText('Non saisie');
     fireEvent.change(screen.getByRole('textbox', { name: 'Date' }), { target: { value: '06/10/26' } });
-    expect(screen.getByText('Stock global disponible actuellement')).toBeVisible();
+    expect(screen.getByText('Stock disponible maintenant')).toBeVisible();
     expect(screen.queryByText('Non saisie')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox', { name: 'Date' }), { target: { value: '07/10/26' } });
     await waitFor(() => expect(pending['2026-10-07']).toBeDefined());
@@ -97,17 +100,17 @@ describe('ProductionDashboard single page', () => {
     renderPage('/production?date=2026-10-05');
     expect(await screen.findByRole('alert')).toHaveTextContent('Stock indisponible');
     expect(await screen.findByText('Non saisie')).toBeVisible();
-    expect(screen.queryByText('Stock global disponible actuellement')).not.toBeInTheDocument();
+    expect(screen.queryByText('Stock disponible maintenant')).not.toBeInTheDocument();
     mockData();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer le stock' }));
-    expect(await screen.findByText('Stock global disponible actuellement')).toBeVisible();
+    expect(await screen.findByText('Stock disponible maintenant')).toBeVisible();
   });
   it('retains stock when daily data fails and retries only the daily request', async () => {
     get.mockImplementation((path) => path === '/productions/stock/daily' ? Promise.reject(new Error('Journée indisponible')) :
       Promise.resolve(path === '/productions/stock' ? stock : [{ id_batiment: 7, nom: 'Batiment 7' }]));
     renderPage('/production?date=2026-10-05');
     await screen.findByText('Journée indisponible');
-    expect(within(screen.getByRole('region', { name: 'Stock actuel' })).getByText('Stock global disponible actuellement')).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Stock actuel' })).getByText('Stock disponible maintenant')).toBeVisible();
     mockData();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer la journée' }));
     expect(await screen.findByText('Non saisie')).toBeVisible();
