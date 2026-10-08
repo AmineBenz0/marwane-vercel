@@ -33,14 +33,14 @@ jobs:
           app/routers/alerts.py app/routers/jobs.py app/routers/product_boms.py
           app/routers/stock.py app/routers/search.py app/routers/reports.py
           app/routers/transformations.py app/routers/productions.py
-          app/routers/batiments.py app/routers/cycles_production.py
+          app/routers/batiments.py app/routers/cycles_production.py app/routers/lots_production.py
           app/models/financial_correction.py
           app/models/inventory.py app/models/job_execution.py
-          app/models/nomenclature.py app/models/production.py
+          app/models/nomenclature.py app/models/production.py app/models/lot_production.py
           scripts/check_database_schema.py tests/test_database_schema.py
-          tests/test_lc_schema_migration.py
+          tests/test_lc_schema_migration.py tests/test_shared_lot_migration.py
           app/schemas/batiment.py
-          app/schemas/compte_bancaire.py app/schemas/cycle_production.py
+          app/schemas/compte_bancaire.py app/schemas/cycle_production.py app/schemas/lot_production.py
           app/schemas/production.py app/utils/egg_product_sync.py
           app/utils/production_cycles.py app/utils/cycle_insights.py app/utils/security.py tests/test_config.py
           tests/test_production_stock.py tests/test_enterprise_remediation.py
@@ -93,7 +93,7 @@ jobs:
           ENVIRONMENT: development
           SECRET_KEY: ci-only-secret
       - name: Verify LC maintenance migration and replay
-        run: python -m pytest --override-ini addopts='' tests/test_lc_schema_migration.py -q
+        run: python -m pytest --override-ini addopts='' tests/test_lc_schema_migration.py tests/test_shared_lot_migration.py -q
         env:
           POSTGRES_MIGRATION_TEST_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
 

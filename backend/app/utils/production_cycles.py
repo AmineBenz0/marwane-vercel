@@ -65,20 +65,27 @@ def find_cycle_for_date(db: Session, id_batiment: int, target_date: date) -> Opt
     ).order_by(CycleProduction.date_debut.desc()).first()
 
 
+def cycle_schedule(cycle: CycleProduction):
+    """The parent owns arrival, age and lifecycle; old unlinked rows still work."""
+    return cycle.lot or cycle
+
+
 def validate_cycle_date(cycle: CycleProduction, target_date: date) -> None:
+    cycle = cycle_schedule(cycle)
     if target_date < cycle.date_debut or (
         cycle.date_fin_reelle is not None and target_date > cycle.date_fin_reelle
     ):
         raise HTTPException(status_code=400, detail="La date choisie est en dehors du cycle.")
 
 
-def validate_cycle_mortality(db: Session, cycle: CycleProduction, mortality: int, excluding_ids=()) -> None:
+def validate_cycle_mortality(db: Session, cycle: CycleProduction, mortality: int, excluding_ids=(), *, limit=None) -> None:
     query = db.query(func.coalesce(func.sum(Production.mortalite), 0)).filter(
         Production.id_cycle == cycle.id_cycle, Production.est_actif.is_(True),
     )
     if excluding_ids:
         query = query.filter(Production.id_production.notin_(excluding_ids))
-    if cycle.effectif_initial is not None and int(query.scalar() or 0) + mortality > cycle.effectif_initial:
+    initial = cycle.effectif_initial if limit is None else limit
+    if initial is not None and int(query.scalar() or 0) + mortality > initial:
         raise HTTPException(status_code=400, detail="La mortalité dépasse l'effectif du cycle.")
 
 
@@ -145,6 +152,8 @@ def calculate_cycle_effectif(db: Session, cycle: CycleProduction, through_date: 
 
 
 def cycle_to_dict(db: Session, cycle: CycleProduction, today: Optional[date] = None) -> dict:
+    allocation = cycle
+    cycle = cycle_schedule(allocation)
     current_day = today or date.today()
     refresh_cycle_status(db, cycle, current_day)
     if cycle.date_fin_reelle:
@@ -156,20 +165,21 @@ def cycle_to_dict(db: Session, cycle: CycleProduction, today: Optional[date] = N
     phase_code, phase_label = get_cycle_phase(age_semaines, cycle.duree_semaines)
 
     return {
-        "id_cycle": cycle.id_cycle,
-        "id_batiment": cycle.id_batiment,
-        "nom_batiment": cycle.batiment.nom if cycle.batiment else None,
-        "nom_cycle": cycle.nom_cycle,
+        "id_cycle": allocation.id_cycle,
+        "id_lot": allocation.id_lot,
+        "id_batiment": allocation.id_batiment,
+        "nom_batiment": allocation.batiment.nom if allocation.batiment else None,
+        "nom_cycle": cycle.nom_lot if allocation.lot else cycle.nom_cycle,
         "souche": cycle.souche,
         "date_debut": cycle.date_debut,
         "age_depart_semaines": cycle.age_depart_semaines,
-        "effectif_initial": cycle.effectif_initial,
+        "effectif_initial": allocation.effectif_initial,
         "duree_semaines": cycle.duree_semaines,
         "date_fin_prevue": cycle.date_fin_prevue,
         "date_fin_reelle": cycle.date_fin_reelle,
         "statut": cycle.statut,
         "notes": cycle.notes,
-        "effectif_actuel": calculate_cycle_effectif(db, cycle, current_day),
+        "effectif_actuel": calculate_cycle_effectif(db, allocation, current_day),
         "age_semaines": age_semaines,
         "semaine_cycle": semaine_cycle,
         "phase_code": phase_code,
