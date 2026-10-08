@@ -1,5 +1,18 @@
 import { test, expect, type Page } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  page.on('pageerror', (error) => console.log('Contact page error:', error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.log('Contact console error:', message.text());
+  });
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    console.log('Contact UI failure:', page.url(), await page.locator('body').innerText());
+  }
+});
+
 async function mockContacts(page: Page, plural: 'clients' | 'fournisseurs') {
   const singular = plural === 'clients' ? 'client' : 'fournisseur';
   const idKey = `id_${singular}`;
