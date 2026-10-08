@@ -53,6 +53,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
     return !Number.isInteger(count) || count < (dialog === 'edit' ? 1 : 0) || count > allocationLimit(building.id_batiment);
   };
   const balanced = Number(values.effectif_initial) > 0 && assigned === Number(values.effectif_initial)
+    && !allocationErrorBuildingId
     && distributionBuildings.every((building) => !allocationError(building));
 
   const open = (kind) => {
