@@ -134,10 +134,11 @@ for (const width of [390, 1200]) {
       { id_batiment: 7, effectif_initial: 100 }, { id_batiment: 8, effectif_initial: 200 },
     ]);
     const panel = page.getByRole('region', { name: 'Lots de volailles' });
-    await expect(panel.getByText('300 / 300')).toBeVisible();
+    await expect(panel.getByText('sur 300 entrants')).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Démarrer un lot' })).toHaveCount(0);
     await expect(panel.getByText('18 semaines')).toBeVisible();
-    await expect(panel.getByText('100 restantes / 100 affectées · mortalité : 0')).toBeVisible();
-    await expect(panel.getByText('200 restantes / 200 affectées · mortalité : 0')).toBeVisible();
+    await expect(panel.getByRole('link', { name: /Bâtiment A.*100 volailles/ })).toBeVisible();
+    await expect(panel.getByRole('link', { name: /Bâtiment B.*200 volailles/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/shared-lot-${width}.png`, fullPage: true });
     await panel.getByRole('button', { name: 'Terminer le lot' }).click();
@@ -169,7 +170,7 @@ test('a building allocation cannot exceed the remaining chicks in the shared lot
   const buildingA = edit.getByLabel('Poussins · Bâtiment A');
   await expect(buildingA).toHaveAttribute('max', '299');
   await buildingA.fill('300');
-  await expect(edit.getByText('La quantité dépasse le nombre de poussins disponibles pour ce bâtiment. Maximum autorisé : 299 poussins.')).toBeVisible();
+  await expect(edit.getByText('La quantité dépasse le nombre total de poussins entrants.')).toBeVisible();
   await expect(edit.getByRole('button', { name: 'Enregistrer', exact: true })).toBeDisabled();
   expect(state.writes.filter((entry) => entry.path === '/lots-production/1')).toHaveLength(0);
   expect(state.errors).toEqual([]);

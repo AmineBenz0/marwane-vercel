@@ -1,7 +1,7 @@
 """Manage one arrival and all building allocations in a single transaction."""
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -106,7 +106,17 @@ def list_lots(db: Session = Depends(get_db), current_user: Utilisateur = Depends
 @router.post("", status_code=201)
 def create_lot(payload: LotProductionCreate, db: Session = Depends(get_db),
                current_user: Utilisateur = Depends(get_current_active_user)):
+    # Serialize arrivals across the whole farm, even with disjoint building IDs.
+    # The transaction-scoped PostgreSQL lock also covers the first-ever arrival
+    # when there is no lot row to lock, and is released on commit or rollback.
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(741026, 1)"))
     _lock_buildings(db, [row.id_batiment for row in payload.repartitions], require_active=True)
+    if db.query(LotProduction).filter(LotProduction.statut != "termine").first():
+        raise HTTPException(
+            status_code=400,
+            detail="Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot.",
+        )
     _validate_start(db, payload)
     lot = LotProduction(statut="actif", id_utilisateur_creation=current_user.id_utilisateur if current_user else None)
     _apply_schedule(lot, payload, current_user)

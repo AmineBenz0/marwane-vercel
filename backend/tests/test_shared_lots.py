@@ -140,3 +140,61 @@ def test_closed_historical_arrival_allows_a_new_shared_arrival(client, db_sessio
                                 params={"date_saisie": str(end)}, headers=auth_headers).json()
         assert historical["cycle"]["id_lot"] == lot["id_lot"]
         assert historical["cycle"]["age_semaines"] == 17
+
+
+def test_active_lot_blocks_arrival_in_entirely_different_buildings(client, db_session, auth_headers):
+    make_arrival(client, db_session, auth_headers)
+    free = Batiment(nom="Unoccupied building", est_actif=True)
+    db_session.add(free)
+    db_session.commit()
+    payload = {
+        "nom_lot": "Second arrival", "date_debut": str(date.today()),
+        "age_depart_semaines": 0, "effectif_initial": 50,
+        "repartitions": [{"id_batiment": free.id_batiment, "effectif_initial": 50}],
+    }
+    result = client.post("/api/v1/lots-production", json=payload, headers=auth_headers)
+    assert result.status_code == 400, result.text
+    assert result.json()["detail"] == "Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot."
+    assert db_session.query(LotProduction).count() == 1
+    assert db_session.query(CycleProduction).filter(CycleProduction.id_batiment == free.id_batiment).count() == 0
+
+
+def test_concurrent_disjoint_arrivals_only_create_one_active_lot(db_session):
+    if db_session.get_bind().dialect.name != "postgresql":
+        pytest.skip("Concurrent arrival serialization requires PostgreSQL.")
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from fastapi import HTTPException
+    from sqlalchemy.orm import sessionmaker
+
+    from app.routers.lots_production import create_lot
+    from app.schemas.lot_production import LotProductionCreate
+
+    buildings = [Batiment(nom="Concurrent A", est_actif=True), Batiment(nom="Concurrent B", est_actif=True)]
+    db_session.add_all(buildings)
+    db_session.commit()
+    ids = [building.id_batiment for building in buildings]
+    session_factory = sessionmaker(bind=db_session.get_bind(), autoflush=False)
+    barrier = Barrier(2)
+
+    def start(building_id):
+        with session_factory() as session:
+            payload = LotProductionCreate(
+                nom_lot="Concurrent arrival", date_debut=date.today(),
+                age_depart_semaines=0, effectif_initial=10,
+                repartitions=[{"id_batiment": building_id, "effectif_initial": 10}],
+            )
+            barrier.wait(timeout=10)
+            try:
+                create_lot(payload, db=session, current_user=None)
+                return 201
+            except HTTPException as error:
+                session.rollback()
+                return error.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(start, ids))
+    assert sorted(results) == [201, 400]
+    assert db_session.query(LotProduction).count() == 1
+    assert db_session.query(CycleProduction).count() == 1

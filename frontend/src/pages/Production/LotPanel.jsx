@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  MenuItem, Stack, TextField, Typography,
+  Divider, Link, Stack, TextField, Typography,
 } from '@mui/material';
+import { ChevronRight, EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { lotProductionService } from '../../services/productionService';
@@ -18,6 +19,7 @@ const message = (error) => {
 export default function LotPanel({ buildings, refreshKey, onChange }) {
   const [lots, setLots] = useState([]);
   const [selectedId, setSelectedId] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
@@ -36,8 +38,9 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
     }).catch((err) => { if (!cancelled) setError(message(err)); });
     return () => { cancelled = true; };
   }, [refreshKey, revision]);
+  const activeLot = lots.find((lot) => lot.statut !== 'termine');
   const selected = lots.find((lot) => String(lot.id_lot) === selectedId)
-    || lots.find((lot) => lot.statut !== 'termine') || lots[0];
+    || activeLot || lots[0];
   const occupied = new Set(lots.filter((lot) => lot.statut !== 'termine')
     .flatMap((lot) => (lot.repartitions || []).map((row) => Number(row.id_batiment))));
   const available = buildings.filter((building) => building.est_actif !== false && !occupied.has(Number(building.id_batiment)));
@@ -57,6 +60,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
     && distributionBuildings.every((building) => !allocationError(building));
 
   const open = (kind) => {
+    if (kind === 'create' && (!loaded || activeLot || !available.length)) return;
     setError('');
     setAllocationErrorBuildingId('');
     setValues(kind === 'create' ? {
@@ -71,6 +75,10 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
   const field = (name, value) => setValues((old) => ({ ...old, [name]: value }));
   const submit = async (event) => {
     event.preventDefault();
+    if (dialog === 'create' && activeLot) {
+      setError('Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot.');
+      return;
+    }
     if (dialog !== 'end' && !balanced) return;
     setSaving(true);
     setError('');
@@ -101,41 +109,77 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
 
   return (
     <Box component="section" aria-label="Lots de volailles" sx={{ mb: 3, p: { xs: 2, md: 2.5 }, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1.5}>
-        <Box><Typography component="h2" variant="h6" fontWeight={900}>Lots de volailles</Typography>
-          <Typography variant="body2" color="text.secondary">Une arrivée, une progression commune, un suivi par bâtiment.</Typography></Box>
-        <Button variant="contained" onClick={() => open('create')} disabled={!loaded || !!error || !available.length} sx={{ alignSelf: 'start', flexShrink: 0 }}>Démarrer un lot</Button>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-start' }} spacing={1.5}>
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
+              {loaded && selected ? selected.nom_lot : 'Lots de volailles'}
+            </Typography>
+            {loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
+              color={selected.statut === 'termine' ? 'default' : 'success'} />}
+          </Stack>
+          {loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+            Arrivée le {formatShortDate(selected.date_debut)}
+            {selected.souche ? ' · Souche : ' + selected.souche : ''}
+            {selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}
+          </Typography>}
+        </Box>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
+          {loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
+          {loaded && !activeLot && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
+        </Stack>
       </Stack>
       {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
       {loaded && !selected && <Typography color="text.secondary" sx={{ mt: 2 }}>Enregistrez l’arrivée et répartissez les poussins entre les bâtiments.</Typography>}
       {loaded && selected && <>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }} alignItems={{ sm: 'center' }}>
-          {lots.length > 1 ? <TextField select size="small" label="Lot / historique" value={selected.id_lot} onChange={(event) => setSelectedId(String(event.target.value))} sx={{ minWidth: 220 }}>
-            {lots.map((lot) => <MenuItem key={lot.id_lot} value={lot.id_lot}>{lot.nom_lot}</MenuItem>)}
-          </TextField> : <Typography fontWeight={800}>{selected.nom_lot}</Typography>}
-          <Chip size="small" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'} color={selected.statut === 'termine' ? 'default' : 'success'} />
-          <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(selected.date_debut)}{selected.date_fin_reelle ? ' · fin le ' + formatShortDate(selected.date_fin_reelle) : ''}</Typography>
-        </Stack>
-        <Box sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: 2 }}>
-          <Fact label="Âge commun" value={selected.age_semaines + ' semaines'} />
-          <Fact label="Effectif total restant" value={number(selected.effectif_actuel) + ' / ' + number(selected.effectif_initial)} />
-          <Fact label="Mortalité du lot" value={number(selected.mortalite_totale)} />
-          <Fact label="Formule selon l’âge" value={selected.formule_suggeree || '—'} />
+        {selected.statut === 'termine' && activeLot && <Button size="small" onClick={() => setSelectedId(String(activeLot.id_lot))} sx={{ mt: 1 }}>Revenir au lot en cours</Button>}
+        <Box sx={{ mt: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 } }}>
+          <Fact label="Effectif restant" value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' entrants'} color="primary.main" />
+          <Fact label="Mortalité cumulée" value={number(selected.mortalite_totale)} />
+          <Fact label="Âge" value={selected.age_semaines == null ? '—' : selected.age_semaines + ' semaines'} />
+          <Fact label="Formule d’aliment" value={selected.formule_suggeree || '—'} />
         </Box>
-        <Stack spacing={1} sx={{ mt: 2 }}>
-          {(selected.repartitions || []).map((row) => <Stack key={row.id_cycle} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} justifyContent="space-between" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}>
-            <Box sx={{ minWidth: 0 }}><Typography fontWeight={800}>{row.nom_batiment}</Typography>
-              <Typography variant="body2" color="text.secondary">{number(row.effectif_actuel)} restantes / {number(row.effectif_initial)} affectées · mortalité : {row.effectif_initial == null ? '—' : number(row.effectif_initial - row.effectif_actuel)}</Typography></Box>
-            <Button component={RouterLink} to={'/production/batiment/' + row.id_batiment} size="small" sx={{ alignSelf: 'start' }}>Voir le suivi</Button>
-          </Stack>)}
-        </Stack>
-        {selected.statut !== 'termine' && <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-          <Button onClick={() => open('edit')}>Modifier le lot</Button>
-          <Button color="error" onClick={() => open('end')}>Terminer le lot</Button>
-        </Stack>}
-        {selected.statut === 'termine' && <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>Progression arrêtée à la date de fin pour tous les bâtiments.</Typography>}
+        {(selected.repartitions || []).length > 0 && <>
+          <Divider sx={{ mt: 2.5, mb: 1 }} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))' }, columnGap: 3 }}>
+            {selected.repartitions.map((row) => <Link key={row.id_cycle} component={RouterLink} to={'/production/batiment/' + row.id_batiment}
+              underline="none" color="text.primary" sx={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minWidth: 0, py: 1.5, px: 1, borderRadius: 1,
+                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+              }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{row.nom_batiment}</Typography>
+                <Typography variant="body2" color="text.secondary">{number(row.effectif_actuel)} volailles</Typography>
+              </Box>
+              <ChevronRight fontSize="small" sx={{ flexShrink: 0 }} />
+            </Link>)}
+          </Box>
+        </>}
+        <Divider sx={{ mt: 1, mb: 2 }} />
+        {selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
+          <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}
+            sx={{ color: 'error.main', borderColor: 'error.main', '&:hover': { color: 'error.dark', borderColor: 'error.dark', bgcolor: 'action.hover' } }}>Terminer le lot</Button>
+        </Stack> : <Typography variant="body2" color="text.secondary">Progression arrêtée à la date de fin pour tous les bâtiments.</Typography>}
       </>}
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Historique des lots</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1} sx={{ pt: 1 }}>
+            {lots.map((lot) => <Button key={lot.id_lot} color="inherit" onClick={() => { setSelectedId(String(lot.id_lot)); setHistoryOpen(false); }}
+              sx={{ justifyContent: 'space-between', gap: 2, textAlign: 'left', p: 1.5 }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.nom_lot}</Typography>
+                <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(lot.date_debut)}</Typography>
+              </Box>
+              <Chip size="small" variant="outlined" label={lot.statut === 'termine' ? 'Terminé' : 'Actif'} color={lot.statut === 'termine' ? 'default' : 'success'} />
+            </Button>)}
+          </Stack>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setHistoryOpen(false)}>Fermer</Button></DialogActions>
+      </Dialog>
       <Dialog open={!!dialog} onClose={() => { if (!saving) { setDialog(''); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submit}>
           <DialogTitle>{dialog === 'create' ? 'Démarrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
@@ -188,6 +232,10 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
   );
 }
 
-function Fact({ label, value }) {
-  return <Box sx={{ minWidth: 0 }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>{value}</Typography></Box>;
+function Fact({ label, value, detail, color = 'text.primary' }) {
+  return <Box sx={{ minWidth: 0 }}>
+    <Typography variant="body2" color="text.secondary">{label}</Typography>
+    <Typography variant="h5" fontWeight={800} color={color} sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>{value}</Typography>
+    {detail && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{detail}</Typography>}
+  </Box>;
 }
