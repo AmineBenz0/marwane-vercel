@@ -1,5 +1,4 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Collapse, Divider, Stack, Typography,
@@ -9,7 +8,7 @@ import { HistoryOutlined, KeyboardArrowDown, KeyboardArrowUp } from '@mui/icons-
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { cycleProductionService } from '../../services/productionService';
-import useProductionView, { localToday, productionLink } from './useProductionView';
+import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 const errorMessage = (error) => {
@@ -17,8 +16,7 @@ const errorMessage = (error) => {
   return typeof detail === 'string' ? detail : error.message || 'Impossible d’enregistrer le cycle.';
 };
 
-export default function CyclePanel({ buildingId, refreshKey, onChange, onSelectCycle, stockContent }) {
-  const { selectedDate } = useProductionView();
+export default function CyclePanel({ buildingId, refreshKey, onChange, onSelectCycle, stockContent, actions }) {
   const [cycles, setCycles] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -66,7 +64,7 @@ export default function CyclePanel({ buildingId, refreshKey, onChange, onSelectC
         </Stack>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           {cycles.length > 1 && <Button size="small" startIcon={<HistoryOutlined />} onClick={() => setHistoryOpen(true)}>Historique des lots</Button>}
-          <Button component={RouterLink} to={productionLink(null, selectedDate)} size="small">Gérer les lots</Button>
+          {actions}
         </Stack>
       </Stack>
       {error && !dialog && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer le lot</Button>}>{error}</Alert>}

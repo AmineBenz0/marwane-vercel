@@ -186,16 +186,16 @@ function BatimentProductionPage() {
         </Typography>
       </Box>
       <CyclePanel buildingId={selectedBatimentId} refreshKey={productions} onSelectCycle={setInsightsCycleId}
-        stockContent={stockContent} onChange={() => { loadData(); reloadStock(); }} />
+        stockContent={stockContent}
+        actions={<Button variant="contained" disabled={!dailyReady || !batiment} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
+          onClick={() => hasProduction ? handleEdit(latestTodayEntry) : handleAddProduction()}>
+          {hasProduction ? 'Modifier la saisie' : 'Saisir la journée'}
+        </Button>}
+        onChange={() => { loadData(); reloadStock(); }} />
       <Card variant="outlined" component="section" aria-label="Journée sélectionnée" aria-busy={!dailyReady} sx={{ borderRadius: 3, minWidth: 0 }}>
         <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
           <DailySectionHeader title="Journée sélectionnée" selectedDate={selectedDate} onDateChange={setSelectedDate}
-            actions={dailyReady && batiment ? <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
-              <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'À saisir'} />
-              <Button variant="contained" startIcon={hasProduction ? <EditIcon /> : <AddIcon />} onClick={() => hasProduction ? handleEdit(latestTodayEntry) : handleAddProduction()}>
-                {hasProduction ? 'Modifier la saisie' : 'Saisir la journée'}
-              </Button>
-            </Stack> : null} />
+            actions={dailyReady && batiment ? <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'À saisir'} /> : null} />
           {loadError ? <Alert severity="error" action={<Button color="inherit" onClick={loadData}>Réessayer la journée</Button>}>{loadError}</Alert> : !dailyReady ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Chargement de la journée" /></Box>
           ) : !batiment ? <Alert severity="warning">Bâtiment introuvable.</Alert> : <>

@@ -106,7 +106,9 @@ for (const width of [390, 1200]) {
     await expect(page.getByText('Formule utilisée', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Activité de la journée' })).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByRole('button', { name: 'Démarrer un cycle' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Gérer les lots' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Gérer les lots' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Cycle des volailles' }).getByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
+    await expect(page.getByRole('region', { name: 'Journée sélectionnée' }).getByRole('button', { name: 'Saisir la journée' })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/flock-building-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Saisir la journée' }).click();

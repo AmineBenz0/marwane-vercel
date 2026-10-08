@@ -45,6 +45,9 @@ describe('Building production views', () => {
     expect(screen.queryByText('Oeufs casses')).not.toBeInTheDocument();
     expect(screen.queryByText('99,00 kg')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Cycle des volailles' })).getByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
+    expect(screen.queryByRole('link', { name: 'Gérer les lots' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Journée sélectionnée' })).queryByRole('button', { name: 'Saisir la journée' })).not.toBeInTheDocument();
   });
   it('accepts legacy links and preserves the daily date without applying it to stock', async () => {
     renderPage('/production/batiment/7?view=stocks&date=2026-10-05');
@@ -71,7 +74,7 @@ describe('Building production views', () => {
     expect(screen.getAllByText('Normaux : 100')).toHaveLength(2);
     expect(screen.getAllByText('Doubles jaunes : 20')).toHaveLength(2);
     expect(within(screen.getByRole('table', { name: 'Saisies quotidiennes' })).getByText('5', { selector: 'td' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Modifier la saisie' })).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Cycle des volailles' })).getByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Modifier la journée du 05/10/26' })).toBeVisible();
     expect(screen.queryByText('999 œufs collectés')).not.toBeInTheDocument();
   });
@@ -108,6 +111,7 @@ describe('Building production views', () => {
     await waitFor(() => expect(screen.getByRole('progressbar', { name: 'Chargement de la journée' })).toBeVisible());
     expect(screen.getByText('Stock disponible maintenant')).toBeVisible();
     expect(screen.queryByText('Production non saisie')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Saisir la journée' })).toBeDisabled();
     expect(get.mock.calls.filter(([path]) => path === '/productions/stock')).toHaveLength(1);
   });
   it('retains inventory when daily loading fails', async () => {
