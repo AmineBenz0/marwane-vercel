@@ -19,7 +19,6 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   FileDownload as FileDownloadIcon,
   Search as SearchIcon,
   Visibility as VisibilityIcon,
@@ -27,7 +26,7 @@ import {
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import ProduitForm from './ProduitForm';
-import { get, post, put } from '../../services/api';
+import { get, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 
 const formatMoney = (value, maximumFractionDigits = 2) => {
@@ -68,7 +67,6 @@ function ProduitsList() {
   const [typeFilter, setTypeFilter] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingProduit, setEditingProduit] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -164,13 +162,6 @@ function ProduitsList() {
   }, []);
 
   const handleCreate = () => {
-    setEditingProduit(null);
-    setFormError(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (produit) => {
-    setEditingProduit(produit);
     setFormError(null);
     setModalOpen(true);
   };
@@ -184,14 +175,9 @@ function ProduitsList() {
     setFormError(null);
 
     try {
-      if (editingProduit) {
-        await put(`/produits/${editingProduit.id_produit}`, data);
-      } else {
-        await post('/produits', data);
-      }
+      await post('/produits', data);
 
       setModalOpen(false);
-      setEditingProduit(null);
       await fetchData();
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
@@ -205,7 +191,6 @@ function ProduitsList() {
   const handleCloseModal = () => {
     if (!formLoading) {
       setModalOpen(false);
-      setEditingProduit(null);
       setFormError(null);
     }
   };
@@ -374,7 +359,6 @@ function ProduitsList() {
               insight={productInsights.get(produit.id_produit)}
               fournisseursMap={fournisseursMap}
               onView={() => handleViewDetails(produit)}
-              onEdit={() => handleEdit(produit)}
             />
           ))}
         </Box>
@@ -384,7 +368,6 @@ function ProduitsList() {
         open={modalOpen}
         onClose={handleCloseModal}
         onSubmit={handleSubmit}
-        initialValues={editingProduit}
         loading={formLoading}
         errorMessage={formError}
       />
@@ -392,7 +375,7 @@ function ProduitsList() {
   );
 }
 
-function ProductCard({ produit, insight, fournisseursMap, onView, onEdit }) {
+function ProductCard({ produit, insight, fournisseursMap, onView }) {
   const supplierCount = insight?.suppliers.size || 0;
   const lastPurchase = insight?.lastPurchase;
   const lastSupplier = lastPurchase
@@ -468,9 +451,6 @@ function ProductCard({ produit, insight, fournisseursMap, onView, onEdit }) {
           <Button variant="contained" startIcon={<VisibilityIcon />} onClick={onView} fullWidth>
             Voir
           </Button>
-          <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} fullWidth>
-            Modifier
-          </Button>
         </Stack>
       </CardContent>
     </Card>
@@ -494,7 +474,6 @@ ProductCard.propTypes = {
   }),
   fournisseursMap: PropTypes.instanceOf(Map).isRequired,
   onView: PropTypes.func.isRequired,
-  onEdit: PropTypes.func.isRequired,
 };
 
 function MiniMetric({ label, value }) {
