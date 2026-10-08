@@ -23,6 +23,11 @@ class LotProductionCreate(BaseModel):
         ids = [row.id_batiment for row in self.repartitions]
         if len(ids) != len(set(ids)):
             raise ValueError("Un bâtiment ne peut apparaître qu'une fois dans la répartition.")
+        oversized = next((row for row in self.repartitions if row.effectif_initial > self.effectif_initial), None)
+        if oversized:
+            raise ValueError(
+                f"L'effectif affecté au bâtiment {oversized.id_batiment} dépasse le nombre total de poussins entrants."
+            )
         if sum(row.effectif_initial for row in self.repartitions) != self.effectif_initial:
             raise ValueError("La répartition doit correspondre au nombre total de poussins entrants.")
         if self.date_fin_prevue and self.date_fin_prevue < self.date_debut:
