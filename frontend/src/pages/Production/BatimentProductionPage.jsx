@@ -458,7 +458,7 @@ function MovementListCard({ movements }) {
 
 function HistoryCard({ days, onEdit, onDelete, onAddProduction }) {
   return (
-    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0, height: '100%' }}>
+    <Card variant="outlined" sx={{ borderRadius: 4, minWidth: 0 }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography variant="h5" fontWeight={950}>Historique récent</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
