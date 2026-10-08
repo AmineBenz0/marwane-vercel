@@ -1,110 +1,66 @@
-import DateField from '../../utils/DateField';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Divider,
-  Stack,
-  Typography,
-} from '@mui/material';
-import {
-  Add as AddIcon,
-  ArrowForward as ArrowForwardIcon,
-  Egg as EggIcon,
-  Factory as FactoryIcon,
-  LocalShipping as LocalShippingIcon,
-  TrendingDown as TrendingDownIcon,
-} from '@mui/icons-material';
+import { Alert, Box, Button, Card, CardContent, CircularProgress, Divider, Stack, Typography } from '@mui/material';
+import { Add as AddIcon, ArrowForward as ArrowForwardIcon, Egg as EggIcon, Factory as FactoryIcon, LocalShipping as LocalShippingIcon, TrendingDown as TrendingDownIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { formatShortDate } from '../../utils/dateFormatting';
 import { productionService, batimentService } from '../../services/productionService';
 import ProductionForm from './ProductionForm';
 import useProductionView, { productionLink } from './useProductionView';
-import { ProductionTabs, ProductionPanel, StockSummary } from './ProductionViews';
+import useProductionStock from './useProductionStock';
+import { DailySectionHeader, StockSummary } from './ProductionViews';
 import useNotificationStore from '../../store/notificationStore';
 
-const STATUS_CONFIG = {
-  ok: { label: 'OK', color: 'success', tone: '#1f7a4d', bg: 'rgba(31, 122, 77, 0.1)' },
-  low: { label: 'Stock bas', color: 'warning', tone: '#b26a00', bg: 'rgba(245, 158, 11, 0.14)' },
-  empty: { label: 'Vide', color: 'error', tone: '#b42318', bg: 'rgba(180, 35, 24, 0.1)' },
-  missing: { label: 'A saisir', color: 'warning', tone: '#b26a00', bg: 'rgba(245, 158, 11, 0.14)' },
-};
-
-const MOVEMENT_CONFIG = {
-  production: { color: 'success', prefix: '+' },
-  sale: { color: 'error', prefix: '' },
-  loss: { color: 'error', prefix: '' },
-  sale_unassigned: { color: 'warning', prefix: '' },
-};
-
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
-const formatEggs = (value) => `${formatNumber(value)} œufs`;
+const formatEggs = (value) => formatNumber(value) + ' œufs';
 
 function ProductionDashboard() {
   const navigate = useNavigate();
   const notifyError = useNotificationStore((state) => state.error);
-
+  const { selectedDate, setSelectedDate } = useProductionView();
+  const { stock: currentStock, loading: stockLoading, error: stockError, reload: reloadStock } = useProductionStock();
   const [stockData, setStockData] = useState(null);
-  const [cumulativeStock, setCumulativeStock] = useState(null);
   const [batiments, setBatiments] = useState([]);
-  const { view, setView, selectedDate, setSelectedDate } = useProductionView();
   const [loadError, setLoadError] = useState('');
   const [loadedDate, setLoadedDate] = useState(null);
   const loadRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
   const [selectedBatimentId, setSelectedBatimentId] = useState('');
-  const [selectedEggType, setSelectedEggType] = useState('normal');
-  const [formTitle, setFormTitle] = useState('');
-  const [formDescription, setFormDescription] = useState('');
 
   const loadData = useCallback(async () => {
     const request = ++loadRequest.current;
     setLoading(true);
     setLoadError('');
     try {
-      const [stock, cumulative, batimentData] = await Promise.all([
+      const [daily, buildings] = await Promise.all([
         productionService.getDailyStock(selectedDate),
-        productionService.getStock(selectedDate),
         batimentService.getBatiments(),
       ]);
       if (request !== loadRequest.current) return;
-      setStockData(stock);
-      setCumulativeStock(cumulative);
+      setStockData(daily);
+      setBatiments(buildings || []);
       setLoadedDate(selectedDate);
-      setBatiments(batimentData || []);
     } catch (err) {
       if (request !== loadRequest.current) return;
-      const message = err?.message || 'Erreur lors du chargement de la production et du stock';
+      const message = err?.message || 'Impossible de charger cette journée.';
       setLoadError(message);
       notifyError(message);
     } finally {
       if (request === loadRequest.current) setLoading(false);
     }
   }, [notifyError, selectedDate]);
-
   useEffect(() => {
     loadData();
     return () => { loadRequest.current += 1; };
   }, [loadData]);
 
+  const dailyReady = !loading && !loadError && loadedDate === selectedDate;
   const totals = stockData?.totals || {};
-  const cumulativeTotals = cumulativeStock?.totals || {};
   const buildingRows = useMemo(() => {
     const dailyById = new Map((stockData?.batiments || []).map((building) => [Number(building.id_batiment), building]));
-    return (cumulativeStock?.batiments || []).map((stock) => ({
-      ...stock,
-      daily: dailyById.get(Number(stock.id_batiment)),
-    }));
-  }, [stockData, cumulativeStock]);
-  const categoryStocks = useMemo(() => (cumulativeStock?.categories || [])
-    .filter((category) => !['casse', 'perdu'].includes(category.type_oeuf))
-    .map((category) => ({ ...category, key: `${category.type_oeuf}-${category.calibre || 'none'}` })),
-  [cumulativeStock]);
+    const stocks = currentStock?.batiments || batiments.map((building) => ({ ...building, nom_batiment: building.nom }));
+    return stocks.map((stock) => ({ ...stock, daily: dailyReady ? dailyById.get(Number(stock.id_batiment)) : null }));
+  }, [stockData, currentStock, batiments, dailyReady]);
   const dailyCategories = useMemo(() => {
     const categories = new Map();
     (stockData?.batiments || []).forEach((building) => {
@@ -116,140 +72,91 @@ function ProductionDashboard() {
     });
     return [...categories.values()];
   }, [stockData]);
-  const completedBuildingsCount = Math.max(
-    0,
-    Number(totals.buildings_count || 0) - Number(totals.missing_buildings_count || 0),
-  );
-
-  const handleOpenProduction = (batimentId = '', eggType = 'normal', title = '', description = '') => {
-    setSelectedBatimentId(batimentId || '');
-    setSelectedEggType(eggType);
-    setFormTitle(title);
-    setFormDescription(description);
-    setOpenForm(true);
-  };
-
-  const header = <HeroHeader selectedDate={selectedDate} onDateChange={setSelectedDate} />;
-  if (loading || (!loadError && loadedDate !== selectedDate)) return <Box>{header}<Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}><CircularProgress /></Box></Box>;
-  if (loadError) return <Box>{header}<Alert severity="error" action={<Button color="inherit" onClick={loadData}>Réessayer</Button>}>{loadError}</Alert></Box>;
+  const completed = Math.max(0, Number(totals.buildings_count || 0) - Number(totals.missing_buildings_count || 0));
 
   return (
-    <Box sx={{ pb: 4 }}>
-      {header}
-      <StockSummary label="Stock global disponible" available={cumulativeTotals.available_eggs} selectedDate={selectedDate} />
-      {Number(cumulativeTotals.unassigned_sold_eggs || 0) > 0 && (
-        <Alert severity="warning" sx={{ mb: 2.5, borderRadius: 3 }}>
-          {formatNumber(cumulativeTotals.unassigned_sold_eggs)} œufs vendus sans bâtiment source.
-          Ces ventes sont déduites du stock global. Attribuez-les pour fiabiliser le stock de chaque bâtiment.
-        </Alert>
-      )}
-      <ProductionTabs view={view} onChange={setView} />
-      <ProductionPanel view={view}>
-        {view === 'journee' && (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }, gap: 2, mb: 2.5 }}>
-            <SummaryCard icon={<FactoryIcon />} label="Bâtiments saisis" value={completedBuildingsCount + '/' + (totals.buildings_count || 0)} tone="amber" />
-            <SummaryCard icon={<EggIcon />} label="Production du jour" value={Number(totals.produced_eggs || 0)} tone="green" />
-            <SummaryCard icon={<LocalShippingIcon />} label="Ventes du jour" value={Number(totals.sold_eggs || 0)} tone="blue" />
-            <SummaryCard icon={<TrendingDownIcon />} label="Cassés du jour" value={Number(totals.lost_eggs || 0)} tone="red" />
-          </Box>
+    <Box sx={{ pb: 4, minWidth: 0 }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography component="h1" variant="h3" fontWeight={900} sx={{ fontSize: { xs: '2rem', md: '3rem' }, letterSpacing: '-0.04em' }}>Production & stock</Typography>
+        <Typography color="text.secondary" sx={{ mt: 1 }}>Le stock disponible maintenant, puis le suivi de chaque journée.</Typography>
+      </Box>
+
+      <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
+        {stockLoading ? <Box sx={{ p: 3 }}><CircularProgress size={24} aria-label="Chargement du stock actuel" /></Box>
+          : stockError ? <Alert severity="error" sx={{ mb: 2.5 }} action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>
+          : <StockSummary label="Stock global disponible actuellement" available={currentStock?.totals?.available_eggs} categories={currentStock?.categories} />}
+        {!stockLoading && Number(currentStock?.totals?.unassigned_sold_eggs || 0) > 0 && (
+          <Alert severity="warning" sx={{ mb: 2.5, borderRadius: 3 }}>
+            {formatNumber(currentStock.totals.unassigned_sold_eggs)} œufs vendus sans bâtiment source.
+            Ces ventes sont déduites du stock global. Attribuez-les pour fiabiliser le stock de chaque bâtiment.
+          </Alert>
         )}
-        <Typography variant="h6" fontWeight={900} sx={{ mb: 1.5 }}>
-          {view === 'stocks' ? 'Stock par bâtiment' : 'Production par bâtiment'}
-        </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2, mb: 2.5 }}>
-          {buildingRows.map((batiment) => (
-            <BuildingStockCard key={batiment.id_batiment} batiment={batiment} view={view}
-              onAddProduction={() => handleOpenProduction(batiment.id_batiment)}
-              onOpenDetail={() => navigate(productionLink(batiment.id_batiment, view, selectedDate))} />
+        <Typography component="h2" variant="h6" fontWeight={900} sx={{ mb: 1.5 }}>Par bâtiment</Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2, mb: 4 }}>
+          {buildingRows.map((building) => (
+            <BuildingStockCard key={building.id_batiment} building={building} selectedDate={selectedDate} dailyReady={dailyReady}
+              stockReady={!stockLoading && !stockError} dailyError={!!loadError}
+              onAddProduction={() => { setSelectedBatimentId(building.id_batiment); setOpenForm(true); }}
+              onOpenDetail={() => navigate(productionLink(building.id_batiment, selectedDate))} />
           ))}
         </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(320px, 0.65fr)' }, gap: 2, alignItems: 'start' }}>
-          <CategoryStockCard categories={view === 'stocks' ? categoryStocks : dailyCategories} view={view} />
-          <MovementCard view={view} movements={(stockData?.movements || []).filter((movement) => view !== 'stocks' || movement.type !== 'loss')} />
-        </Box>
-      </ProductionPanel>
+      </Box>
+
+      <Box component="section" aria-label="Journée sélectionnée" aria-busy={!dailyReady && !loadError} sx={{ pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
+        <DailySectionHeader selectedDate={selectedDate} onDateChange={setSelectedDate} />
+        {loadError ? <Alert severity="error" action={<Button color="inherit" onClick={loadData}>Réessayer la journée</Button>}>{loadError}</Alert>
+          : !dailyReady ? <Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress aria-label="Chargement de la journée" /></Box>
+          : <>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2.5 }}>
+              <SummaryCard icon={<FactoryIcon />} label="Bâtiments saisis" value={completed + '/' + (totals.buildings_count || 0)} tone="amber" />
+              <SummaryCard icon={<EggIcon />} label="Œufs collectés" value={Number(totals.produced_eggs || 0)} tone="green" />
+              <SummaryCard icon={<LocalShippingIcon />} label="Ventes" value={Number(totals.sold_eggs || 0)} tone="blue" />
+              <SummaryCard icon={<TrendingDownIcon />} label="Cassés" value={Number(totals.lost_eggs || 0)} tone="red" />
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2, alignItems: 'start' }}>
+              <DailyCategoryCard categories={dailyCategories} />
+              <MovementCard movements={stockData?.movements || []} />
+            </Box>
+          </>}
+      </Box>
 
       {openForm && (
-        <ProductionForm
-          key={`${selectedBatimentId}-${selectedEggType}-${formTitle}`}
-          open={openForm}
-          onClose={() => setOpenForm(false)}
-          onSuccess={() => {
-            setOpenForm(false);
-            loadData();
-          }}
-          batiments={batiments}
-          preselectedBatimentId={selectedBatimentId}
-          preselectedEggType={selectedEggType}
-          preselectedDate={selectedDate}
-          title={formTitle}
-          description={formDescription}
-        />
+        <ProductionForm key={selectedBatimentId} open={openForm} onClose={() => setOpenForm(false)}
+          onSuccess={() => { setOpenForm(false); reloadStock(); loadData(); }}
+          batiments={batiments} preselectedBatimentId={selectedBatimentId} preselectedDate={selectedDate} />
       )}
-
     </Box>
   );
 }
 
-function HeroHeader({
-  selectedDate,
-  onDateChange,
-}) {
+function BuildingStockCard({ building, selectedDate, dailyReady, stockReady, dailyError, onAddProduction, onOpenDetail }) {
+  const entered = !!building.daily?.entries_count;
+  const categories = (building.daily?.categories || []).filter((category) => !['casse', 'perdu'].includes(category.type_oeuf));
   return (
-    <Card
-      elevation={0}
-      sx={{
-        mb: 2.5,
-        borderRadius: 4,
-        overflow: 'hidden',
-        border: '1px solid',
-        borderColor: 'divider',
-        background:
-          'radial-gradient(circle at top left, rgba(20, 184, 166, 0.18), transparent 34%), linear-gradient(135deg, #fffdf7 0%, #f7efe1 100%)',
-      }}
-    >
-      <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: '1fr',
-            alignItems: 'start',
-          }}
-        >
-          <Box>
-            <Typography variant="h3" fontWeight={900} sx={{ fontSize: { xs: '2rem', md: '3rem' }, letterSpacing: '-0.04em' }}>
-              Production & stock
-            </Typography>
-            <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 720 }}>
-              Consultez la collecte du jour ou les œufs disponibles, pour chaque bâtiment.
-            </Typography>
-
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 230px)',
-                gap: 1.5,
-                alignItems: 'center',
-                mt: 2.5,
-                maxWidth: 760,
-              }}
-            >
-              <DateField
-                label="Date"
-
-                value={selectedDate}
-                onChange={(event) => onDateChange(event.target.value)}
-                InputLabelProps={{ shrink: true }}
-                sx={{
-                  bgcolor: 'rgba(255,255,255,0.72)',
-                  borderRadius: 2,
-                  alignSelf: 'center',
-                  '& .MuiInputBase-root': { bgcolor: 'rgba(255,255,255,0.72)' },
-                }}
-              />
-            </Box>
-          </Box>
-        </Box>
+    <Card variant="outlined" sx={{ borderRadius: 3, height: '100%', bgcolor: 'background.paper' }}>
+      <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Stack direction="row" justifyContent="space-between" spacing={1}>
+          <Typography component="h3" variant="h6" fontWeight={900}>{building.nom_batiment}</Typography>
+          {building.est_actif === false && <Typography variant="caption" color="text.secondary">Archivé</Typography>}
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Stock disponible actuellement</Typography>
+        <Typography variant="h4" fontWeight={900} color={Number(building.available_eggs) < 0 ? 'error.main' : 'primary.main'} sx={{ mt: 0.5 }}>
+          {stockReady && building.available_eggs != null ? formatEggs(building.available_eggs) : '—'}
+        </Typography>
+        <Divider sx={{ my: 2 }} />
+        <Stack direction="row" justifyContent="space-between" spacing={1}>
+          <Typography variant="body2" color="text.secondary">Production du {formatShortDate(selectedDate)}</Typography>
+          <Typography variant="body2" fontWeight={800}>
+            {!dailyReady ? dailyError ? 'Indisponible' : 'Chargement…' : entered ? formatEggs(building.daily.produced_eggs) : 'Non saisie'}
+          </Typography>
+        </Stack>
+        {entered && <Typography variant="caption" color="text.secondary" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
+          {categories.map((category) => category.label + ' : ' + formatNumber(category.produced_eggs)).join(' · ')}
+        </Typography>}
+        <Stack direction="row" spacing={1} sx={{ pt: 2, mt: 'auto' }}>
+          {dailyReady && !entered && building.est_actif !== false && <Button variant="contained" startIcon={<AddIcon />} onClick={onAddProduction} size="small" sx={{ flex: 1 }}>Saisir</Button>}
+          <Button variant="outlined" endIcon={<ArrowForwardIcon />} onClick={onOpenDetail} size="small" sx={{ flex: 1 }}>Voir le bâtiment</Button>
+        </Stack>
       </CardContent>
     </Card>
   );
@@ -260,212 +167,61 @@ function SummaryCard({ icon, label, value, tone }) {
     green: { bg: 'rgba(34, 197, 94, 0.1)', color: '#15803d' },
     blue: { bg: 'rgba(14, 165, 233, 0.1)', color: '#0369a1' },
     red: { bg: 'rgba(239, 68, 68, 0.1)', color: '#b91c1c' },
-    dark: { bg: 'rgba(15, 23, 42, 0.08)', color: '#0f172a' },
     amber: { bg: 'rgba(245, 158, 11, 0.14)', color: '#b45309' },
   };
-  const current = colors[tone] || colors.dark;
-
+  const color = colors[tone];
   return (
-    <Card elevation={0} sx={{ flex: 1, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+    <Card variant="outlined" sx={{ borderRadius: 3 }}>
       <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 2 }}>
-        <Box sx={{ display: 'grid', placeItems: 'center', width: 42, height: 42, borderRadius: 2, bgcolor: current.bg, color: current.color }}>
-          {icon}
-        </Box>
+        <Box sx={{ display: 'grid', placeItems: 'center', width: 38, height: 38, flexShrink: 0, borderRadius: 2, bgcolor: color.bg, color: color.color }}>{icon}</Box>
         <Box>
-          <Typography variant="caption" color="text.secondary" fontWeight={900} textTransform="uppercase">
-            {label}
-          </Typography>
-          <Typography variant="h5" fontWeight={900}>
-            {typeof value === 'number' ? `${formatNumber(value)} œufs` : value}
-          </Typography>
+          <Typography variant="body2" color="text.secondary">{label}</Typography>
+          <Typography variant="h5" fontWeight={900}>{typeof value === 'number' ? formatEggs(value) : value}</Typography>
         </Box>
       </CardContent>
     </Card>
   );
 }
 
-function BuildingStockCard({ batiment, view, onAddProduction, onOpenDetail }) {
-  const isStock = view === 'stocks';
-  const status = isStock ? (STATUS_CONFIG[batiment.status] || STATUS_CONFIG.ok) : { label: batiment.daily?.entries_count ? 'Saisi' : 'À saisir', color: batiment.daily?.entries_count ? 'success' : 'warning' };
-  const showEmpty = !batiment.daily?.entries_count;
-  const canAddProduction = showEmpty && batiment.est_actif !== false;
-  const hasDailyAlert = Number(batiment.daily?.mortalite || 0) > 0;
-
+function DailyCategoryCard({ categories }) {
   return (
-    <Card
-      elevation={0}
-      sx={{
-        borderRadius: 4,
-        border: '1px solid',
-        borderColor: batiment.status === 'low' || batiment.status === 'missing' ? 'warning.light' : 'divider',
-        overflow: 'hidden',
-        background: !isStock && showEmpty
-          ? 'linear-gradient(135deg, #fffaf0, #fff7ed)'
-          : 'linear-gradient(135deg, #ffffff, #fbf8ef)',
-      }}
-    >
-      <CardContent sx={{ p: { xs: 2, sm: 2.25 } }}>
-        <Stack direction="row" justifyContent="space-between" spacing={1.5} alignItems="flex-start">
-          <Box>
-            <Typography variant="h5" fontWeight={900}>{batiment.nom_batiment}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-              {isStock ? 'Stock disponible' : 'Production du jour'}
-            </Typography>
-          </Box>
-          <Chip label={batiment.est_actif === false ? 'Archivé' : status.label} color={batiment.est_actif === false ? 'default' : status.color} sx={{ fontWeight: 900, borderRadius: 2 }} />
-        </Stack>
-
-        <Box
-          sx={{
-            mt: 2.25,
-            minHeight: 82,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-          }}
-        >
-          <Typography variant="h5" fontWeight={950} sx={{ letterSpacing: '-0.04em', lineHeight: 1.08 }}>
-            {isStock ? formatEggs(batiment.available_eggs) : showEmpty ? 'Non saisie' : formatEggs(batiment.daily.produced_eggs)}
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            {isStock ? 'Cumul des collectes vendables, moins les ventes attribuées.' : 'Stock disponible : ' + formatEggs(batiment.available_eggs)}
-          </Typography>
-        </Box>
-
-        {!isStock && hasDailyAlert && (
-          <Alert severity="warning" sx={{ mt: 1.5, borderRadius: 2.5 }}>
-            Mortalite {formatNumber(batiment.daily?.mortalite || 0)}
-          </Alert>
-        )}
-
-        <Divider sx={{ my: 1.5 }} />
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          {!isStock && canAddProduction && (
-            <Button
-              variant="contained"
-              onClick={onAddProduction}
-              startIcon={<AddIcon />}
-              size="small"
-              sx={{ borderRadius: 1.75, flex: 1, minHeight: 34, fontSize: '0.85rem', fontWeight: 800, px: 1.25 }}
-            >
-              Saisir
-            </Button>
-          )}
-          <Button
-            variant={showEmpty ? 'outlined' : 'contained'}
-            onClick={onOpenDetail}
-            endIcon={<ArrowForwardIcon />}
-            size="small"
-            sx={{ borderRadius: 1.75, flex: 1, minHeight: 34, fontSize: '0.85rem', fontWeight: 800, px: 1.25 }}
-          >
-            Voir le batiment
-          </Button>
+    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+      <CardContent>
+        <Typography component="h3" variant="h6" fontWeight={900}>Collecte par type</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Œufs collectés pour cette journée, hors cassés.</Typography>
+        <Stack spacing={1.5} sx={{ mt: 2 }}>
+          {categories.length === 0 ? <Typography color="text.secondary">Aucune collecte saisie pour cette date.</Typography>
+            : categories.map((category) => (
+              <Stack key={category.key} direction="row" justifyContent="space-between" spacing={2}>
+                <Typography>{category.label}</Typography>
+                <Typography fontWeight={800}>{formatEggs(category.produced_eggs)}</Typography>
+              </Stack>
+            ))}
         </Stack>
       </CardContent>
     </Card>
   );
 }
 
-function CategoryStockCard({ categories, view }) {
-  const isStock = view === 'stocks';
+function MovementCard({ movements }) {
   return (
-    <Card elevation={0} sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
+    <Card variant="outlined" sx={{ borderRadius: 3 }}>
       <CardContent>
-        <Typography variant="h6" fontWeight={900}>{isStock ? 'Répartition du stock par type' : 'Collecte du jour par type'}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          {isStock ? 'Œufs disponibles jusqu’à la date choisie. Les œufs cassés sont exclus.' : 'Quantités collectées pour la journée choisie, hors œufs cassés.'}
-        </Typography>
-        <Stack spacing={1} sx={{ mt: 2 }}>
-          {categories.length === 0 ? (
-            <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'grey.50', textAlign: 'center' }}>
-              <Typography color="text.secondary">
-                Aucune quantité enregistrée pour cette date.
-              </Typography>
-            </Box>
-          ) : (
-            categories.map((category) => (
-              <Box
-                key={category.key}
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1fr) auto',
-                  gap: 1.5,
-                  alignItems: 'center',
-                  p: 1.4,
-                  borderRadius: 2.5,
-                  bgcolor: isStock && category.available_eggs <= 0 ? 'error.50' : 'grey.50',
-                }}
-              >
-                <Box>
-                  <Typography fontWeight={900}>{category.label}</Typography>
-                  {isStock && <Typography variant="caption" color="text.secondary">
-                    Produit {formatEggs(category.produced_eggs)}
-                    {category.sold_eggs > 0 ? ` - vendu ${formatEggs(category.sold_eggs)}` : ''}
-                  </Typography>}
+        <Typography component="h3" variant="h6" fontWeight={900}>Activité de la journée</Typography>
+        <Stack spacing={1.5} sx={{ mt: 2 }}>
+          {movements.length === 0 ? <Typography color="text.secondary">Aucun mouvement pour cette date.</Typography>
+            : movements.map((movement, index) => (
+              <Stack key={movement.type + '-' + index} direction="row" spacing={1.5} alignItems="center">
+                <Typography variant="caption" color="text.secondary">{movement.time || '--:--'}</Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography fontWeight={800}>{movement.type === 'loss' ? 'Œufs cassés' : movement.label}</Typography>
+                  <Typography variant="caption" color="text.secondary">{movement.nom_batiment ? movement.nom_batiment + ' · ' : ''}{movement.detail}</Typography>
                 </Box>
-                <Chip
-                  label={formatEggs(isStock ? category.available_eggs : category.produced_eggs)}
-                  color={isStock && category.available_eggs <= 0 ? 'error' : 'success'}
-                  sx={{ fontWeight: 900 }}
-                />
-              </Box>
-            ))
-          )}
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MovementCard({ movements, view }) {
-  return (
-    <Card elevation={0} sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
-      <CardContent>
-        <Typography variant="h6" fontWeight={900}>{view === 'stocks' ? 'Mouvements du jour sélectionné' : 'Activité du jour'}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>
-          {view === 'stocks' ? 'Collectes et ventes enregistrées pour cette journée.' : 'Collectes, ventes et œufs cassés de cette journée.'}
-        </Typography>
-        <Stack spacing={1}>
-          {movements.length === 0 ? (
-            <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'grey.50', textAlign: 'center' }}>
-              <Typography color="text.secondary">Aucun mouvement pour cette date.</Typography>
-            </Box>
-          ) : (
-            movements.map((movement, index) => {
-              const config = MOVEMENT_CONFIG[movement.type] || MOVEMENT_CONFIG.production;
-              return (
-                <Box
-                  key={`${movement.type}-${movement.time}-${index}`}
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto 1fr auto',
-                    gap: 1.25,
-                    alignItems: 'center',
-                    p: 1.25,
-                    borderRadius: 2.5,
-                    bgcolor: 'grey.50',
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary" fontWeight={900}>
-                    {movement.time || '--:--'}
-                  </Typography>
-                  <Box>
-                    <Typography fontWeight={900}>{movement.type === 'loss' ? 'Œufs cassés' : movement.label}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {movement.nom_batiment ? `${movement.nom_batiment} - ` : ''}{movement.detail}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    size="small"
-                    color={config.color}
-                    label={`${movement.quantity > 0 ? config.prefix : ''}${formatNumber(movement.quantity)} œufs`}
-                    sx={{ fontWeight: 900 }}
-                  />
-                </Box>
-              );
-            })
-          )}
+                <Typography fontWeight={800} color={movement.type === 'production' ? 'success.main' : 'text.primary'}>
+                  {Number(movement.quantity) > 0 ? '+' : ''}{formatEggs(movement.quantity)}
+                </Typography>
+              </Stack>
+            ))}
         </Stack>
       </CardContent>
     </Card>

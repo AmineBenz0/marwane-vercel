@@ -13,26 +13,25 @@ const validDate = (value) => {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 };
 
-export function productionLink(buildingId, view, date) {
+export function productionLink(buildingId, date) {
   const path = buildingId == null ? '/production' : '/production/batiment/' + buildingId;
-  return path + '?' + new URLSearchParams({ view, date });
+  return path + '?' + new URLSearchParams({ date });
 }
 
 export default function useProductionView() {
   const [params, setParams] = useSearchParams();
   const [defaultDate] = useState(localToday);
-  const view = params.get('view') === 'stocks' ? 'stocks' : 'journee';
   const selectedDate = validDate(params.get('date')) ? params.get('date') : defaultDate;
-  const update = (key, value) => setParams((previous) => {
-    const next = new URLSearchParams(previous);
-    next.set('view', view);
-    next.set('date', selectedDate);
-    next.set(key, value);
-    return next;
-  });
   return {
-    view, selectedDate,
-    setView: (value) => update('view', value),
-    setSelectedDate: (value) => { if (validDate(value)) update('date', value); },
+    selectedDate,
+    setSelectedDate: (date) => {
+      if (!validDate(date)) return;
+      setParams((previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete('view');
+        next.set('date', date);
+        return next;
+      });
+    },
   };
 }
