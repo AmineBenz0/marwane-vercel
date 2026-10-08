@@ -45,6 +45,7 @@ class CycleProductionTerminate(BaseModel):
 
 
 class CycleProductionRead(BaseModel):
+    id_lot: Optional[int] = None
     id_cycle: int
     id_batiment: int
     nom_batiment: Optional[str] = None

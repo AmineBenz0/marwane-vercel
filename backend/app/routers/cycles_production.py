@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.routers.lots_production import create_lot, update_lot, terminate_lot
+from app.schemas.lot_production import LotProductionCreate
 from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
 from app.models.user import Utilisateur
@@ -97,39 +99,12 @@ def create_cycle(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
-    _ensure_batiment(db, cycle_in.id_batiment)
-    _ensure_no_active_cycle(db, cycle_in.id_batiment)
-    if cycle_in.date_debut > date.today():
-        raise HTTPException(status_code=400, detail="Le cycle ne peut pas commencer dans le futur.")
-    previous = db.query(CycleProduction).filter(
-        CycleProduction.id_batiment == cycle_in.id_batiment,
-        CycleProduction.date_fin_reelle >= cycle_in.date_debut,
-    ).first()
-    if previous:
-        raise HTTPException(status_code=400, detail="Cette date chevauche un cycle précédent.")
-
-    date_fin_prevue = cycle_in.date_fin_prevue or calculate_cycle_end_date(
-        cycle_in.date_debut,
-        cycle_in.duree_semaines,
-    )
-
-    cycle = CycleProduction(
-        id_batiment=cycle_in.id_batiment,
-        nom_cycle=cycle_in.nom_cycle,
-        souche=cycle_in.souche,
-        date_debut=cycle_in.date_debut,
-        age_depart_semaines=cycle_in.age_depart_semaines,
-        effectif_initial=cycle_in.effectif_initial,
-        duree_semaines=cycle_in.duree_semaines,
-        date_fin_prevue=date_fin_prevue,
-        statut="actif",
-        notes=cycle_in.notes,
-        id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
-    )
-    db.add(cycle)
-    db.commit()
-    db.refresh(cycle)
-    return cycle_to_dict(db, cycle)
+    # Compatibility endpoint: a single-building arrival is still a parent lot.
+    data = cycle_in.model_dump(exclude={"id_batiment", "nom_cycle"})
+    data["nom_lot"] = cycle_in.nom_cycle
+    data["repartitions"] = [{"id_batiment": cycle_in.id_batiment, "effectif_initial": cycle_in.effectif_initial}]
+    lot = create_lot(LotProductionCreate(**data), db, current_user)
+    return lot["repartitions"][0]
 
 
 @router.get("/context/{id_batiment}")
@@ -213,6 +188,26 @@ def update_cycle(
     if not cycle:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot introuvable")
 
+    if cycle.id_lot:
+        if len(cycle.lot.allocations) > 1:
+            raise HTTPException(status_code=409, detail="Modifiez le lot partagé depuis Production & stock.")
+        data = {
+            "nom_lot": cycle.lot.nom_lot, "souche": cycle.lot.souche,
+            "date_debut": cycle.lot.date_debut, "age_depart_semaines": cycle.lot.age_depart_semaines,
+            "effectif_initial": cycle.effectif_initial, "duree_semaines": cycle.lot.duree_semaines,
+            "date_fin_prevue": cycle.lot.date_fin_prevue, "notes": cycle.lot.notes,
+        }
+        changes = cycle_in.model_dump(exclude_unset=True)
+        if "nom_cycle" in changes:
+            changes["nom_lot"] = changes.pop("nom_cycle")
+        data.update(changes)
+        if "date_fin_prevue" not in changes and ("date_debut" in changes or "duree_semaines" in changes):
+            data["date_fin_prevue"] = None
+        if any(data[key] is None for key in ("nom_lot", "date_debut", "age_depart_semaines", "effectif_initial", "duree_semaines")):
+            raise HTTPException(status_code=400, detail="Les champs obligatoires ne peuvent pas être vides.")
+        data["repartitions"] = [{"id_batiment": cycle.id_batiment, "effectif_initial": data["effectif_initial"]}]
+        return update_lot(cycle.id_lot, LotProductionCreate(**data), db, current_user)["repartitions"][0]
+
     _ensure_batiment(db, cycle.id_batiment)
     if cycle.statut == "termine":
         raise HTTPException(status_code=400, detail="Ce cycle est terminé.")
@@ -265,6 +260,11 @@ def terminate_cycle(
     cycle = db.query(CycleProduction).filter(CycleProduction.id_cycle == id_cycle).first()
     if not cycle:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot introuvable")
+
+    if cycle.id_lot:
+        if len(cycle.lot.allocations) > 1:
+            raise HTTPException(status_code=409, detail="Terminez le lot partagé depuis Production & stock.")
+        return terminate_lot(cycle.id_lot, payload, db, current_user)["repartitions"][0]
 
     _ensure_batiment(db, cycle.id_batiment)
     if cycle.statut == "termine":

@@ -80,6 +80,13 @@ export const productionService = {
   getCalibreThresholds: () => get('/productions/calibre-thresholds'),
 };
 
+export const lotProductionService = {
+  getLots: () => get('/lots-production'),
+  createLot: (data) => post('/lots-production', data),
+  updateLot: (idLot, data) => put(`/lots-production/${idLot}`, data),
+  terminateLot: (idLot, data) => post(`/lots-production/${idLot}/terminer`, data),
+};
+
 export const cycleProductionService = {
   getContext: (idBatiment, dateSaisie) => get(`/cycles-production/context/${idBatiment}`, { params: { date_saisie: dateSaisie } }),
   getInsights: (idCycle) => get(`/cycles-production/${idCycle}/insights`),

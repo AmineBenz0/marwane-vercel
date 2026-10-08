@@ -44,3 +44,27 @@ schemas, then run from `backend`:
 ```sh
 python -m pytest --override-ini addopts='' tests/test_database_schema.py tests/test_lc_schema_migration.py tests/test_lc_cession_cancellation.py -q
 ```
+
+## Shared arrival lots
+
+Before deploying the shared-lot release, apply
+`supabase_migrations/0005_shared_production_lots.sql` with the Supabase maintenance
+connection. The existing production database is SQL-managed: do not run the
+entire Alembic chain against it. The SQL is transactional and replayable, adds
+`lots_production` and `cycles_production.id_lot`, retains production and
+transaction IDs, and grants only SELECT/INSERT/UPDATE to the runtime role.
+
+Each old building cycle becomes a separate historical parent because shared
+arrivals cannot be inferred safely from matching dates. New arrivals are created
+once with explicit building allocations whose sum must equal the incoming count.
+The parent owns arrival, starting age, formula progression and closure. Existing
+common fields on allocations are compatibility snapshots for old SQL reports,
+synchronized in the same transaction. Buildings cannot edit or close a shared
+lot independently. Counts can be corrected for the same set of buildings,
+provided no corrected count is below recorded mortality; transfers require a
+separate future workflow.
+
+After applying the migration, run the existing read-only schema preflight, then
+release the tested branch. The new application must not be deployed against the
+old schema. CI covers migration replay and history preservation in isolated
+PostgreSQL schemas.

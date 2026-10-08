@@ -4,6 +4,7 @@ import { Add as AddIcon, ArrowForward as ArrowForwardIcon, Egg as EggIcon, Facto
 import { useNavigate } from 'react-router-dom';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { productionService, batimentService } from '../../services/productionService';
+import LotPanel from './LotPanel';
 import ProductionForm from './ProductionForm';
 import useProductionView, { productionLink } from './useProductionView';
 import useProductionStock from './useProductionStock';
@@ -24,6 +25,7 @@ function ProductionDashboard() {
   const [loadedDate, setLoadedDate] = useState(null);
   const loadRequest = useRef(0);
   const [loading, setLoading] = useState(true);
+  const [lotRevision, setLotRevision] = useState(0);
   const [openForm, setOpenForm] = useState(false);
   const [selectedBatimentId, setSelectedBatimentId] = useState('');
 
@@ -81,6 +83,8 @@ function ProductionDashboard() {
         <Typography color="text.secondary" sx={{ mt: 1 }}>Le stock disponible maintenant, puis le suivi de chaque journée.</Typography>
       </Box>
 
+      <LotPanel buildings={batiments} refreshKey={lotRevision} onChange={() => { reloadStock(); loadData(); }} />
+
       <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
         {stockLoading ? <Box sx={{ p: 3 }}><CircularProgress size={24} aria-label="Chargement du stock actuel" /></Box>
           : stockError ? <Alert severity="error" sx={{ mb: 2.5 }} action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>
@@ -122,7 +126,7 @@ function ProductionDashboard() {
 
       {openForm && (
         <ProductionForm key={selectedBatimentId} open={openForm} onClose={() => setOpenForm(false)}
-          onSuccess={() => { setOpenForm(false); reloadStock(); loadData(); }}
+          onSuccess={() => { setOpenForm(false); setLotRevision((old) => old + 1); reloadStock(); loadData(); }}
           batiments={batiments} preselectedBatimentId={selectedBatimentId} preselectedDate={selectedDate} />
       )}
     </Box>

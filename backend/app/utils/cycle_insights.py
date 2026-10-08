@@ -3,15 +3,16 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.models.production import Production
-from app.utils.production_cycles import cycle_to_dict
+from app.utils.production_cycles import cycle_to_dict, cycle_schedule
 
 
 def cycle_insights(db, cycle):
-    end = min(cycle.date_fin_reelle or date.today(), date.today())
+    schedule = cycle_schedule(cycle)
+    end = min(schedule.date_fin_reelle or date.today(), date.today())
     records = db.query(Production).filter(
         Production.id_cycle == cycle.id_cycle,
         Production.est_actif.is_(True),
-        Production.date_production >= cycle.date_debut,
+        Production.date_production >= schedule.date_debut,
         Production.date_production <= end,
     ).order_by(Production.date_production).all()
     daily = {}
@@ -32,7 +33,7 @@ def cycle_insights(db, cycle):
 
     weeks = []
     flock = cycle.effectif_initial
-    cursor = cycle.date_debut
+    cursor = schedule.date_debut
     while cursor <= end:
         week_end = min(cursor + timedelta(days=6), end)
         beginning = flock
@@ -58,7 +59,7 @@ def cycle_insights(db, cycle):
         expected = (week_end - cursor).days + 1
         weeks.append({
             "semaine": len(weeks) + 1,
-            "age_semaines": cycle.age_depart_semaines + (cursor - cycle.date_debut).days // 7,
+            "age_semaines": schedule.age_depart_semaines + (cursor - schedule.date_debut).days // 7,
             "date_debut": cursor, "date_fin": week_end,
             "effectif_debut": beginning, "effectif_fin": flock,
             "mortalite": mortality, "oeufs": eggs, "aliment_kg": feed,

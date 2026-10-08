@@ -1,7 +1,7 @@
 """
 SQLAlchemy model for production cycles/lots.
 """
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -10,10 +10,17 @@ from app.database import Base
 
 class CycleProduction(Base):
     """
-    Represents one flock/lot cycle inside a building.
+    Represents the chicks allocated to one building within a shared lot.
     """
     __tablename__ = "cycles_production"
 
+    __table_args__ = (UniqueConstraint("id_lot", "id_batiment", name="uq_cycle_lot_batiment"),)
+
+    id_lot = Column(Integer, ForeignKey("lots_production.id_lot"), nullable=True, index=True)
+    lot = relationship("LotProduction", back_populates="allocations")
+
+    # Common fields remain as compatibility snapshots for old reports. Shared lot
+    # writes synchronize them atomically; the parent is authoritative for age.
     id_cycle = Column(Integer, primary_key=True, index=True)
     id_batiment = Column(Integer, ForeignKey("batiments.id_batiment"), nullable=False, index=True)
     nom_cycle = Column(String(100), nullable=False)
