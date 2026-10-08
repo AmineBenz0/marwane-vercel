@@ -10,20 +10,6 @@ vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn()
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return { ...actual, useParams: () => ({ id: '7' }), useNavigate: () => navigate };
-  it('paginates every recorded day instead of truncating history', async () => {
-    mockData({ rows: Array.from({ length: 7 }, (_, index) => ({
-      id_production: index + 1, id_batiment: 7, date_production: '2026-09-' + String(20 + index).padStart(2, '0'),
-      type_oeuf: 'normal', nombre_oeufs: 100 + index, grammage: 60,
-    })) });
-    renderPage();
-    const table = await screen.findByRole('table', { name: 'Saisies quotidiennes' });
-    expect(within(table).getAllByRole('row')).toHaveLength(6);
-    expect(within(table).queryByText('20/09/26')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Page suivante' }));
-    expect(within(table).getByText('20/09/26')).toBeVisible();
-    expect(within(table).getAllByRole('row')).toHaveLength(3);
-    expect(within(table).getByRole('button', { name: 'Modifier la journée du 20/09/26' })).toBeVisible();
-  });
 });
 const renderPage = (url = '/production/batiment/7?date=2026-10-05') => render(<MemoryRouter initialEntries={[url]}><BatimentProductionPage /></MemoryRouter>);
 const stock = {
@@ -135,6 +121,21 @@ describe('Building production views', () => {
     mockData();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer la journée' }));
     expect(await screen.findByText('Production non saisie')).toBeVisible();
+  });
+
+  it('paginates every recorded day instead of truncating history', async () => {
+    mockData({ rows: Array.from({ length: 7 }, (_, index) => ({
+      id_production: index + 1, id_batiment: 7, date_production: '2026-09-' + String(20 + index).padStart(2, '0'),
+      type_oeuf: 'normal', nombre_oeufs: 100 + index, grammage: 60,
+    })) });
+    renderPage();
+    const table = await screen.findByRole('table', { name: 'Saisies quotidiennes' });
+    expect(within(table).getAllByRole('row')).toHaveLength(6);
+    expect(within(table).queryByText('20/09/26')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Page suivante' }));
+    expect(within(table).getByText('20/09/26')).toBeVisible();
+    expect(within(table).getAllByRole('row')).toHaveLength(3);
+    expect(within(table).getByRole('button', { name: 'Modifier la journée du 20/09/26' })).toBeVisible();
   });
 
 });
