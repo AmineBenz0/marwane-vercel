@@ -250,7 +250,6 @@ function FournisseursList() {
               key={fournisseur.id_fournisseur}
               to={`/fournisseurs/${fournisseur.id_fournisseur}/profile`}
               name={fournisseur.nom_fournisseur}
-              createdAt={fournisseur.date_creation}
               balance={fournisseur.outstanding_balance}
               type="fournisseur"
             />

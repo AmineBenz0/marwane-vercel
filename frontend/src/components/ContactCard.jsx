@@ -1,10 +1,9 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Card, Divider, Typography } from '@mui/material';
 import { ChevronRight as ChevronRightIcon } from '@mui/icons-material';
-import { formatShortDate } from '../utils/dateFormatting';
 import { formatMontantComplet } from '../utils/formatNumber';
 
-export default function ContactCard({ to, name, createdAt, balance, type }) {
+export default function ContactCard({ to, name, balance, type }) {
   // Decimal amounts arrive as strings. Missing/invalid values are never zero.
   const hasBalance = (typeof balance === 'number' || typeof balance === 'string')
     && String(balance).trim() !== '' && Number.isFinite(Number(balance));
@@ -61,9 +60,6 @@ export default function ContactCard({ to, name, createdAt, balance, type }) {
         </Typography>
         <ChevronRightIcon aria-hidden="true" sx={{ fontSize: 20, color: 'text.secondary', flexShrink: 0, mt: 0.25 }} />
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-        Créé le {formatShortDate(createdAt)}
-      </Typography>
       <Divider sx={{ my: 1.25 }} />
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
         {label}

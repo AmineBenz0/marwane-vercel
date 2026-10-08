@@ -10,7 +10,7 @@ function renderCard(props = {}) {
   return render(
     <MemoryRouter>
       <Routes>
-        <Route path="/" element={<ContactCard to="/clients/7/profile" name="Contact test" createdAt="2026-10-08" type="client" {...props} />} />
+        <Route path="/" element={<ContactCard to="/clients/7/profile" name="Contact test" type="client" {...props} />} />
         <Route path="/clients/7/profile" element={<div>Profil client</div>} />
         <Route path="/fournisseurs/7/profile" element={<div>Profil fournisseur</div>} />
       </Routes>
@@ -28,7 +28,7 @@ describe('ContactCard', () => {
     link.focus();
     expect(link).toHaveFocus();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByText('Créé le 08/10/26')).toBeVisible();
+    expect(screen.queryByText(/Créé le/)).not.toBeInTheDocument();
     fireEvent.click(link);
     expect(screen.getByText(type === 'client' ? 'Profil client' : 'Profil fournisseur')).toBeVisible();
   });

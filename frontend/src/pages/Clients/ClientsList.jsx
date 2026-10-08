@@ -250,7 +250,6 @@ function ClientsList() {
               key={client.id_client}
               to={`/clients/${client.id_client}/profile`}
               name={client.nom_client}
-              createdAt={client.date_creation}
               balance={client.outstanding_balance}
               type="client"
             />

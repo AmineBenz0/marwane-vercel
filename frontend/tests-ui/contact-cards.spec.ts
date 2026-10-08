@@ -88,7 +88,7 @@ for (const plural of ['clients', 'fournisseurs'] as const) {
       }))).toBe(true);
       await expect(grid.getByText('Indisponible')).toHaveCount(1);
       await expect(grid.getByText(plural === 'clients' ? 'Avance reçue' : 'Avance versée')).toBeVisible();
-      await expect(grid.getByText('Créé le 08/10/26')).toHaveCount(6);
+      await expect(grid.getByText(/Créé le/)).toHaveCount(0);
       expect(state.listRequests.every((url) => url.searchParams.get('include_balance') === 'true')).toBe(true);
       expect(state.profileRequests).toEqual([]);
       await expect(page.getByRole('button', { name: 'Profil', exact: true })).toHaveCount(0);
