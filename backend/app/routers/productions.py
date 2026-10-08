@@ -400,7 +400,7 @@ def create_production(
     Enregistre une nouvelle production et calcule automatiquement les cartons.
     """
     # Vérifier l'existence du bâtiment
-    batiment = db.query(Batiment).filter(Batiment.id_batiment == prod_in.id_batiment).first()
+    batiment = db.query(Batiment).filter(Batiment.id_batiment == prod_in.id_batiment).with_for_update().first()
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
 
@@ -410,7 +410,16 @@ def create_production(
         if not cycle or cycle.id_batiment != prod_in.id_batiment:
             raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
         refresh_cycle_status(db, cycle)
+    else:
+        cycle = find_cycle_for_date(db, prod_in.id_batiment, prod_in.date_production)
+        if not cycle and db.query(CycleProduction.id_cycle).filter(
+            CycleProduction.id_batiment == prod_in.id_batiment,
+        ).first():
+            raise HTTPException(status_code=400, detail="Aucun cycle pour cette date.")
+    if cycle:
         validate_cycle_date(cycle, prod_in.date_production)
+        if prod_in.date_production > date.today():
+            raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
         validate_cycle_mortality(db, cycle, prod_in.mortalite or 0)
     # Calculer le nombre de cartons selon les règles métier
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)

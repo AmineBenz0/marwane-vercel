@@ -6,7 +6,8 @@ import { dirname, join, relative } from 'node:path';
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const root = join(repositoryRoot, 'frontend', 'src');
 const extensions = new Set(['.js', '.jsx', '.ts', '.tsx', '.css', '.html']);
-const forbidden = /(?:Ã.|Â.|ðŸ|�)/;
+// French "Âge" is valid Unicode, not a broken UTF-8 sequence.
+const forbidden = /(?:Ã.|Â(?!ge\b).|ðŸ|�)/;
 const violations = [];
 
 function visit(directory) {
