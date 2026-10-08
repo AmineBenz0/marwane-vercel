@@ -40,7 +40,7 @@ async function mockFlock(page: Page, started = true) {
       cycle, total_oeufs: 1200, total_aliment_kg: 80, jours_saisis: 2,
       semaines: [{ semaine: 19, age_semaines: 18, date_debut: '2026-10-01', date_fin: '2026-10-07',
         effectif_debut: 1000, effectif_fin: 998, mortalite: 2, oeufs: 1200, aliment_kg: 80,
-        formules: ['25-1% Sem vita'], jours_saisis: 2, jours_attendus: 7, ponte_pct: 60, g_poule_jour: 40 }],
+        formules: ['25-1% Sem vita'], jours_aliment: 2, jours_saisis: 2, jours_attendus: 7, ponte_pct: 60, g_poule_jour: 40 }],
     };
     else if (path === '/batiments') data = [{ id_batiment: 7, nom: 'Bâtiment A', est_actif: true }];
     else if (path === '/productions') data = records;

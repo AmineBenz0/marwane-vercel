@@ -96,8 +96,8 @@ def test_weekly_rates_use_recorded_bird_days_and_show_gaps(client, db_session, a
         result = client.post("/api/v1/productions/daily", json={
             "date_production": str(start + timedelta(days=offset)),
             "id_batiment": cycle["id_batiment"],
-            "quantites": {"normal": 70}, "grammage": "60",
-            "consommation_aliment_kg": "10",
+            "quantites": {"normal": 70, "casse": 5}, "grammage": "60",
+            "consommation_aliment_kg": "10" if offset == 0 else None,
         }, headers=auth_headers)
         assert result.status_code == 201, result.text
     result = client.get(f"/api/v1/cycles-production/{cycle['id_cycle']}/insights", headers=auth_headers)
@@ -106,7 +106,8 @@ def test_weekly_rates_use_recorded_bird_days_and_show_gaps(client, db_session, a
     assert first["jours_saisis"] == 2
     assert first["jours_attendus"] == 7
     assert first["oeufs"] == 140
-    assert Decimal(str(first["ponte_pct"])) == 70
+    assert Decimal(str(first["ponte_pct"])) == 75
+    assert first["jours_aliment"] == 1
     assert Decimal(str(first["g_poule_jour"])) == 100
     assert first["age_semaines"] == 26
     assert second["jours_saisis"] == 0
