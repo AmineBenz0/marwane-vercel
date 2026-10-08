@@ -169,7 +169,7 @@ test('a building allocation cannot exceed the remaining chicks in the shared lot
   const buildingA = edit.getByLabel('Poussins · Bâtiment A');
   await expect(buildingA).toHaveAttribute('max', '299');
   await buildingA.fill('300');
-  await expect(edit.getByText('Maximum 299 : le reste est déjà réparti dans les autres bâtiments.')).toBeVisible();
+  await expect(edit.getByText('La quantité dépasse le nombre de poussins disponibles pour ce bâtiment. Maximum autorisé : 299 poussins.')).toBeVisible();
   await expect(edit.getByRole('button', { name: 'Enregistrer', exact: true })).toBeDisabled();
   expect(state.writes.filter((entry) => entry.path === '/lots-production/1')).toHaveLength(0);
   expect(state.errors).toEqual([]);

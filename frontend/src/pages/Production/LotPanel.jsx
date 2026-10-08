@@ -155,7 +155,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
                     inputProps={{ min: dialog === 'edit' ? 1 : 0, max: limit, step: 1 }}
                     value={counts[building.id_batiment] ?? ''}
                     error={allocationError(building)}
-                    helperText={overLimit ? 'Maximum ' + number(limit) + ' : le reste est déjà réparti dans les autres bâtiments.' : undefined}
+                    helperText={overLimit ? 'La quantité dépasse le nombre de poussins disponibles pour ce bâtiment. Maximum autorisé : ' + number(limit) + ' poussins.' : undefined}
                     onChange={(event) => setCounts((old) => ({ ...old, [building.id_batiment]: event.target.value }))} />;
                 })}
                 <Typography role="status" color={balanced ? 'success.main' : 'text.secondary'}>{number(assigned)} / {number(values.effectif_initial || 0)} poussins répartis{assigned !== Number(values.effectif_initial || 0) ? ' · écart : ' + number(Number(values.effectif_initial || 0) - assigned) : ''}</Typography>
