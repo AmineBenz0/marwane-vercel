@@ -35,7 +35,7 @@ async function mockFlock(page: Page, started = true) {
     const path = url.pathname.replace('/api/v1', '');
     const method = request.method();
     let data: any = [];
-    if (method === 'POST' || method === 'PUT') {
+    if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
       const body = request.postDataJSON();
       writes.push({ path, body });
       if (path === '/lots-production' || (method === 'PUT' && path === '/lots-production/1')) {
@@ -50,6 +50,9 @@ async function mockFlock(page: Page, started = true) {
       } else if (path === '/lots-production/1/terminer') {
         allocations = allocations.map((row) => ({ ...row, statut: 'termine', date_fin_reelle: body.date_fin_reelle }));
         data = lot();
+      } else if (path === '/productions/daily' && method === 'DELETE') {
+        records = [];
+        data = { deleted: 1 };
       } else if (path === '/productions/daily') {
         records = [{ ...body, id_production: 1, id_cycle: 1, type_oeuf: 'normal', nombre_oeufs: 0, nombre_cartons: 0, est_actif: true }];
         data = { records, versions: { 1: 'v1' } };
@@ -125,6 +128,15 @@ for (const width of [390, 1200]) {
     await page.getByRole('button', { name: 'Modifier la journée du 05/10/26' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Annuler', exact: true }).click();
+    page.once('dialog', (confirmation) => confirmation.dismiss());
+    await page.getByRole('button', { name: 'Désactiver la journée du 05/10/26' }).click();
+    await expect(page.getByRole('button', { name: 'Modifier la saisie', exact: true })).toBeVisible();
+    expect(state.writes.filter((entry) => entry.path === '/productions/daily')).toHaveLength(1);
+    page.once('dialog', (confirmation) => confirmation.accept());
+    await page.getByRole('button', { name: 'Désactiver la journée du 05/10/26' }).click();
+    await expect(page.getByRole('button', { name: 'Saisir la journée', exact: true })).toBeVisible();
+    const deactivation = state.writes.filter((entry) => entry.path === '/productions/daily')[1];
+    expect(deactivation.body).toEqual({ id_batiment: 7, date_production: '2026-10-05', versions: { 1: 'v1' } });
     await page.getByRole('button', { name: 'Vue globale', exact: true }).click();
     await expect(page).toHaveURL(/\/production\?date=2026-10-05$/);
     expect(state.errors).toEqual([]);
