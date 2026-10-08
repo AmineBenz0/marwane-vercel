@@ -23,6 +23,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install -r requirements.txt
+      - name: Verify bulk contact balances and existing contact APIs
+        run: python -m pytest --override-ini addopts='' tests/test_contact_balances.py tests/test_clients.py tests/test_fournisseurs.py -q
       - run: python -m pip install ruff==0.12.10
       - run: >-
           python -m ruff check app/config.py app/config/logging_config.py
@@ -125,6 +127,16 @@ jobs:
       - run: npm run lint
       - run: npm run test:unit:coverage
       - run: npm run build
+      - name: Install Chromium for deterministic contact UI checks
+        run: npx playwright install --with-deps chromium
+      - name: Verify contact layout, keyboard access and forms
+        run: npx playwright test --config playwright.contacts.config.ts
+      - name: Save contact UI screenshots and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contact-card-ui
+          path: frontend/test-results/
       - run: npm audit --audit-level=high
 
   e2e:

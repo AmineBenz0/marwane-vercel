@@ -16,21 +16,26 @@ from app.models.produit import Produit
 from app.models.user import Utilisateur
 from app.models.paiement import Paiement
 from app.schemas.fournisseur import (
-    FournisseurCreate, FournisseurUpdate, FournisseurRead, FournisseurProfile, 
+    FournisseurCreate, FournisseurUpdate, FournisseurRead, FournisseurListRead, FournisseurProfile, 
     FournisseurProfileStats, FournisseurStatsMensuelles, FournisseurStatsMensuellesItem,
     FournisseurProduitsVendus, ProduitVendu, FournisseurInsightsFinanciers, FournisseurScore
 )
+from app.services.financial import contact_balances
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/fournisseurs", tags=["Fournisseurs"])
 
 
-@router.get("", response_model=List[FournisseurRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "", response_model=List[FournisseurListRead], response_model_exclude_unset=True,
+    status_code=status.HTTP_200_OK,
+)
 def get_fournisseurs(
     skip: int = 0,
     limit: int = 100,
     est_actif: Optional[bool] = None,
     recherche: Optional[str] = None,
+    include_balance: bool = False,
     db: Session = Depends(get_db),
     current_user: Optional[Utilisateur] = Depends(get_current_active_user)
 ):
@@ -44,6 +49,7 @@ def get_fournisseurs(
         limit: Nombre maximum de fournisseurs à retourner
         est_actif: Filtre optionnel pour les fournisseurs actifs/inactifs (None = tous)
         recherche: Terme de recherche optionnel pour filtrer par nom (recherche partielle, insensible à la casse)
+        include_balance: Inclure les soldes nets calculés en une requête groupée
         db: Session de base de données
         current_user: Utilisateur actuel authentifié (via dépendance)
         
@@ -67,7 +73,19 @@ def get_fournisseurs(
     # Pagination
     fournisseurs = query.offset(skip).limit(limit).all()
     
-    return fournisseurs
+    if not include_balance:
+        return fournisseurs
+
+    balances = contact_balances(
+        db, direction="payable",
+        contact_ids=[row.id_fournisseur for row in fournisseurs],
+    )
+    return [
+        FournisseurListRead.model_validate(row).model_copy(
+            update={"outstanding_balance": balances[row.id_fournisseur]},
+        )
+        for row in fournisseurs
+    ]
 
 
 @router.get("/{id}/profile", response_model=FournisseurProfile, status_code=status.HTTP_200_OK)

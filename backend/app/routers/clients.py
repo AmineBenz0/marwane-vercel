@@ -16,21 +16,26 @@ from app.models.produit import Produit
 from app.models.user import Utilisateur
 from app.models.paiement import Paiement
 from app.schemas.client import (
-    ClientCreate, ClientUpdate, ClientRead, ClientProfile, ClientProfileStats, 
+    ClientCreate, ClientUpdate, ClientRead, ClientListRead, ClientProfile, ClientProfileStats, 
     ClientStatsMensuelles, ClientStatsMensuellesItem, ClientProduitsAchetes, ProduitAchete,
     ClientInsightsFinanciers, ClientScore
 )
+from app.services.financial import contact_balances
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
 
-@router.get("", response_model=List[ClientRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "", response_model=List[ClientListRead], response_model_exclude_unset=True,
+    status_code=status.HTTP_200_OK,
+)
 def get_clients(
     skip: int = 0,
     limit: int = 100,
     est_actif: Optional[bool] = None,
     recherche: Optional[str] = None,
+    include_balance: bool = False,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -44,6 +49,7 @@ def get_clients(
         limit: Nombre maximum de clients à retourner
         est_actif: Filtre optionnel pour les clients actifs/inactifs (None = tous)
         recherche: Terme de recherche optionnel pour filtrer par nom (recherche partielle, insensible à la casse)
+        include_balance: Inclure les soldes nets calculés en une requête groupée
         db: Session de base de données
         current_user: Utilisateur actuel authentifié (via dépendance)
         
@@ -67,7 +73,19 @@ def get_clients(
     # Pagination
     clients = query.offset(skip).limit(limit).all()
     
-    return clients
+    if not include_balance:
+        return clients
+
+    balances = contact_balances(
+        db, direction="receivable",
+        contact_ids=[row.id_client for row in clients],
+    )
+    return [
+        ClientListRead.model_validate(row).model_copy(
+            update={"outstanding_balance": balances[row.id_client]},
+        )
+        for row in clients
+    ]
 
 
 @router.get("/{id}/profile", response_model=ClientProfile, status_code=status.HTTP_200_OK)

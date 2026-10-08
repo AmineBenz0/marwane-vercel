@@ -82,6 +82,14 @@ class FournisseurRead(FournisseurBase):
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 
 
+class FournisseurListRead(FournisseurRead):
+    """List-only projection; balances are opt-in and never persisted."""
+    outstanding_balance: Optional[Decimal] = Field(
+        None,
+        description="Solde net des transactions actives après paiements effectifs",
+    )
+
+
 class FournisseurProfileStats(BaseModel):
     """
     Schéma pour les statistiques agrégées d'un fournisseur.
