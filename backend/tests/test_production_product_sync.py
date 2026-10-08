@@ -24,7 +24,7 @@ def create_test_batiment(db_session) -> Batiment:
     cycle = CycleProduction(
         id_batiment=batiment.id_batiment,
         nom_cycle=f"Lot {batiment.nom}",
-        date_debut=date.today(),
+        date_debut=date.today() - timedelta(days=1),
         age_depart_semaines=40,
         effectif_initial=1000,
         duree_semaines=80,
@@ -78,7 +78,7 @@ class TestProductionProductSync:
     ):
         batiment = create_test_batiment(db_session)
         payload = {
-            "date_production": str(date.today()),
+            "date_production": str(date.today() - timedelta(days=1)),
             "id_batiment": batiment.id_batiment,
             "type_oeuf": "double_jaune",
             "calibre": None,
@@ -95,7 +95,7 @@ class TestProductionProductSync:
 
         second_payload = {
             **payload,
-            "date_production": str(date.today() + timedelta(days=1)),
+            "date_production": str(date.today()),
             "nombre_oeufs": 90,
         }
         second_response = client.post(
