@@ -50,6 +50,12 @@ def test_operational_day_auto_links_and_preserves_history(client, db_session, au
     assert row["nombre_cartons"] == 0
     assert row["id_cycle"] == cycle["id_cycle"]
     assert row["formule"] == "25-1% Sem vita"
+    stock = client.get("/api/v1/productions/stock/daily", headers=auth_headers).json()
+    building = next(item for item in stock["batiments"] if item["id_batiment"] == cycle["id_batiment"])
+    assert building["entries_count"] == 1
+    assert building["categories"] == []
+    assert building["mortalite"] == 2
+    assert Decimal(str(building["consommation_aliment_kg"])) == 8
     changed = client.put("/api/v1/productions/daily", json={
         **payload, "quantites": {"normal": 70}, "grammage": "60",
         "formule": "26-35 Sem", "versions": body["versions"],

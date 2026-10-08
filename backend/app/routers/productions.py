@@ -308,7 +308,7 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
 
             retained.nombre_oeufs = quantity
             retained.grammage = prod_in.grammage
-            retained.calibre = _deduce_calibre(egg_type, prod_in.grammage)
+            retained.calibre = _deduce_calibre(egg_type, prod_in.grammage) if quantity else None
             retained.nombre_cartons = Production.calculer_cartons(quantity, egg_type)
             # Building-level facts are counted only once across the type rows.
             retained.mortalite = prod_in.mortalite if not records else None
@@ -619,6 +619,10 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         building["consommation_aliment_kg"] += float(prod.consommation_aliment_kg or 0)
         if prod.formule:
             building["formules"].add(prod.formule)
+        building["entries_count"] += 1
+        # Operational-only days count as entered, without creating egg stock.
+        if quantity == 0:
+            continue
         type_key, calibre_key = _category_key(prod.type_oeuf, prod.calibre)
         if type_key == "perdu":
             type_key = "casse"
@@ -647,8 +651,6 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         else:
             building["produced_eggs"] += quantity
             category["produced_eggs"] += quantity
-
-        building["entries_count"] += 1
 
         add_movement({
             "time": prod.date_creation.strftime("%H:%M") if prod.date_creation else None,
