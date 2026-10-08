@@ -183,7 +183,7 @@ def assign_cycle_history(
     validate_cycle_mortality(db, cycle, sum(record.mortalite or 0 for record in records))
     for record in records:
         record.id_cycle = cycle.id_cycle
-        record.id_utilisateur_modification = current_user.id_utilisateur
+        record.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     db.commit()
     return {"rattachees": len(records)}
 

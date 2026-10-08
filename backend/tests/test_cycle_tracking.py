@@ -153,3 +153,21 @@ def test_mortality_cannot_exceed_flock_or_close_before_entries(client, db_sessio
         "date_fin_reelle": str(date.today() - timedelta(days=1)),
     }, headers=auth_headers)
     assert close.status_code == 400
+
+
+def test_context_uses_entry_date_and_retains_closed_cycle(client, db_session, auth_headers):
+    start = date.today() - timedelta(weeks=28)
+    cycle = make_cycle(client, db_session, auth_headers, start=start)
+    day = start + timedelta(weeks=18)
+    context_url = f"/api/v1/cycles-production/context/{cycle['id_batiment']}"
+    context = client.get(context_url, params={"date_saisie": str(day)}, headers=auth_headers).json()
+    assert context["cycle"]["age_semaines"] == 18
+    assert context["cycle"]["formule_suggeree"] == "25-1% Sem vita"
+    ended = client.post(f"/api/v1/cycles-production/{cycle['id_cycle']}/terminer", json={
+        "date_fin_reelle": str(start + timedelta(weeks=25)),
+    }, headers=auth_headers)
+    assert ended.status_code == 200
+    historical = client.get(context_url, params={"date_saisie": str(day)}, headers=auth_headers).json()
+    assert historical["cycle"]["id_cycle"] == cycle["id_cycle"]
+    assert historical["cycle"]["age_semaines"] == 18
+    assert historical["cycle"]["statut"] == "termine"
