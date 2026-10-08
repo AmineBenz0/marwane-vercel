@@ -170,7 +170,7 @@ export function CycleWeeklyInsights({ cycleId, refreshKey }) {
   return (
     <Box component="section" aria-label="Suivi hebdomadaire du cycle" sx={{ mt: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
       <Typography component="h2" variant="h6" fontWeight={900}>Suivi hebdomadaire du cycle</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>Semaines depuis l’arrivée. Les moyennes utilisent uniquement les journées saisies.</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>Semaines depuis l’arrivée. Les moyennes utilisent les journées renseignées. Les œufs cassés sont inclus dans le taux de ponte.</Typography>
       {error ? <Alert severity="error" action={<Button onClick={reload}>Réessayer</Button>}>{error}</Alert> : !data ? <Typography>Chargement du suivi...</Typography> : <>
         <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
           <Fact label="Œufs du cycle" value={number(data.total_oeufs)} />
@@ -186,7 +186,7 @@ export function CycleWeeklyInsights({ cycleId, refreshKey }) {
               <TableCell>{number(week.effectif_fin)}</TableCell>
               <TableCell>{week.jours_saisis ? number(week.mortalite) : '—'}</TableCell>
               <TableCell>{week.jours_saisis ? number(week.oeufs) : '—'}</TableCell>
-              <TableCell>{week.jours_saisis ? number(week.aliment_kg) : '—'}</TableCell>
+              <TableCell>{week.jours_aliment ? number(week.aliment_kg) : '—'}</TableCell>
               <TableCell>{week.formules.join(', ') || '—'}</TableCell>
               <TableCell><Chip size="small" variant="outlined" color={week.jours_saisis < week.jours_attendus ? 'warning' : 'success'} label={week.jours_saisis + '/' + week.jours_attendus} /></TableCell>
               <TableCell>{number(week.ponte_pct)}</TableCell>

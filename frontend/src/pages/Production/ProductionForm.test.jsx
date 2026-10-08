@@ -100,6 +100,7 @@ describe('ProductionForm', () => {
     render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
     fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '55' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText("Indiquez au moins un nombre d'œufs.")).toBeVisible();
     expect(post).not.toHaveBeenCalled();

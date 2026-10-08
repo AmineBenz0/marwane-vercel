@@ -17,8 +17,12 @@ def cycle_insights(db, cycle):
     daily = {}
     for record in records:
         day = daily.setdefault(record.date_production, {
-            "eggs": 0, "mortality": 0, "feed": Decimal(0), "formulas": set(),
+            "eggs": 0, "laid_eggs": 0, "mortality": 0, "feed": Decimal(0),
+            "has_feed": False, "formulas": set(),
         })
+        day["laid_eggs"] += record.nombre_oeufs
+        if record.consommation_aliment_kg is not None:
+            day["has_feed"] = True
         if record.type_oeuf not in {"casse", "perdu"}:
             day["eggs"] += record.nombre_oeufs
         day["mortality"] += record.mortalite or 0
@@ -32,7 +36,7 @@ def cycle_insights(db, cycle):
     while cursor <= end:
         week_end = min(cursor + timedelta(days=6), end)
         beginning = flock
-        eggs = mortality = entered = bird_days = 0
+        eggs = laid_eggs = mortality = entered = bird_days = feed_bird_days = feed_days = 0
         feed = Decimal(0)
         formulas = set()
         for offset in range((week_end - cursor).days + 1):
@@ -42,6 +46,10 @@ def cycle_insights(db, cycle):
             entered += 1
             bird_days += flock or 0
             eggs += day["eggs"]
+            laid_eggs += day["laid_eggs"]
+            if day["has_feed"]:
+                feed_bird_days += flock or 0
+                feed_days += 1
             mortality += day["mortality"]
             feed += day["feed"]
             formulas.update(day["formulas"])
@@ -55,9 +63,9 @@ def cycle_insights(db, cycle):
             "effectif_debut": beginning, "effectif_fin": flock,
             "mortalite": mortality, "oeufs": eggs, "aliment_kg": feed,
             "formules": sorted(formulas),
-            "jours_saisis": entered, "jours_attendus": expected,
-            "ponte_pct": round(Decimal(eggs) * 100 / bird_days, 2) if bird_days else None,
-            "g_poule_jour": round(feed * 1000 / bird_days, 2) if bird_days else None,
+            "jours_saisis": entered, "jours_attendus": expected, "jours_aliment": feed_days,
+            "ponte_pct": round(Decimal(laid_eggs) * 100 / bird_days, 2) if bird_days else None,
+            "g_poule_jour": round(feed * 1000 / feed_bird_days, 2) if feed_bird_days else None,
         })
         cursor += timedelta(days=7)
     return {
