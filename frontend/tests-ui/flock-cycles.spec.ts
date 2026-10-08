@@ -153,6 +153,28 @@ for (const width of [390, 1200]) {
   });
 }
 
+test('a building allocation cannot exceed the remaining chicks in the shared lot', async ({ page }) => {
+  const state = await mockFlock(page, false);
+  await page.goto('/production?date=2026-10-05');
+  await page.getByRole('button', { name: 'Démarrer un lot' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Nombre total de poussins entrants').fill('300');
+  await dialog.getByLabel('Poussins · Bâtiment A').fill('299');
+  await dialog.getByLabel('Poussins · Bâtiment B').fill('1');
+  await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Modifier le lot' }).click();
+  const edit = page.getByRole('dialog');
+  const buildingA = edit.getByLabel('Poussins · Bâtiment A');
+  await expect(buildingA).toHaveAttribute('max', '299');
+  await buildingA.fill('300');
+  await expect(edit.getByText('Maximum 299 : le reste est déjà réparti dans les autres bâtiments.')).toBeVisible();
+  await expect(edit.getByRole('button', { name: 'Enregistrer', exact: true })).toBeDisabled();
+  expect(state.writes.filter((entry) => entry.path === '/lots-production/1')).toHaveLength(0);
+  expect(state.errors).toEqual([]);
+});
+
 test('history assignment remains scoped to the building allocation', async ({ page }) => {
   const state = await mockFlock(page);
   await page.goto('/production/batiment/7?date=2026-10-05');

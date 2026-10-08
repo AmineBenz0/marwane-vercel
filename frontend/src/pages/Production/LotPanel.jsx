@@ -44,11 +44,15 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
     ? (selected?.repartitions || []).map((row) => ({ id_batiment: row.id_batiment, nom: row.nom_batiment }))
     : available;
   const assigned = distributionBuildings.reduce((sum, building) => sum + Number(counts[building.id_batiment] || 0), 0);
+  const allocationLimit = (buildingId) => Math.max(0, Number(values.effectif_initial || 0)
+    - distributionBuildings.filter((building) => building.id_batiment !== buildingId)
+      .reduce((sum, building) => sum + Number(counts[building.id_batiment] || 0), 0));
+  const allocationError = (building) => {
+    const count = Number(counts[building.id_batiment] || 0);
+    return !Number.isInteger(count) || count < (dialog === 'edit' ? 1 : 0) || count > allocationLimit(building.id_batiment);
+  };
   const balanced = Number(values.effectif_initial) > 0 && assigned === Number(values.effectif_initial)
-    && distributionBuildings.every((building) => {
-      const count = Number(counts[building.id_batiment] || 0);
-      return Number.isInteger(count) && count >= (dialog === 'edit' ? 1 : 0);
-    });
+    && distributionBuildings.every((building) => !allocationError(building));
 
   const open = (kind) => {
     setError('');
@@ -144,7 +148,16 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
                 <TextField label="Nombre total de poussins entrants" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
                 <TextField label="Âge à l’arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="Le même âge et la même formule suggérée pour tous les bâtiments." />
                 <Typography fontWeight={800}>Répartition par bâtiment</Typography>
-                {distributionBuildings.map((building) => <TextField key={building.id_batiment} label={'Poussins · ' + building.nom} type="number" inputProps={{ min: dialog === 'edit' ? 1 : 0, step: 1 }} value={counts[building.id_batiment] ?? ''} onChange={(event) => setCounts((old) => ({ ...old, [building.id_batiment]: event.target.value }))} />)}
+                {distributionBuildings.map((building) => {
+                  const limit = allocationLimit(building.id_batiment);
+                  const overLimit = Number(counts[building.id_batiment] || 0) > limit;
+                  return <TextField key={building.id_batiment} label={'Poussins · ' + building.nom} type="number"
+                    inputProps={{ min: dialog === 'edit' ? 1 : 0, max: limit, step: 1 }}
+                    value={counts[building.id_batiment] ?? ''}
+                    error={allocationError(building)}
+                    helperText={overLimit ? 'Maximum ' + number(limit) + ' : le reste est déjà réparti dans les autres bâtiments.' : undefined}
+                    onChange={(event) => setCounts((old) => ({ ...old, [building.id_batiment]: event.target.value }))} />;
+                })}
                 <Typography role="status" color={balanced ? 'success.main' : 'text.secondary'}>{number(assigned)} / {number(values.effectif_initial || 0)} poussins répartis{assigned !== Number(values.effectif_initial || 0) ? ' · écart : ' + number(Number(values.effectif_initial || 0) - assigned) : ''}</Typography>
                 {dialog === 'create' && occupied.size > 0 && <Typography variant="caption" color="text.secondary">Les bâtiments ayant déjà un lot actif sont indisponibles pour cette arrivée.</Typography>}
                 <TextField label="Souche (facultatif)" inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
