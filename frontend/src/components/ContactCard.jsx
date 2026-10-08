@@ -1,6 +1,6 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Card, Divider, Typography } from '@mui/material';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { ChevronRight as ChevronRightIcon } from '@mui/icons-material';
 import { formatShortDate } from '../utils/dateFormatting';
 import { formatMontantComplet } from '../utils/formatNumber';
 

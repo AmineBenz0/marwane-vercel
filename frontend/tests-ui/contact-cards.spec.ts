@@ -1,7 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 
+const pageErrors = new WeakMap<Page, string[]>();
+
 test.beforeEach(async ({ page }) => {
-  page.on('pageerror', (error) => console.log('Contact page error:', error.message));
+  pageErrors.set(page, []);
+  page.on('pageerror', (error) => {
+    pageErrors.get(page)!.push(error.message);
+    console.log('Contact page error:', error.message);
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') console.log('Contact console error:', message.text());
   });
@@ -11,6 +17,7 @@ test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status !== testInfo.expectedStatus) {
     console.log('Contact UI failure:', page.url(), await page.locator('body').innerText());
   }
+  expect(pageErrors.get(page)).toEqual([]);
 });
 
 async function mockContacts(page: Page, plural: 'clients' | 'fournisseurs') {
