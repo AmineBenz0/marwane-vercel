@@ -1,5 +1,5 @@
 import { Box, Card, CardContent, Stack, Tab, Tabs, Typography } from '@mui/material';
-import InventoryOutlined from '@mui/icons-material/InventoryOutlined';
+import { InventoryOutlined } from '@mui/icons-material';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { localToday } from './useProductionView';
 
