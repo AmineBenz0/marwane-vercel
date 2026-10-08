@@ -14,7 +14,6 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   FileDownload as FileDownloadIcon,
   People as PeopleIcon,
   PersonAdd as PersonAddIcon,
@@ -25,7 +24,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
-import { get, post, put } from '../../services/api';
+import { get, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
 
@@ -59,7 +58,6 @@ function ClientsList() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [filters, setFilters] = useState({ nom: '' });
@@ -109,13 +107,6 @@ function ClientsList() {
   };
 
   const handleCreate = () => {
-    setEditingClient(null);
-    setFormError(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (client) => {
-    setEditingClient(client);
     setFormError(null);
     setModalOpen(true);
   };
@@ -123,7 +114,6 @@ function ClientsList() {
   const handleCloseModal = () => {
     if (!formLoading) {
       setModalOpen(false);
-      setEditingClient(null);
       setFormError(null);
     }
   };
@@ -133,15 +123,10 @@ function ClientsList() {
     setFormError(null);
     try {
       const payload = { ...data, est_actif: true };
-      if (editingClient) {
-        await put(`/clients/${editingClient.id_client}`, payload);
-      } else {
-        await post('/clients', payload);
-      }
+      await post('/clients', payload);
       setModalOpen(false);
-      setEditingClient(null);
       await fetchClients();
-      notification.success(editingClient ? 'Client modifié avec succès' : 'Client créé avec succès');
+      notification.success('Client créé avec succès');
     } catch (err) {
       const message = err?.message || "Une erreur est survenue lors de l'enregistrement";
       setFormError(message);
@@ -311,9 +296,6 @@ function ClientsList() {
                   <Button variant="contained" startIcon={<VisibilityIcon />} onClick={() => handleViewProfile(client)} fullWidth>
                     Profil
                   </Button>
-                  <Button variant="outlined" startIcon={<EditIcon />} onClick={() => handleEdit(client)} fullWidth>
-                    Modifier
-                  </Button>
                 </Stack>
               </CardContent>
             </Card>
@@ -325,11 +307,11 @@ function ClientsList() {
         open={modalOpen}
         onClose={handleCloseModal}
         onSubmit={handleSubmit}
-        initialValues={{ nom_client: editingClient?.nom_client || '' }}
+        initialValues={{ nom_client: '' }}
         validationSchema={clientValidationSchema}
         fields={clientFields}
-        title={editingClient ? 'Modifier ce client' : 'Nouveau client'}
-        submitLabel={editingClient ? 'Enregistrer' : 'Créer le client'}
+        title="Nouveau client"
+        submitLabel="Créer le client"
         loading={formLoading}
         errorMessage={formError}
       />
