@@ -41,6 +41,7 @@ describe('ProductionForm', () => {
     fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '63' } });
     expect(screen.getByText(/Total collecté \(hors cassés\) : 160 œufs/)).toBeVisible();
     expect(screen.getByText('10', { exact: true })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
