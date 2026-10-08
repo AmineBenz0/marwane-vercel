@@ -64,9 +64,21 @@ class CycleProductionRead(BaseModel):
     phase_code: Optional[str] = None
     phase_label: Optional[str] = None
     jours_restants: Optional[int] = None
+    formule_suggeree: Optional[str] = None
     date_creation: datetime
     date_modification: datetime
     id_utilisateur_creation: Optional[int] = None
     id_utilisateur_modification: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CycleHistoryAssign(BaseModel):
+    date_debut: date
+    date_fin: date
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        if self.date_fin < self.date_debut:
+            raise ValueError("La date de fin doit suivre la date de début")
+        return self

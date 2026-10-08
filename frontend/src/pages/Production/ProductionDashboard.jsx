@@ -143,6 +143,9 @@ function BuildingStockCard({ building, selectedDate, dailyReady, stockReady, dai
         <Typography variant="h4" fontWeight={900} color={Number(building.available_eggs) < 0 ? 'error.main' : 'primary.main'} sx={{ mt: 0.5 }}>
           {stockReady && building.available_eggs != null ? formatEggs(building.available_eggs) : '—'}
         </Typography>
+        {stockReady && building.cycle?.statut !== 'termine' && building.cycle && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {building.cycle.age_semaines} semaines · {formatNumber(building.cycle.effectif_actuel)} volailles restantes
+        </Typography>}
         <Divider sx={{ my: 2 }} />
         <Stack direction="row" justifyContent="space-between" spacing={1}>
           <Typography variant="body2" color="text.secondary">Production du {formatShortDate(selectedDate)}</Typography>

@@ -22,6 +22,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { productionService, batimentService } from '../../services/productionService';
 import useNotificationStore from '../../store/notificationStore';
 import ProductionForm from './ProductionForm';
+import CyclePanel, { CycleWeeklyInsights } from './CyclePanel';
 import useProductionView, { productionLink } from './useProductionView';
 import { DailySectionHeader, StockSummary } from './ProductionViews';
 import useProductionStock from './useProductionStock';
@@ -39,6 +40,7 @@ function BatimentProductionPage() {
   const notifySuccess = useNotificationStore((state) => state.success);
   const notifyError = useNotificationStore((state) => state.error);
   const [productions, setProductions] = useState([]);
+  const [insightsCycleId, setInsightsCycleId] = useState(null);
   const [batiments, setBatiments] = useState([]);
   const [stockData, setStockData] = useState(null);
   const { selectedDate, setSelectedDate } = useProductionView();
@@ -182,6 +184,7 @@ function BatimentProductionPage() {
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
       {header}
+      <CyclePanel buildingId={selectedBatimentId} buildingName={batiment?.nom} refreshKey={productions} onSelectCycle={setInsightsCycleId} onChange={() => { loadData(); reloadStock(); }} />
       <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading} sx={{ mb: 3 }}>
         {stockLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Chargement du stock actuel" /></Box>
@@ -231,6 +234,7 @@ function BatimentProductionPage() {
         )}
       </Box>
 
+      <CycleWeeklyInsights cycleId={insightsCycleId} refreshKey={productions} />
       {openForm && (
         <ProductionForm
           key={`${selectedBatimentId}-${preselectedEggType}-${formTitle}-${editingProduction?.id_production || 'new'}`}

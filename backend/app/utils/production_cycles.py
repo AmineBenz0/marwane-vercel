@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.cycle_production import CycleProduction
@@ -21,22 +21,65 @@ def calculate_cycle_end_date(start_date: date, duration_weeks: int) -> date:
 
 
 def get_cycle_phase(age_weeks: int, duration_weeks: int = DEFAULT_LOT_DURATION_WEEKS) -> tuple[str, str]:
-    if age_weeks > duration_weeks:
-        return "a_cloturer", "A cloturer"
+    if age_weeks >= 86:
+        return "reforme", "Réforme"
     if age_weeks <= PULLET_PHASE_END_WEEK:
         return "elevage", "Phase elevage"
     return "ponte", "Phase ponte"
 
 
-def refresh_cycle_status(db: Session, cycle: Optional[CycleProduction], today: Optional[date] = None) -> Optional[CycleProduction]:
-    if not cycle:
-        return None
+FORMULA_RANGES = [
+    (0, 17, "17-1% Sem vita"),
+    (18, 25, "25-1% Sem vita"),
+    (26, 35, "26-35 Sem"),
+    (36, 45, "36-45 Sem"),
+    (46, 55, "46-55 Sem"),
+    (56, 65, "56-65 Sem"),
+    (66, 75, "66-75 Sem"),
+    (76, 85, "76-85 Sem"),
+    (86, None, "86-Réforme"),
+]
 
-    current_day = today or date.today()
-    if cycle.statut == "actif" and cycle.date_fin_prevue < current_day:
-        cycle.statut = "a_cloturer"
+
+def suggested_formula(age_weeks: int) -> str:
+    return next(label for first, last, label in FORMULA_RANGES
+                if age_weeks >= first and (last is None or age_weeks <= last))
+
+
+def refresh_cycle_status(db: Session, cycle: Optional[CycleProduction], today: Optional[date] = None) -> Optional[CycleProduction]:
+    # Only an explicit user action closes a flock, including legacy overdue lots.
+    if cycle and cycle.statut == "a_cloturer":
+        cycle.statut = "actif"
         db.flush()
     return cycle
+
+
+def find_cycle_for_date(db: Session, id_batiment: int, target_date: date) -> Optional[CycleProduction]:
+    return db.query(CycleProduction).filter(
+        CycleProduction.id_batiment == id_batiment,
+        CycleProduction.date_debut <= target_date,
+        or_(
+            CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES),
+            CycleProduction.date_fin_reelle >= target_date,
+        ),
+    ).order_by(CycleProduction.date_debut.desc()).first()
+
+
+def validate_cycle_date(cycle: CycleProduction, target_date: date) -> None:
+    if target_date < cycle.date_debut or (
+        cycle.date_fin_reelle is not None and target_date > cycle.date_fin_reelle
+    ):
+        raise HTTPException(status_code=400, detail="La date choisie est en dehors du cycle.")
+
+
+def validate_cycle_mortality(db: Session, cycle: CycleProduction, mortality: int, excluding_ids=()) -> None:
+    query = db.query(func.coalesce(func.sum(Production.mortalite), 0)).filter(
+        Production.id_cycle == cycle.id_cycle, Production.est_actif.is_(True),
+    )
+    if excluding_ids:
+        query = query.filter(Production.id_production.notin_(excluding_ids))
+    if cycle.effectif_initial is not None and int(query.scalar() or 0) + mortality > cycle.effectif_initial:
+        raise HTTPException(status_code=400, detail="La mortalité dépasse l'effectif du cycle.")
 
 
 def find_active_cycle(
@@ -80,12 +123,6 @@ def require_active_cycle_for_date(
             detail="La date choisie est avant le debut du lot actif.",
         )
 
-    if target_date > cycle.date_fin_prevue:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le lot a atteint sa date de fin prevue. Prolongez ou terminez le lot avant {action_label}.",
-        )
-
     return cycle
 
 
@@ -110,9 +147,11 @@ def calculate_cycle_effectif(db: Session, cycle: CycleProduction, through_date: 
 def cycle_to_dict(db: Session, cycle: CycleProduction, today: Optional[date] = None) -> dict:
     current_day = today or date.today()
     refresh_cycle_status(db, cycle, current_day)
+    if cycle.date_fin_reelle:
+        current_day = min(current_day, cycle.date_fin_reelle)
     days_since_start = max((current_day - cycle.date_debut).days, 0)
     age_semaines = cycle.age_depart_semaines + (days_since_start // 7)
-    semaine_cycle = min((days_since_start // 7) + 1, cycle.duree_semaines)
+    semaine_cycle = (days_since_start // 7) + 1
     jours_restants = (cycle.date_fin_prevue - current_day).days
     phase_code, phase_label = get_cycle_phase(age_semaines, cycle.duree_semaines)
 
@@ -136,6 +175,7 @@ def cycle_to_dict(db: Session, cycle: CycleProduction, today: Optional[date] = N
         "phase_code": phase_code,
         "phase_label": phase_label,
         "jours_restants": jours_restants,
+        "formule_suggeree": suggested_formula(age_semaines),
         "date_creation": cycle.date_creation,
         "date_modification": cycle.date_modification,
         "id_utilisateur_creation": cycle.id_utilisateur_creation,

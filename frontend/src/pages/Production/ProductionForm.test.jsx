@@ -41,6 +41,7 @@ describe('ProductionForm', () => {
     fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '63' } });
     expect(screen.getByText(/Total collecté \(hors cassés\) : 160 œufs/)).toBeVisible();
     expect(screen.getByText('10', { exact: true })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
@@ -52,6 +53,27 @@ describe('ProductionForm', () => {
 
     expect(post.mock.calls[0][1]).not.toHaveProperty('id_cycle');
     expect(post.mock.calls[0][1]).not.toHaveProperty('nom_cycle');
+  });
+
+  it('preselects the dated formula and accepts feed before laying', async () => {
+    get.mockImplementation((path) => {
+      if (path === '/productions/formules') return Promise.resolve([{ value: '25-1% Sem vita', label: '25-1% Sem vita' }]);
+      if (path.startsWith('/cycles-production/context/')) return Promise.resolve({
+        has_cycles: true, cycle: { id_cycle: 4, nom_cycle: 'Cycle A', age_semaines: 18, effectif_actuel: 1000, formule_suggeree: '25-1% Sem vita' },
+      });
+      return Promise.resolve([]);
+    });
+    render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
+      batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} preselectedDate="2026-09-01" />);
+    expect(await screen.findByText('Cycle A')).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
+    expect(screen.getByRole('combobox', { name: 'Formule' })).toHaveTextContent('25-1% Sem vita');
+    fireEvent.change(screen.getByLabelText('Aliment consommé (kg)'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
+      formule: '25-1% Sem vita', consommation_aliment_kg: 10, grammage: 0,
+      quantites: { normal: 0, double_jaune: 0, blanc: 0, casse: 0 },
+    })));
   });
 
   it('does not allow negative mortality in daily production', async () => {
@@ -78,6 +100,7 @@ describe('ProductionForm', () => {
     render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
     fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '55' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText("Indiquez au moins un nombre d'œufs.")).toBeVisible();
     expect(post).not.toHaveBeenCalled();

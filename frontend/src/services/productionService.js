@@ -81,6 +81,9 @@ export const productionService = {
 };
 
 export const cycleProductionService = {
+  getContext: (idBatiment, dateSaisie) => get(`/cycles-production/context/${idBatiment}`, { params: { date_saisie: dateSaisie } }),
+  getInsights: (idCycle) => get(`/cycles-production/${idCycle}/insights`),
+  assignHistory: (idCycle, data) => post(`/cycles-production/${idCycle}/rattacher`, data),
   getCycles: (params = {}) => get('/cycles-production', { params }),
   getActiveCycle: (idBatiment) => get(`/cycles-production/active/${idBatiment}`),
   createCycle: (data) => post('/cycles-production', data),

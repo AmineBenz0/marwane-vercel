@@ -30,9 +30,12 @@ from app.utils.dependencies import get_current_active_user
 from app.utils.date_formatting import DISPLAY_DATE_FORMAT
 from app.utils.egg_product_sync import ensure_sellable_egg_product, parse_sellable_egg_product_name
 from app.utils.production_cycles import (
-    ACTIVE_CYCLE_STATUSES,
     cycle_to_dict,
-    find_active_cycle,
+    find_cycle_for_date,
+    validate_cycle_date,
+    validate_cycle_mortality,
+    suggested_formula,
+    FORMULA_RANGES,
     refresh_cycle_status,
 )
 from app.models.user import Utilisateur
@@ -41,15 +44,9 @@ router = APIRouter(prefix="/productions", tags=["Productions"])
 logger = logging.getLogger(__name__)
 
 FORMULES_ALIMENT = [
-    {"value": "17-1% Sem vita", "label": "17-1% Sem vita", "description": ""},
-    {"value": "25-1% Sem vita", "label": "25-1% Sem vita", "description": ""},
-    {"value": "26-35 Sem", "label": "26-35 Sem", "description": ""},
-    {"value": "36-45 Sem", "label": "36-45 Sem", "description": ""},
-    {"value": "46-55 Sem", "label": "46-55 Sem", "description": ""},
-    {"value": "56-65 Sem", "label": "56-65 Sem", "description": ""},
-    {"value": "66-75 Sem", "label": "66-75 Sem", "description": ""},
-    {"value": "76-85 Sem", "label": "76-85 Sem", "description": ""},
-    {"value": "86-Réforme", "label": "86-Réforme", "description": ""},
+    {"value": label, "label": label, "description": "",
+     "age_min": first, "age_max": last}
+    for first, last, label in FORMULA_RANGES
 ]
 
 # Placeholder business thresholds. Tweak these ranges once the client confirms
@@ -254,6 +251,28 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         if len(cycle_ids) > 1:
             raise HTTPException(status_code=409, detail="Cette journee contient plusieurs lots et doit etre corrigee separement.")
         cycle_id = next(iter(cycle_ids), None)
+        cycle = db.get(CycleProduction, cycle_id) if cycle_id else None
+        if not updating:
+            cycle = find_cycle_for_date(db, prod_in.id_batiment, prod_in.date_production)
+            if not cycle and db.query(CycleProduction.id_cycle).filter(
+                CycleProduction.id_batiment == prod_in.id_batiment,
+            ).first():
+                raise HTTPException(status_code=400, detail="Aucun cycle pour cette date. Démarrez un cycle depuis le bâtiment.")
+            cycle_id = cycle.id_cycle if cycle else None
+        if cycle:
+            validate_cycle_date(cycle, prod_in.date_production)
+            if prod_in.date_production > date.today():
+                raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
+            validate_cycle_mortality(db, cycle, prod_in.mortalite or 0,
+                                    [record.id_production for record in existing])
+        operational_only = not any(quantities.values())
+        if operational_only:
+            quantities["normal"] = 0
+        formula = prod_in.formule
+        if not updating and cycle and "formule" not in prod_in.model_fields_set:
+            age = cycle.age_depart_semaines + (prod_in.date_production - cycle.date_debut).days // 7
+            formula = suggested_formula(age)
+
         by_type = {}
         for record in existing:
             by_type.setdefault(record.type_oeuf, []).append(record)
@@ -263,7 +282,8 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         for egg_type in ("normal", "double_jaune", "casse", "blanc", "double_jaune_demarrage", "perdu"):
             quantity = quantities.get(egg_type, 0)
             candidates = by_type.get(egg_type, [])
-            retained = candidates[0] if quantity and candidates else None
+            keep_type = bool(quantity) or (operational_only and egg_type == "normal")
+            retained = candidates[0] if keep_type and candidates else None
             for record in candidates:
                 if record is not retained:
                     record.est_actif = False
@@ -271,7 +291,7 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
                     record.motif_annulation = "Correction de la saisie quotidienne"
                     record.id_utilisateur_annulation = user_id
                     record.id_utilisateur_modification = user_id
-            if not quantity:
+            if not keep_type:
                 continue
 
             if retained is None:
@@ -288,13 +308,13 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
 
             retained.nombre_oeufs = quantity
             retained.grammage = prod_in.grammage
-            retained.calibre = _deduce_calibre(egg_type, prod_in.grammage)
+            retained.calibre = _deduce_calibre(egg_type, prod_in.grammage) if quantity else None
             retained.nombre_cartons = Production.calculer_cartons(quantity, egg_type)
             # Building-level facts are counted only once across the type rows.
             retained.mortalite = prod_in.mortalite if not records else None
             retained.consommation_aliment_kg = prod_in.consommation_aliment_kg if not records else None
-            retained.formule = prod_in.formule if not records else None
-            if egg_type not in {"casse", "perdu"}:
+            retained.formule = formula if not records else None
+            if quantity and egg_type not in {"casse", "perdu"}:
                 ensure_sellable_egg_product(db, egg_type, retained.calibre)
             records.append(retained)
 
@@ -380,7 +400,7 @@ def create_production(
     Enregistre une nouvelle production et calcule automatiquement les cartons.
     """
     # Vérifier l'existence du bâtiment
-    batiment = db.query(Batiment).filter(Batiment.id_batiment == prod_in.id_batiment).first()
+    batiment = db.query(Batiment).filter(Batiment.id_batiment == prod_in.id_batiment).with_for_update().first()
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
 
@@ -390,10 +410,17 @@ def create_production(
         if not cycle or cycle.id_batiment != prod_in.id_batiment:
             raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
         refresh_cycle_status(db, cycle)
-        if cycle.statut not in ACTIVE_CYCLE_STATUSES:
-            raise HTTPException(status_code=400, detail="Ce lot est termine")
-        if prod_in.date_production < cycle.date_debut or prod_in.date_production > cycle.date_fin_prevue:
-            raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
+    else:
+        cycle = find_cycle_for_date(db, prod_in.id_batiment, prod_in.date_production)
+        if not cycle and db.query(CycleProduction.id_cycle).filter(
+            CycleProduction.id_batiment == prod_in.id_batiment,
+        ).first():
+            raise HTTPException(status_code=400, detail="Aucun cycle pour cette date.")
+    if cycle:
+        validate_cycle_date(cycle, prod_in.date_production)
+        if prod_in.date_production > date.today():
+            raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
+        validate_cycle_mortality(db, cycle, prod_in.mortalite or 0)
     # Calculer le nombre de cartons selon les règles métier
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
     calibre = _deduce_calibre(prod_in.type_oeuf, prod_in.grammage)
@@ -548,7 +575,7 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         buildings_query = buildings_query.filter(Batiment.est_actif.is_(True))
     batiments = buildings_query.order_by(Batiment.nom).all()
     cycles_by_batiment = {
-        batiment.id_batiment: find_active_cycle(db, batiment.id_batiment, target_date)
+        batiment.id_batiment: find_cycle_for_date(db, batiment.id_batiment, target_date)
         for batiment in batiments
     }
     db.flush()
@@ -592,6 +619,10 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         building["consommation_aliment_kg"] += float(prod.consommation_aliment_kg or 0)
         if prod.formule:
             building["formules"].add(prod.formule)
+        building["entries_count"] += 1
+        # Operational-only days count as entered, without creating egg stock.
+        if quantity == 0:
+            continue
         type_key, calibre_key = _category_key(prod.type_oeuf, prod.calibre)
         if type_key == "perdu":
             type_key = "casse"
@@ -620,8 +651,6 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         else:
             building["produced_eggs"] += quantity
             category["produced_eggs"] += quantity
-
-        building["entries_count"] += 1
 
         add_movement({
             "time": prod.date_creation.strftime("%H:%M") if prod.date_creation else None,
@@ -855,10 +884,10 @@ def get_cycle_performance(
             "mort_pct": _ratio_percent(summary["mort"], summary["effectif_debut"]) if summary["effectif_debut"] else "-",
             "oeufs": summary["oeufs"],
             "oeufs_cumul": summary["oeufs"],
-            "ponte_pct": _ratio_percent(summary["oeufs"], summary["effectif_debut"]) if summary["effectif_debut"] else "-",
+            "ponte_pct": _ratio_percent(summary["oeufs"], summary["bird_days"]) if summary["bird_days"] else "-",
             "formule": ", ".join(sorted(summary["formules"])) or "-",
             "aliment_kg": _safe_decimal(summary["aliment_kg"]),
-            "g_poule": _safe_decimal((summary["aliment_kg"] * Decimal("1000")) / Decimal(summary["effectif_debut"]), "0.1") if summary["effectif_debut"] else "-",
+            "g_poule": _safe_decimal((summary["aliment_kg"] * Decimal("1000")) / Decimal(summary["bird_days"]), "0.1") if summary["bird_days"] else "-",
             "g_oeuf": _safe_decimal((summary["aliment_kg"] * Decimal("1000")) / Decimal(summary["oeufs"]), "0.1") if summary["oeufs"] else "-",
             "calibre": ", ".join(sorted(summary["calibres"])) or "-",
             "effectif_debut": summary["effectif_debut"],
@@ -878,6 +907,7 @@ def get_cycle_performance(
             cumulative_week_eggs = 0
             week_summary = {
                 "week_key": week_key,
+                "bird_days": 0,
                 "mort": 0,
                 "oeufs": 0,
                 "aliment_kg": Decimal("0"),
@@ -922,6 +952,7 @@ def get_cycle_performance(
         })
 
         if week_summary:
+            week_summary["bird_days"] += effectif_debut or 0
             week_summary["mort"] += day["mort"]
             week_summary["oeufs"] += day["oeufs"]
             week_summary["aliment_kg"] += day["aliment_kg"]
@@ -1004,8 +1035,7 @@ def update_production(
             ).first()
             if not cycle or cycle.id_batiment != final_batiment_id:
                 raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
-            if final_date < cycle.date_debut or final_date > cycle.date_fin_prevue:
-                raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
+            validate_cycle_date(cycle, final_date)
         # Explicit null detaches the production from its lot.
     elif prod.id_cycle is not None:
         cycle = db.query(CycleProduction).filter(
@@ -1013,9 +1043,10 @@ def update_production(
         ).first()
         if not cycle or cycle.id_batiment != final_batiment_id:
             raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
-        if final_date < cycle.date_debut or final_date > cycle.date_fin_prevue:
-            raise HTTPException(status_code=400, detail="La date de production est en dehors du lot")
+        validate_cycle_date(cycle, final_date)
 
+    if cycle:
+        validate_cycle_mortality(db, cycle, update_dict.get("mortalite", prod.mortalite) or 0, [prod.id_production])
     for key, value in update_dict.items():
         setattr(prod, key, value)
 

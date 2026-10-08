@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 // Deterministic UI checks use mocked API data and never access a real ledger.
 export default defineConfig({
   testDir: './tests-ui',
-  testMatch: 'contact-cards.spec.ts',
+  testMatch: ['contact-cards.spec.ts', 'flock-cycles.spec.ts'],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   forbidOnly: true,
