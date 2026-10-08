@@ -26,7 +26,7 @@ class LotProductionCreate(BaseModel):
         oversized = next((row for row in self.repartitions if row.effectif_initial > self.effectif_initial), None)
         if oversized:
             raise ValueError(
-                f"L'effectif affecté au bâtiment {oversized.id_batiment} dépasse le nombre total de poussins entrants."
+                "La quantité affectée à un bâtiment ne peut pas dépasser le nombre total de poussins du lot."
             )
         if sum(row.effectif_initial for row in self.repartitions) != self.effectif_initial:
             raise ValueError("La répartition doit correspondre au nombre total de poussins entrants.")
