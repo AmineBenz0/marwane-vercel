@@ -25,6 +25,7 @@ import {
 import {
   ArrowBack as ArrowBackIcon,
   Delete as DeleteIcon,
+  DeleteForever as DeleteForeverIcon,
   Edit as EditIcon,
   History as HistoryIcon,
   Inventory as InventoryIcon,
@@ -69,6 +70,7 @@ function ProduitDetail() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const clientsMap = useMemo(() => new Map(
@@ -204,6 +206,20 @@ function ProduitDetail() {
     }
   };
 
+  const handlePermanentDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      await del(`/produits/${id}/permanent`);
+      setPermanentDeleteDialogOpen(false);
+      notification.success('Produit supprimé définitivement');
+      navigate('/produits');
+    } catch (err) {
+      notification.error(err?.message || 'Erreur lors de la suppression du produit');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const handleReactivate = async () => {
     try {
       await patch(`/produits/${id}/reactivate`, {});
@@ -272,6 +288,15 @@ function ProduitDetail() {
                 Réactiver
               </Button>
             )}
+            <Button
+              color="error"
+              variant="outlined"
+              startIcon={<DeleteForeverIcon />}
+              onClick={() => setPermanentDeleteDialogOpen(true)}
+              disabled={deleteLoading}
+            >
+              Supprimer
+            </Button>
           </Stack>
         )}
       </Stack>
@@ -374,6 +399,28 @@ function ProduitDetail() {
         loading={formLoading}
         errorMessage={formError}
       />
+
+      <Dialog
+        open={permanentDeleteDialogOpen}
+        onClose={() => {
+          if (!deleteLoading) setPermanentDeleteDialogOpen(false);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Supprimer définitivement ce produit ?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Le produit <strong>{produit.nom_produit}</strong> sera supprimé du catalogue. Cette action est possible uniquement s&apos;il n&apos;est référencé dans aucune transaction, aucun mouvement de stock, aucune nomenclature ou transformation. Pour un produit déjà utilisé, désactivez-le afin de conserver l&apos;historique.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPermanentDeleteDialogOpen(false)} disabled={deleteLoading}>Annuler</Button>
+          <Button onClick={handlePermanentDelete} color="error" variant="contained" disabled={deleteLoading}>
+            Supprimer définitivement
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Désactiver ce produit ?</DialogTitle>
