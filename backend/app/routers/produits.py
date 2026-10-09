@@ -323,6 +323,7 @@ def get_produits_par_type(
     limit: int = 100,
     est_actif: Optional[bool] = True,
     type_produit: Optional[ProductType] = None,
+    usage: Optional[ProductUsage] = None,
     recherche: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Utilisateur] = Depends(get_current_active_user)
