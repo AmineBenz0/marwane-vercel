@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProduitDetail from './ProduitDetail';
-import { get } from '../../services/api';
+import { del, get } from '../../services/api';
+
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
   useParams: () => ({ id: '1' }),
 }));
 
@@ -87,3 +89,21 @@ it('shows sales and clients for a sold product', async () => {
   expect(screen.getByRole('cell', { name: 'Client test' })).toBeVisible();
   expect(screen.queryByText('Total acheté')).not.toBeInTheDocument();
 });
+
+
+it('permanently deletes an unused product after confirmation', async () => {
+  del.mockResolvedValueOnce(undefined);
+  render(<ProduitDetail />);
+
+  expect(await screen.findByRole('button', { name: 'Supprimer' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+
+  expect(screen.getByRole('heading', { name: 'Supprimer définitivement ce produit ?' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Supprimer définitivement' }));
+
+  await waitFor(() => {
+    expect(del).toHaveBeenCalledWith('/produits/1/permanent');
+    expect(navigateMock).toHaveBeenCalledWith('/produits');
+  });
+});
+
