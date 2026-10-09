@@ -121,9 +121,24 @@ def test_closure_is_atomic_and_freezes_every_allocation(client, db_session, auth
     assert client.post(url, json={}, headers=auth_headers).json()["id_lot"] == lot["id_lot"]
     for allocation in (a, b):
         assert client.get(f"/api/v1/cycles-production/active/{allocation['id_batiment']}", headers=auth_headers).json() is None
-    # Arrival and closure days are inclusive, so a replacement starts the next day.
+    # A replacement can arrive on the closure day without moving old records.
     payload["date_debut"] = str(date.today())
-    assert client.post("/api/v1/lots-production", json=payload, headers=auth_headers).status_code == 400
+    replacement = client.post("/api/v1/lots-production", json=payload, headers=auth_headers)
+    assert replacement.status_code == 201, replacement.text
+    new_a, new_b = replacement.json()["repartitions"]
+    existing = client.get("/api/v1/productions/daily", params={
+        "id_batiment": b["id_batiment"], "date_production": str(date.today()),
+    }, headers=auth_headers).json()
+    assert existing["records"][0]["id_cycle"] == b["id_cycle"]
+    assert new_b["id_cycle"] != b["id_cycle"]
+    created = daily(client, auth_headers, a["id_batiment"], 3)
+    assert created.status_code == 201, created.text
+    assert created.json()["records"][0]["id_cycle"] == new_a["id_cycle"]
+    lots = client.get("/api/v1/lots-production", headers=auth_headers).json()
+    old_lot = next(row for row in lots if row["id_lot"] == lot["id_lot"])
+    new_lot = next(row for row in lots if row["id_lot"] == replacement.json()["id_lot"])
+    assert old_lot["mortalite_totale"] == 2
+    assert new_lot["mortalite_totale"] == 3
 
 
 def test_closed_historical_arrival_allows_a_new_shared_arrival(client, db_session, auth_headers):
@@ -198,3 +213,49 @@ def test_concurrent_disjoint_arrivals_only_create_one_active_lot(db_session):
     assert sorted(results) == [201, 400]
     assert db_session.query(LotProduction).count() == 1
     assert db_session.query(CycleProduction).count() == 1
+
+
+@pytest.mark.parametrize("offset, expected_status", [(-1, 400), (0, 201), (1, 201)])
+def test_arrival_date_relative_to_previous_closure(client, db_session, auth_headers, offset, expected_status):
+    payload, lot = make_arrival(client, db_session, auth_headers)
+    end = date.today() - timedelta(days=2)
+    closed = client.post(f"/api/v1/lots-production/{lot['id_lot']}/terminer",
+                         json={"date_fin_reelle": str(end)}, headers=auth_headers)
+    assert closed.status_code == 200, closed.text
+    payload["date_debut"] = str(end + timedelta(days=offset))
+    result = client.post("/api/v1/lots-production", json=payload, headers=auth_headers)
+    assert result.status_code == expected_status, result.text
+    assert db_session.query(LotProduction).count() == (1 if offset < 0 else 2)
+
+
+def test_corrected_arrival_can_equal_previous_closure(client, db_session, auth_headers):
+    payload, lot = make_arrival(client, db_session, auth_headers)
+    end = date.today() - timedelta(days=2)
+    closed = client.post(f"/api/v1/lots-production/{lot['id_lot']}/terminer",
+                         json={"date_fin_reelle": str(end)}, headers=auth_headers)
+    assert closed.status_code == 200, closed.text
+    payload["date_debut"] = str(date.today())
+    created = client.post("/api/v1/lots-production", json=payload, headers=auth_headers)
+    assert created.status_code == 201, created.text
+    url = f"/api/v1/lots-production/{created.json()['id_lot']}"
+    payload["date_debut"] = str(end)
+    updated = client.put(url, json=payload, headers=auth_headers)
+    assert updated.status_code == 200, updated.text
+    assert all(row["date_debut"] == str(end) for row in updated.json()["repartitions"])
+    payload["date_debut"] = str(end - timedelta(days=1))
+    rejected = client.put(url, json=payload, headers=auth_headers)
+    assert rejected.status_code == 400, rejected.text
+
+
+def test_same_day_lots_resolve_context_to_latest_arrival(client, db_session, auth_headers):
+    payload, lot = make_arrival(client, db_session, auth_headers, date_debut=str(date.today()))
+    closed = client.post(f"/api/v1/lots-production/{lot['id_lot']}/terminer",
+                         json={}, headers=auth_headers)
+    assert closed.status_code == 200, closed.text
+    replacement = client.post("/api/v1/lots-production", json=payload, headers=auth_headers)
+    assert replacement.status_code == 201, replacement.text
+    for allocation in replacement.json()["repartitions"]:
+        context = client.get(f"/api/v1/cycles-production/context/{allocation['id_batiment']}",
+                             params={"date_saisie": str(date.today())}, headers=auth_headers)
+        assert context.status_code == 200, context.text
+        assert context.json()["cycle"]["id_cycle"] == allocation["id_cycle"]

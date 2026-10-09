@@ -75,7 +75,7 @@ def _validate_start(db, payload, excluded=()):
         conflicts = conflicts.filter(CycleProduction.id_cycle.notin_(excluded))
     if conflicts.filter(CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES)).first():
         raise HTTPException(status_code=400, detail="Un bâtiment a déjà un lot actif. Terminez ce lot avant une nouvelle arrivée.")
-    if conflicts.filter(CycleProduction.date_fin_reelle >= payload.date_debut).first():
+    if conflicts.filter(CycleProduction.date_fin_reelle > payload.date_debut).first():
         raise HTTPException(status_code=400, detail="Cette arrivée chevauche un lot précédent dans un bâtiment.")
 
 

@@ -62,7 +62,9 @@ def find_cycle_for_date(db: Session, id_batiment: int, target_date: date) -> Opt
             CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES),
             CycleProduction.date_fin_reelle >= target_date,
         ),
-    ).order_by(CycleProduction.date_debut.desc()).first()
+    # The new arrival owns the shared boundary date, even when both lots
+    # started on the same day. Existing records retain their explicit id_cycle.
+    ).order_by(CycleProduction.date_debut.desc(), CycleProduction.id_cycle.desc()).first()
 
 
 def cycle_schedule(cycle: CycleProduction):

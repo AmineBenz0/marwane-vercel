@@ -221,7 +221,7 @@ def update_cycle(
     if db.query(CycleProduction).filter(
         CycleProduction.id_batiment == cycle.id_batiment,
         CycleProduction.id_cycle != cycle.id_cycle,
-        CycleProduction.date_fin_reelle >= new_start,
+        CycleProduction.date_fin_reelle > new_start,
     ).first():
         raise HTTPException(status_code=400, detail="Cette date chevauche un cycle précédent.")
     if db.query(Production).filter(
