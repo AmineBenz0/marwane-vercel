@@ -679,7 +679,7 @@ function TransactionForm({
                       {
                         value: 'client',
                         title: 'Vente client',
-                        subtitle: "Oeufs vendus, argent qui entre",
+                        subtitle: "Produits vendus, argent qui entre",
                         disabled: prefillFournisseurId !== null && prefillFournisseurId !== undefined,
                         activeColor: 'primary.main',
                         activeBg: 'rgba(13, 148, 136, 0.05)',
@@ -988,7 +988,7 @@ function TransactionForm({
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
                                 <FormControl fullWidth error={!!error} disabled={loading}>
-                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Oeufs vendus *' : 'Produit acheté *'}</InputLabel>
+                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
                                       value={field.value || ''}
@@ -1003,7 +1003,7 @@ function TransactionForm({
                                       }}
                                     >
                                       <MenuItem value="">
-                                      <em>{watchedTypeEntite === 'client' ? 'Sélectionner les oeufs' : 'Sélectionner le produit acheté'}</em>
+                                      <em>{watchedTypeEntite === 'client' ? 'Sélectionner le produit vendu' : 'Sélectionner le produit acheté'}</em>
                                       </MenuItem>
                                       {produits.map((produit) => (
                                         <MenuItem

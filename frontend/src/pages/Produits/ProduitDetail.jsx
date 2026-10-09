@@ -37,6 +37,7 @@ import { del, get, patch, put } from '../../services/api';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useNotification from '../../hooks/useNotification';
 import ProduitForm from './ProduitForm';
+import { getProductUsage, productUsageLabels } from '../../utils/productUsage';
 
 const formatCurrency = (value, maximumFractionDigits = 2) => {
   const amount = Number(value || 0);
@@ -48,17 +49,12 @@ const formatCurrency = (value, maximumFractionDigits = 2) => {
 };
 
 const formatDate = (value) => {
-  if (!value) return 'Aucun achat';
+  if (!value) return '-';
   return formatShortDate(value);
 };
 
 const formatQuantity = (value) => Number(value || 0).toLocaleString('fr-FR');
 
-const productTypeLabels = {
-  matiere_premiere: 'Matière première',
-  produit_fini: 'Produit fini',
-  service: 'Service',
-};
 
 function ProduitDetail() {
   const { id } = useParams();
@@ -67,6 +63,8 @@ function ProduitDetail() {
   const [produit, setProduit] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
+  const [clients, setClients] = useState([]);
+  const sold = getProductUsage(produit) === 'vendu';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -74,6 +72,10 @@ function ProduitDetail() {
   const [formError, setFormError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const clientsMap = useMemo(() => new Map(
+    clients.map((client) => [client.id_client, client.nom_client])
+  ), [clients]);
 
   const fournisseursMap = useMemo(() => {
     const map = new Map();
@@ -87,7 +89,7 @@ function ProduitDetail() {
     setLoading(true);
     setError(null);
     try {
-      const [produitData, transactionsData, fournisseursData] = await Promise.all([
+      const [produitData, transactionsData, fournisseursData, clientsData] = await Promise.all([
         get(`/produits/${id}`),
         get('/transactions', {
           params: {
@@ -102,11 +104,13 @@ function ProduitDetail() {
             limit: 1000,
           },
         }),
+        get('/clients', { params: { est_actif: true, limit: 1000 } }),
       ]);
 
       setProduit(produitData);
       setTransactions(transactionsData || []);
       setFournisseurs(fournisseursData || []);
+      setClients(clientsData || []);
     } catch (err) {
       setError(err?.message || 'Impossible de charger ce produit');
     } finally {
@@ -119,7 +123,10 @@ function ProduitDetail() {
   }, [loadProduit]);
 
   const insights = useMemo(() => {
-    const achats = transactions.filter((transaction) => transaction.id_fournisseur !== null);
+    const achats = transactions.filter((transaction) => {
+      const partyId = sold ? transaction.id_client : transaction.id_fournisseur;
+      return partyId !== null && partyId !== undefined;
+    });
     const totalAchats = achats.reduce((sum, transaction) => sum + Number(transaction.montant_total || 0), 0);
     const quantiteAchetee = achats.reduce((sum, transaction) => sum + Number(transaction.quantite || 0), 0);
     const lastPurchase = [...achats].sort(
@@ -132,15 +139,18 @@ function ProduitDetail() {
       quantiteAchetee,
       lastPurchase,
     };
-  }, [transactions]);
+  }, [transactions, sold]);
 
   const fournisseurRows = useMemo(() => {
     const rows = new Map();
 
     insights.achats.forEach((transaction) => {
-      const current = rows.get(transaction.id_fournisseur) || {
-        id_fournisseur: transaction.id_fournisseur,
-        nom_fournisseur: fournisseursMap.get(transaction.id_fournisseur) || `Fournisseur #${transaction.id_fournisseur}`,
+      const partyId = sold ? transaction.id_client : transaction.id_fournisseur;
+      const current = rows.get(partyId) || {
+        id_fournisseur: partyId,
+        nom_fournisseur: sold
+          ? clientsMap.get(partyId) || `Client #${partyId}`
+          : fournisseursMap.get(partyId) || `Fournisseur #${partyId}`,
         achats: 0,
         quantite: 0,
         total: 0,
@@ -160,11 +170,11 @@ function ProduitDetail() {
         current.dernierPrix = Number(transaction.prix_unitaire || 0);
       }
 
-      rows.set(transaction.id_fournisseur, current);
+      rows.set(partyId, current);
     });
 
     return [...rows.values()].sort((a, b) => new Date(b.dernierAchat) - new Date(a.dernierAchat));
-  }, [insights.achats, fournisseursMap]);
+  }, [insights.achats, fournisseursMap, clientsMap, sold]);
 
   const handleSubmit = async (data) => {
     setFormLoading(true);
@@ -225,21 +235,20 @@ function ProduitDetail() {
     );
   }
 
-  // Egg production products are a legacy bridge identified by their
-  // generated name. `pour_clients` is a transaction capability flag and is
-  // true for ordinary finished products as well, so it must not control the
-  // product detail workflow.
+  // Generated eggs remain managed from Production.
   const isEggProduct = produit.nom_produit?.trim().toLowerCase().startsWith('oeufs -');
   const lastSupplier = insights.lastPurchase
-    ? fournisseursMap.get(insights.lastPurchase.id_fournisseur) || `Fournisseur #${insights.lastPurchase.id_fournisseur}`
-    : 'Aucun achat';
+    ? (sold
+      ? clientsMap.get(insights.lastPurchase.id_client) || `Client #${insights.lastPurchase.id_client}`
+      : fournisseursMap.get(insights.lastPurchase.id_fournisseur) || `Fournisseur #${insights.lastPurchase.id_fournisseur}`)
+    : (sold ? 'Aucune vente' : 'Aucun achat');
 
   return (
     <Box sx={{ maxWidth: 1180, mx: 'auto' }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/produits')} variant="outlined" sx={{ mb: 2 }}>
-            Retour aux produits achetés
+            Retour aux produits
           </Button>
           <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
             <Typography variant="h4" fontWeight={900}>
@@ -251,7 +260,7 @@ function ProduitDetail() {
             />
           </Stack>
           <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-            {productTypeLabels[produit.type_produit] || 'Produit'} · référentiel unique et historique auditable.
+            {productUsageLabels[getProductUsage(produit)]} · {sold ? 'Transactions clients' : 'Transactions fournisseurs'}
           </Typography>
         </Box>
 
@@ -275,39 +284,39 @@ function ProduitDetail() {
 
       {isEggProduct && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Les œufs sont suivis dans la section Production. Cette fiche reste accessible pour l&apos;historique, mais elle n&apos;est plus gérée dans le catalogue des produits achetés.
+          Les œufs sont suivis dans la section Production. Ils sont disponibles dans les ventes clients.
         </Alert>
       )}
 
-      {!isEggProduct && (
+      {(
         <>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
             <InsightCard
               icon={<ShoppingCartIcon />}
-              label="Total acheté"
+              label={sold ? 'Total vendu' : 'Total acheté'}
               value={formatCurrency(insights.totalAchats, 0)}
-              detail={`${insights.achats.length} achat${insights.achats.length > 1 ? 's' : ''}`}
+              detail={`${insights.achats.length} ${sold ? 'vente' : 'achat'}${insights.achats.length > 1 ? 's' : ''}`}
               tone="warning"
             />
             <InsightCard
               icon={<InventoryIcon />}
-              label="Quantité achetée"
+              label={sold ? 'Quantité vendue' : 'Quantité achetée'}
               value={formatQuantity(insights.quantiteAchetee)}
               detail="Total enregistré"
               tone="primary"
             />
             <InsightCard
               icon={<HistoryIcon />}
-              label="Dernier achat"
+              label={sold ? 'Dernière vente' : 'Dernier achat'}
               value={formatDate(insights.lastPurchase?.date_transaction)}
               detail={lastSupplier}
               tone="info"
             />
             <InsightCard
               icon={<ShoppingCartIcon />}
-              label="Fournisseurs"
+              label={sold ? 'Clients' : 'Fournisseurs'}
               value={fournisseurRows.length}
-              detail="Ont vendu ce produit"
+              detail={sold ? 'Ont acheté ce produit' : 'Ont vendu ce produit'}
               tone="success"
             />
           </Box>
@@ -315,27 +324,27 @@ function ProduitDetail() {
           <Card variant="outlined" sx={{ borderRadius: 4, mb: 3 }}>
             <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Typography variant="h6" fontWeight={900} sx={{ mb: 0.5 }}>
-                Fournisseurs de ce produit
+                {sold ? 'Clients de ce produit' : 'Fournisseurs de ce produit'}
               </Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Voir rapidement chez qui le produit a été acheté, avec le dernier prix et le total enregistré.
+                {sold ? 'Retrouvez les clients, les derniers prix et les quantités vendues.' : 'Retrouvez les fournisseurs, les derniers prix et les quantités achetées.'}
               </Typography>
 
               {fournisseurRows.length === 0 ? (
                 <Alert severity="info">
-                  Aucun achat fournisseur enregistré pour ce produit.
+                  {sold ? 'Aucune vente client enregistrée pour ce produit.' : 'Aucun achat fournisseur enregistré pour ce produit.'}
                 </Alert>
               ) : (
                 <TableContainer sx={{ overflowX: 'auto' }}>
                   <Table size="small" sx={{ minWidth: 760 }}>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Fournisseur</TableCell>
+                        <TableCell>{sold ? 'Client' : 'Fournisseur'}</TableCell>
                         <TableCell align="right">Dernier prix</TableCell>
-                        <TableCell>Dernier achat</TableCell>
+                        <TableCell>{sold ? 'Dernière vente' : 'Dernier achat'}</TableCell>
                         <TableCell align="right">Quantité totale</TableCell>
                         <TableCell align="right">Montant total</TableCell>
-                        <TableCell align="right">Achats</TableCell>
+                        <TableCell align="right">{sold ? 'Ventes' : 'Achats'}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -362,13 +371,13 @@ function ProduitDetail() {
                 Ce qu&apos;il faut retenir
               </Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Cette fiche sert à comparer les achats d&apos;un même produit sans créer de doublons.
+                {sold ? 'Ce produit est proposé uniquement dans les transactions clients.' : 'Ce produit est proposé uniquement dans les transactions fournisseurs.'}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <Stack spacing={1.5}>
-                <BusinessLine label="Type" value={productTypeLabels[produit.type_produit] || 'Produit'} />
+                <BusinessLine label="Utilisation" value={productUsageLabels[getProductUsage(produit)]} />
                 <BusinessLine label="Statut" value={produit.est_actif ? 'Actif' : 'Inactif'} />
-                <BusinessLine label="Dernier fournisseur" value={lastSupplier} />
+                <BusinessLine label={sold ? 'Dernier client' : 'Dernier fournisseur'} value={lastSupplier} />
               </Stack>
             </CardContent>
           </Card>

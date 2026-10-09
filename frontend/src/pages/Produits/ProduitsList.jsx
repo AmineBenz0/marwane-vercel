@@ -28,6 +28,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import ProduitForm from './ProduitForm';
 import { get, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
+import { getProductUsage, productUsageLabels } from '../../utils/productUsage';
 
 const formatMoney = (value, maximumFractionDigits = 2) => {
   const amount = Number(value || 0);
@@ -39,7 +40,7 @@ const formatMoney = (value, maximumFractionDigits = 2) => {
 };
 
 const formatDate = (value) => {
-  if (!value) return 'Aucun achat';
+  if (!value) return '-';
   return formatShortDate(value);
 };
 
@@ -47,11 +48,6 @@ const pluralize = (count, singular, plural = `${singular}s`) => (
   count > 1 ? plural : singular
 );
 
-const productTypeLabels = {
-  matiere_premiere: 'Matière première',
-  produit_fini: 'Produit fini',
-  service: 'Service',
-};
 
 function ProduitsList() {
   const navigate = useNavigate();
@@ -61,6 +57,7 @@ function ProduitsList() {
   const [produits, setProduits] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -78,11 +75,20 @@ function ProduitsList() {
     return map;
   }, [fournisseurs]);
 
+  const clientsMap = useMemo(() => new Map(
+    clients.map((client) => [client.id_client, client.nom_client])
+  ), [clients]);
+
   const productInsights = useMemo(() => {
     const map = new Map();
 
     transactions
-      .filter((transaction) => transaction.id_fournisseur !== null && transaction.id_fournisseur !== undefined)
+      .filter((transaction) => {
+        const product = produits.find((item) => item.id_produit === transaction.id_produit);
+        const partyId = getProductUsage(product) === 'vendu'
+          ? transaction.id_client : transaction.id_fournisseur;
+        return partyId !== null && partyId !== undefined;
+      })
       .forEach((transaction) => {
         const current = map.get(transaction.id_produit) || {
           suppliers: new Set(),
@@ -92,7 +98,9 @@ function ProduitsList() {
           lastPurchase: null,
         };
 
-        current.suppliers.add(transaction.id_fournisseur);
+        const product = produits.find((item) => item.id_produit === transaction.id_produit);
+        current.suppliers.add(getProductUsage(product) === 'vendu'
+          ? transaction.id_client : transaction.id_fournisseur);
         current.purchases += 1;
         current.quantity += Number(transaction.quantite || 0);
         current.total += Number(transaction.montant_total || 0);
@@ -108,14 +116,14 @@ function ProduitsList() {
       });
 
     return map;
-  }, [transactions]);
+  }, [transactions, produits]);
 
   const filteredProduits = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return produits.filter((produit) => {
       const matchesSearch = !normalizedSearch
         || produit.nom_produit?.toLowerCase().includes(normalizedSearch);
-      const matchesType = !typeFilter || produit.type_produit === typeFilter;
+      const matchesType = !typeFilter || getProductUsage(produit) === typeFilter;
       return matchesSearch && matchesType;
     });
   }, [produits, search, typeFilter]);
@@ -125,7 +133,7 @@ function ProduitsList() {
     setError(null);
 
     try {
-      const [produitsData, transactionsData, fournisseursData] = await Promise.all([
+      const [produitsData, transactionsData, fournisseursData, clientsData] = await Promise.all([
         get('/produits', {
           params: {
             est_actif: true,
@@ -144,11 +152,13 @@ function ProduitsList() {
             limit: 1000,
           },
         }),
+        get('/clients', { params: { est_actif: true, limit: 1000 } }),
       ]);
 
       setProduits(produitsData || []);
       setTransactions(transactionsData || []);
       setFournisseurs(fournisseursData || []);
+      setClients(clientsData || []);
     } catch (err) {
       console.error('Erreur lors du chargement des produits:', err);
       setError(err?.message || 'Une erreur est survenue lors du chargement des produits');
@@ -200,13 +210,16 @@ function ProduitsList() {
       const rows = filteredProduits.map((produit) => {
         const insight = productInsights.get(produit.id_produit);
         const lastPurchase = insight?.lastPurchase;
+        const sold = getProductUsage(produit) === 'vendu';
 
         return {
           nom_produit: produit.nom_produit,
-          type_produit: productTypeLabels[produit.type_produit] || 'Produit',
+          usage: productUsageLabels[getProductUsage(produit)],
           fournisseurs: insight?.suppliers.size || 0,
           dernier_fournisseur: lastPurchase
-            ? fournisseursMap.get(lastPurchase.id_fournisseur) || `Fournisseur #${lastPurchase.id_fournisseur}`
+            ? sold
+              ? clientsMap.get(lastPurchase.id_client) || `Client #${lastPurchase.id_client}`
+              : fournisseursMap.get(lastPurchase.id_fournisseur) || `Fournisseur #${lastPurchase.id_fournisseur}`
             : '-',
           dernier_prix: lastPurchase?.prix_unitaire || '',
           dernier_achat: lastPurchase?.date_transaction || '',
@@ -219,11 +232,11 @@ function ProduitsList() {
         rows,
         [
           { id: 'nom_produit', label: 'Produit' },
-          { id: 'type_produit', label: 'Type' },
-          { id: 'fournisseurs', label: 'Fournisseurs' },
-          { id: 'dernier_fournisseur', label: 'Dernier fournisseur' },
+          { id: 'usage', label: 'Utilisation' },
+          { id: 'fournisseurs', label: 'Clients / Fournisseurs' },
+          { id: 'dernier_fournisseur', label: 'Dernier client / fournisseur' },
           { id: 'dernier_prix', label: 'Dernier prix' },
-          { id: 'dernier_achat', label: 'Dernier achat' },
+          { id: 'dernier_achat', label: 'Dernière transaction' },
           { id: 'quantite_totale', label: 'Quantité totale' },
           { id: 'montant_total', label: 'Montant total' },
         ],
@@ -252,10 +265,10 @@ function ProduitsList() {
             fontWeight={900}
             sx={{ fontSize: { xs: '1.65rem', sm: '2rem', md: '2.25rem' } }}
           >
-            Produits achetés
+            Produits
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Catalogue simple des produits achetés chez les fournisseurs. Les œufs restent suivis dans Production.
+            Chaque produit est vendu à un client ou acheté chez un fournisseur.
           </Typography>
         </Box>
 
@@ -294,10 +307,10 @@ function ProduitsList() {
           >
             <Box>
               <Typography fontWeight={900} fontSize="1.15rem">
-                Catalogue des achats
+                Catalogue des produits
               </Typography>
                 <Typography variant="body2" color="text.secondary">
-                Matières premières, produits finis et services dans un référentiel unique.
+                Retrouvez les produits vendus et achetés dans une seule liste.
               </Typography>
             </Box>
 
@@ -320,14 +333,13 @@ function ProduitsList() {
                 select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value)}
-                label="Type"
+                label="Utilisation"
                 size="small"
                 sx={{ minWidth: { xs: '100%', sm: 190 } }}
               >
-                <MenuItem value="">Tous les types</MenuItem>
-                <MenuItem value="matiere_premiere">Matière première</MenuItem>
-                <MenuItem value="produit_fini">Produit fini</MenuItem>
-                <MenuItem value="service">Service</MenuItem>
+                <MenuItem value="">Tous les produits</MenuItem>
+                <MenuItem value="vendu">Vendus</MenuItem>
+                <MenuItem value="achete">Achetés</MenuItem>
               </TextField>
             </Stack>
           </Stack>
@@ -358,6 +370,7 @@ function ProduitsList() {
               produit={produit}
               insight={productInsights.get(produit.id_produit)}
               fournisseursMap={fournisseursMap}
+              clientsMap={clientsMap}
               onView={() => handleViewDetails(produit)}
             />
           ))}
@@ -375,12 +388,15 @@ function ProduitsList() {
   );
 }
 
-function ProductCard({ produit, insight, fournisseursMap, onView }) {
+function ProductCard({ produit, insight, fournisseursMap, clientsMap, onView }) {
+  const sold = getProductUsage(produit) === 'vendu';
   const supplierCount = insight?.suppliers.size || 0;
   const lastPurchase = insight?.lastPurchase;
   const lastSupplier = lastPurchase
-    ? fournisseursMap.get(lastPurchase.id_fournisseur) || `Fournisseur #${lastPurchase.id_fournisseur}`
-    : 'Aucun achat';
+    ? (sold
+      ? clientsMap.get(lastPurchase.id_client) || `Client #${lastPurchase.id_client}`
+      : fournisseursMap.get(lastPurchase.id_fournisseur) || `Fournisseur #${lastPurchase.id_fournisseur}`)
+    : (sold ? 'Aucune vente' : 'Aucun achat');
 
   return (
     <Card
@@ -415,22 +431,22 @@ function ProductCard({ produit, insight, fournisseursMap, onView }) {
               color={supplierCount > 0 ? 'success' : 'default'}
               label={
                 supplierCount > 0
-                  ? `${supplierCount} ${pluralize(supplierCount, 'fournisseur')}`
-                  : 'Pas encore acheté'
+                  ? `${supplierCount} ${pluralize(supplierCount, sold ? 'client' : 'fournisseur')}`
+                  : sold ? 'Pas encore vendu' : 'Pas encore acheté'
               }
               sx={{ fontWeight: 800, flexShrink: 0 }}
             />
             <Chip
               size="small"
               variant="outlined"
-              label={productTypeLabels[produit.type_produit] || 'Produit'}
+              label={productUsageLabels[getProductUsage(produit)]}
               sx={{ fontWeight: 700, flexShrink: 0, mt: 0.75 }}
             />
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             {supplierCount > 0
-              ? `Dernier fournisseur: ${lastSupplier}`
-              : 'Le produit est prêt pour les prochains achats.'}
+              ? `Dernier ${sold ? 'client' : 'fournisseur'} : ${lastSupplier}`
+              : sold ? 'Disponible pour les ventes clients.' : 'Disponible pour les achats fournisseurs.'}
           </Typography>
         </Box>
 
@@ -443,7 +459,7 @@ function ProductCard({ produit, insight, fournisseursMap, onView }) {
           }}
         >
           <MiniMetric label="Dernier prix" value={lastPurchase ? formatMoney(lastPurchase.prix_unitaire, 2) : '-'} />
-          <MiniMetric label="Dernier achat" value={formatDate(lastPurchase?.date_transaction)} />
+          <MiniMetric label={sold ? 'Dernière vente' : 'Dernier achat'} value={formatDate(lastPurchase?.date_transaction)} />
           <MiniMetric label="Quantité totale" value={(insight?.quantity || 0).toLocaleString('fr-FR')} />
         </Box>
 
@@ -461,18 +477,22 @@ ProductCard.propTypes = {
   produit: PropTypes.shape({
     id_produit: PropTypes.number.isRequired,
     nom_produit: PropTypes.string.isRequired,
-    type_produit: PropTypes.string,
+    usage: PropTypes.string,
+    pour_clients: PropTypes.bool,
+    pour_fournisseurs: PropTypes.bool,
   }).isRequired,
   insight: PropTypes.shape({
     suppliers: PropTypes.instanceOf(Set),
     quantity: PropTypes.number,
     lastPurchase: PropTypes.shape({
       id_fournisseur: PropTypes.number,
+      id_client: PropTypes.number,
       prix_unitaire: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
       date_transaction: PropTypes.string,
     }),
   }),
   fournisseursMap: PropTypes.instanceOf(Map).isRequired,
+  clientsMap: PropTypes.instanceOf(Map).isRequired,
   onView: PropTypes.func.isRequired,
 };
 
@@ -499,12 +519,12 @@ function EmptyProductsState({ hasFilters, onCreate }) {
     <Card variant="outlined" sx={{ borderRadius: 4 }}>
       <CardContent sx={{ p: { xs: 3, md: 5 }, textAlign: 'center' }}>
         <Typography variant="h5" fontWeight={900}>
-          {hasFilters ? 'Aucun produit trouvé' : 'Aucun produit acheté pour le moment'}
+          {hasFilters ? 'Aucun produit trouvé' : 'Aucun produit pour le moment'}
         </Typography>
         <Typography color="text.secondary" sx={{ mt: 1, mb: 3, maxWidth: 520, mx: 'auto' }}>
           {hasFilters
             ? 'Essayez un autre nom ou effacez les filtres.'
-            : 'Créez le premier produit acheté chez un fournisseur. Les achats pourront ensuite montrer les fournisseurs et les derniers prix.'}
+            : 'Créez un produit et choisissez s’il est vendu à un client ou acheté chez un fournisseur.'}
         </Typography>
         {!hasFilters && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>

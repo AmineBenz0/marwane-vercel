@@ -183,13 +183,13 @@ def create_transactions_batch(
             produit = produits_dict[tx_data.id_produit]
             
             # Valider que le produit correspond au type de transaction
-            if tx_data.id_client is not None and not produit.pour_clients:
+            if tx_data.id_client is not None and produit.usage != 'vendu':
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients"
                 )
             
-            if tx_data.id_fournisseur is not None and not produit.pour_fournisseurs:
+            if tx_data.id_fournisseur is not None and produit.usage != 'achete':
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
@@ -491,13 +491,13 @@ def create_transaction(
         )
     
     # Valider que le produit correspond au type de transaction
-    if transaction_data.id_client is not None and not produit.pour_clients:
+    if transaction_data.id_client is not None and produit.usage != 'vendu':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients"
         )
     
-    if transaction_data.id_fournisseur is not None and not produit.pour_fournisseurs:
+    if transaction_data.id_fournisseur is not None and produit.usage != 'achete':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
@@ -690,12 +690,12 @@ def update_transaction(
     )
     final_id_batiment = update_data.get("id_batiment", transaction.id_batiment)
     final_id_cycle = update_data.get("id_cycle", transaction.id_cycle)
-    if final_id_client is not None and not final_produit.pour_clients:
+    if final_id_client is not None and final_produit.usage != 'vendu':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Le produit '{final_produit.nom_produit}' ne peut pas être utilisé pour les transactions clients",
         )
-    if final_id_fournisseur is not None and not final_produit.pour_fournisseurs:
+    if final_id_fournisseur is not None and final_produit.usage != 'achete':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Le produit '{final_produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs",

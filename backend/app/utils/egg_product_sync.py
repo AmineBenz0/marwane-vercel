@@ -99,6 +99,7 @@ def ensure_sellable_egg_product(
     if produit:
         produit.est_actif = True
         produit.pour_clients = True
+        produit.pour_fournisseurs = False
         produit.type_produit = "produit_fini"
         return produit
 

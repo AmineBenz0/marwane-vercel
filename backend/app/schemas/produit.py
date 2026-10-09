@@ -4,6 +4,7 @@ Schémas Pydantic pour la validation des données produits.
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Literal, Optional
 
+ProductUsage = Literal['vendu', 'achete']
 ProductType = Literal['matiere_premiere', 'produit_fini', 'service']
 
 
@@ -23,7 +24,7 @@ class ProduitBase(BaseModel):
         description="Indique si le produit est actif (soft delete)"
     )
     pour_clients: bool = Field(
-        True,
+        False,
         description="Indique si le produit peut être utilisé pour des transactions clients"
     )
     pour_fournisseurs: bool = Field(
@@ -47,6 +48,30 @@ class ProduitCreate(ProduitBase):
     """
     Schéma pour créer un nouveau produit.
     """
+    usage: Optional[ProductUsage] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def apply_usage(cls, data):
+        if isinstance(data, dict) and data.get('usage') in ('vendu', 'achete'):
+            data = dict(data)
+            sold = data['usage'] == 'vendu'
+            if (
+                ('pour_clients' in data and data['pour_clients'] != sold)
+                or ('pour_fournisseurs' in data and data['pour_fournisseurs'] != (not sold))
+            ):
+                raise ValueError("Le produit doit être soit vendu, soit acheté")
+            data['pour_clients'] = sold
+            data['pour_fournisseurs'] = not sold
+            data.setdefault('type_produit', 'produit_fini' if sold else 'matiere_premiere')
+        return data
+
+    @model_validator(mode='after')
+    def validate_single_usage(self):
+        if self.pour_clients == self.pour_fournisseurs:
+            raise ValueError("Le produit doit être soit vendu, soit acheté")
+        return self
+
     @field_validator('nom_produit')
     @classmethod
     def validate_nom_produit(cls, v: str) -> str:
@@ -65,6 +90,23 @@ class ProduitUpdate(BaseModel):
     Schéma pour mettre à jour un produit.
     Tous les champs sont optionnels pour permettre des mises à jour partielles.
     """
+    usage: Optional[ProductUsage] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def apply_usage(cls, data):
+        if isinstance(data, dict) and data.get('usage') in ('vendu', 'achete'):
+            data = dict(data)
+            sold = data['usage'] == 'vendu'
+            if (
+                ('pour_clients' in data and data['pour_clients'] != sold)
+                or ('pour_fournisseurs' in data and data['pour_fournisseurs'] != (not sold))
+            ):
+                raise ValueError("Le produit doit être soit vendu, soit acheté")
+            data['pour_clients'] = sold
+            data['pour_fournisseurs'] = not sold
+        return data
+
     nom_produit: Optional[str] = Field(
         None,
         min_length=1,
@@ -109,6 +151,24 @@ class ProduitRead(ProduitBase):
     Inclut les champs générés automatiquement (id).
     """
     id_produit: int = Field(..., description="Identifiant unique du produit")
+
+    usage: ProductUsage
+
+    @model_validator(mode='before')
+    @classmethod
+    def read_single_usage(cls, data):
+        if not isinstance(data, dict):
+            usage = data.usage
+            return {
+                'id_produit': data.id_produit,
+                'nom_produit': data.nom_produit,
+                'est_actif': data.est_actif,
+                'type_produit': data.type_produit,
+                'usage': usage,
+                'pour_clients': usage == 'vendu',
+                'pour_fournisseurs': usage == 'achete',
+            }
+        return data
 
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 

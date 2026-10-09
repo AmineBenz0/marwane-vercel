@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.produit import Produit
 from app.models.user import Utilisateur
-from app.schemas.produit import ProduitCreate, ProduitUpdate, ProduitRead, ProductType
+from app.schemas.produit import ProduitCreate, ProduitUpdate, ProduitRead, ProductType, ProductUsage
 from app.utils.dependencies import get_current_active_user
 from app.config import settings
 
@@ -21,6 +21,7 @@ def get_produits(
     limit: int = 100,
     est_actif: Optional[bool] = None,
     type_produit: Optional[ProductType] = None,
+    usage: Optional[ProductUsage] = None,
     recherche: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Utilisateur] = Depends(get_current_active_user)
@@ -42,6 +43,9 @@ def get_produits(
         Liste des produits (ProduitRead)
     """
     query = db.query(Produit)
+
+    if usage is not None:
+        query = query.filter(Produit.usage == usage)
 
     if est_actif is not None:
         query = query.filter(Produit.est_actif == est_actif)
@@ -195,19 +199,20 @@ def update_produit(
     # Mettre à jour les champs fournis
     update_data = produit_data.model_dump(exclude_unset=True)
     
-    # Before applying updates, check that at least one type flag will remain True
-    # (only relevant if either pour_clients or pour_fournisseurs is being updated)
-    if 'pour_clients' in update_data or 'pour_fournisseurs' in update_data:
-        # Determine final values after update
-        final_pour_clients = update_data.get('pour_clients', produit.pour_clients)
-        final_pour_fournisseurs = update_data.get('pour_fournisseurs', produit.pour_fournisseurs)
-        
-        if not final_pour_clients and not final_pour_fournisseurs:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Un produit doit être utilisable au moins pour les clients OU les fournisseurs"
-            )
-    
+    # Normalize legacy rows on edit and enforce one usage on every write.
+    update_data.pop('usage', None)
+    final_pour_clients = update_data.get('pour_clients', produit.usage == 'vendu')
+    final_pour_fournisseurs = update_data.get('pour_fournisseurs', produit.usage == 'achete')
+    if (not isinstance(final_pour_clients, bool)
+        or not isinstance(final_pour_fournisseurs, bool)
+        or final_pour_clients == final_pour_fournisseurs):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le produit doit être soit vendu, soit acheté",
+        )
+    update_data['pour_clients'] = final_pour_clients
+    update_data['pour_fournisseurs'] = final_pour_fournisseurs
+
     for field, value in update_data.items():
         if field == "nom_produit" and value is not None:
             setattr(produit, field, value.strip())
@@ -358,14 +363,17 @@ def get_produits_par_type(
     
     query = db.query(Produit)
 
+    if usage is not None:
+        query = query.filter(Produit.usage == usage)
+
     if est_actif is not None:
         query = query.filter(Produit.est_actif == est_actif)
     
     # Filter by transaction type
     if type_transaction_lower == 'client':
-        query = query.filter(Produit.pour_clients == True)
+        query = query.filter(Produit.usage == 'vendu')
     else:  # fournisseur
-        query = query.filter(Produit.pour_fournisseurs == True)
+        query = query.filter(Produit.usage == 'achete')
     
     # Filter by product type
     if type_produit:

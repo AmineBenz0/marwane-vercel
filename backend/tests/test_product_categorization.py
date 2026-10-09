@@ -52,23 +52,14 @@ class TestProductCreationWithTypes:
         assert data["pour_clients"] is False
         assert data["pour_fournisseurs"] is True
     
-    def test_create_product_for_both(self, client, auth_headers, db_session):
-        """Test : Création d'un produit pour les deux types de transactions."""
-        product_data = {
+    def test_create_product_for_both_is_rejected(self, client, auth_headers):
+        response = client.post("/api/v1/produits", headers=auth_headers, json={
             "nom_produit": "Produit Polyvalent",
-            "est_actif": True,
             "pour_clients": True,
-            "pour_fournisseurs": True
-        }
-        
-        response = client.post("/api/v1/produits", json=product_data, headers=auth_headers)
-        
-        assert response.status_code == status.HTTP_201_CREATED
-        data = response.json()
-        assert data["nom_produit"] == "Produit Polyvalent"
-        assert data["pour_clients"] is True
-        assert data["pour_fournisseurs"] is True
-    
+            "pour_fournisseurs": True,
+        })
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
     def test_create_product_with_neither_type_fails(self, client, auth_headers, db_session):
         """Test : Création d'un produit sans aucun type échoue."""
         product_data = {
@@ -92,17 +83,13 @@ class TestProductUpdateWithTypes:
         # Créer un produit
         product_data = {
             "nom_produit": "Produit à Modifier",
-            "est_actif": True,
-            "pour_clients": True,
-            "pour_fournisseurs": True
+            "usage": "achete"
         }
         response = client.post("/api/v1/produits", json=product_data, headers=auth_headers)
         product_id = response.json()["id_produit"]
         
         # Modifier pour clients uniquement
-        update_data = {
-            "pour_fournisseurs": False
-        }
+        update_data = {"usage": "vendu"}
         response = client.put(f"/api/v1/produits/{product_id}", json=update_data, headers=auth_headers)
         
         assert response.status_code == status.HTTP_200_OK
@@ -129,7 +116,7 @@ class TestProductUpdateWithTypes:
         response = client.put(f"/api/v1/produits/{product_id}", json=update_data, headers=auth_headers)
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "au moins" in response.json()["detail"].lower()
+        assert "soit vendu, soit acheté" in response.json()["detail"].lower()
 
 
 class TestProductFilteringByType:
@@ -168,15 +155,17 @@ class TestProductFilteringByType:
         response = client.post("/api/v1/produits", json=product2, headers=auth_headers)
         products.append(response.json())
         
-        # Produit pour les deux
-        product3 = {
-            "nom_produit": "Produit Polyvalent C",
-            "pour_clients": True,
-            "pour_fournisseurs": True
-        }
-        response = client.post("/api/v1/produits", json=product3, headers=auth_headers)
-        products.append(response.json())
-        
+        # Legacy dual-flag finished product resolves to sold only.
+        legacy = Produit(
+            nom_produit="Produit Polyvalent C",
+            type_produit="produit_fini",
+            pour_clients=True,
+            pour_fournisseurs=True,
+        )
+        db_session.add(legacy)
+        db_session.commit()
+        products.append(legacy)
+
         return products
     
     def test_filter_products_for_clients(self, client, auth_headers, sample_products):
@@ -200,11 +189,11 @@ class TestProductFilteringByType:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         
-        # Devrait retourner 2 produits (Fournisseur B et Polyvalent C)
-        assert len(data) == 2
+        # Seul le produit acheté apparaît chez les fournisseurs.
+        assert len(data) == 1
         product_names = [p["nom_produit"] for p in data]
         assert "Produit Fournisseur B" in product_names
-        assert "Produit Polyvalent C" in product_names
+        assert "Produit Polyvalent C" not in product_names
         assert "Produit Client A" not in product_names
     
     def test_filter_products_invalid_type(self, client, auth_headers):
@@ -349,7 +338,7 @@ class TestProductTypeDefaults:
     """Tests pour les valeurs par défaut des types de produits."""
     
     def test_default_values_on_creation(self, client, auth_headers):
-        """Test : Les valeurs par défaut sont True pour les deux types."""
+        """Sans utilisation fournie, un nouveau produit est acheté."""
         product_data = {
             "nom_produit": "Produit avec Defaults"
             # Ne pas spécifier pour_clients et pour_fournisseurs
@@ -359,5 +348,6 @@ class TestProductTypeDefaults:
         
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
-        assert data["pour_clients"] is True
+        assert data["pour_clients"] is False
         assert data["pour_fournisseurs"] is True
+        assert data["usage"] == "achete"

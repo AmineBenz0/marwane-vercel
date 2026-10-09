@@ -1,8 +1,9 @@
 """
 Modèle SQLAlchemy pour la table Produits.
 """
-from sqlalchemy import Column, Integer, String, Boolean, CheckConstraint
+from sqlalchemy import Column, Integer, String, Boolean, CheckConstraint, and_, case
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from app.database import Base
 
 
@@ -42,6 +43,28 @@ class Produit(Base):
         ),
     )
     
+    @hybrid_property
+    def usage(self):
+        """One business usage, including deterministic legacy dual-flag rows."""
+        if self.pour_clients and (
+            not self.pour_fournisseurs or self.type_produit == "produit_fini"
+        ):
+            return "vendu"
+        return "achete"
+
+    @usage.expression
+    def usage(cls):
+        return case(
+            (
+                and_(
+                    cls.pour_clients.is_(True),
+                    (cls.pour_fournisseurs.is_(False) | (cls.type_produit == "produit_fini")),
+                ),
+                "vendu",
+            ),
+            else_="achete",
+        )
+
     # Relations
     transactions = relationship("Transaction", back_populates="produit")
 
