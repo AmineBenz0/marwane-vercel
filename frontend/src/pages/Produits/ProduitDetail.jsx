@@ -402,7 +402,7 @@ function ProduitDetail() {
         <DialogTitle>Désactiver ce produit ?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Le produit <strong>{produit.nom_produit}</strong> restera dans l&apos;historique, mais ne sera plus proposé dans les nouveaux achats.
+            Le produit <strong>{produit.nom_produit}</strong> restera dans l&apos;historique, mais ne sera plus proposé dans les nouvelles transactions.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

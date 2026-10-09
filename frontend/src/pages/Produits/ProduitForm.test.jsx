@@ -14,7 +14,9 @@ describe('ProduitForm', () => {
     fireEvent.mouseDown(screen.getByRole('combobox'));
     expect(screen.getAllByRole('option')).toHaveLength(2);
     fireEvent.click(screen.getByRole('option', { name: label }));
-    fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+    const submit = screen.getByRole('button', { name: 'Créer' });
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.click(submit);
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({
       nom_produit: 'Produit test', est_actif: true, usage,
     }));
