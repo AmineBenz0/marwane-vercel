@@ -426,16 +426,14 @@ function ProductCard({ produit, insight, fournisseursMap, clientsMap, onView }) 
             <Typography variant="h6" fontWeight={900} lineHeight={1.15} sx={{ flex: '1 1 160px', minWidth: 0, wordBreak: 'break-word' }}>
               {produit.nom_produit}
             </Typography>
-            <Chip
-              size="small"
-              color={supplierCount > 0 ? 'success' : 'default'}
-              label={
-                supplierCount > 0
-                  ? `${supplierCount} ${pluralize(supplierCount, sold ? 'client' : 'fournisseur')}`
-                  : sold ? 'Pas encore vendu' : 'Pas encore acheté'
-              }
-              sx={{ fontWeight: 800, flexShrink: 0 }}
-            />
+            {supplierCount > 0 && (
+              <Chip
+                size="small"
+                color="success"
+                label={`${supplierCount} ${pluralize(supplierCount, sold ? 'client' : 'fournisseur')}`}
+                sx={{ fontWeight: 800, flexShrink: 0 }}
+              />
+            )}
             <Chip
               size="small"
               variant="outlined"
