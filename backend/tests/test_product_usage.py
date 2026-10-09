@@ -48,7 +48,7 @@ def test_usage_controls_products_and_transactions(client, usage, party, opposite
     })
     assert invalid.status_code == 400, invalid.text
 
-    bulk = client.post("/api/v1/transactions/bulk", json=[
+    bulk = client.post("/api/v1/transactions/batch", json=[
         {**payload, f"id_{opposite}": parties[opposite]},
     ])
     assert bulk.status_code == 400, bulk.text
