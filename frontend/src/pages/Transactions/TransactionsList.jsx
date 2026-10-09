@@ -946,20 +946,6 @@ function TransactionsList() {
         return <PaymentStatusBadge statut={statut} />;
       },
     },
-    {
-      id: 'est_actif',
-      label: 'Statut',
-      sortable: true,
-      filterable: false,
-      mobilePriority: false,
-      format: (value) => (
-        <Chip
-          label={value ? 'Actif' : 'Inactif'}
-          color={value ? 'success' : 'default'}
-          size="small"
-        />
-      ),
-    },
   ];
 
   // Préparer les données pour le registre
@@ -1685,11 +1671,7 @@ function TransactionExcelRow({
         <PaymentReglementsCell payments={transaction.paiements || []} formatMontant={formatMontant} />
       </TableCell>
       <TableCell>
-        {inactive ? (
-          <Chip size="small" label="Inactive" sx={{ fontWeight: 800 }} />
-        ) : (
-          <PaymentStatusBadge statut={paymentStatus} />
-        )}
+        {!inactive && <PaymentStatusBadge statut={paymentStatus} />}
       </TableCell>
       <TableCell align="right" sx={stickyActionBodySx}>
         <Stack direction="row" spacing={0} justifyContent="center" alignItems="center" sx={{ minWidth: 28 }}>

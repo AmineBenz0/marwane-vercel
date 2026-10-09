@@ -409,7 +409,7 @@ function ClientProfile() {
         },
         reglement: (value, row) => getPaymentReglementSummary(row),
         statut_paiement: (value, row) => {
-          if (row.est_actif === false) return 'Inactive';
+          if (row.est_actif === false) return '';
           const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
           return {
             paye: 'Payé',

@@ -542,17 +542,6 @@ function TransactionDetail() {
                   </Typography>
                   <Typography variant="body1">{getClientOuFournisseur()}</Typography>
                 </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Statut
-                  </Typography>
-                  <Chip
-                    label={transaction.est_actif ? 'Actif' : 'Inactif'}
-                    color={transaction.est_actif ? 'success' : 'default'}
-                    size="small"
-                    sx={{ mt: 0.5 }}
-                  />
-                </Box>
               </Stack>
             </CardContent>
           </Card>

@@ -7,14 +7,12 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Divider,
   Stack,
   Table,
   TableBody,
@@ -254,10 +252,6 @@ function ProduitDetail() {
             <Typography variant="h4" fontWeight={900}>
               {produit.nom_produit}
             </Typography>
-            <Chip
-              label={produit.est_actif ? 'Actif' : 'Inactif'}
-              color={produit.est_actif ? 'success' : 'default'}
-            />
           </Stack>
           <Typography color="text.secondary" sx={{ mt: 0.75 }}>
             {productUsageLabels[getProductUsage(produit)]} · {sold ? 'Transactions clients' : 'Transactions fournisseurs'}
@@ -321,7 +315,7 @@ function ProduitDetail() {
             />
           </Box>
 
-          <Card variant="outlined" sx={{ borderRadius: 4, mb: 3 }}>
+          <Card variant="outlined" sx={{ borderRadius: 4 }}>
             <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Typography variant="h6" fontWeight={900} sx={{ mb: 0.5 }}>
                 {sold ? 'Clients de ce produit' : 'Fournisseurs de ce produit'}
@@ -362,23 +356,6 @@ function ProduitDetail() {
                   </Table>
                 </TableContainer>
               )}
-            </CardContent>
-          </Card>
-
-          <Card variant="outlined" sx={{ borderRadius: 4 }}>
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Typography variant="h6" fontWeight={900} sx={{ mb: 0.5 }}>
-                Ce qu&apos;il faut retenir
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 2 }}>
-                {sold ? 'Ce produit est proposé uniquement dans les transactions clients.' : 'Ce produit est proposé uniquement dans les transactions fournisseurs.'}
-              </Typography>
-              <Divider sx={{ mb: 2 }} />
-              <Stack spacing={1.5}>
-                <BusinessLine label="Utilisation" value={productUsageLabels[getProductUsage(produit)]} />
-                <BusinessLine label="Statut" value={produit.est_actif ? 'Actif' : 'Inactif'} />
-                <BusinessLine label={sold ? 'Dernier client' : 'Dernier fournisseur'} value={lastSupplier} />
-              </Stack>
             </CardContent>
           </Card>
         </>
@@ -439,20 +416,6 @@ InsightCard.propTypes = {
   value: PropTypes.node.isRequired,
   detail: PropTypes.string.isRequired,
   tone: PropTypes.string,
-};
-
-function BusinessLine({ label, value }) {
-  return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, p: 1.5, borderRadius: 2, bgcolor: 'grey.50' }}>
-      <Typography color="text.secondary">{label}</Typography>
-      <Typography fontWeight={900} textAlign="right">{value || '-'}</Typography>
-    </Box>
-  );
-}
-
-BusinessLine.propTypes = {
-  label: PropTypes.string.isRequired,
-  value: PropTypes.node,
 };
 
 export default ProduitDetail;

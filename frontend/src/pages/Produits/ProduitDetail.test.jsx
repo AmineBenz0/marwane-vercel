@@ -41,7 +41,7 @@ describe('ProduitDetail', () => {
     render(<ProduitDetail />);
 
     expect(await screen.findByRole('button', { name: 'Modifier' })).toBeVisible();
-    expect(screen.getByText('Acheté')).toBeVisible();
+    expect(screen.getByText(/Acheté · Transactions fournisseurs/)).toBeVisible();
     expect(screen.queryByText('Matière première')).not.toBeInTheDocument();
     expect(screen.queryByText(/Les œufs sont suivis/)).not.toBeInTheDocument();
   });
