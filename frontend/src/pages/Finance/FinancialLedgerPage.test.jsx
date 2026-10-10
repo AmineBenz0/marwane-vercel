@@ -48,6 +48,26 @@ describe('FinancialLedgerPage', () => {
     expect(screen.queryByText('0,00\u00a0MAD')).not.toBeInTheDocument();
   });
 
+  it('keeps primary filters visible and places due dates, sorting, and overdue in advanced filters', async () => {
+    render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
+
+    expect(await screen.findByRole('textbox', { name: 'Rechercher' })).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Client' })).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Statut' })).toBeVisible();
+    expect(screen.queryByLabelText('Échéance à partir du')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filtres avancés (5)' }));
+    expect(await screen.findByLabelText('Échéance à partir du')).toBeVisible();
+    expect(screen.getByLabelText('Échéance jusqu’au')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'En retard uniquement' }));
+
+    await waitFor(() => {
+      expect(get.mock.calls.some(([path, config]) => (
+        path === '/transactions/creances' && config?.params?.overdue_only === true
+      ))).toBe(true);
+    });
+  });
+
   it('does not post when the user cancels the financial confirmation', async () => {
     window.confirm.mockReturnValue(false);
     render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
