@@ -1,4 +1,3 @@
-import DateField from '../../utils/DateField';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
@@ -33,6 +32,7 @@ import { Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { get, post } from '../../services/api';
 import { getBusinessDateInput } from '../../utils/businessDate';
+import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 
 const money = (value) => new Intl.NumberFormat('fr-FR', {
   style: 'currency', currency: 'MAD', maximumFractionDigits: 2,
@@ -179,7 +179,7 @@ function FinancialLedgerPage({ direction }) {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [data, setData] = useState({ items: [], summary: {} });
-  const [filters, setFilters] = useState({ id_tiers: '', recherche: '', statut: '', echeance_debut: '', echeance_fin: '', overdue_only: false, sort_by: 'date_echeance', sort_order: 'asc' });
+  const [filters, setFilters] = useState({ id_tiers: '', recherche: '', statut: '', echeance_debut: '', echeance_fin: '', overdue_only: false });
   const [page, setPage] = useState(0);
   const pageSize = 50;
   const [loading, setLoading] = useState(true);
@@ -192,6 +192,75 @@ function FinancialLedgerPage({ direction }) {
   const title = isReceivable ? 'Créances clients' : 'Dettes fournisseurs';
   const partyLabel = isReceivable ? 'Client' : 'Fournisseur';
   const partyEndpoint = isReceivable ? '/clients' : '/fournisseurs';
+
+  const filterDefinitions = useMemo(() => [
+    {
+      id: 'recherche',
+      label: 'Rechercher',
+      placeholder: 'Client, produit…',
+      type: 'search',
+      alwaysInline: true,
+    },
+    {
+      id: 'id_tiers',
+      label: partyLabel,
+      type: 'select',
+      alwaysInline: true,
+      options: parties.map((party) => ({
+        value: isReceivable ? party.id_client : party.id_fournisseur,
+        label: isReceivable ? party.nom_client : party.nom_fournisseur,
+      })),
+    },
+    {
+      id: 'statut',
+      label: 'Statut',
+      type: 'select',
+      alwaysInline: true,
+      options: Object.entries(statusLabel).map(([value, label]) => ({ value, label })),
+    },
+    { id: 'echeance_debut', label: 'Échéance à partir du', type: 'date' },
+    { id: 'echeance_fin', label: 'Échéance jusqu’au', type: 'date' },
+    {
+      id: 'sort_by',
+      label: 'Trier par',
+      type: 'select',
+      defaultValue: 'date_echeance',
+      options: [
+        { value: 'date_echeance', label: 'Échéance' },
+        { value: 'date_transaction', label: 'Date' },
+        { value: 'montant_total', label: 'Montant total' },
+        { value: 'montant_restant', label: 'Montant restant' },
+      ],
+    },
+    {
+      id: 'sort_order',
+      label: 'Ordre',
+      type: 'select',
+      defaultValue: 'asc',
+      options: [
+        { value: 'asc', label: 'Croissant' },
+        { value: 'desc', label: 'Décroissant' },
+      ],
+    },
+    {
+      id: 'overdue_only',
+      label: 'En retard uniquement',
+      type: 'custom',
+      defaultValue: false,
+      formatChipValue: () => 'Oui',
+      renderComponent: ({ value, onChange }) => (
+        <Button
+          fullWidth
+          variant={value ? 'contained' : 'outlined'}
+          color="error"
+          onClick={() => onChange(!value)}
+          sx={{ minHeight: 40, whiteSpace: 'nowrap' }}
+        >
+          En retard uniquement
+        </Button>
+      ),
+    },
+  ], [isReceivable, parties, partyLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +288,8 @@ function FinancialLedgerPage({ direction }) {
       const params = Object.fromEntries(
         Object.entries(queryFilters).filter(([, value]) => value !== '' && value !== false && value !== null && value !== undefined),
       );
+      params.sort_by = filters.sort_by || 'date_echeance';
+      params.sort_order = filters.sort_order || 'asc';
       const result = await get(endpoint, { params: { ...params, [tierParam]: selectedParty || undefined, skip: page * pageSize, limit: pageSize } });
       setData(result || { items: [], summary: {} });
     } catch (err) {
@@ -234,6 +305,10 @@ function FinancialLedgerPage({ direction }) {
   const updateFilter = (field, value) => {
     setPage(0);
     setFilters((current) => ({ ...current, [field]: value }));
+  };
+  const clearFilters = () => {
+    setPage(0);
+    setFilters({ id_tiers: '', recherche: '', statut: '', echeance_debut: '', echeance_fin: '', overdue_only: false });
   };
   const partyPath = (item) => {
     const partyId = isReceivable ? item.id_client : item.id_fournisseur;
@@ -255,32 +330,14 @@ function FinancialLedgerPage({ direction }) {
       </Stack>
 
       <SummaryCards summary={data.summary} />
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-          <TextField label="Rechercher" value={filters.recherche} onChange={(event) => updateFilter('recherche', event.target.value)} size="small" fullWidth />
-          <TextField label={partyLabel} select value={filters.id_tiers} onChange={(event) => updateFilter('id_tiers', event.target.value)} size="small" sx={{ minWidth: { md: 220 } }} disabled={partiesLoading}>
-            <MenuItem value="">Tous</MenuItem>
-            {parties.map((party) => <MenuItem key={isReceivable ? party.id_client : party.id_fournisseur} value={isReceivable ? party.id_client : party.id_fournisseur}>{isReceivable ? party.nom_client : party.nom_fournisseur}</MenuItem>)}
-          </TextField>
-          <TextField label="Statut" select value={filters.statut} onChange={(event) => updateFilter('statut', event.target.value)} size="small" sx={{ minWidth: { md: 180 } }}>
-            <MenuItem value="">Tous</MenuItem>
-            {Object.entries(statusLabel).map(([value, label]) => <MenuItem value={value} key={value}>{label}</MenuItem>)}
-          </TextField>
-          <DateField label="Échéance à partir du"  value={filters.echeance_debut} onChange={(event) => updateFilter('echeance_debut', event.target.value)} size="small" InputLabelProps={{ shrink: true }} />
-          <DateField label="Échéance jusqu’au"  value={filters.echeance_fin} onChange={(event) => updateFilter('echeance_fin', event.target.value)} size="small" InputLabelProps={{ shrink: true }} />
-          <TextField label="Trier par" select value={filters.sort_by} onChange={(event) => updateFilter('sort_by', event.target.value)} size="small" sx={{ minWidth: { md: 170 } }}>
-            <MenuItem value="date_echeance">Échéance</MenuItem>
-            <MenuItem value="date_transaction">Date</MenuItem>
-            <MenuItem value="montant_total">Montant total</MenuItem>
-            <MenuItem value="montant_restant">Montant restant</MenuItem>
-          </TextField>
-          <TextField label="Ordre" select value={filters.sort_order} onChange={(event) => updateFilter('sort_order', event.target.value)} size="small" sx={{ minWidth: { md: 120 } }}>
-            <MenuItem value="asc">Croissant</MenuItem>
-            <MenuItem value="desc">Décroissant</MenuItem>
-          </TextField>
-          <Button variant={filters.overdue_only ? 'contained' : 'outlined'} color="error" onClick={() => updateFilter('overdue_only', !filters.overdue_only)} sx={{ whiteSpace: 'nowrap' }}>En retard uniquement</Button>
-        </Stack>
-      </Paper>
+      <SmartFilterPanel
+        pageKey={`financial-ledger-${direction}`}
+        filterDefinitions={filterDefinitions}
+        filters={filters}
+        onFilterChange={updateFilter}
+        onClearAll={clearFilters}
+        maxInlineFilters={3}
+      />
 
       {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={load}>Réessayer</Button>} sx={{ mb: 2 }}>{error}</Alert>}
       {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box> : rows.length === 0 ? <Alert severity="info">Aucune {isReceivable ? 'créance' : 'dette'} ne correspond aux filtres.</Alert> : mobile ? (
