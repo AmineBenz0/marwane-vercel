@@ -5,6 +5,10 @@ import pytest
 from fastapi import status
 from app.models.produit import Produit
 from app.models.user import Utilisateur
+from app.models.client import Client
+from app.models.inventory import MouvementStock
+from app.models.transaction import Transaction
+from datetime import date
 from app.config import settings
 
 
@@ -416,6 +420,96 @@ class TestProduitsEndpoints:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "déjà inactif" in response.json()["detail"].lower()
     
+    def test_permanent_delete_unused_product(self, client, test_user, db_session, auth_headers):
+        produit = Produit(nom_produit="Produit à supprimer définitivement", est_actif=True)
+        db_session.add(produit)
+        db_session.commit()
+        db_session.refresh(produit)
+
+        response = client.delete(
+            f"/api/v1/produits/{produit.id_produit}/permanent",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert db_session.query(Produit).filter(
+            Produit.id_produit == produit.id_produit
+        ).first() is None
+
+    def test_permanent_delete_product_with_transaction_is_blocked(
+        self, client, test_user, db_session, auth_headers
+    ):
+        produit = Produit(nom_produit="Produit avec historique", est_actif=True)
+        client_record = Client(nom_client="Client de test", est_actif=True)
+        db_session.add_all([produit, client_record])
+        db_session.commit()
+        db_session.refresh(produit)
+        db_session.refresh(client_record)
+        transaction = Transaction(
+            date_transaction=date.today(),
+            id_produit=produit.id_produit,
+            quantite=1,
+            prix_unitaire=1,
+            montant_total=1,
+            id_client=client_record.id_client,
+            id_fournisseur=None,
+        )
+        db_session.add(transaction)
+        db_session.commit()
+
+        response = client.delete(
+            f"/api/v1/produits/{produit.id_produit}/permanent",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert "transaction" in response.json()["detail"].lower()
+        assert db_session.query(Produit).filter(
+            Produit.id_produit == produit.id_produit
+        ).first() is not None
+
+    def test_permanent_delete_product_with_stock_movement_is_blocked(
+        self, client, test_user, db_session, auth_headers
+    ):
+        produit = Produit(nom_produit="Produit avec stock", est_actif=True)
+        db_session.add(produit)
+        db_session.commit()
+        db_session.refresh(produit)
+        db_session.add(MouvementStock(
+            id_produit=produit.id_produit,
+            quantite_delta=1,
+            cout_unitaire=0,
+            type_mouvement="TEST",
+            source_type="TEST",
+        ))
+        db_session.commit()
+
+        response = client.delete(
+            f"/api/v1/produits/{produit.id_produit}/permanent",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert "mouvement" in response.json()["detail"].lower()
+
+    def test_permanent_delete_generated_egg_product_is_blocked(
+        self, client, test_user, db_session, auth_headers
+    ):
+        produit = Produit(nom_produit="Oeufs - Blancs", est_actif=True)
+        db_session.add(produit)
+        db_session.commit()
+        db_session.refresh(produit)
+
+        response = client.delete(
+            f"/api/v1/produits/{produit.id_produit}/permanent",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert db_session.query(Produit).filter(
+            Produit.id_produit == produit.id_produit
+        ).first() is not None
+
     def test_get_produits_pagination(self, client, test_user, db_session, auth_headers):
         """Test de la pagination sur GET /produits."""
         

@@ -4,9 +4,14 @@ Gère les endpoints CRUD pour les produits.
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.produit import Produit
+from app.models.inventory import MouvementStock
+from app.models.nomenclature import Nomenclature, NomenclatureLigne
+from app.models.transaction import Transaction
+from app.models.transformation import TransformationLigne
 from app.models.user import Utilisateur
 from app.schemas.produit import ProduitCreate, ProduitUpdate, ProduitRead, ProductType, ProductUsage
 from app.utils.dependencies import get_current_active_user
@@ -266,6 +271,59 @@ def delete_produit(
     
     db.commit()
     
+    return None
+
+
+@router.delete("/{id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+def delete_produit_permanently(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[Utilisateur] = Depends(get_current_active_user)
+):
+    """Delete a product permanently only when no business history references it."""
+    produit = db.query(Produit).filter(Produit.id_produit == id).first()
+    if not produit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produit avec l'ID {id} introuvable"
+        )
+
+    # Generated egg products are managed by Production and must stay in the catalog.
+    if produit.nom_produit.strip().lower().startswith(("oeufs -", "œufs -")):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Les produits d'œufs gérés par la production ne peuvent pas être supprimés"
+        )
+
+    references = [
+        ("transaction(s)", db.query(Transaction).filter(Transaction.id_produit == id).count()),
+        ("mouvement(s) de stock", db.query(MouvementStock).filter(MouvementStock.id_produit == id).count()),
+        ("nomenclature(s) de sortie", db.query(Nomenclature).filter(Nomenclature.id_produit_sortie == id).count()),
+        ("ligne(s) de nomenclature", db.query(NomenclatureLigne).filter(NomenclatureLigne.id_produit_entree == id).count()),
+        ("ligne(s) de transformation", db.query(TransformationLigne).filter(TransformationLigne.id_produit == id).count()),
+    ]
+    blocking_references = [f"{count} {label}" for label, count in references if count]
+    if blocking_references:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Ce produit est utilisé dans l'historique "
+                f"({', '.join(blocking_references)}). Désactivez-le pour le conserver."
+            )
+        )
+
+    try:
+        db.delete(produit)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Ce produit est encore référencé par des données liées et ne peut pas être supprimé. "
+                "Désactivez-le pour conserver l'historique."
+            )
+        )
     return None
 
 
