@@ -47,6 +47,7 @@ import {
 } from '@mui/material';
 import { get, post, put, del } from '../../services/api';
 import { format } from 'date-fns';
+import { getDefaultPaymentDate } from '../../utils/paymentDates';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
@@ -266,7 +267,7 @@ function TransactionDetail() {
     setValue: setValuePaiement,
   } = useForm({
     defaultValues: {
-      date_paiement: format(new Date(), 'yyyy-MM-dd'),
+      date_paiement: getDefaultPaymentDate(transaction?.date_transaction),
       montant: 0,
       type_paiement: 'cash',
       statut_cheque: 'a_encaisser',
@@ -442,7 +443,7 @@ function TransactionDetail() {
   const handleAddPaiement = () => {
     setEditingPaiement(null);
     resetPaiement({
-      date_paiement: format(new Date(), 'yyyy-MM-dd'),
+      date_paiement: getDefaultPaymentDate(transaction?.date_transaction),
       montant: statutPaiement?.montant_restant || 0,
       type_paiement: 'cash',
       statut_cheque: 'a_encaisser',
@@ -906,7 +907,7 @@ function TransactionDetail() {
                 />
               ) : (
                 <MultiPaiementForm
-                  transaction={statutPaiement}
+                  transaction={{ ...statutPaiement, date_transaction: transaction?.date_transaction }}
                   fields={fields}
                   append={append}
                   remove={remove}
