@@ -120,6 +120,7 @@ function SmartFilterPanel({
    * Rend un champ de filtre selon son type.
    */
   const renderFilterField = useCallback((filter, isInline = false) => {
+    const labelId = `${pageKey}-${filter.id}-label`;
     const value = filters[filter.id] || filter.defaultValue || '';
     const commonProps = {
       size: 'small',
@@ -156,8 +157,9 @@ function SmartFilterPanel({
       case 'select':
         return (
           <FormControl key={filter.id} {...commonProps} disabled={filter.disabled}>
-            <InputLabel>{filter.label}</InputLabel>
+            <InputLabel id={labelId}>{filter.label}</InputLabel>
             <Select
+              labelId={labelId}
               value={value}
               label={filter.label}
               onChange={(e) => handleFilterChange(filter.id, e.target.value)}
@@ -222,7 +224,7 @@ function SmartFilterPanel({
       default:
         return null;
     }
-  }, [filters, handleFilterChange]);
+  }, [filters, handleFilterChange, pageKey]);
 
   /**
    * Vérifie si au moins un filtre est actif.
