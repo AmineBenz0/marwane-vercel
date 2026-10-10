@@ -24,7 +24,6 @@ import {
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  Delete as DeleteIcon,
   DeleteForever as DeleteForeverIcon,
   Edit as EditIcon,
   History as HistoryIcon,
@@ -69,7 +68,6 @@ function ProduitDetail() {
   const [modalOpen, setModalOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -192,20 +190,6 @@ function ProduitDetail() {
     }
   };
 
-  const handleDeactivate = async () => {
-    setDeleteLoading(true);
-    try {
-      await del(`/produits/${id}`);
-      setDeleteDialogOpen(false);
-      notification.success('Produit désactivé');
-      await loadProduit();
-    } catch (err) {
-      notification.error(err?.message || 'Erreur lors de la désactivation');
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
   const handlePermanentDelete = async () => {
     setDeleteLoading(true);
     try {
@@ -279,18 +263,9 @@ function ProduitDetail() {
             <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setModalOpen(true)}>
               Modifier
             </Button>
-            {produit.est_actif ? (
-              <Button color="error" variant="outlined" startIcon={<DeleteIcon />} onClick={() => setDeleteDialogOpen(true)}>
-                Désactiver
-              </Button>
-            ) : (
-              <Button color="success" variant="contained" startIcon={<RestoreIcon />} onClick={handleReactivate}>
-                Réactiver
-              </Button>
-            )}
             <Button
               color="error"
-              variant="outlined"
+              variant="contained"
               startIcon={<DeleteForeverIcon />}
               onClick={() => setPermanentDeleteDialogOpen(true)}
               disabled={deleteLoading}
@@ -411,7 +386,7 @@ function ProduitDetail() {
         <DialogTitle>Supprimer définitivement ce produit ?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Le produit <strong>{produit.nom_produit}</strong> sera supprimé du catalogue. Cette action est possible uniquement s&apos;il n&apos;est référencé dans aucune transaction, aucun mouvement de stock, aucune nomenclature ou transformation. Pour un produit déjà utilisé, désactivez-le afin de conserver l&apos;historique.
+            Le produit <strong>{produit.nom_produit}</strong> sera supprimé du catalogue. Cette action est possible uniquement s&apos;il n&apos;est référencé dans aucune transaction, aucun mouvement de stock, aucune nomenclature ou transformation. Les produits déjà utilisés doivent être conservés pour préserver leur historique.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -422,20 +397,6 @@ function ProduitDetail() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Désactiver ce produit ?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Le produit <strong>{produit.nom_produit}</strong> restera dans l&apos;historique, mais ne sera plus proposé dans les nouvelles transactions.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleteLoading}>Annuler</Button>
-          <Button onClick={handleDeactivate} color="error" variant="contained" disabled={deleteLoading}>
-            Désactiver
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
