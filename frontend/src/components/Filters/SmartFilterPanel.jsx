@@ -137,6 +137,7 @@ function SmartFilterPanel({
             placeholder={filter.placeholder}
             value={value}
             onChange={(e) => handleFilterChange(filter.id, e.target.value)}
+            disabled={filter.disabled}
             InputProps={
               filter.type === 'search'
                 ? {
@@ -154,7 +155,7 @@ function SmartFilterPanel({
 
       case 'select':
         return (
-          <FormControl key={filter.id} {...commonProps}>
+          <FormControl key={filter.id} {...commonProps} disabled={filter.disabled}>
             <InputLabel>{filter.label}</InputLabel>
             <Select
               value={value}
@@ -180,6 +181,7 @@ function SmartFilterPanel({
             value={value}
             onChange={(e) => handleFilterChange(filter.id, e.target.value)}
             InputLabelProps={{ shrink: true }}
+            disabled={filter.disabled}
             {...commonProps}
           />
         );
@@ -192,6 +194,7 @@ function SmartFilterPanel({
             type="number"
             value={value}
             onChange={(e) => handleFilterChange(filter.id, e.target.value)}
+            disabled={filter.disabled}
             inputProps={{
               min: filter.min,
               max: filter.max,
