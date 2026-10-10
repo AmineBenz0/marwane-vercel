@@ -33,6 +33,7 @@ import { Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { get, post } from '../../services/api';
 import { getBusinessDateInput } from '../../utils/businessDate';
+import { getDefaultPaymentDate } from '../../utils/paymentDates';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 
 const money = (value) => new Intl.NumberFormat('fr-FR', {
@@ -48,7 +49,7 @@ const createIdempotencyKey = () => window.crypto?.randomUUID?.() || `payment-${D
 function PaymentDialog({ item, open, onClose, onSaved }) {
   const [amount, setAmount] = useState(Number(item?.montant_restant || 0).toFixed(2));
   const [type, setType] = useState('cash');
-  const [date, setDate] = useState(getBusinessDateInput);
+  const [date, setDate] = useState(() => getDefaultPaymentDate(item?.date_transaction || getBusinessDateInput()));
   const [notes, setNotes] = useState('');
   const [idempotencyKey, setIdempotencyKey] = useState(createIdempotencyKey);
   const [saving, setSaving] = useState(false);
@@ -58,7 +59,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
     if (open) {
       setAmount(Number(item?.montant_restant || 0).toFixed(2));
       setType('cash');
-      setDate(getBusinessDateInput());
+      setDate(getDefaultPaymentDate(item?.date_transaction || getBusinessDateInput()));
       setNotes('');
       setIdempotencyKey(createIdempotencyKey());
       setError(null);
