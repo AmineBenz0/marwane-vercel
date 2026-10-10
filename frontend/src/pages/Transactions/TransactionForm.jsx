@@ -1324,8 +1324,6 @@ function TransactionForm({
                               </Box>
                             </Collapse>
                           </Grid>
-
-                        </Grid>
                     </Paper>
                         );
                       })}
