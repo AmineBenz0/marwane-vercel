@@ -611,20 +611,13 @@ function TransactionForm({
                 Choisissez le type, ajoutez les produits, puis validez.
               </Typography>
             </Box>
-            <Typography variant="h6" component="div" sx={{ display: 'none' }}>
-              {isEditing ? 'Modifier la transaction' : 'Créer une nouvelle transaction'}
-            </Typography>
-            <Button
-              onClick={handleClose}
-              disabled={loading}
-              sx={{ minWidth: 'auto', p: 1, borderRadius: 2 }}
-            >
+            <IconButton onClick={handleClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
               <CloseIcon />
-            </Button>
+            </IconButton>
           </Box>
         </DialogTitle>
 
-        <DialogContent dividers sx={{ backgroundColor: 'background.default', px: { xs: 2, md: 3 }, py: 2.5 }}>
+        <DialogContent dividers sx={{ backgroundColor: 'background.default', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
           {/* Afficher l'erreur serveur générale si présente */}
           {(errorMessage || errors.root) && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -720,10 +713,13 @@ function TransactionForm({
                 <FormHelperText error>{errors.type_entite.message}</FormHelperText>
               )}
 
-              <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 2.5, borderRadius: 2.5 }}>
-                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>Informations de la transaction</Typography>
-                <Grid container spacing={1.5}>
-                  <Grid item xs={12} sm={6}>
+              <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 2, borderRadius: 2.5, bgcolor: 'background.paper' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
+                  <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>1</Box>
+                  <Typography variant="subtitle1" fontWeight={800}>Informations de la transaction</Typography>
+                </Box>
+                <Grid container spacing={1.25}>
+                  <Grid item xs={12} md={4}>
               {/* Date de transaction */}
               <Controller
                 name="date_transaction"
@@ -742,12 +738,12 @@ function TransactionForm({
                     }}
                     fullWidth
                     label="Date de transaction"
-
+                    size="small"
                     error={!!error}
                     helperText={error?.message || ''}
                     required
                     disabled={loading}
-                    margin="normal"
+                    margin="dense"
                     variant="outlined"
                     InputLabelProps={{
                       shrink: true,
@@ -756,7 +752,7 @@ function TransactionForm({
                 )}
               />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12} md={4}>
               {/* Date d'échéance (optionnel) */}
               <Controller
                 name="date_echeance"
@@ -766,11 +762,11 @@ function TransactionForm({
                     {...field}
                     fullWidth
                     label="Date d'échéance du paiement (optionnel)"
-
+                    size="small"
                     error={!!error}
                     helperText={error?.message || 'Date limite pour le paiement'}
                     disabled={loading}
-                    margin="normal"
+                    margin="dense"
                     variant="outlined"
                     InputLabelProps={{
                       shrink: true,
@@ -779,9 +775,9 @@ function TransactionForm({
                 )}
               />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
               {/* Sélection Client OU Fournisseur */}
-              <FormControl component="fieldset" margin="normal" fullWidth error={!!errors.type_entite} sx={{ display: 'none' }}>
+              <FormControl component="fieldset" margin="dense" fullWidth error={!!errors.type_entite} sx={{ display: 'none' }}>
                 <FormLabel component="legend">Type d'entité</FormLabel>
                 <Controller
                   name="type_entite"
@@ -824,7 +820,8 @@ function TransactionForm({
                       fullWidth
                       required
                       label="Client"
-                      margin="normal"
+                      margin="dense"
+                      size="small"
                       error={!!error}
                       helperText={error?.message}
                       disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
@@ -855,7 +852,8 @@ function TransactionForm({
                       fullWidth
                       required
                       label="Fournisseur"
-                      margin="normal"
+                      margin="dense"
+                      size="small"
                       error={!!error}
                       helperText={error?.message}
                       disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
@@ -882,34 +880,30 @@ function TransactionForm({
               </Paper>
 
               {/* Produits et paiements */}
-              <Paper
-                variant="outlined"
-                sx={{
-                  mt: 3,
-                  mb: 2,
-                  p: { xs: 2, md: 2.5 },
-                  borderRadius: 3,
-                  backgroundColor: 'background.paper',
-                }}
-              >
+              <Paper variant="outlined" sx={{ mb: 2, p: { xs: 1.25, sm: 2 }, borderRadius: 2.5, backgroundColor: 'background.paper' }}>
                 <Box
                   sx={{
                     display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
                     justifyContent: 'space-between',
-                    alignItems: 'center',
-                    mb: 2,
+                    alignItems: { xs: 'stretch', sm: 'center' },
+                    gap: 1,
+                    mb: 1.5,
                   }}
                 >
-                  <Box>
-                    <Typography variant="h6" fontWeight={900}>Produits</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Ajoutez chaque produit, puis indiquez un paiement si vous en enregistrez un maintenant.
-                    </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={800}>Produits</Typography>
+                      <Typography variant="caption" color="text.secondary">Ajoutez les produits et leurs quantités.</Typography>
+                    </Box>
                   </Box>
                   {!isEditing && (
                     <Button
                       variant="outlined"
                       size="small"
+                      fullWidth={false}
+                      sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
                       startIcon={<AddIcon />}
                       onClick={handleAddLine}
                       disabled={loading}
@@ -926,7 +920,8 @@ function TransactionForm({
                 )}
 
                 {/* Produits de la transaction */}
-                      {watchedLignes?.map((ligne, index) => {
+                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                  {watchedLignes?.map((ligne, index) => {
                         const ligneTotal =
                           (parseFloat(ligne.quantite) || 0) *
                           (parseFloat(ligne.prix_unitaire) || 0);
@@ -937,21 +932,24 @@ function TransactionForm({
                     <Paper
                       key={index}
                       variant="outlined"
-                      sx={{ mb: 1.5, p: { xs: 1.5, sm: 2 }, borderRadius: 2.5 }}
+                      sx={{ p: { xs: 1.25, sm: 1.75 }, borderRadius: 2.5, bgcolor: 'background.paper' }}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                        <Typography variant="subtitle2" color="text.secondary" fontWeight={800}>
-                          Produit {index + 1}
-                        </Typography>
-                        {!isEditing && watchedLignes.length > 1 && (
-                          <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, gap: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={800}>Produit {index + 1}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
+                            <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total de la ligne : {ligneTotal.toFixed(2)} MAD</Typography>
+                          </Box>
+                          {!isEditing && watchedLignes.length > 1 && (
+                            <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Box>
                       </Box>
-                        <Grid container spacing={2}>
-                          {/* Produit */}
-                          <Grid item xs={12} md={4}>
+                      <Grid container spacing={1.25}>
+                        {/* Produit */}
+                        <Grid item xs={12} md={shouldShowBatimentSource ? 8 : 12}>
                               <Controller
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
@@ -960,6 +958,7 @@ function TransactionForm({
                                   <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
+                                      size="small"
                                       value={field.value || ''}
                                     label={watchedTypeEntite === 'client' ? 'Oeufs vendus *' : 'Produit acheté *'}
                                       disabled={loading}
@@ -1004,6 +1003,7 @@ function TransactionForm({
                                     select
                                     fullWidth
                                     label="Batiment source pour le stock"
+                                    size="small"
                                     value={field.value || ''}
                                     error={!!error}
                                     helperText={error?.message || "Ce choix permet de retirer les oeufs vendus du bon batiment."}
@@ -1024,7 +1024,7 @@ function TransactionForm({
                           )}
 
                           {/* Quantité */}
-                          <Grid item xs={12} sm={3}>
+                          <Grid item xs={12} sm={6} md={4}>
                               <Controller
                                 name={`lignes.${index}.quantite`}
                                 control={control}
@@ -1038,6 +1038,7 @@ function TransactionForm({
                                     value={field.value ?? ''}
                                     error={!!error}
                                     helperText={error?.message || (shouldShowBatimentSource ? "Pour garder le stock juste, entrez le nombre d'oeufs." : '')}
+                                    size="small"
                                     disabled={loading}
                                     onChange={(e) => {
                                       const value = e.target.value;
@@ -1055,7 +1056,7 @@ function TransactionForm({
                           </Grid>
 
                           {/* Prix unitaire */}
-                          <Grid item xs={12} sm={3}>
+                          <Grid item xs={12} sm={6} md={4}>
                               <Controller
                                 name={`lignes.${index}.prix_unitaire`}
                                 control={control}
@@ -1069,6 +1070,7 @@ function TransactionForm({
                                     value={field.value ?? ''}
                                     error={!!error}
                                     helperText={error?.message || ''}
+                                    size="small"
                                     disabled={loading}
                                     onChange={(e) => {
                                       const value = e.target.value;
@@ -1083,18 +1085,6 @@ function TransactionForm({
                                   />
                                 )}
                               />
-                          </Grid>
-
-                          {/* Total de cette ligne */}
-                          <Grid item xs={12} sm={3}>
-                            <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                              <Typography variant="body2" color="text.secondary">
-                                Total de cette ligne
-                              </Typography>
-                              <Typography variant="h6" color="primary" fontWeight="bold">
-                                {ligneTotal.toFixed(2)} MAD
-                              </Typography>
-                            </Box>
                           </Grid>
 
                           <Grid item xs={12}>
@@ -1150,7 +1140,7 @@ function TransactionForm({
 
                           {/* Champs de paiement conditionnels */}
                             <Collapse in={ligne.ajouter_paiement}>
-                              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                              <Box sx={{ mt: 1, p: { xs: 1, sm: 1.5 }, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                   <Typography variant="subtitle2" color="text.primary">
                                     Paiement pour ce produit
@@ -1191,7 +1181,7 @@ function TransactionForm({
                                     </Box>
                                     <Grid container spacing={2}>
                                       {/* Date du paiement */}
-                                      <Grid item xs={12} sm={4}>
+                                      <Grid item xs={12} sm={6} md={4}>
                                         <Controller
                                           name={`lignes.${index}.paiements.${pIndex}.date`}
                                           control={control}
@@ -1212,7 +1202,7 @@ function TransactionForm({
                                       </Grid>
 
                                       {/* Montant */}
-                                      <Grid item xs={12} sm={4}>
+                                      <Grid item xs={12} sm={6} md={4}>
                                         <Controller
                                           name={`lignes.${index}.paiements.${pIndex}.montant`}
                                           control={control}
@@ -1234,7 +1224,7 @@ function TransactionForm({
                                       </Grid>
 
                                       {/* Type de paiement */}
-                                      <Grid item xs={12} sm={4}>
+                                      <Grid item xs={12} sm={6} md={4}>
                                         <Controller
                                           name={`lignes.${index}.paiements.${pIndex}.type`}
                                           control={control}
@@ -1326,9 +1316,8 @@ function TransactionForm({
                           </Grid>
                     </Paper>
                         );
-                      })}
-
-
+                  })}
+                </Box>
               </Paper>
             </Box>
           )}
@@ -1360,11 +1349,11 @@ function TransactionForm({
               <Typography variant="subtitle1" fontWeight={800}>{montantTotal.toFixed(2)} MAD</Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">Paiement enregistré</Typography>
+              <Typography variant="caption" color="text.secondary">Déjà payé</Typography>
               <Typography variant="subtitle1" fontWeight={700}>{montantPaye.toFixed(2)} MAD</Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">Reste à régler</Typography>
+              <Typography variant="caption" color="text.secondary">Reste à payer</Typography>
               <Typography variant="subtitle1" fontWeight={800} color="primary.main">{montantRestant.toFixed(2)} MAD</Typography>
             </Box>
           </Box>
