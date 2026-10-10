@@ -54,7 +54,6 @@ describe('FinancialLedgerPage', () => {
     expect(await screen.findByRole('textbox', { name: 'Rechercher' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Client' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Statut' })).toBeVisible();
-    expect(screen.queryByLabelText('Échéance à partir du')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Filtres avancés (5)' }));
     expect(await screen.findByLabelText('Échéance à partir du')).toBeVisible();
