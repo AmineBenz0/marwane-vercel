@@ -25,8 +25,8 @@ import {
   ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { formatMontant } from '../../utils/formatNumber';
+import { format } from 'date-fns';
 import PropTypes from 'prop-types';
-import { getDefaultPaymentDate } from '../../utils/paymentDates';
 
 const TYPES_PAIEMENT = [
   { value: 'cash', label: '💵 Espèces' },
@@ -60,13 +60,13 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
   useEffect(() => {
     if (fields.length === 0) {
       append({
-        date_paiement: getDefaultPaymentDate(transaction?.date_transaction),
+        date_paiement: format(new Date(), 'yyyy-MM-dd'),
         montant: montantRestant > 0 ? montantRestant : 0,
         type_paiement: 'cash',
         statut_cheque: 'a_encaisser'
       });
     }
-  }, [fields.length, append, montantRestant, transaction?.date_transaction]);
+  }, [fields.length, append, montantRestant]);
 
   // Gérer le changement de LC
   const handleLcChange = (index, lcId) => {
@@ -283,7 +283,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
             variant="outlined" 
             size="small"
             onClick={() => append({
-              date_paiement: getDefaultPaymentDate(transaction?.date_transaction),
+              date_paiement: format(new Date(), 'yyyy-MM-dd'),
               montant: difference > 0 ? difference : 0,
               type_paiement: 'cash',
               statut_cheque: 'a_encaisser'
