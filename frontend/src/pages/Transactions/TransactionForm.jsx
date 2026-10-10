@@ -62,6 +62,7 @@ import {
 } from '@mui/icons-material';
 import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
+import { getDefaultPaymentDate } from '../../utils/paymentDates';
 import { transactionValidationSchema } from './transactionValidation';
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -83,7 +84,7 @@ const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
   quantite: undefined,
   prix_unitaire: undefined,
   ajouter_paiement: false,
-  paiements: [createPaymentDefaults(date)],
+  paiements: [createPaymentDefaults(getDefaultPaymentDate(date))],
 });
 
 /**
@@ -317,7 +318,11 @@ function TransactionForm({
                 id_lc: p.id_lc || '',
                 notes: p.notes || '',
                 id_paiement: p.id_paiement,
-              })) : [createPaymentDefaults()],
+              })) : [createPaymentDefaults(getDefaultPaymentDate(
+                initialValues.date_transaction
+                  ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
+                  : today()
+              ))],
             }],
           });
         } else {
@@ -752,6 +757,19 @@ function TransactionForm({
                 render={({ field, fieldState: { error } }) => (
                   <DateField
                     {...field}
+                    onChange={(event) => {
+                      const previousDate = field.value;
+                      const nextDate = event.target.value;
+                      field.onChange(event);
+                      (watch('lignes') || []).forEach((line, lineIndex) => {
+                        (line.paiements || []).forEach((payment, paymentIndex) => {
+                          const followsEntryDate = !payment.date || payment.date === getDefaultPaymentDate(previousDate || today());
+                          if (followsEntryDate && !payment.id_paiement) {
+                            setValue(`lignes.${lineIndex}.paiements.${paymentIndex}.date`, getDefaultPaymentDate(nextDate || today()));
+                          }
+                        });
+                      });
+                    }}
                     fullWidth
                     label="Date de transaction"
 
@@ -1163,12 +1181,12 @@ function TransactionForm({
                                             const existingPaiements = watch(`lignes.${index}.paiements`);
                                             if (!existingPaiements || existingPaiements.length === 0) {
                                               setValue(`lignes.${index}.paiements`, [createPaymentDefaults(
-                                                watch('date_transaction') || today()
+                                                getDefaultPaymentDate(watch('date_transaction') || today())
                                               )]);
                                               setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
                                             } else {
                                               setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
-                                              setValue(`lignes.${index}.paiements.0.date`, watch('date_transaction'));
+                                              setValue(`lignes.${index}.paiements.0.date`, getDefaultPaymentDate(watch('date_transaction') || today()));
                                             }
                                           }
                                         }}
@@ -1213,7 +1231,7 @@ function TransactionForm({
                                     onClick={() => {
                                       const currentPaiements = watch(`lignes.${index}.paiements`) || [];
                                       setValue(`lignes.${index}.paiements`, [...currentPaiements, {
-                                        date: watch('date_transaction') || new Date().toISOString().split('T')[0],
+                                        date: getDefaultPaymentDate(watch('date_transaction') || today()),
                                         montant: '',
                                         type: 'cash',
                                         numero_cheque: '',
