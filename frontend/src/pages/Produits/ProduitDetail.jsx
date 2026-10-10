@@ -28,10 +28,9 @@ import {
   Edit as EditIcon,
   History as HistoryIcon,
   Inventory as InventoryIcon,
-  Restore as RestoreIcon,
   ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
-import { del, get, patch, put } from '../../services/api';
+import { del, get, put } from '../../services/api';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useNotification from '../../hooks/useNotification';
 import ProduitForm from './ProduitForm';
@@ -201,16 +200,6 @@ function ProduitDetail() {
       notification.error(err?.message || 'Erreur lors de la suppression du produit');
     } finally {
       setDeleteLoading(false);
-    }
-  };
-
-  const handleReactivate = async () => {
-    try {
-      await patch(`/produits/${id}/reactivate`, {});
-      notification.success('Produit réactivé');
-      await loadProduit();
-    } catch (err) {
-      notification.error(err?.message || 'Erreur lors de la réactivation');
     }
   };
 
