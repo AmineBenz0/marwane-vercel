@@ -62,7 +62,7 @@ import {
 } from '@mui/icons-material';
 import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
-import { getDefaultPaymentDate } from '../../utils/paymentDates';
+import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -84,7 +84,7 @@ const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
   quantite: undefined,
   prix_unitaire: undefined,
   ajouter_paiement: false,
-  paiements: [createPaymentDefaults(getDefaultPaymentDate(date))],
+  paiements: [createPaymentDefaults(date)],
 });
 
 /**
@@ -216,7 +216,7 @@ function TransactionForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
       date_transaction: today(),
-      date_echeance: '',
+      date_echeance: getDefaultDueDate(today()),
       type_entite: 'client',
       id_client: '',
       id_fournisseur: '',
@@ -297,7 +297,9 @@ function TransactionForm({
               : today(),
             date_echeance: initialValues.date_echeance
               ? new Date(initialValues.date_echeance).toISOString().split('T')[0]
-              : '',
+              : getDefaultDueDate(initialValues.date_transaction
+                ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
+                : today()),
             type_entite: typeEntite,
             id_client: initialValues.id_client || '',
             id_fournisseur: initialValues.id_fournisseur || '',
@@ -318,11 +320,7 @@ function TransactionForm({
                 id_lc: p.id_lc || '',
                 notes: p.notes || '',
                 id_paiement: p.id_paiement,
-              })) : [createPaymentDefaults(getDefaultPaymentDate(
-                initialValues.date_transaction
-                  ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
-                  : today()
-              ))],
+              })) : [createPaymentDefaults()],
             }],
           });
         } else {
@@ -332,7 +330,7 @@ function TransactionForm({
           
           reset({
             date_transaction: today(),
-            date_echeance: '',
+            date_echeance: getDefaultDueDate(today()),
             type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : 'client',
             id_client: hasPrefillClient ? prefillClientId : '',
             id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : '',
@@ -761,14 +759,10 @@ function TransactionForm({
                       const previousDate = field.value;
                       const nextDate = event.target.value;
                       field.onChange(event);
-                      (watch('lignes') || []).forEach((line, lineIndex) => {
-                        (line.paiements || []).forEach((payment, paymentIndex) => {
-                          const followsEntryDate = !payment.date || payment.date === getDefaultPaymentDate(previousDate || today());
-                          if (followsEntryDate && !payment.id_paiement) {
-                            setValue(`lignes.${lineIndex}.paiements.${paymentIndex}.date`, getDefaultPaymentDate(nextDate || today()));
-                          }
-                        });
-                      });
+                      const dueDate = watch('date_echeance');
+                      if (!dueDate || dueDate === getDefaultDueDate(previousDate || today())) {
+                        setValue('date_echeance', getDefaultDueDate(nextDate || today()));
+                      }
                     }}
                     fullWidth
                     label="Date de transaction"
@@ -1181,12 +1175,12 @@ function TransactionForm({
                                             const existingPaiements = watch(`lignes.${index}.paiements`);
                                             if (!existingPaiements || existingPaiements.length === 0) {
                                               setValue(`lignes.${index}.paiements`, [createPaymentDefaults(
-                                                getDefaultPaymentDate(watch('date_transaction') || today())
+                                                watch('date_transaction') || today()
                                               )]);
                                               setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
                                             } else {
                                               setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
-                                              setValue(`lignes.${index}.paiements.0.date`, getDefaultPaymentDate(watch('date_transaction') || today()));
+                                              setValue(`lignes.${index}.paiements.0.date`, watch('date_transaction'));
                                             }
                                           }
                                         }}
@@ -1231,7 +1225,7 @@ function TransactionForm({
                                     onClick={() => {
                                       const currentPaiements = watch(`lignes.${index}.paiements`) || [];
                                       setValue(`lignes.${index}.paiements`, [...currentPaiements, {
-                                        date: getDefaultPaymentDate(watch('date_transaction') || today()),
+                                        date: watch('date_transaction') || new Date().toISOString().split('T')[0],
                                         montant: '',
                                         type: 'cash',
                                         numero_cheque: '',
