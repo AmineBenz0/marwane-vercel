@@ -949,7 +949,7 @@ function TransactionForm({
                       </Box>
                       <Grid container spacing={1.25}>
                         {/* Produit */}
-                        <Grid item xs={12} md={shouldShowBatimentSource ? 8 : 12}>
+                        <Grid item xs={12} md={4}>
                               <Controller
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
@@ -992,33 +992,7 @@ function TransactionForm({
                               />
                           </Grid>
 
-                          {shouldShowBatimentSource && (
-                            <Grid item xs={12} md={4}>
-                              <Controller
-                                name={`lignes.${index}.id_batiment`}
-                                control={control}
-                                render={({ field, fieldState: { error } }) => (
-                                  <TextField
-                                    {...field}
-                                    select
-                                    fullWidth
-                                    label="Batiment source pour le stock"
-                                    size="small"
-                                    value={field.value || ''}
-                                    error={!!error}
-                                    helperText={error?.message || "Ce choix permet de retirer les oeufs vendus du bon batiment."}
-                                    disabled={loading}
-                                  >
-                                    <MenuItem value="">
-                                      <em>Choisir le batiment</em>
-                                    </MenuItem>
-                                    {batiments.map((batiment) => (
-                                      <MenuItem key={batiment.id_batiment} value={batiment.id_batiment}>
-                                        {batiment.nom}
-                                      </MenuItem>
-                                    ))}
-                                  </TextField>
-                                )}
+
                               />
                             </Grid>
                           )}
@@ -1086,6 +1060,34 @@ function TransactionForm({
                                 )}
                               />
                           </Grid>
+
+                          {shouldShowBatimentSource && (
+                            <Grid item xs={12}>
+                              <Controller
+                                name={`lignes.${index}.id_batiment`}
+                                control={control}
+                                render={({ field, fieldState: { error } }) => (
+                                  <TextField
+                                    {...field}
+                                    select
+                                    fullWidth
+                                    label="Batiment source pour le stock"
+                                    size="small"
+                                    value={field.value || ''}
+                                    error={!!error}
+                                    helperText={error?.message || "Ce choix permet de retirer les oeufs vendus du bon batiment."}
+                                    disabled={loading}
+                                  >
+                                    <MenuItem value="">
+                                      <em>Choisir le batiment</em>
+                                    </MenuItem>
+                                    {batiments.map((batiment) => (
+                                      <MenuItem key={batiment.id_batiment} value={batiment.id_batiment}>
+                                        {batiment.nom}
+                                      </MenuItem>
+                                    ))}
+                                  </TextField>
+                                )}
 
                           <Grid item xs={12}>
                             <Divider />
