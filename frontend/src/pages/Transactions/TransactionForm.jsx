@@ -48,17 +48,11 @@ import {
   Divider,
   Collapse,
   Grid,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Chip,
 } from '@mui/material';
 import { 
   Close as CloseIcon, 
   Add as AddIcon, 
   Delete as DeleteIcon,
-  ExpandMore as ExpandMoreIcon,
-  Payment as PaymentIcon,
 } from '@mui/icons-material';
 import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
@@ -195,9 +189,6 @@ function TransactionForm({
   const [loadingData, setLoadingData] = useState(false);
   
   // État pour gérer les paiements par ligne (tableau de booleans)
-  // État pour gérer l'expansion des accordions (première ligne expanded par défaut)
-  const [expandedAccordion, setExpandedAccordion] = useState(0);
-
   // État pour stocker les paiements existants (en mode édition)
   const [, setPaiementsExistants] = useState([]);
 
@@ -485,8 +476,6 @@ function TransactionForm({
 
   const handleInvalidSubmit = (formErrors) => {
     const firstErrorPath = findFirstErrorPath(formErrors);
-    const lineMatch = firstErrorPath?.match(/^lignes\.(\d+)/);
-    if (lineMatch) setExpandedAccordion(Number(lineMatch[1]));
     setError('root', {
       type: 'validation',
       message: 'Certains champs sont invalides. Vérifiez les champs signalés en rouge.',
@@ -516,8 +505,6 @@ function TransactionForm({
     )], {
       shouldDirty: true,
     });
-    // Expand le nouvel accordion
-    setExpandedAccordion(currentLignes.length);
   };
 
   /**
@@ -529,12 +516,6 @@ function TransactionForm({
       const newLignes = currentLignes.filter((_, i) => i !== index);
       setValue('lignes', newLignes, { shouldDirty: true });
       
-      // Ajuster l'accordion expanded si nécessaire
-      if (expandedAccordion === index) {
-        setExpandedAccordion(0); // Expand la première ligne
-      } else if (expandedAccordion > index) {
-        setExpandedAccordion(expandedAccordion - 1); // Décaler l'index
-      }
     }
   };
 
@@ -570,6 +551,13 @@ function TransactionForm({
   };
 
   const montantTotal = calculateTotal();
+  const montantPaye = (watchedLignes || []).reduce(
+    (sum, ligne) => ligne.ajouter_paiement
+      ? sum + (ligne.paiements || []).reduce((ligneSum, paiement) => ligneSum + (parseFloat(paiement.montant) || 0), 0)
+      : sum,
+    0
+  );
+  const montantRestant = Math.max(0, montantTotal - montantPaye);
   const isEditing = initialValues && initialValues.id_transaction;
 
   return (
@@ -650,22 +638,6 @@ function TransactionForm({
             </Box>
           ) : (
             <Box sx={{ mt: 1 }}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: { xs: 2, md: 2.5 },
-                  mb: 2.5,
-                  borderRadius: 3,
-                  backgroundColor: 'background.paper',
-                }}
-              >
-                <Typography sx={{ fontWeight: 900, mb: 0.5 }}>
-                  1. Choisir le type
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Vente ou achat: le choix détermine automatiquement les produits proposés.
-                </Typography>
-              </Paper>
               <Controller
                 name="type_entite"
                 control={control}
@@ -714,8 +686,8 @@ function TransactionForm({
                             }
                           }}
                           sx={{
-                            p: { xs: 2, md: 2.5 },
-                            minHeight: 112,
+                            p: { xs: 1.25, sm: 1.5 },
+                            minHeight: 68,
                             borderRadius: 3,
                             border: '2px solid',
                             borderColor: isSelected ? option.activeColor : 'divider',
@@ -732,10 +704,10 @@ function TransactionForm({
                             },
                           }}
                         >
-                          <Typography sx={{ fontSize: { xs: 20, md: 23 }, fontWeight: 900 }}>
+                          <Typography sx={{ fontSize: 16, fontWeight: 800 }}>
                             {option.title}
                           </Typography>
-                          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">
                             {option.subtitle}
                           </Typography>
                         </Box>
@@ -748,6 +720,10 @@ function TransactionForm({
                 <FormHelperText error>{errors.type_entite.message}</FormHelperText>
               )}
 
+              <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 2.5, borderRadius: 2.5 }}>
+                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>Informations de la transaction</Typography>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={12} sm={6}>
               {/* Date de transaction */}
               <Controller
                 name="date_transaction"
@@ -779,7 +755,8 @@ function TransactionForm({
                   />
                 )}
               />
-
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
               {/* Date d'échéance (optionnel) */}
               <Controller
                 name="date_echeance"
@@ -801,7 +778,8 @@ function TransactionForm({
                   />
                 )}
               />
-
+                  </Grid>
+                  <Grid item xs={12}>
               {/* Sélection Client OU Fournisseur */}
               <FormControl component="fieldset" margin="normal" fullWidth error={!!errors.type_entite} sx={{ display: 'none' }}>
                 <FormLabel component="legend">Type d'entité</FormLabel>
@@ -899,7 +877,11 @@ function TransactionForm({
                 />
               )}
 
-              {/* Lignes de transaction avec Accordions */}
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* Produits et paiements */}
               <Paper
                 variant="outlined"
                 sx={{
@@ -919,9 +901,9 @@ function TransactionForm({
                   }}
                 >
                   <Box>
-                    <Typography variant="h6" fontWeight={900}>2. Produits et paiements</Typography>
+                    <Typography variant="h6" fontWeight={900}>Produits</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Ajoutez les produits, puis cochez le paiement uniquement si l'argent est déjà encaissé ou payé.
+                      Ajoutez chaque produit, puis indiquez un paiement si vous en enregistrez un maintenant.
                     </Typography>
                   </Box>
                   {!isEditing && (
@@ -932,7 +914,7 @@ function TransactionForm({
                       onClick={handleAddLine}
                       disabled={loading}
                     >
-                      Ajouter une ligne
+                      Ajouter un produit
                     </Button>
                   )}
                 </Box>
@@ -943,58 +925,33 @@ function TransactionForm({
                   </Alert>
                 )}
 
-                {/* Accordions pour chaque ligne */}
+                {/* Produits de la transaction */}
                       {watchedLignes?.map((ligne, index) => {
                         const ligneTotal =
                           (parseFloat(ligne.quantite) || 0) *
                           (parseFloat(ligne.prix_unitaire) || 0);
                   const selectedProduit = produits.find(p => Number(p.id_produit) === Number(ligne.id_produit));
-                  const produitNom = selectedProduit?.nom_produit || 'Produit non sélectionné';
                   const shouldShowBatimentSource = watchedTypeEntite === 'client' && isEggProduct(selectedProduit);
                   
                         return (
-                    <Accordion 
+                    <Paper
                       key={index}
-                      expanded={expandedAccordion === index}
-                      onChange={() => setExpandedAccordion(expandedAccordion === index ? -1 : index)}
-                      sx={{
-                        mb: 1.5,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 2.5,
-                        overflow: 'hidden',
-                        '&:before': { display: 'none' },
-                      }}
+                      variant="outlined"
+                      sx={{ mb: 1.5, p: { xs: 1.5, sm: 2 }, borderRadius: 2.5 }}
                     >
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', pr: 2 }}>
-                          <Chip 
-                            label={`Ligne ${index + 1}`} 
-                            size="small" 
-                            color="primary" 
-                            variant="outlined"
-                          />
-                          <Typography variant="body1" sx={{ flex: 1 }}>
-                            {produitNom}
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold" color="primary">
-                            {ligneTotal.toFixed(2)} MAD
-                          </Typography>
-                          {ligne.ajouter_paiement && (
-                            <Chip 
-                              icon={<PaymentIcon />}
-                              label="Avec paiement" 
-                              size="small" 
-                              color="success"
-                            />
-                          )}
-                        </Box>
-                      </AccordionSummary>
-                      
-                      <AccordionDetails>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={800}>
+                          Produit {index + 1}
+                        </Typography>
+                        {!isEditing && watchedLignes.length > 1 && (
+                          <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                      </Box>
                         <Grid container spacing={2}>
                           {/* Produit */}
-                          <Grid item xs={12}>
+                          <Grid item xs={12} md={4}>
                               <Controller
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
@@ -1037,7 +994,7 @@ function TransactionForm({
                           </Grid>
 
                           {shouldShowBatimentSource && (
-                            <Grid item xs={12}>
+                            <Grid item xs={12} md={4}>
                               <Controller
                                 name={`lignes.${index}.id_batiment`}
                                 control={control}
@@ -1067,7 +1024,7 @@ function TransactionForm({
                           )}
 
                           {/* Quantité */}
-                          <Grid item xs={12} sm={6}>
+                          <Grid item xs={12} sm={3}>
                               <Controller
                                 name={`lignes.${index}.quantite`}
                                 control={control}
@@ -1098,7 +1055,7 @@ function TransactionForm({
                           </Grid>
 
                           {/* Prix unitaire */}
-                          <Grid item xs={12} sm={6}>
+                          <Grid item xs={12} sm={3}>
                               <Controller
                                 name={`lignes.${index}.prix_unitaire`}
                                 control={control}
@@ -1129,7 +1086,7 @@ function TransactionForm({
                           </Grid>
 
                           {/* Total de cette ligne */}
-                          <Grid item xs={12}>
+                          <Grid item xs={12} sm={3}>
                             <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                               <Typography variant="body2" color="text.secondary">
                                 Total de cette ligne
@@ -1144,80 +1101,59 @@ function TransactionForm({
                             <Divider />
                           </Grid>
 
-                          {/* Section Paiement */}
+                          {/* Paiement */}
                           <Grid item xs={12}>
                             <Controller
                               name={`lignes.${index}.ajouter_paiement`}
                               control={control}
                               render={({ field }) => (
-                                <>
-                                <Box
-                                  sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                                    gap: 1.5,
+                                <RadioGroup
+                                  row
+                                  value={field.value ? 'now' : 'later'}
+                                  onChange={(event) => {
+                                    const shouldPayNow = event.target.value === 'now';
+                                    field.onChange(shouldPayNow);
+                                    if (shouldPayNow && ligneTotal > 0) {
+                                      const existingPaiements = watch(`lignes.${index}.paiements`);
+                                      if (!existingPaiements || existingPaiements.length === 0) {
+                                        setValue(`lignes.${index}.paiements`, [
+                                          createPaymentDefaults(watch('date_transaction') || today()),
+                                        ]);
+                                        setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
+                                      } else {
+                                        setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
+                                        setValue(
+                                          `lignes.${index}.paiements.0.date`,
+                                          watch('date_transaction') || today()
+                                        );
+                                      }
+                                    }
                                   }}
+                                  aria-label="Enregistrer un paiement maintenant"
                                 >
-                                  {[
-                                    { value: true, title: 'Payé maintenant', subtitle: 'Créer le paiement' },
-                                    { value: false, title: 'À payer plus tard', subtitle: 'Sans paiement' },
-                                  ].map((option) => {
-                                    const isSelected = Boolean(field.value) === option.value;
-                                    return (
-                                      <Box
-                                        key={option.title}
-                                        role="button"
-                                        tabIndex={loading ? -1 : 0}
-                                        onClick={() => {
-                                          if (loading) return;
-                                          field.onChange(option.value);
-                                          if (option.value && ligneTotal > 0) {
-                                            const existingPaiements = watch(`lignes.${index}.paiements`);
-                                            if (!existingPaiements || existingPaiements.length === 0) {
-                                              setValue(`lignes.${index}.paiements`, [createPaymentDefaults(
-                                                watch('date_transaction') || today()
-                                              )]);
-                                              setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
-                                            } else {
-                                              setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
-                                              setValue(`lignes.${index}.paiements.0.date`, watch('date_transaction'));
-                                            }
-                                          }
-                                        }}
-                                        onKeyDown={(event) => {
-                                          if ((event.key === 'Enter' || event.key === ' ') && !loading) {
-                                            event.preventDefault();
-                                            event.currentTarget.click();
-                                          }
-                                        }}
-                                        sx={{
-                                          p: 2,
-                                          borderRadius: 2.5,
-                                          border: '2px solid',
-                                          borderColor: isSelected ? 'primary.main' : 'divider',
-                                          backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.05)' : 'background.paper',
-                                          cursor: loading ? 'not-allowed' : 'pointer',
-                                          opacity: loading ? 0.6 : 1,
-                                        }}
-                                      >
-                                        <Typography fontWeight={900}>{option.title}</Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                          {option.subtitle}
-                                        </Typography>
-                                      </Box>
-                                    );
-                                  })}
-                                </Box>
-                                </>
+                                  <FormControlLabel
+                                    value="now"
+                                    control={<Radio size="small" />}
+                                    label="Enregistrer un paiement maintenant"
+                                    disabled={loading}
+                                  />
+                                  <FormControlLabel
+                                    value="later"
+                                    control={<Radio size="small" />}
+                                    label="À régler plus tard"
+                                    disabled={loading}
+                                  />
+                                </RadioGroup>
                               )}
                             />
+                          </Grid>
 
-                            {/* Champs de paiement conditionnels */}
+                          {/* Champs de paiement conditionnels */}
                             <Collapse in={ligne.ajouter_paiement}>
                               <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                   <Typography variant="subtitle2" color="text.primary">
-                                    📋 Liste des paiements
+                                    Paiement pour ce produit
                                   </Typography>
                                   <Button 
                                     size="small" 
@@ -1255,7 +1191,7 @@ function TransactionForm({
                                     </Box>
                                     <Grid container spacing={2}>
                                       {/* Date du paiement */}
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid item xs={12} sm={4}>
                                         <Controller
                                           name={`lignes.${index}.paiements.${pIndex}.date`}
                                           control={control}
@@ -1263,7 +1199,7 @@ function TransactionForm({
                                             <DateField
                                               {...field}
                                               fullWidth
-                                              label="Date"
+                                              label="Date du paiement"
 
                                               error={!!error}
                                               helperText={error?.message}
@@ -1276,7 +1212,7 @@ function TransactionForm({
                                       </Grid>
 
                                       {/* Montant */}
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid item xs={12} sm={4}>
                                         <Controller
                                           name={`lignes.${index}.paiements.${pIndex}.montant`}
                                           control={control}
@@ -1298,7 +1234,7 @@ function TransactionForm({
                                       </Grid>
 
                                       {/* Type de paiement */}
-                                      <Grid item xs={12}>
+                                      <Grid item xs={12} sm={4}>
                                         <Controller
                                           name={`lignes.${index}.paiements.${pIndex}.type`}
                                           control={control}
@@ -1307,7 +1243,7 @@ function TransactionForm({
                                               {...field}
                                               select
                                               fullWidth
-                                              label="Mode"
+                                              label="Mode de paiement"
                                               error={!!error}
                                               helperText={error?.message}
                                               disabled={loading}
@@ -1381,7 +1317,7 @@ function TransactionForm({
                                 {ligne.ajouter_paiement && (
                                   <Box sx={{ mt: 1, p: 1, borderTop: '1px solid #ddd' }}>
                                     <Typography variant="caption">
-                                      Total payé pour cette ligne: <strong>{ligne.paiements.reduce((acc, p) => acc + (parseFloat(p.montant) || 0), 0).toFixed(2)} / {ligneTotal.toFixed(2)} MAD</strong>
+                                      Reste à régler : <strong>{Math.max(0, ligneTotal - ligne.paiements.reduce((acc, p) => acc + (parseFloat(p.montant) || 0), 0)).toFixed(2)} MAD</strong>
                                     </Typography>
                                   </Box>
                                 )}
@@ -1389,90 +1325,76 @@ function TransactionForm({
                             </Collapse>
                           </Grid>
 
-                          {/* Bouton supprimer la ligne */}
-                          {!isEditing && watchedLignes.length > 1 && (
-                            <Grid item xs={12}>
-                              <Button
-                                startIcon={<DeleteIcon />}
-                                onClick={() => handleRemoveLine(index)}
-                                disabled={loading}
-                                color="error"
-                                size="small"
-                                fullWidth
-                                variant="contained"
-                              >
-                                Supprimer cette ligne
-                              </Button>
-                            </Grid>
-                            )}
                         </Grid>
-                      </AccordionDetails>
-                    </Accordion>
+                    </Paper>
                         );
                       })}
 
-                {/* Montant total */}
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    mt: 3,
-                    p: 2,
-                    borderRadius: 3,
-                    backgroundColor: 'background.paper',
-                  }}
-                >
-                  <Typography sx={{ fontWeight: 900, mb: 1 }}>
-                    3. Résumé avant validation
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Vérifiez le total et les paiements avant d'enregistrer.
-                  </Typography>
-                <Box
-                  sx={{
-                    mt: 1.5,
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 1,
-                  }}
-                >
-                  <Typography variant="h6" sx={{ mr: 2 }}>
-                    Montant total :
-                  </Typography>
-                  <Typography variant="h6" color="primary" fontWeight="bold">
-                    {montantTotal.toFixed(2)} MAD
-                  </Typography>
-                </Box>
-                </Paper>
-                
-                {!isEditing && watchedLignes.length > 1 && (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    {watchedLignes.length} transactions indépendantes seront créées (une par ligne).
-                    Vous pouvez ajouter un paiement pour chacune dans son accordion.
-                  </Alert>
-                )}
+
               </Paper>
             </Box>
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={handleClose}
-            disabled={loading}
-            color="inherit"
+        <DialogActions
+          sx={{
+            px: { xs: 1.5, sm: 3 },
+            py: 1.5,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'center' },
+            justifyContent: 'space-between',
+            gap: 1.5,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: { xs: 1, sm: 3 },
+              width: { xs: '100%', sm: 'auto' },
+            }}
           >
-            Annuler
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading || !isDirty}
-            startIcon={loading ? <CircularProgress size={16} /> : null}
-          >
-            {loading ? 'Enregistrement...' : isEditing ? 'Modifier' : 'Créer'}
-          </Button>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Total</Typography>
+              <Typography variant="subtitle1" fontWeight={800}>{montantTotal.toFixed(2)} MAD</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Paiement enregistré</Typography>
+              <Typography variant="subtitle1" fontWeight={700}>{montantPaye.toFixed(2)} MAD</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Reste à régler</Typography>
+              <Typography variant="subtitle1" fontWeight={800} color="primary.main">{montantRestant.toFixed(2)} MAD</Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+            <Button
+              onClick={handleClose}
+              disabled={loading}
+              color="inherit"
+              sx={{ flex: { xs: 1, sm: 'initial' } }}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loading || !isDirty}
+              startIcon={loading ? <CircularProgress size={16} /> : null}
+              sx={{ flex: { xs: 1, sm: 'initial' } }}
+            >
+              {loading
+                ? 'Enregistrement...'
+                : isEditing
+                  ? 'Enregistrer les modifications'
+                  : watchedTypeEntite === 'client'
+                    ? 'Enregistrer la vente'
+                    : "Enregistrer l’achat"}
+            </Button>
+          </Box>
         </DialogActions>
     </Dialog>
   );
