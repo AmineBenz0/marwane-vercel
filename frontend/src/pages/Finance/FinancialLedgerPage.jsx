@@ -207,6 +207,7 @@ function FinancialLedgerPage({ direction }) {
       label: partyLabel,
       type: 'select',
       alwaysInline: true,
+      disabled: partiesLoading,
       options: parties.map((party) => ({
         value: isReceivable ? party.id_client : party.id_fournisseur,
         label: isReceivable ? party.nom_client : party.nom_fournisseur,
@@ -249,11 +250,12 @@ function FinancialLedgerPage({ direction }) {
       type: 'custom',
       defaultValue: false,
       formatChipValue: () => 'Oui',
-      renderComponent: ({ value, onChange }) => (
+      renderComponent: ({ value, onChange, filter }) => (
         <Button
           fullWidth
           variant={value ? 'contained' : 'outlined'}
           color="error"
+          disabled={filter.disabled}
           onClick={() => onChange(!value)}
           sx={{ minHeight: 40, whiteSpace: 'nowrap' }}
         >
@@ -261,7 +263,7 @@ function FinancialLedgerPage({ direction }) {
         </Button>
       ),
     },
-  ], [isReceivable, parties, partyLabel]);
+  ], [isReceivable, parties, partiesLoading, partyLabel]);
 
   useEffect(() => {
     let cancelled = false;
