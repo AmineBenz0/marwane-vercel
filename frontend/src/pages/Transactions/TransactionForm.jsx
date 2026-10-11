@@ -948,6 +948,38 @@ function TransactionForm({
                         </Box>
                       </Box>
                       <Grid container spacing={1.25}>
+                          {/* Quantité */}
+                          <Grid item xs={12} sm={6} md={4}>
+                              <Controller
+                                name={`lignes.${index}.quantite`}
+                                control={control}
+                                render={({ field, fieldState: { error } }) => (
+                                  <TextField
+                                    {...field}
+                                    fullWidth
+                                    label={shouldShowBatimentSource ? "Quantite vendue (oeufs) *" : "Quantite *"}
+                                    type="number"
+                                    inputProps={{ min: 1, step: 1 }}
+                                    value={field.value ?? ''}
+                                    error={!!error}
+                                    helperText={error?.message || (shouldShowBatimentSource ? "Pour garder le stock juste, entrez le nombre d'oeufs." : '')}
+                                    size="small"
+                                    disabled={loading}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      field.onChange(value === '' ? undefined : value);
+                                      // Mettre à jour le montant du paiement si paiement activé
+                                      if (ligne.ajouter_paiement) {
+                                        const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
+                                        setValue(`lignes.${index}.paiements.0.montant`, newTotal);
+                                      }
+                                    }}
+                                    onBlur={field.onBlur}
+                                  />
+                                )}
+                              />
+                          </Grid>
+
                         {/* Produit */}
                         <Grid item xs={12} md={4}>
                               <Controller
@@ -988,38 +1020,6 @@ function TransactionForm({
                                       </FormHelperText>
                                     )}
                                   </FormControl>
-                                )}
-                              />
-                          </Grid>
-
-                          {/* Quantité */}
-                          <Grid item xs={12} sm={6} md={4}>
-                              <Controller
-                                name={`lignes.${index}.quantite`}
-                                control={control}
-                                render={({ field, fieldState: { error } }) => (
-                                  <TextField
-                                    {...field}
-                                    fullWidth
-                                    label={shouldShowBatimentSource ? "Quantite vendue (oeufs) *" : "Quantite *"}
-                                    type="number"
-                                    inputProps={{ min: 1, step: 1 }}
-                                    value={field.value ?? ''}
-                                    error={!!error}
-                                    helperText={error?.message || (shouldShowBatimentSource ? "Pour garder le stock juste, entrez le nombre d'oeufs." : '')}
-                                    size="small"
-                                    disabled={loading}
-                                    onChange={(e) => {
-                                      const value = e.target.value;
-                                      field.onChange(value === '' ? undefined : value);
-                                      // Mettre à jour le montant du paiement si paiement activé
-                                      if (ligne.ajouter_paiement) {
-                                        const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
-                                        setValue(`lignes.${index}.paiements.0.montant`, newTotal);
-                                      }
-                                    }}
-                                    onBlur={field.onBlur}
-                                  />
                                 )}
                               />
                           </Grid>
