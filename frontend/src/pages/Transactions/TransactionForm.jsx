@@ -1098,7 +1098,11 @@ function TransactionForm({
                               control={control}
                               render={({ field }) => (
                                 <RadioGroup
-                                  row
+                                  sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                                    gap: 1,
+                                  }}
                                   value={field.value ? 'now' : 'later'}
                                   onChange={(event) => {
                                     const shouldPayNow = event.target.value === 'now';
@@ -1119,16 +1123,40 @@ function TransactionForm({
                                       }
                                     }
                                   }}
-                                  aria-label="Enregistrer un paiement maintenant"
+                                  aria-label="Choix du paiement"
                                 >
                                   <FormControlLabel
                                     value="now"
+                                    sx={{
+                                      m: 0,
+                                      px: 1,
+                                      py: 0.5,
+                                      minHeight: 48,
+                                      border: '1px solid',
+                                      borderRadius: 1.5,
+                                      borderColor: field.value ? 'primary.main' : 'divider',
+                                      bgcolor: field.value ? 'action.selected' : 'background.paper',
+                                      '& .MuiFormControlLabel-label': { fontWeight: field.value ? 700 : 500 },
+                                      '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+                                    }}
                                     control={<Radio size="small" />}
-                                    label="Enregistrer un paiement maintenant"
+                                    label="Payer maintenant"
                                     disabled={loading}
                                   />
                                   <FormControlLabel
                                     value="later"
+                                    sx={{
+                                      m: 0,
+                                      px: 1,
+                                      py: 0.5,
+                                      minHeight: 48,
+                                      border: '1px solid',
+                                      borderRadius: 1.5,
+                                      borderColor: !field.value ? 'primary.main' : 'divider',
+                                      bgcolor: !field.value ? 'action.selected' : 'background.paper',
+                                      '& .MuiFormControlLabel-label': { fontWeight: !field.value ? 700 : 500 },
+                                      '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+                                    }}
                                     control={<Radio size="small" />}
                                     label="À régler plus tard"
                                     disabled={loading}
@@ -1139,14 +1167,16 @@ function TransactionForm({
                           </Grid>
 
                           {/* Champs de paiement conditionnels */}
+                          <Grid item xs={12} sx={{ display: ligne.ajouter_paiement ? 'block' : 'none' }}>
                             <Collapse in={ligne.ajouter_paiement}>
-                              <Box sx={{ mt: 1, p: { xs: 1, sm: 1.5 }, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                  <Typography variant="subtitle2" color="text.primary">
-                                    Paiement pour ce produit
+                              <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                  <Typography variant="subtitle2" color="text.primary" fontWeight={700}>
+                                    Paiement
                                   </Typography>
                                   <Button 
-                                    size="small" 
+                                    size="small"
+                                    disabled={loading}
                                     startIcon={<AddIcon />} 
                                     onClick={() => {
                                       const currentPaiements = watch(`lignes.${index}.paiements`) || [];
@@ -1162,45 +1192,25 @@ function TransactionForm({
                                       }]);
                                     }}
                                   >
-                                    Ajouter
+                                    Ajouter un paiement
                                   </Button>
                                 </Box>
                                 
                                 {ligne.paiements?.map((paiement, pIndex) => (
                                   <Box key={pIndex} sx={{ mb: 2, pb: 2, borderBottom: pIndex < ligne.paiements.length - 1 ? '1px dashed #ccc' : 'none' }}>
+                                    {ligne.paiements.length > 1 && (
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                       <Typography variant="caption" fontWeight="bold">Paiement #{pIndex + 1}</Typography>
-                                      {ligne.paiements.length > 1 && (
-                                        <IconButton size="small" color="error" onClick={() => {
+                                      
+                                        <IconButton size="small" color="error" disabled={loading} aria-label={`Supprimer le paiement ${pIndex + 1}`} onClick={() => {
                                           const newPaiements = ligne.paiements.filter((_, i) => i !== pIndex);
                                           setValue(`lignes.${index}.paiements`, newPaiements);
                                         }}>
                                           <DeleteIcon fontSize="small" />
                                         </IconButton>
-                                      )}
                                     </Box>
+                                    )}
                                     <Grid container spacing={2}>
-                                      {/* Date du paiement */}
-                                      <Grid item xs={12} sm={6} md={4}>
-                                        <Controller
-                                          name={`lignes.${index}.paiements.${pIndex}.date`}
-                                          control={control}
-                                          render={({ field, fieldState: { error } }) => (
-                                            <DateField
-                                              {...field}
-                                              fullWidth
-                                              label="Date du paiement"
-
-                                              error={!!error}
-                                              helperText={error?.message}
-                                              disabled={loading}
-                                              InputLabelProps={{ shrink: true }}
-                                              size="small"
-                                            />
-                                          )}
-                                        />
-                                      </Grid>
-
                                       {/* Montant */}
                                       <Grid item xs={12} sm={6} md={4}>
                                         <Controller
@@ -1247,6 +1257,27 @@ function TransactionForm({
                                               <MenuItem value="lc">📜 Lettre de Crédit</MenuItem>
                                               <MenuItem value="autre">📄 Autre</MenuItem>
                                             </TextField>
+                                          )}
+                                        />
+                                      </Grid>
+
+                                      {/* Date du paiement */}
+                                      <Grid item xs={12} md={4}>
+                                        <Controller
+                                          name={`lignes.${index}.paiements.${pIndex}.date`}
+                                          control={control}
+                                          render={({ field, fieldState: { error } }) => (
+                                            <DateField
+                                              {...field}
+                                              fullWidth
+                                              label="Date du paiement"
+
+                                              error={!!error}
+                                              helperText={error?.message}
+                                              disabled={loading}
+                                              InputLabelProps={{ shrink: true }}
+                                              size="small"
+                                            />
                                           )}
                                         />
                                       </Grid>
@@ -1304,15 +1335,27 @@ function TransactionForm({
                                   </Box>
                                 ))}
                                 
-                                {ligne.ajouter_paiement && (
-                                  <Box sx={{ mt: 1, p: 1, borderTop: '1px solid #ddd' }}>
-                                    <Typography variant="caption">
-                                      Reste à régler : <strong>{Math.max(0, ligneTotal - ligne.paiements.reduce((acc, p) => acc + (parseFloat(p.montant) || 0), 0)).toFixed(2)} MAD</strong>
-                                    </Typography>
-                                  </Box>
-                                )}
+                                <Box sx={{
+                                  mt: 1,
+                                  pt: 1.5,
+                                  borderTop: '1px solid',
+                                  borderColor: 'divider',
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Total du produit : <Box component="span" fontWeight={600} color="text.primary">{formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
+                                  </Typography>
+                                  <Typography variant="body2" fontWeight={700}>
+                                    Reste à régler : <Box component="span" color="primary.main">{formatMontant(Math.max(0, ligneTotal - (ligne.paiements || []).reduce((acc, paiement) => acc + (parseFloat(paiement.montant) || 0), 0)), { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
+                                  </Typography>
+                                </Box>
                               </Box>
                             </Collapse>
+                          </Grid>
                           </Grid>
                     </Paper>
                         );
