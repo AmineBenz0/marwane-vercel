@@ -25,22 +25,22 @@ export const productionService = {
   updateDailyProduction: (data) => put('/productions/daily', data),
 
   /**
-   * Récupère la liste des productions avec filtres.
+   * R�cup�re la liste des productions avec filtres.
    */
   getProductions: (params) => get('/productions', { params }),
 
   /**
-   * Récupère le détail d'une production.
+   * R�cup�re le d�tail d'une production.
    */
   getProduction: (id) => get(`/productions/${id}`),
 
   /**
-   * Crée une nouvelle production.
+   * Cr�e une nouvelle production.
    */
   createProduction: (data) => post('/productions', data),
 
   /**
-   * Met à jour une production.
+   * Met � jour une production.
    */
   updateProduction: (id, data) => put(`/productions/${id}`, data),
 
@@ -50,7 +50,7 @@ export const productionService = {
   deleteProduction: (id) => del(`/productions/${id}`),
 
   /**
-   * Récupère les stats quotidiennes.
+   * R�cup�re les stats quotidiennes.
    */
   getDailyStats: (days = 30) => get('/productions/stats/daily', { params: { days } }),
 
@@ -82,6 +82,7 @@ export const productionService = {
 
 export const lotProductionService = {
   getLots: () => get('/lots-production'),
+  getEggEvolution: (idLot) => get(`/lots-production/${idLot}/egg-evolution`),
   createLot: (data) => post('/lots-production', data),
   updateLot: (idLot, data) => put(`/lots-production/${idLot}`, data),
   terminateLot: (idLot, data) => post(`/lots-production/${idLot}/terminer`, data),
@@ -99,16 +100,17 @@ export const cycleProductionService = {
 };
 
 /**
- * Service pour la gestion des bâtiments.
+ * Service pour la gestion des b�timents.
  */
 export const batimentService = {
   /**
-   * Récupère la liste des bâtiments.
+   * R�cup�re la liste des b�timents.
    */
   getBatiments: () => get('/batiments'),
 
   /**
-   * Crée un bâtiment.
+   * Cr�e un b�timent.
    */
   createBatiment: (data) => post('/batiments', data),
 };
+

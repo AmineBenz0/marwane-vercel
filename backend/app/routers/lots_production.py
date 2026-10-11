@@ -13,6 +13,7 @@ from app.models.user import Utilisateur
 from app.schemas.lot_production import LotProductionCreate
 from app.schemas.cycle_production import CycleProductionTerminate
 from app.utils.dependencies import get_current_active_user
+from app.utils.lot_egg_evolution import lot_egg_evolution
 from app.utils.production_cycles import (
     ACTIVE_CYCLE_STATUSES, calculate_cycle_end_date, cycle_to_dict,
     validate_cycle_mortality,
@@ -50,9 +51,9 @@ def _lock_buildings(db, ids, *, require_active=False):
         Batiment.id_batiment,
     ).populate_existing().with_for_update().all()
     if len(rows) != len(ids):
-        raise HTTPException(status_code=400, detail="Un bâtiment de la répartition est introuvable.")
+        raise HTTPException(status_code=400, detail="Un b�timent de la r�partition est introuvable.")
     if require_active and any(not row.est_actif for row in rows):
-        raise HTTPException(status_code=400, detail="La répartition nécessite des bâtiments actifs.")
+        raise HTTPException(status_code=400, detail="La r�partition n�cessite des b�timents actifs.")
 
 
 def _lock_lot(db, id_lot):
@@ -74,9 +75,9 @@ def _validate_start(db, payload, excluded=()):
     if excluded:
         conflicts = conflicts.filter(CycleProduction.id_cycle.notin_(excluded))
     if conflicts.filter(CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES)).first():
-        raise HTTPException(status_code=400, detail="Un bâtiment a déjà un lot actif. Terminez ce lot avant une nouvelle arrivée.")
+        raise HTTPException(status_code=400, detail="Un b�timent a d�j� un lot actif. Terminez ce lot avant une nouvelle arriv�e.")
     if conflicts.filter(CycleProduction.date_fin_reelle > payload.date_debut).first():
-        raise HTTPException(status_code=400, detail="Cette arrivée chevauche un lot précédent dans un bâtiment.")
+        raise HTTPException(status_code=400, detail="Cette arriv�e chevauche un lot pr�c�dent dans un b�timent.")
 
 
 def _apply_schedule(lot, payload, user):
@@ -115,7 +116,7 @@ def create_lot(payload: LotProductionCreate, db: Session = Depends(get_db),
     if db.query(LotProduction).filter(LotProduction.statut != "termine").first():
         raise HTTPException(
             status_code=400,
-            detail="Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot.",
+            detail="Un lot est d�j� actif. Terminez-le avant de d�marrer un nouveau lot.",
         )
     _validate_start(db, payload)
     lot = LotProduction(statut="actif", id_utilisateur_creation=current_user.id_utilisateur if current_user else None)
@@ -134,21 +135,32 @@ def create_lot(payload: LotProductionCreate, db: Session = Depends(get_db),
     return lot_to_dict(db, lot)
 
 
+@router.get("/{id_lot}/egg-evolution")
+def get_lot_egg_evolution(id_lot: int, db: Session = Depends(get_db),
+                         current_user: Utilisateur = Depends(get_current_active_user)):
+    lot = db.query(LotProduction).options(selectinload(LotProduction.allocations)).filter(
+        LotProduction.id_lot == id_lot,
+    ).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot introuvable.")
+    return lot_egg_evolution(db, lot)
+
+
 @router.put("/{id_lot}")
 def update_lot(id_lot: int, payload: LotProductionCreate, db: Session = Depends(get_db),
                current_user: Utilisateur = Depends(get_current_active_user)):
     lot = _lock_lot(db, id_lot)
     if lot.statut == "termine":
-        raise HTTPException(status_code=400, detail="Ce lot est terminé.")
+        raise HTTPException(status_code=400, detail="Ce lot est termin�.")
     if {row.id_batiment for row in payload.repartitions} != {row.id_batiment for row in lot.allocations}:
-        raise HTTPException(status_code=400, detail="Les bâtiments d'un lot démarré ne peuvent pas changer.")
+        raise HTTPException(status_code=400, detail="Les b�timents d'un lot d�marr� ne peuvent pas changer.")
     ids = [row.id_cycle for row in lot.allocations]
     _validate_start(db, payload, ids)
     if db.query(Production).filter(
         Production.id_cycle.in_(ids), Production.est_actif.is_(True),
         Production.date_production < payload.date_debut,
     ).first():
-        raise HTTPException(status_code=400, detail="Des saisies précèdent cette nouvelle date d'arrivée.")
+        raise HTTPException(status_code=400, detail="Des saisies pr�c�dent cette nouvelle date d'arriv�e.")
     counts = {row.id_batiment: row.effectif_initial for row in payload.repartitions}
     for cycle in lot.allocations:
         validate_cycle_mortality(db, cycle, 0, limit=counts[cycle.id_batiment])
@@ -169,12 +181,12 @@ def terminate_lot(id_lot: int, payload: CycleProductionTerminate, db: Session = 
         return lot_to_dict(db, lot)
     end = payload.date_fin_reelle or date.today()
     if end < lot.date_debut or end > date.today():
-        raise HTTPException(status_code=400, detail="La date de fin doit être entre l'arrivée et aujourd'hui.")
+        raise HTTPException(status_code=400, detail="La date de fin doit �tre entre l'arriv�e et aujourd'hui.")
     if db.query(Production).filter(
         Production.id_cycle.in_([row.id_cycle for row in lot.allocations]),
         Production.est_actif.is_(True), Production.date_production > end,
     ).first():
-        raise HTTPException(status_code=400, detail="Des saisies existent après cette date de fin dans un bâtiment.")
+        raise HTTPException(status_code=400, detail="Des saisies existent apr�s cette date de fin dans un b�timent.")
     lot.statut = "termine"
     lot.date_fin_reelle = end
     if current_user:
@@ -184,3 +196,4 @@ def terminate_lot(id_lot: int, payload: CycleProductionTerminate, db: Session = 
     db.commit()
     db.refresh(lot)
     return lot_to_dict(db, lot)
+
