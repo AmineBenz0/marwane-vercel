@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LotEggChart, { WeekTooltip } from './LotEggChart';
 import LotPanel from './LotPanel';
@@ -56,6 +56,55 @@ describe('Lot egg chart', () => {
     expect(screen.getByText('01/09/26 – 07/09/26')).toBeVisible();
     expect(screen.getByText('350')).toBeVisible();
     expect(screen.getByText(/Données incomplètes/)).toBeVisible();
+  });
+
+  it('provides labeled sample data with a spike, gaps, real zero values and a partial week without writing production', async () => {
+    getEggEvolution.mockResolvedValue({ semaines: [], totaux: {} });
+    render(<LotEggChart lotId={7} refreshKey={0} />);
+    await screen.findByText('Aucune production enregistrée pour ce lot.');
+    fireEvent.click(screen.getByRole('button', { name: 'Voir un exemple' }));
+    expect(screen.getByText('Lot fictif · Données de démonstration')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres par semaine' }));
+    expect(screen.getAllByRole('row')).toHaveLength(21);
+    const missing = screen.getByRole('row', { name: /^S\. 5 / });
+    expect(within(missing).getAllByText('—', { selector: 'td' })).toHaveLength(5);
+    const zero = screen.getByRole('row', { name: /^S\. 8 / });
+    expect(within(zero).getAllByText('0', { selector: 'td' })).toHaveLength(5);
+    expect(zero).not.toHaveTextContent('Incomplète');
+    expect(screen.getByRole('row', { name: /^S\. 10 / })).toHaveTextContent('9 / 21 saisies · Incomplète');
+    const spike = screen.getByRole('row', { name: /^S\. 15 / });
+    expect(within(spike).getByText((value) => value.replace(/\s/g, '') === '240000')).toBeVisible();
+    expect(screen.getByRole('row', { name: /^S\. 20 / })).toHaveTextContent('Partielle');
+    fireEvent.click(screen.getByRole('button', { name: 'Revenir aux données du lot' }));
+    expect(screen.getByText('Aucune production enregistrée pour ce lot.')).toBeVisible();
+    expect(screen.queryByText('Lot fictif · Données de démonstration')).not.toBeInTheDocument();
+    expect(getEggEvolution).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps demo scenarios isolated from live responses and resets the chart controls when changing examples', async () => {
+    let finishRequest;
+    getEggEvolution.mockImplementation(() => new Promise((resolve) => { finishRequest = resolve; }));
+    render(<LotEggChart lotId={7} refreshKey={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Voir un exemple' }));
+    const normal = screen.getByRole('button', { name: /^Normaux/ });
+    fireEvent.click(normal);
+    expect(normal).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres par semaine' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple à visualiser' }), { target: { value: 'long' } });
+    expect(screen.getByRole('button', { name: /^Normaux/ })).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres par semaine' }));
+    expect(screen.getAllByRole('row')).toHaveLength(105);
+    finishRequest(data);
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Normaux · 350' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple à visualiser' }), { target: { value: 'zero' } });
+    expect(screen.getByRole('button', { name: 'Normaux · 0' })).toBeVisible();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple à visualiser' }), { target: { value: 'empty' } });
+    expect(screen.getByText('Aucune production enregistrée pour ce lot.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Revenir aux données du lot' }));
+    expect(await screen.findByRole('button', { name: 'Normaux · 350' })).toBeVisible();
+    expect(getEggEvolution).toHaveBeenCalledTimes(1);
   });
 
   it('switches history without displaying a late response from the previous lot', async () => {

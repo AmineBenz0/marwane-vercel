@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Collapse, Stack, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Typography, useTheme,
+  TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useTheme,
 } from '@mui/material';
 import { Brush, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { lotProductionService } from '../../services/productionService';
 import { EGG_TYPE_LABELS } from '../../utils/dailyProduction';
 import { formatShortDate } from '../../utils/dateFormatting';
+import { createLotEggDemo, LOT_EGG_DEMO_SCENARIOS } from './lotEggDemo';
 
 const SERIES = [
   { key: 'normal', color: '#2563eb' },
@@ -46,6 +47,7 @@ export default function LotEggChart({ lotId, refreshKey }) {
   const [retry, setRetry] = useState(0);
   const [hidden, setHidden] = useState([]);
   const [details, setDetails] = useState(false);
+  const [demoScenario, setDemoScenario] = useState('');
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -58,30 +60,47 @@ export default function LotEggChart({ lotId, refreshKey }) {
     return () => { cancelled = true; };
   }, [lotId, refreshKey, retry]);
 
-  const weeks = (data?.semaines || []).map((week) => ({ ...week, ...week.quantites }));
+  const chartData = demoScenario ? createLotEggDemo(demoScenario) : data;
+  const weeks = (chartData?.semaines || []).map((week) => ({ ...week, ...week.quantites }));
   const recorded = weeks.some((week) => week.saisies > 0);
   const incomplete = weeks.some((week) => week.incomplete);
   const visible = SERIES.filter((series) => !hidden.includes(series.key));
   const toggle = (key) => setHidden((old) => old.includes(key) ? old.filter((item) => item !== key) : [...old, key]);
-  return <Box component="section" aria-label="Évolution des œufs par semaine" aria-busy={loading} sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider', minWidth: 0 }}>
+  const changeDemo = (scenario) => { setDemoScenario(scenario); setHidden([]); setDetails(false); };
+  return <Box component="section" aria-label="Évolution des œufs par semaine" aria-busy={loading && !demoScenario} sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider', minWidth: 0 }}>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ sm: 'center' }}>
     <Typography component="h3" variant="h6" fontWeight={700}>Évolution des œufs par semaine</Typography>
+      <Button size="small" onClick={() => changeDemo(demoScenario ? '' : 'mixed')} sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, flexShrink: 0 }}>
+        {demoScenario ? 'Revenir aux données du lot' : 'Voir un exemple'}
+      </Button>
+    </Stack>
     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
       Quantités hebdomadaires de tous les bâtiments du lot. La semaine 1 commence à l'arrivée.
     </Typography>
-    {loading ? <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={26} aria-label="Chargement du graphique" /></Box>
-      : error ? <Alert severity="error" sx={{ mt: 2 }} action={<Button color="inherit" onClick={() => setRetry((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>
+    {demoScenario && <Box sx={{ mt: 2 }}>
+      <Alert severity="info" sx={{ mb: 1.5 }}>
+        <Typography variant="body2" fontWeight={700}>Lot fictif · Données de démonstration</Typography>
+        <Typography variant="body2">Ces chiffres servent uniquement à tester le graphique.</Typography>
+      </Alert>
+      <TextField select fullWidth size="small" label="Exemple à visualiser" value={demoScenario} SelectProps={{ native: true }} onChange={(event) => changeDemo(event.target.value)}>
+        {LOT_EGG_DEMO_SCENARIOS.map((scenario) => <option key={scenario.value} value={scenario.value}>{scenario.label}</option>)}
+      </TextField>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{LOT_EGG_DEMO_SCENARIOS.find((scenario) => scenario.value === demoScenario)?.description}</Typography>
+    </Box>}
+    {loading && !demoScenario ? <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={26} aria-label="Chargement du graphique" /></Box>
+      : error && !demoScenario ? <Alert severity="error" sx={{ mt: 2 }} action={<Button color="inherit" onClick={() => setRetry((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>
       : !recorded ? <Typography color="text.secondary" sx={{ py: 3 }}>Aucune production enregistrée pour ce lot.</Typography>
       : <>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', my: 2 }} aria-label="Types d'œufs affichés">
           {SERIES.map(({ key, color }) => <Button key={key} size="small" variant="outlined" aria-pressed={!hidden.includes(key)} onClick={() => toggle(key)}
             sx={{ textTransform: 'none', color: hidden.includes(key) ? 'text.secondary' : color, borderColor: hidden.includes(key) ? 'divider' : color,
               opacity: hidden.includes(key) ? 0.65 : 1, '&:hover': { borderColor: color, bgcolor: 'action.hover' } }}>
-            {EGG_TYPE_LABELS[key]} · {number(data.totaux?.[key])}
+            {EGG_TYPE_LABELS[key]} · {number(chartData.totaux?.[key])}
           </Button>)}
         </Stack>
         {visible.length ? <Box sx={{ width: '100%', height: { xs: 300, sm: 330 }, minWidth: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={weeks} accessibilityLayer margin={{ top: 10, right: 12, left: 0, bottom: 12 }}>
+            <LineChart key={demoScenario || 'lot'} data={weeks} accessibilityLayer margin={{ top: 10, right: 12, left: 0, bottom: 12 }}>
               <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="semaine" tickFormatter={(value) => `S. ${value}`} minTickGap={24} tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} tickLine={false} axisLine={false} />
               <YAxis allowDecimals={false} width={60} domain={[0, 'auto']} tickFormatter={(value) => Number(value).toLocaleString('fr-FR', { notation: 'compact' })}
@@ -94,7 +113,8 @@ export default function LotEggChart({ lotId, refreshKey }) {
           </ResponsiveContainer>
         </Box> : <Typography sx={{ py: 4 }} color="text.secondary">Sélectionnez un type d'œuf pour afficher sa courbe.</Typography>}
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Totaux du lot dans la légende. Cliquez sur un type pour afficher ou masquer sa courbe.
+          Totaux {demoScenario ? "de l'exemple" : 'du lot'} dans la légende. Cliquez sur un type pour afficher ou masquer sa courbe.
+          {' Masquez les Normaux pour mieux voir les petites quantités : l’échelle s’adapte aux courbes affichées.'}
           {weeks.length > 16 ? ' Utilisez les poignées sous le graphique pour agrandir une période.' : ''}
         </Typography>
         {incomplete && <Typography variant="caption" color="warning.dark" sx={{ display: 'block', mt: 0.5 }}>
