@@ -54,6 +54,10 @@ import {
   Add as AddIcon, 
   Delete as DeleteIcon,
 } from '@mui/icons-material';
+import PaymentsIcon from '@mui/icons-material/PaymentsOutlined';
+import ChequeIcon from '@mui/icons-material/ReceiptLongOutlined';
+import BankTransferIcon from '@mui/icons-material/AccountBalanceOutlined';
+import CreditLetterIcon from '@mui/icons-material/DescriptionOutlined';
 import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
@@ -1249,10 +1253,30 @@ function TransactionForm({
                                               disabled={loading}
                                               size="small"
                                             >
-                                              <MenuItem value="cash">💵 Espèces</MenuItem>
-                                              <MenuItem value="cheque">💳 Chèque</MenuItem>
-                                              <MenuItem value="virement">🏦 Virement</MenuItem>
-                                              <MenuItem value="lc">📜 Lettre de Crédit</MenuItem>
+                                              <MenuItem value="cash">
+                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                                                  <PaymentsIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                                                  <Box component="span">Espèces</Box>
+                                                </Box>
+                                              </MenuItem>
+                                              <MenuItem value="cheque">
+                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                                                  <ChequeIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                                                  <Box component="span">Chèque</Box>
+                                                </Box>
+                                              </MenuItem>
+                                              <MenuItem value="virement">
+                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                                                  <BankTransferIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                                                  <Box component="span">Virement</Box>
+                                                </Box>
+                                              </MenuItem>
+                                              <MenuItem value="lc">
+                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                                                  <CreditLetterIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                                                  <Box component="span">Lettre de Crédit</Box>
+                                                </Box>
+                                              </MenuItem>
                                             </TextField>
                                           )}
                                         />
