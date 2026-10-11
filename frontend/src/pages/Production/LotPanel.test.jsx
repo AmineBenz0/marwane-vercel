@@ -34,30 +34,30 @@ describe('LotPanel allocation limits', () => {
       </MemoryRouter>,
     );
 
-    const startButton = await screen.findByRole('button', { name: 'D�marrer un lot' });
+    const startButton = await screen.findByRole('button', { name: 'Démarrer un lot' });
     await waitFor(() => expect(startButton).toBeEnabled());
     fireEvent.click(startButton);
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Nombre total de poussins entrants' }), {
       target: { value: '100' },
     });
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Poussins � A' }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Poussins · A' }), {
       target: { value: '99' },
     });
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Poussins � B' }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Poussins · B' }), {
       target: { value: '1' },
     });
 
-    const lastBuildingField = screen.getByRole('spinbutton', { name: 'Poussins � C' });
+    const lastBuildingField = screen.getByRole('spinbutton', { name: 'Poussins · C' });
     expect(lastBuildingField).toHaveAttribute('max', '0');
     fireEvent.change(lastBuildingField, { target: { value: '1' } });
 
     expect(lastBuildingField).toHaveValue(null);
-    expect(screen.getByText('La quantit� d�passe le nombre total de poussins entrants.')).toBeVisible();
+    expect(screen.getByText('La quantité dépasse le nombre total de poussins entrants.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
 
     fireEvent.change(lastBuildingField, { target: { value: '0' } });
     await waitFor(() => {
-      expect(screen.queryByText('La quantit� d�passe le nombre total de poussins entrants.')).not.toBeInTheDocument();
+      expect(screen.queryByText('La quantité dépasse le nombre total de poussins entrants.')).not.toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled();
   });
@@ -86,7 +86,7 @@ describe('LotPanel single active lot and history', () => {
     getLots.mockResolvedValue([activeLot]);
     renderPanel();
     expect(await screen.findByRole('heading', { name: 'Lot en cours' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'D�marrer un lot' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Démarrer un lot' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /A.*99 volailles/ })).not.toBeInTheDocument();
     expect(screen.getByText('Effectif restant')).toBeVisible();
     expect(screen.getByText('sur 100 entrants')).toBeVisible();
@@ -99,7 +99,7 @@ describe('LotPanel single active lot and history', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Historique' }));
     fireEvent.click(screen.getByRole('button', { name: /Ancien lot/ }));
     expect(await screen.findByRole('heading', { name: 'Ancien lot' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'D�marrer un lot' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Démarrer un lot' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Modifier le lot' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Revenir au lot en cours' }));
     expect(await screen.findByRole('heading', { name: 'Lot en cours' })).toBeVisible();
@@ -113,7 +113,7 @@ describe('LotPanel single active lot and history', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Terminer le lot' }));
     const buttons = screen.getAllByRole('button', { name: 'Terminer le lot' });
     fireEvent.click(buttons[buttons.length - 1]);
-    expect(await screen.findByRole('button', { name: 'D�marrer un lot' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Démarrer un lot' })).toBeEnabled();
     expect(terminateLot).toHaveBeenCalledTimes(1);
   });
 });

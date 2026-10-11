@@ -10,10 +10,10 @@ import { lotProductionService } from '../../services/productionService';
 import { localToday } from './useProductionView';
 import LotEggChart from './LotEggChart';
 
-const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
+const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 const message = (error) => {
   const detail = error.data?.detail || error.response?.data?.detail;
-  return typeof detail === 'string' ? detail : error.message || 'Impossible d'enregistrer le lot.';
+  return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
 };
 
 export default function LotPanel({ buildings, refreshKey, onChange }) {
@@ -76,7 +76,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
   const submit = async (event) => {
     event.preventDefault();
     if (dialog === 'create' && activeLot) {
-      setError('Un lot est d�j� actif. Terminez-le avant de d�marrer un nouveau lot.');
+      setError('Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot.');
       return;
     }
     if (dialog !== 'end' && !balanced) return;
@@ -115,37 +115,37 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
             <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
               {loaded && selected ? selected.nom_lot : 'Lots de volailles'}
             </Typography>
-            {loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Termin�' : 'Actif'}
+            {loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
               color={selected.statut === 'termine' ? 'default' : 'success'} />}
           </Stack>
           {loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
-            Arriv�e le {formatShortDate(selected.date_debut)}
-            {selected.souche ? ' � Souche : ' + selected.souche : ''}
-            {selected.date_fin_reelle ? ' � Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}
+            Arrivée le {formatShortDate(selected.date_debut)}
+            {selected.souche ? ' · Souche : ' + selected.souche : ''}
+            {selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}
           </Typography>}
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
           {loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
-          {loaded && !activeLot && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>D�marrer un lot</Button>}
+          {loaded && !activeLot && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
         </Stack>
       </Stack>
-      {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>R�essayer</Button>}>{error}</Alert>}
+      {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
-      {loaded && !selected && <Typography color="text.secondary" sx={{ mt: 2 }}>Enregistrez l'arriv�e et r�partissez les poussins entre les b�timents.</Typography>}
+      {loaded && !selected && <Typography color="text.secondary" sx={{ mt: 2 }}>Enregistrez l’arrivée et répartissez les poussins entre les bâtiments.</Typography>}
       {loaded && selected && <>
         {selected.statut === 'termine' && activeLot && <Button size="small" onClick={() => setSelectedId(String(activeLot.id_lot))} sx={{ mt: 1 }}>Revenir au lot en cours</Button>}
         <Box sx={{ mt: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 } }}>
           <Fact label="Effectif restant" value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' entrants'} color="primary.main" />
-          <Fact label="Mortalit� cumul�e" value={number(selected.mortalite_totale)} />
-          <Fact label="Age" value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
-          <Fact label="Formule d'aliment" value={selected.formule_suggeree || '-'} />
+          <Fact label="Mortalité cumulée" value={number(selected.mortalite_totale)} />
+          <Fact label="Âge" value={selected.age_semaines == null ? '—' : selected.age_semaines + ' semaines'} />
+          <Fact label="Formule d’aliment" value={selected.formule_suggeree || '—'} />
         </Box>
         <Divider sx={{ mt: 2.5, mb: 2 }} />
         {selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
           <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}
             sx={{ color: 'error.main', borderColor: 'error.main', '&:hover': { color: 'error.dark', borderColor: 'error.dark', bgcolor: 'action.hover' } }}>Terminer le lot</Button>
-        </Stack> : <Typography variant="body2" color="text.secondary">Progression arr�t�e � la date de fin pour tous les b�timents.</Typography>}
+        </Stack> : <Typography variant="body2" color="text.secondary">Progression arrêtée à la date de fin pour tous les bâtiments.</Typography>}
         <LotEggChart key={selected.id_lot} lotId={selected.id_lot} refreshKey={`${refreshKey}-${revision}`} />
       </>}
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="sm" fullWidth>
@@ -156,9 +156,9 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
               sx={{ justifyContent: 'space-between', gap: 2, textAlign: 'left', p: 1.5 }}>
               <Box sx={{ minWidth: 0 }}>
                 <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.nom_lot}</Typography>
-                <Typography variant="body2" color="text.secondary">Arriv�e le {formatShortDate(lot.date_debut)}</Typography>
+                <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(lot.date_debut)}</Typography>
               </Box>
-              <Chip size="small" variant="outlined" label={lot.statut === 'termine' ? 'Termin�' : 'Actif'} color={lot.statut === 'termine' ? 'default' : 'success'} />
+              <Chip size="small" variant="outlined" label={lot.statut === 'termine' ? 'Terminé' : 'Actif'} color={lot.statut === 'termine' ? 'default' : 'success'} />
             </Button>)}
           </Stack>
         </DialogContent>
@@ -166,28 +166,28 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
       </Dialog>
       <Dialog open={!!dialog} onClose={() => { if (!saving) { setDialog(''); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submit}>
-          <DialogTitle>{dialog === 'create' ? 'D�marrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
+          <DialogTitle>{dialog === 'create' ? 'Démarrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
           <DialogContent>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Stack spacing={2} sx={{ pt: 1 }}>
               {dialog === 'end' ? <>
-                <Typography>Cette action termine le lot dans tous ses b�timents et conserve leur historique.</Typography>
+                <Typography>Cette action termine le lot dans tous ses bâtiments et conserve leur historique.</Typography>
                 <DateField label="Date de fin" required value={values.date_fin_reelle || ''} onChange={(event) => field('date_fin_reelle', event.target.value)} />
               </> : <>
                 <TextField label="Nom du lot" required inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => field('nom_lot', event.target.value)} />
-                <DateField label="Date d'arriv�e" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
+                <DateField label="Date d’arrivée" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
                 <TextField label="Nombre total de poussins entrants" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => { setAllocationErrorBuildingId(''); field('effectif_initial', event.target.value); }} />
-                <TextField label="Age � l'arriv�e (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="Le m�me �ge et la m�me formule sugg�r�e pour tous les b�timents." />
-                <Typography fontWeight={800}>R�partition par b�timent</Typography>
+                <TextField label="Âge à l’arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="Le même âge et la même formule suggérée pour tous les bâtiments." />
+                <Typography fontWeight={800}>Répartition par bâtiment</Typography>
                 {distributionBuildings.map((building) => {
                   const limit = allocationLimit(building.id_batiment);
                   const overLimit = Number(counts[building.id_batiment] || 0) > limit;
                   const attemptedOvershoot = allocationErrorBuildingId === String(building.id_batiment);
-                  return <TextField key={building.id_batiment} label={'Poussins � ' + building.nom} type="number"
+                  return <TextField key={building.id_batiment} label={'Poussins · ' + building.nom} type="number"
                     inputProps={{ min: dialog === 'edit' ? 1 : 0, max: limit, step: 1 }}
                     value={counts[building.id_batiment] ?? ''}
                     error={allocationError(building) || attemptedOvershoot}
-                    helperText={overLimit || attemptedOvershoot ? 'La quantit� d�passe le nombre total de poussins entrants.' : undefined}
+                    helperText={overLimit || attemptedOvershoot ? 'La quantité dépasse le nombre total de poussins entrants.' : undefined}
                     onChange={(event) => {
                       const nextValue = event.target.value;
                       const nextCount = nextValue === '' ? 0 : Number(nextValue);
@@ -199,8 +199,8 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
                       setCounts((old) => ({ ...old, [building.id_batiment]: nextValue }));
                     }} />;
                 })}
-                <Typography role="status" color={balanced ? 'success.main' : 'text.secondary'}>{number(assigned)} / {number(values.effectif_initial || 0)} poussins r�partis{assigned !== Number(values.effectif_initial || 0) ? ' � �cart : ' + number(Number(values.effectif_initial || 0) - assigned) : ''}</Typography>
-                {dialog === 'create' && occupied.size > 0 && <Typography variant="caption" color="text.secondary">Les b�timents ayant d�j� un lot actif sont indisponibles pour cette arriv�e.</Typography>}
+                <Typography role="status" color={balanced ? 'success.main' : 'text.secondary'}>{number(assigned)} / {number(values.effectif_initial || 0)} poussins répartis{assigned !== Number(values.effectif_initial || 0) ? ' · écart : ' + number(Number(values.effectif_initial || 0) - assigned) : ''}</Typography>
+                {dialog === 'create' && occupied.size > 0 && <Typography variant="caption" color="text.secondary">Les bâtiments ayant déjà un lot actif sont indisponibles pour cette arrivée.</Typography>}
                 <TextField label="Souche (facultatif)" inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
                 <TextField label="Notes (facultatif)" multiline minRows={2} value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
               </>}

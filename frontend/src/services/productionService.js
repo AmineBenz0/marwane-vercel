@@ -25,22 +25,22 @@ export const productionService = {
   updateDailyProduction: (data) => put('/productions/daily', data),
 
   /**
-   * R�cup�re la liste des productions avec filtres.
+   * Récupère la liste des productions avec filtres.
    */
   getProductions: (params) => get('/productions', { params }),
 
   /**
-   * R�cup�re le d�tail d'une production.
+   * Récupère le détail d'une production.
    */
   getProduction: (id) => get(`/productions/${id}`),
 
   /**
-   * Cr�e une nouvelle production.
+   * Crée une nouvelle production.
    */
   createProduction: (data) => post('/productions', data),
 
   /**
-   * Met � jour une production.
+   * Met à jour une production.
    */
   updateProduction: (id, data) => put(`/productions/${id}`, data),
 
@@ -50,7 +50,7 @@ export const productionService = {
   deleteProduction: (id) => del(`/productions/${id}`),
 
   /**
-   * R�cup�re les stats quotidiennes.
+   * Récupère les stats quotidiennes.
    */
   getDailyStats: (days = 30) => get('/productions/stats/daily', { params: { days } }),
 
@@ -100,16 +100,16 @@ export const cycleProductionService = {
 };
 
 /**
- * Service pour la gestion des b�timents.
+ * Service pour la gestion des bâtiments.
  */
 export const batimentService = {
   /**
-   * R�cup�re la liste des b�timents.
+   * Récupère la liste des bâtiments.
    */
   getBatiments: () => get('/batiments'),
 
   /**
-   * Cr�e un b�timent.
+   * Crée un bâtiment.
    */
   createBatiment: (data) => post('/batiments', data),
 };
