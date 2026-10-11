@@ -53,11 +53,11 @@ import {
   Close as CloseIcon, 
   Add as AddIcon, 
   Delete as DeleteIcon,
+  PaymentsOutlined as PaymentsIcon,
+  ReceiptLongOutlined as ChequeIcon,
+  AccountBalanceOutlined as BankTransferIcon,
+  DescriptionOutlined as CreditLetterIcon,
 } from '@mui/icons-material';
-import PaymentsIcon from '@mui/icons-material/PaymentsOutlined';
-import ChequeIcon from '@mui/icons-material/ReceiptLongOutlined';
-import BankTransferIcon from '@mui/icons-material/AccountBalanceOutlined';
-import CreditLetterIcon from '@mui/icons-material/DescriptionOutlined';
 import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
