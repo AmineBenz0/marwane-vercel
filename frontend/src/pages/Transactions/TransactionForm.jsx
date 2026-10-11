@@ -948,6 +948,50 @@ function TransactionForm({
                         </Box>
                       </Box>
                       <Grid container spacing={1.25}>
+                        {/* Produit */}
+                        <Grid item xs={12} md={4}>
+                              <Controller
+                                name={`lignes.${index}.id_produit`}
+                                control={control}
+                                render={({ field, fieldState: { error } }) => (
+                                <FormControl fullWidth size="small" error={!!error} disabled={loading}>
+                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
+                                    <Select
+                                      {...field}
+                                      size="small"
+                                      value={field.value || ''}
+                                    label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}
+                                      disabled={loading}
+                                      onChange={(event) => {
+                                        field.onChange(event);
+                                        const selected = produits.find(p => Number(p.id_produit) === Number(event.target.value));
+                                        if (!isEggProduct(selected)) {
+                                          setValue(`lignes.${index}.id_batiment`, '');
+                                        }
+                                      }}
+                                    >
+                                      <MenuItem value="">
+                                      <em>{watchedTypeEntite === 'client' ? 'Sélectionner le produit vendu' : 'Sélectionner le produit acheté'}</em>
+                                      </MenuItem>
+                                      {produits.map((produit) => (
+                                        <MenuItem
+                                          key={produit.id_produit}
+                                          value={produit.id_produit}
+                                        >
+                                          {produit.nom_produit}
+                                        </MenuItem>
+                                      ))}
+                                    </Select>
+                                    {error && (
+                                      <FormHelperText error>
+                                        {error.message}
+                                      </FormHelperText>
+                                    )}
+                                  </FormControl>
+                                )}
+                              />
+                          </Grid>
+
                           {/* Quantité */}
                           <Grid item xs={12} sm={6} md={4}>
                               <Controller
@@ -976,50 +1020,6 @@ function TransactionForm({
                                     }}
                                     onBlur={field.onBlur}
                                   />
-                                )}
-                              />
-                          </Grid>
-
-                        {/* Produit */}
-                        <Grid item xs={12} md={4}>
-                              <Controller
-                                name={`lignes.${index}.id_produit`}
-                                control={control}
-                                render={({ field, fieldState: { error } }) => (
-                                <FormControl fullWidth error={!!error} disabled={loading}>
-                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
-                                    <Select
-                                      {...field}
-                                      size="small"
-                                      value={field.value || ''}
-                                    label={watchedTypeEntite === 'client' ? 'Oeufs vendus *' : 'Produit acheté *'}
-                                      disabled={loading}
-                                      onChange={(event) => {
-                                        field.onChange(event);
-                                        const selected = produits.find(p => Number(p.id_produit) === Number(event.target.value));
-                                        if (!isEggProduct(selected)) {
-                                          setValue(`lignes.${index}.id_batiment`, '');
-                                        }
-                                      }}
-                                    >
-                                      <MenuItem value="">
-                                      <em>{watchedTypeEntite === 'client' ? 'Sélectionner le produit vendu' : 'Sélectionner le produit acheté'}</em>
-                                      </MenuItem>
-                                      {produits.map((produit) => (
-                                        <MenuItem
-                                          key={produit.id_produit}
-                                          value={produit.id_produit}
-                                        >
-                                          {produit.nom_produit}
-                                        </MenuItem>
-                                      ))}
-                                    </Select>
-                                    {error && (
-                                      <FormHelperText error>
-                                        {error.message}
-                                      </FormHelperText>
-                                    )}
-                                  </FormControl>
                                 )}
                               />
                           </Grid>
