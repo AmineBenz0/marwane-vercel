@@ -1252,10 +1252,7 @@ function TransactionForm({
                                               <MenuItem value="cash">💵 Espèces</MenuItem>
                                               <MenuItem value="cheque">💳 Chèque</MenuItem>
                                               <MenuItem value="virement">🏦 Virement</MenuItem>
-                                              <MenuItem value="carte">💳 Carte bancaire</MenuItem>
-                                              <MenuItem value="compensation">↔️ Compensation</MenuItem>
                                               <MenuItem value="lc">📜 Lettre de Crédit</MenuItem>
-                                              <MenuItem value="autre">📄 Autre</MenuItem>
                                             </TextField>
                                           )}
                                         />
