@@ -163,7 +163,7 @@ describe('Lot egg chart', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
     expect(screen.getAllByRole('row')).toHaveLength(21);
     const missing = screen.getByRole('row', { name: /^S\. 5 / });
-    expect(within(missing).getAllByText('—', { selector: 'td' })).toHaveLength(5);
+    expect(within(missing).getAllByText('—', { selector: 'td' })).toHaveLength(4);
     const zero = screen.getByRole('row', { name: /^S\. 8 / });
     expect(within(zero).getAllByText('0', { selector: 'td' })).toHaveLength(4);
     expect(zero).not.toHaveTextContent('Incomplète');

@@ -15,7 +15,8 @@ import MuiTooltip from '@mui/material/Tooltip';
 const SERIES = [
   { key: 'normal', color: '#2563eb' },
   { key: 'blanc', color: '#0f766e', dash: '6 3' },
-  { key: 'double_jaune', color: '#a16207', dash: '3 3' },  { key: 'casse', color: '#dc2626', dash: '10 4' },
+  { key: 'double_jaune', color: '#a16207', dash: '3 3' },
+  { key: 'casse', color: '#dc2626', dash: '10 4' },
 ];
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 const period = (week) => `${formatShortDate(week.date_debut)} – ${formatShortDate(week.date_fin)}`;
