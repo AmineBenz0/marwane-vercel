@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Stack,
+  Alert, Box, Button, Card, CardContent, CircularProgress, Divider, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { Add, ChevronRight } from '@mui/icons-material';
@@ -140,9 +140,7 @@ function BuildingsOverview({ buildings, dailyReady, dailyError, stockReady, onAd
   const stock = (building) => stockReady && building.available_eggs != null ? formatEggs(building.available_eggs) : '—';
   const collect = (building) => !dailyReady
     ? <Typography variant="body2" color="text.secondary">{dailyError ? 'Indisponible' : 'Chargement…'}</Typography>
-    : building.daily?.entries_count ? <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
-      <Typography variant="body2">{formatEggs(building.daily.produced_eggs || 0)}</Typography><Chip label="Saisie" color="success" variant="outlined" size="small" />
-    </Stack> : <Typography variant="body2" color={building.est_actif === false ? 'text.secondary' : 'warning.dark'}>{building.est_actif === false ? '—' : 'Non saisie'}</Typography>;
+    : building.daily?.entries_count ? <Typography variant="body2">{formatEggs(building.daily.produced_eggs || 0)}</Typography> : <Typography variant="body2" color={building.est_actif === false ? 'text.secondary' : 'warning.dark'}>{building.est_actif === false ? '—' : 'Non saisie'}</Typography>;
   const actions = (building) => <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
     {dailyReady && !building.daily?.entries_count && building.est_actif !== false && <Button size="small" variant="contained" startIcon={<Add />} onClick={() => onAdd(building.id_batiment)}>Saisir</Button>}
     <Button size="small" endIcon={<ChevronRight />} aria-label={'Voir le bâtiment ' + building.nom_batiment} onClick={() => onOpen(building.id_batiment)}>Voir</Button>
