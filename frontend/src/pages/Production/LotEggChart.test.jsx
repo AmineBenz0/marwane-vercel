@@ -20,12 +20,12 @@ vi.stubGlobal('ResizeObserver', class {
 });
 
 const data = {
-  totaux: { normal: 350, blanc: 25, double_jaune: 0, double_jaune_demarrage: 0, casse: 5 },
+  totaux: { normal: 350, blanc: 25, double_jaune: 0, casse: 5 },
   semaines: [
     { semaine: 1, date_debut: '2026-09-01', date_fin: '2026-09-07', saisies: 14, saisies_attendues: 14, incomplete: false, partielle: false,
-      quantites: { normal: 350, blanc: 0, double_jaune: 0, double_jaune_demarrage: 0, casse: 0 } },
+      quantites: { normal: 350, blanc: 0, double_jaune: 0, casse: 0 } },
     { semaine: 2, date_debut: '2026-09-08', date_fin: '2026-09-14', saisies: 0, saisies_attendues: 14, incomplete: true, partielle: false,
-      quantites: { normal: null, blanc: null, double_jaune: null, double_jaune_demarrage: null, casse: null } },
+      quantites: { normal: null, blanc: null, double_jaune: null, casse: null } },
   ],
 };
 
@@ -76,7 +76,7 @@ describe('Lot egg chart', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
     expect(screen.getByRole('table', { name: "Quantités d'œufs par semaine" })).toBeVisible();
     expect(screen.getByText('350', { selector: 'td' })).toBeVisible();
-    expect(screen.getAllByText('—', { selector: 'td' })).toHaveLength(5);
+    expect(screen.getAllByText('—', { selector: 'td' })).toHaveLength(4);
     expect(screen.getByText('0 / 14 saisies · Incomplète')).toBeVisible();
   });
 
@@ -100,8 +100,9 @@ describe('Lot egg chart', () => {
     render(<LotEggChart lotId={7} refreshKey={0} />);
     expect(await screen.findByText(/Semaine 1 ·/)).toBeVisible();
     const graph = screen.getByRole('figure', { name: /Graphique des quantités d’œufs/ });
-    expect(graph.querySelectorAll('.recharts-line-dots .recharts-dot')).toHaveLength(5);
+    expect(graph.querySelectorAll('.recharts-line-dots .recharts-dot')).toHaveLength(4);
     expect(graph.querySelector('.recharts-line-dots .recharts-dot')).toHaveAttribute('r', '6');
+    expect(screen.queryByText('Doubles jaunes démarrage')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Options' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('combobox', { name: 'De' })).not.toBeInTheDocument();
   });
@@ -115,11 +116,11 @@ describe('Lot egg chart', () => {
 
   it('keeps large and rare quantities on one graph, rescales a chosen week and offers a linear scale', async () => {
     getEggEvolution.mockResolvedValue({
-      totaux: { normal: 300000, blanc: 3000, double_jaune: 16, double_jaune_demarrage: 0, casse: 550 },
+      totaux: { normal: 300000, blanc: 3000, double_jaune: 16, casse: 550 },
       semaines: data.semaines.map((week, index) => ({ ...week, saisies: 14, incomplete: false,
         quantites: index === 0
-          ? { normal: 240000, blanc: 1000, double_jaune: 12, double_jaune_demarrage: 0, casse: 200 }
-          : { normal: 60000, blanc: 2000, double_jaune: 4, double_jaune_demarrage: 0, casse: 350 },
+          ? { normal: 240000, blanc: 1000, double_jaune: 12, casse: 200 }
+          : { normal: 60000, blanc: 2000, double_jaune: 4, casse: 350 },
       })),
     });
     render(<LotEggChart lotId={7} refreshKey={0} />);
@@ -164,7 +165,7 @@ describe('Lot egg chart', () => {
     const missing = screen.getByRole('row', { name: /^S\. 5 / });
     expect(within(missing).getAllByText('—', { selector: 'td' })).toHaveLength(5);
     const zero = screen.getByRole('row', { name: /^S\. 8 / });
-    expect(within(zero).getAllByText('0', { selector: 'td' })).toHaveLength(5);
+    expect(within(zero).getAllByText('0', { selector: 'td' })).toHaveLength(4);
     expect(zero).not.toHaveTextContent('Incomplète');
     expect(screen.getByRole('row', { name: /^S\. 10 / })).toHaveTextContent('9 / 21 saisies · Incomplète');
     const spike = screen.getByRole('row', { name: /^S\. 15 / });

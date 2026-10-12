@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { axisEggValue, eggAxis, plotEggValue } from './lotEggChartScale';
 
-const series = ['normal', 'blanc', 'double_jaune', 'double_jaune_demarrage', 'casse'].map((key) => ({ key }));
+const series = ['normal', 'blanc', 'double_jaune', 'casse'].map((key) => ({ key }));
 const weeks = [
-  { normal: 240000, blanc: 1000, double_jaune: 12, double_jaune_demarrage: 0, casse: 200 },
-  { normal: 60000, blanc: 2000, double_jaune: 4, double_jaune_demarrage: 0, casse: 350 },
-  { normal: null, blanc: null, double_jaune: null, double_jaune_demarrage: null, casse: null },
+  { normal: 240000, blanc: 1000, double_jaune: 12, casse: 200 },
+  { normal: 60000, blanc: 2000, double_jaune: 4, casse: 350 },
+  { normal: null, blanc: null, double_jaune: null, casse: null },
 ];
 
 describe('Egg chart readability', () => {

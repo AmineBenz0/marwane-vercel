@@ -1,4 +1,4 @@
-const TYPES = ['normal', 'blanc', 'double_jaune', 'double_jaune_demarrage', 'casse'];
+const TYPES = ['normal', 'blanc', 'double_jaune', 'casse'];
 const counts = (normal = 0, blanc = 0, double = 0, earlyDouble = 0, broken = 0) =>
   Object.fromEntries(TYPES.map((key, index) => [key, [normal, blanc, double, earlyDouble, broken][index]]));
 const dateAt = (start, days) => new Date(Date.parse(`${start}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
