@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Collapse, Stack, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, TextField, Typography, useTheme,
+  TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Typography, useTheme,
 } from '@mui/material';
 import { Brush, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { lotProductionService } from '../../services/productionService';
 import { EGG_TYPE_LABELS } from '../../utils/dailyProduction';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { createLotEggDemo, LOT_EGG_DEMO_SCENARIOS } from './lotEggDemo';
+import { eggAxis, groupEggSeries } from './lotEggChartScale';
 
 const SERIES = [
   { key: 'normal', color: '#2563eb' },
@@ -41,6 +42,7 @@ export function WeekTooltip({ active, payload }) {
 // the previous lot's chart immediately when switching to history.
 export default function LotEggChart({ lotId, refreshKey }) {
   const theme = useTheme();
+  const syncId = useId();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,6 +50,8 @@ export default function LotEggChart({ lotId, refreshKey }) {
   const [hidden, setHidden] = useState([]);
   const [details, setDetails] = useState(false);
   const [demoScenario, setDemoScenario] = useState('');
+  const [scaleMode, setScaleMode] = useState('adapted');
+  const [range, setRange] = useState(null);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -65,8 +69,15 @@ export default function LotEggChart({ lotId, refreshKey }) {
   const recorded = weeks.some((week) => week.saisies > 0);
   const incomplete = weeks.some((week) => week.incomplete);
   const visible = SERIES.filter((series) => !hidden.includes(series.key));
+  const startIndex = Math.min(range?.startIndex ?? 0, Math.max(0, weeks.length - 1));
+  const endIndex = Math.max(startIndex, Math.min(range?.endIndex ?? weeks.length - 1, weeks.length - 1));
+  const displayedWeeks = weeks.slice(startIndex, endIndex + 1);
+  const groups = groupEggSeries(weeks, visible, scaleMode === 'common');
+  const setPeriod = (next) => {
+    if (next?.startIndex != null && next?.endIndex != null) setRange(next);
+  };
   const toggle = (key) => setHidden((old) => old.includes(key) ? old.filter((item) => item !== key) : [...old, key]);
-  const changeDemo = (scenario) => { setDemoScenario(scenario); setHidden([]); setDetails(false); };
+  const changeDemo = (scenario) => { setDemoScenario(scenario); setHidden([]); setDetails(false); setRange(null); };
   return <Box component="section" aria-label="Évolution des œufs par semaine" aria-busy={loading && !demoScenario} sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider', minWidth: 0 }}>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ sm: 'center' }}>
     <Typography component="h3" variant="h6" fontWeight={700}>Évolution des œufs par semaine</Typography>
@@ -98,23 +109,73 @@ export default function LotEggChart({ lotId, refreshKey }) {
             {EGG_TYPE_LABELS[key]} · {number(chartData.totaux?.[key])}
           </Button>)}
         </Stack>
-        {visible.length ? <Box sx={{ width: '100%', height: { xs: 300, sm: 330 }, minWidth: 0 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart key={demoScenario || 'lot'} data={weeks} accessibilityLayer margin={{ top: 10, right: 12, left: 0, bottom: 12 }}>
-              <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="semaine" tickFormatter={(value) => `S. ${value}`} minTickGap={24} tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} tickLine={false} axisLine={false} />
-              <YAxis allowDecimals={false} width={60} domain={[0, 'auto']} tickFormatter={(value) => Number(value).toLocaleString('fr-FR', { notation: 'compact' })}
-                tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} tickLine={false} axisLine={false} />
-              <Tooltip content={<WeekTooltip />} filterNull={false} />
-              {visible.map(({ key, color, dash }) => <Line key={key} type="linear" dataKey={key} name={EGG_TYPE_LABELS[key]} stroke={color} strokeWidth={2.5} strokeDasharray={dash}
-                dot={{ r: weeks.length > 30 ? 1.5 : 3 }} activeDot={{ r: 5 }} connectNulls={false} isAnimationActive={false} />)}
-              {weeks.length > 16 && <Brush dataKey="semaine" height={26} stroke={theme.palette.primary.main} tickFormatter={(value) => `S. ${value}`} travellerWidth={10} />}
-            </LineChart>
-          </ResponsiveContainer>
-        </Box> : <Typography sx={{ py: 4 }} color="text.secondary">Sélectionnez un type d'œuf pour afficher sa courbe.</Typography>}
+        {visible.length ? <>
+          <ToggleButtonGroup value={scaleMode} exclusive size="small" aria-label="Échelle des graphiques"
+            onChange={(_, value) => { if (value) setScaleMode(value); }} sx={{ mb: 1 }}>
+            <ToggleButton value="adapted" sx={{ textTransform: 'none' }}>Échelles adaptées</ToggleButton>
+            <ToggleButton value="common" sx={{ textTransform: 'none' }}>Échelle commune</ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+            {scaleMode === 'adapted'
+              ? 'Les volumes proches partagent une échelle. Utilisez « Échelle commune » pour comparer les quantités entre toutes les courbes.'
+              : 'Toutes les courbes partagent la même échelle pour comparer leurs volumes.'}
+          </Typography>
+          {weeks.length > 1 && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} sx={{ mb: 2 }}>
+            <TextField select size="small" label="De la semaine" value={startIndex} SelectProps={{ native: true }} sx={{ width: { xs: '100%', sm: 160 } }}
+              onChange={(event) => setPeriod({ startIndex: Number(event.target.value), endIndex: Math.max(endIndex, Number(event.target.value)) })}>
+              {weeks.map((week, index) => <option key={week.semaine} value={index}>S. {week.semaine}</option>)}
+            </TextField>
+            <TextField select size="small" label="À la semaine" value={endIndex} SelectProps={{ native: true }} sx={{ width: { xs: '100%', sm: 160 } }}
+              onChange={(event) => setPeriod({ startIndex: Math.min(startIndex, Number(event.target.value)), endIndex: Number(event.target.value) })}>
+              {weeks.map((week, index) => <option key={week.semaine} value={index}>S. {week.semaine}</option>)}
+            </TextField>
+            {range && <Button size="small" onClick={() => setRange(null)}>Tout le lot</Button>}
+          </Stack>}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: groups.length > 1 ? 'repeat(2, minmax(0, 1fr))' : '1fr' }, gap: 2 }}>
+            {groups.map((series, index) => {
+              const axis = eggAxis(displayedWeeks, series);
+              const title = series.map(({ key }) => EGG_TYPE_LABELS[key]).join(' · ');
+              const hasEntries = displayedWeeks.some((week) => week.saisies > 0);
+              return <Box component="figure" aria-label={`Graphique : ${title}`} key={series.map(({ key }) => key).join('-')}
+                sx={{ m: 0, p: { xs: 1.5, sm: 2 }, border: '1px solid', borderColor: 'divider', borderRadius: 2.5, minWidth: 0,
+                  gridColumn: index === 0 && groups.length % 2 === 1 ? '1 / -1' : 'auto' }}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                  {series.map(({ key, color }) => <Typography key={key} component="span" variant="body2" fontWeight={700} sx={{ color }}>{EGG_TYPE_LABELS[key]}</Typography>)}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  Échelle : 0 – {number(axis.domain[1])} œufs / semaine
+                </Typography>
+                <Box sx={{ width: '100%', height: groups.length === 1 ? { xs: 280, sm: 310 } : 220, minWidth: 0, mt: 1 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={displayedWeeks} syncId={syncId} syncMethod="value" accessibilityLayer margin={{ top: 10, right: 12, left: 0, bottom: 4 }}>
+                      <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="semaine" padding={{ left: 8, right: 8 }} tickFormatter={(value) => `S. ${value}`} minTickGap={24}
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} tickLine={false} axisLine={false} />
+                      <YAxis allowDecimals={false} width={60} domain={axis.domain} ticks={axis.ticks}
+                        tickFormatter={(value) => Number(value).toLocaleString('fr-FR', { notation: 'compact' })}
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} tickLine={false} axisLine={false} />
+                      <Tooltip content={<WeekTooltip />} filterNull={false} />
+                      {series.map(({ key, color, dash }) => <Line key={key} type="linear" dataKey={key} name={EGG_TYPE_LABELS[key]} stroke={color} strokeWidth={2.5} strokeDasharray={dash}
+                        dot={{ r: displayedWeeks.length > 30 ? 1.5 : 3 }} activeDot={{ r: 5 }} connectNulls={false} isAnimationActive={false} />)}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Box>
+                {!hasEntries && <Typography variant="caption" color="text.secondary">Aucune saisie sur cette période.</Typography>}
+              </Box>;
+            })}
+          </Box>
+          {weeks.length > 16 && <Box sx={{ width: '100%', height: 52, mt: 2 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={weeks} margin={{ top: 5, right: 12, left: 60, bottom: 5 }}>
+                <Brush dataKey="semaine" height={30} stroke={theme.palette.primary.main} tickFormatter={(value) => `S. ${value}`}
+                  startIndex={startIndex} endIndex={endIndex} onChange={setPeriod} travellerWidth={10} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Box>}
+        </> : <Typography sx={{ py: 4 }} color="text.secondary">Sélectionnez un type d'œuf pour afficher sa courbe.</Typography>}
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           Totaux {demoScenario ? "de l'exemple" : 'du lot'} dans la légende. Cliquez sur un type pour afficher ou masquer sa courbe.
-          {' Masquez les Normaux pour mieux voir les petites quantités : l’échelle s’adapte aux courbes affichées.'}
+          {' Chaque échelle part de zéro et s’adapte aux quantités de la période sélectionnée.'}
           {weeks.length > 16 ? ' Utilisez les poignées sous le graphique pour agrandir une période.' : ''}
         </Typography>
         {incomplete && <Typography variant="caption" color="warning.dark" sx={{ display: 'block', mt: 0.5 }}>

@@ -58,6 +58,31 @@ describe('Lot egg chart', () => {
     expect(screen.getByText(/Données incomplètes/)).toBeVisible();
   });
 
+  it('separates large and rare quantities automatically, rescales a chosen week and offers a common scale', async () => {
+    getEggEvolution.mockResolvedValue({
+      totaux: { normal: 300000, blanc: 3000, double_jaune: 16, double_jaune_demarrage: 0, casse: 550 },
+      semaines: data.semaines.map((week, index) => ({ ...week, saisies: 14, incomplete: false,
+        quantites: index === 0
+          ? { normal: 240000, blanc: 1000, double_jaune: 12, double_jaune_demarrage: 0, casse: 200 }
+          : { normal: 60000, blanc: 2000, double_jaune: 4, double_jaune_demarrage: 0, casse: 350 },
+      })),
+    });
+    render(<LotEggChart lotId={7} refreshKey={0} />);
+    const normal = await screen.findByRole('figure', { name: 'Graphique : Normaux' });
+    expect(screen.getAllByRole('figure')).toHaveLength(3);
+    expect(normal.textContent.replace(/\s/g, '')).toContain('0–300000');
+    fireEvent.change(screen.getByRole('combobox', { name: 'De la semaine' }), { target: { value: '1' } });
+    expect(normal.textContent.replace(/\s/g, '')).toContain('0–80000');
+    expect(screen.getByRole('button', { name: 'Tout le lot' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Échelle commune' }));
+    expect(screen.getAllByRole('figure')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Tout le lot' }));
+    expect(screen.getByRole('figure').textContent.replace(/\s/g, '')).toContain('0–300000');
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres par semaine' }));
+    expect(screen.getByText('12', { selector: 'td' })).toBeVisible();
+    expect(screen.getByText((text, element) => element.tagName === 'TD' && text.replace(/\s/g, '') === '240000')).toBeVisible();
+  });
+
   it('provides labeled sample data with a spike, gaps, real zero values and a partial week without writing production', async () => {
     getEggEvolution.mockResolvedValue({ semaines: [], totaux: {} });
     render(<LotEggChart lotId={7} refreshKey={0} />);
