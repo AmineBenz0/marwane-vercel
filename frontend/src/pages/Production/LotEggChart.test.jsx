@@ -5,6 +5,9 @@ import LotPanel from './LotPanel';
 
 const { getEggEvolution, getLots } = vi.hoisted(() => ({ getEggEvolution: vi.fn(), getLots: vi.fn() }));
 vi.mock('../../services/productionService', () => ({ lotProductionService: { getEggEvolution, getLots } }));
+// Decorative lot controls do not affect chart behavior. Avoid importing the
+// entire icon catalogue into this focused chart test suite.
+vi.mock('@mui/icons-material', () => ({ EditOutlined: () => null, History: () => null, StopCircleOutlined: () => null }));
 vi.stubGlobal('ResizeObserver', class {
   constructor(callback) { this.callback = callback; }
   observe() { this.callback([{ contentRect: { width: 800, height: 330 } }]); }
@@ -58,7 +61,7 @@ describe('Lot egg chart', () => {
     expect(screen.getByText(/Données incomplètes/)).toBeVisible();
   });
 
-  it('separates large and rare quantities automatically, rescales a chosen week and offers a common scale', async () => {
+  it('keeps large and rare quantities on one graph, rescales a chosen week and offers a linear scale', async () => {
     getEggEvolution.mockResolvedValue({
       totaux: { normal: 300000, blanc: 3000, double_jaune: 16, double_jaune_demarrage: 0, casse: 550 },
       semaines: data.semaines.map((week, index) => ({ ...week, saisies: 14, incomplete: false,
@@ -68,19 +71,31 @@ describe('Lot egg chart', () => {
       })),
     });
     render(<LotEggChart lotId={7} refreshKey={0} />);
-    const normal = await screen.findByRole('figure', { name: 'Graphique : Normaux' });
-    expect(screen.getAllByRole('figure')).toHaveLength(3);
+    const normal = await screen.findByRole('figure', { name: 'Graphique des quantités d’œufs' });
+    expect(screen.getAllByRole('figure')).toHaveLength(1);
+    expect(normal).toHaveTextContent('Échelle compressée');
     expect(normal.textContent.replace(/\s/g, '')).toContain('0–300000');
     fireEvent.change(screen.getByRole('combobox', { name: 'De la semaine' }), { target: { value: '1' } });
     expect(normal.textContent.replace(/\s/g, '')).toContain('0–80000');
     expect(screen.getByRole('button', { name: 'Tout le lot' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Échelle commune' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Échelle linéaire' }));
     expect(screen.getAllByRole('figure')).toHaveLength(1);
+    expect(normal).toHaveTextContent('Échelle linéaire');
     fireEvent.click(screen.getByRole('button', { name: 'Tout le lot' }));
     expect(screen.getByRole('figure').textContent.replace(/\s/g, '')).toContain('0–300000');
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres par semaine' }));
     expect(screen.getByText('12', { selector: 'td' })).toBeVisible();
     expect(screen.getByText((text, element) => element.tagName === 'TD' && text.replace(/\s/g, '') === '240000')).toBeVisible();
+  });
+
+  it('shows original counts in tooltips even though the plotted coordinates are compressed', () => {
+    render(<WeekTooltip active payload={[
+      { dataKey: 'plot_normal', name: 'Normaux', value: 5.38, payload: { ...data.semaines[0], normal: 240000, double_jaune: 12 } },
+      { dataKey: 'plot_double_jaune', name: 'Doubles jaunes', value: 1.11, payload: { ...data.semaines[0], normal: 240000, double_jaune: 12 } },
+    ]} />);
+    expect(screen.getByText((text) => text.replace(/\s/g, '') === '240000')).toBeVisible();
+    expect(screen.getByText('12')).toBeVisible();
+    expect(screen.queryByText('5,38')).not.toBeInTheDocument();
   });
 
   it('provides labeled sample data with a spike, gaps, real zero values and a partial week without writing production', async () => {
