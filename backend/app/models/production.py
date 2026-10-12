@@ -77,7 +77,7 @@ class Production(Base):
         # Nombre de cartons pleins
         nb_pleins = math.ceil(nombre_oeufs / 30)
         
-        if type_oeuf.lower() in ['double_jaune', 'double_jaune_demarrage']:
+        if type_oeuf.lower() == 'double_jaune':
             # "Quand double jaune utilisé, 2 fois plus de carton + 1"
             return (nb_pleins * 2) + 1
         else:
