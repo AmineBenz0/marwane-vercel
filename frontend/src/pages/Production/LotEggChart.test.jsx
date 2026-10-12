@@ -26,7 +26,41 @@ const data = {
 };
 
 describe('Lot egg chart', () => {
-  beforeEach(() => { vi.clearAllMocks(); getEggEvolution.mockResolvedValue(data); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('VITE_DEPLOYMENT_ENV', 'production');
+    getEggEvolution.mockResolvedValue(data);
+  });
+
+  it('hides all sample controls in production, including for empty lots and failed requests', async () => {
+    const view = render(<LotEggChart lotId={7} refreshKey={0} />);
+    await screen.findByRole('button', { name: 'Normaux · 350' });
+    expect(screen.queryByRole('button', { name: 'Voir un exemple' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Exemple à visualiser' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lot fictif/)).not.toBeInTheDocument();
+    getEggEvolution.mockResolvedValueOnce({ semaines: [], totaux: {} });
+    view.rerender(<LotEggChart lotId={7} refreshKey={1} />);
+    await screen.findByText('Aucune production enregistrée pour ce lot.');
+    expect(screen.queryByRole('button', { name: 'Voir un exemple' })).not.toBeInTheDocument();
+    getEggEvolution.mockRejectedValueOnce(new Error('Network'));
+    view.rerender(<LotEggChart lotId={7} refreshKey={2} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de charger');
+    expect(screen.queryByRole('button', { name: 'Voir un exemple' })).not.toBeInTheDocument();
+  });
+
+  it('uses real lot data in production even if a sample was previously selected', async () => {
+    vi.stubEnv('VITE_DEPLOYMENT_ENV', 'preview');
+    const view = render(<LotEggChart lotId={7} refreshKey={0} />);
+    await screen.findByRole('button', { name: 'Normaux · 350' });
+    fireEvent.click(screen.getByRole('button', { name: 'Voir un exemple' }));
+    expect(screen.getByText(/Lot fictif/)).toBeVisible();
+    vi.stubEnv('VITE_DEPLOYMENT_ENV', 'production');
+    view.rerender(<LotEggChart lotId={7} refreshKey={0} />);
+    expect(screen.getByRole('button', { name: 'Normaux · 350' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Voir un exemple|Revenir aux données/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Exemple à visualiser' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lot fictif/)).not.toBeInTheDocument();
+  });
 
   it('loads the lot, toggles curves and exposes exact weekly values with missing-week gaps', async () => {
     render(<LotEggChart lotId={7} refreshKey={0} />);
@@ -99,6 +133,7 @@ describe('Lot egg chart', () => {
   });
 
   it('provides labeled sample data with a spike, gaps, real zero values and a partial week without writing production', async () => {
+    vi.stubEnv('VITE_DEPLOYMENT_ENV', 'preview');
     getEggEvolution.mockResolvedValue({ semaines: [], totaux: {} });
     render(<LotEggChart lotId={7} refreshKey={0} />);
     await screen.findByText('Aucune production enregistrée pour ce lot.');
@@ -122,6 +157,7 @@ describe('Lot egg chart', () => {
   });
 
   it('keeps demo scenarios isolated from live responses and resets the chart controls when changing examples', async () => {
+    vi.stubEnv('VITE_DEPLOYMENT_ENV', 'preview');
     let finishRequest;
     getEggEvolution.mockImplementation(() => new Promise((resolve) => { finishRequest = resolve; }));
     render(<LotEggChart lotId={7} refreshKey={0} />);

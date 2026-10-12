@@ -46,6 +46,8 @@ export function WeekTooltip({ active, payload }) {
 // the previous lot's chart immediately when switching to history.
 export default function LotEggChart({ lotId, refreshKey }) {
   const theme = useTheme();
+  const demosEnabled = import.meta.env.VITE_DEPLOYMENT_ENV === 'preview'
+    || import.meta.env.VITE_DEPLOYMENT_ENV === 'development';
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -67,7 +69,8 @@ export default function LotEggChart({ lotId, refreshKey }) {
     return () => { cancelled = true; };
   }, [lotId, refreshKey, retry]);
 
-  const chartData = demoScenario ? createLotEggDemo(demoScenario) : data;
+  const activeDemo = demosEnabled ? demoScenario : '';
+  const chartData = activeDemo ? createLotEggDemo(activeDemo) : data;
   const weeks = (chartData?.semaines || []).map((week) => ({ ...week, ...week.quantites }));
   const recorded = weeks.some((week) => week.saisies > 0);
   const incomplete = weeks.some((week) => week.incomplete);
@@ -84,28 +87,28 @@ export default function LotEggChart({ lotId, refreshKey }) {
   };
   const toggle = (key) => setHidden((old) => old.includes(key) ? old.filter((item) => item !== key) : [...old, key]);
   const changeDemo = (scenario) => { setDemoScenario(scenario); setHidden([]); setDetails(false); setRange(null); };
-  return <Box component="section" aria-label="Évolution des œufs par semaine" aria-busy={loading && !demoScenario} sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider', minWidth: 0 }}>
+  return <Box component="section" aria-label="Évolution des œufs par semaine" aria-busy={loading && !activeDemo} sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider', minWidth: 0 }}>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ sm: 'center' }}>
     <Typography component="h3" variant="h6" fontWeight={700}>Évolution des œufs par semaine</Typography>
-      <Button size="small" onClick={() => changeDemo(demoScenario ? '' : 'mixed')} sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, flexShrink: 0 }}>
-        {demoScenario ? 'Revenir aux données du lot' : 'Voir un exemple'}
-      </Button>
+      {demosEnabled && <Button size="small" onClick={() => changeDemo(activeDemo ? '' : 'mixed')} sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, flexShrink: 0 }}>
+        {activeDemo ? 'Revenir aux données du lot' : 'Voir un exemple'}
+      </Button>}
     </Stack>
     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
       Quantités hebdomadaires de tous les bâtiments du lot. La semaine 1 commence à l'arrivée.
     </Typography>
-    {demoScenario && <Box sx={{ mt: 2 }}>
+    {activeDemo && <Box sx={{ mt: 2 }}>
       <Alert severity="info" sx={{ mb: 1.5 }}>
         <Typography variant="body2" fontWeight={700}>Lot fictif · Données de démonstration</Typography>
         <Typography variant="body2">Ces chiffres servent uniquement à tester le graphique.</Typography>
       </Alert>
-      <TextField select fullWidth size="small" label="Exemple à visualiser" value={demoScenario} SelectProps={{ native: true }} onChange={(event) => changeDemo(event.target.value)}>
+      <TextField select fullWidth size="small" label="Exemple à visualiser" value={activeDemo} SelectProps={{ native: true }} onChange={(event) => changeDemo(event.target.value)}>
         {LOT_EGG_DEMO_SCENARIOS.map((scenario) => <option key={scenario.value} value={scenario.value}>{scenario.label}</option>)}
       </TextField>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{LOT_EGG_DEMO_SCENARIOS.find((scenario) => scenario.value === demoScenario)?.description}</Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{LOT_EGG_DEMO_SCENARIOS.find((scenario) => scenario.value === activeDemo)?.description}</Typography>
     </Box>}
-    {loading && !demoScenario ? <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={26} aria-label="Chargement du graphique" /></Box>
-      : error && !demoScenario ? <Alert severity="error" sx={{ mt: 2 }} action={<Button color="inherit" onClick={() => setRetry((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>
+    {loading && !activeDemo ? <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={26} aria-label="Chargement du graphique" /></Box>
+      : error && !activeDemo ? <Alert severity="error" sx={{ mt: 2 }} action={<Button color="inherit" onClick={() => setRetry((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>
       : !recorded ? <Typography color="text.secondary" sx={{ py: 3 }}>Aucune production enregistrée pour ce lot.</Typography>
       : <>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', my: 2 }} aria-label="Types d'œufs affichés">
@@ -168,7 +171,7 @@ export default function LotEggChart({ lotId, refreshKey }) {
           </Box>}
         </> : <Typography sx={{ py: 4 }} color="text.secondary">Sélectionnez un type d'œuf pour afficher sa courbe.</Typography>}
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Totaux {demoScenario ? "de l'exemple" : 'du lot'} dans la légende. Cliquez sur un type pour afficher ou masquer sa courbe.
+          Totaux {activeDemo ? "de l'exemple" : 'du lot'} dans la légende. Cliquez sur un type pour afficher ou masquer sa courbe.
           {' L’axe part de zéro et s’adapte aux quantités de la période sélectionnée.'}
           {weeks.length > 16 ? ' Utilisez les poignées sous le graphique pour agrandir une période.' : ''}
         </Typography>
