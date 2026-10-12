@@ -18,7 +18,6 @@ from app.models.produit import Produit
 
 SELLABLE_TYPE_LABELS = {
     "double_jaune": "Oeufs - Double jaune",
-    "double_jaune_demarrage": "Oeufs - Double jaune demarrage",
     "casse": "Oeufs - Casses",
     "blanc": "Oeufs - Blancs",
 }
@@ -34,7 +33,6 @@ PRODUCT_NAME_TO_CATEGORY = {
     "oeufs - moyen": ("normal", "moyen"),
     "oeufs - gros": ("normal", "gros"),
     "oeufs - double jaune": ("double_jaune", None),
-    "oeufs - double jaune demarrage": ("double_jaune_demarrage", None),
     "oeufs - casses": ("casse", None),
     "oeufs - blancs": ("blanc", None),
 }

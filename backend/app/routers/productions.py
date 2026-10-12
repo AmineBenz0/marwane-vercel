@@ -70,7 +70,6 @@ def _category_label(type_oeuf: str, calibre: Optional[str] = None) -> str:
     labels = {
         "normal": "Normal",
         "double_jaune": "Double jaune",
-        "double_jaune_demarrage": "Double jaune demarrage",
         "casse": "Oeufs casses",
         "blanc": "Blanc",
         "perdu": "Perdus (historique)",
@@ -238,11 +237,6 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         elif existing:
             raise HTTPException(status_code=409, detail="Cette journee est deja saisie. Modifiez la saisie existante.")
 
-        if prod_in.quantites.get("double_jaune_demarrage", 0) and not any(
-            record.type_oeuf == "double_jaune_demarrage" for record in existing
-        ):
-            raise HTTPException(status_code=400, detail="Ce type historique ne peut plus etre ajoute.")
-
         quantities = dict(prod_in.quantites)
         quantities["casse"] = quantities.get("casse", 0) + quantities.pop("perdu", 0)
 
@@ -279,7 +273,7 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
 
         records = []
         # Losses are last so operational fields normally belong to a produced type.
-        for egg_type in ("normal", "double_jaune", "casse", "blanc", "double_jaune_demarrage", "perdu"):
+        for egg_type in ("normal", "double_jaune", "casse", "blanc", "perdu"):
             quantity = quantities.get(egg_type, 0)
             candidates = by_type.get(egg_type, [])
             keep_type = bool(quantity) or (operational_only and egg_type == "normal")

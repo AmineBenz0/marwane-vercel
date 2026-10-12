@@ -7,7 +7,7 @@ class ProductionBase(BaseModel):
     date_production: date = Field(..., description="Date de la production")
     id_cycle: Optional[int] = Field(None, description="ID du lot/cycle de production")
     id_batiment: int = Field(..., description="ID du bâtiment")
-    type_oeuf: Literal["normal", "double_jaune", "double_jaune_demarrage", "casse", "blanc", "perdu"] = Field(..., description="Type d'œuf")
+    type_oeuf: Literal["normal", "double_jaune", "casse", "blanc", "perdu"] = Field(..., description="Type d'œuf")
     calibre: Optional[Literal["demarrage", "moyen", "gros"]] = Field(None, description="Calibre deduit automatiquement depuis le grammage")
     nombre_oeufs: int = Field(..., ge=0, description="Nombre d'œufs collectés")
     grammage: Decimal = Field(..., ge=0, description="Poids moyen en grammes")
@@ -48,7 +48,7 @@ class ProductionUpdate(BaseModel):
     date_production: Optional[date] = None
     id_cycle: Optional[int] = None
     id_batiment: Optional[int] = None
-    type_oeuf: Optional[Literal["normal", "double_jaune", "double_jaune_demarrage", "casse", "blanc", "perdu"]] = None
+    type_oeuf: Optional[Literal["normal", "double_jaune", "casse", "blanc", "perdu"]] = None
     calibre: Optional[Literal["demarrage", "moyen", "gros"]] = None
     nombre_oeufs: Optional[int] = Field(None, gt=0, description="Nombre d'œufs collectés")
     grammage: Optional[Decimal] = None
@@ -193,7 +193,7 @@ class ProductionDailyInput(BaseModel):
     """One collection for a building, with a shared average egg weight."""
     date_production: date
     id_batiment: int = Field(..., gt=0)
-    quantites: dict[Literal["normal", "double_jaune", "casse", "blanc", "perdu", "double_jaune_demarrage"], int] = Field(default_factory=dict)
+    quantites: dict[Literal["normal", "double_jaune", "casse", "blanc", "perdu"], int] = Field(default_factory=dict)
     grammage: Decimal = Field(default=0, ge=0, max_digits=10, decimal_places=2)
     mortalite: Optional[int] = Field(None, ge=0)
     consommation_aliment_kg: Optional[Decimal] = Field(None, ge=0)

@@ -62,7 +62,6 @@ function ProductionForm({
   const [loadingDaily, setLoadingDaily] = useState(!!initialData);
   const [loadError, setLoadError] = useState('');
   const [versions, setVersions] = useState({});
-  const [hasLegacyType, setHasLegacyType] = useState(false);
   const { register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       date_production: initialData?.date_production?.slice(0, 10) || preselectedDate,
@@ -79,17 +78,14 @@ function ProductionForm({
   const watchedBatiment = watch('id_batiment');
   const watchedGrammage = watch('grammage');
   const watchedDate = watch('date_production');
-  const eggTypeOptions = hasLegacyType
-    ? [...EGG_TYPES, { value: 'double_jaune_demarrage', label: 'Double jaune démarrage (historique)' }]
-    : EGG_TYPES;
-  const totalEggs = eggTypeOptions.reduce(
+  const totalEggs = EGG_TYPES.reduce(
     (sum, type) => sum + (type.value === 'casse' ? 0 : previewCount(quantities[type.value])), 0,
   );
-  const cartonPreview = eggTypeOptions.reduce((sum, type) => {
+  const cartonPreview = EGG_TYPES.reduce((sum, type) => {
     const count = previewCount(quantities[type.value]);
     if (count <= 0 || type.value === 'casse') return sum;
     const cartons = Math.ceil(count / 30);
-    return sum + (type.value.startsWith('double_jaune')
+    return sum + (type.value === 'double_jaune'
       ? (cartons * 2) + 1
       : cartons + Math.ceil(cartons / 10));
   }, 0);
@@ -107,7 +103,7 @@ function ProductionForm({
       const counts = Object.fromEntries(EGG_TYPES.map((type) => [type.value, 0]));
       rows.forEach((row) => {
         const type = row.type_oeuf === 'perdu' ? 'casse' : row.type_oeuf;
-        counts[type] = (counts[type] || 0) + Number(row.nombre_oeufs);
+        if (Object.hasOwn(counts, type)) counts[type] += Number(row.nombre_oeufs);
       });
       const weightRows = rows.filter((row) => !['casse', 'perdu'].includes(row.type_oeuf));
       const weightCount = weightRows.reduce((sum, row) => sum + Number(row.nombre_oeufs), 0);
@@ -124,7 +120,6 @@ function ProductionForm({
         formule: rows.find((row) => row.formule)?.formule || '',
       });
       setVersions(daily.versions || {});
-      setHasLegacyType(counts.double_jaune_demarrage > 0);
     }).catch(() => {
       if (!cancelled) setLoadError('Impossible de charger la saisie quotidienne. Fermez puis rouvrez le formulaire.');
     }).finally(() => {
@@ -326,7 +321,7 @@ function ProductionForm({
                 Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés sont comptabilisés à part.
               </Typography>
             </Grid>
-            {eggTypeOptions.map((type) => (
+            {EGG_TYPES.map((type) => (
               <Grid item xs={12} sm={6} key={type.value}>
                 <TextField
                   {...register(`quantites.${type.value}`, {
