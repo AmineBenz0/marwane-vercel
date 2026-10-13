@@ -318,7 +318,9 @@ function TransactionDetail() {
         : '',
       statut_cheque: paiement.statut_cheque || 'a_encaisser',
       reference_virement: paiement.reference_virement || '',
+      id_lc: paiement.id_lc || null,
       notes: paiement.notes || '',
+      paiements: [],
     });
     setPaiementDialogOpen(true);
   };
@@ -363,7 +365,10 @@ function TransactionDetail() {
   const onSubmitPaiement = async (data) => {
     try {
       // Préparer les données
-      const paiementData = {
+      // Financial attributes are immutable; editing sends operational fields only.
+      const paiementData = editingPaiement ? {
+        notes: data.notes || null,
+      } : {
         date_paiement: data.date_paiement,
         montant: parseFloat(data.montant),
         type_paiement: data.type_paiement,
@@ -378,7 +383,7 @@ function TransactionDetail() {
         paiementData.statut_cheque = data.statut_cheque || 'a_encaisser';
       } else if (data.type_paiement === 'virement') {
         paiementData.reference_virement = data.reference_virement || null;
-      } else if (data.type_paiement === 'lc') {
+      } else if (data.type_paiement === 'lc' && !editingPaiement) {
         paiementData.id_lc = data.id_lc || null;
       }
 
@@ -451,6 +456,7 @@ function TransactionDetail() {
       date_encaissement_prevue: '',
       reference_virement: '',
       notes: '',
+      paiements: [],
     });
     setPaiementDialogOpen(true);
   };
@@ -875,7 +881,7 @@ function TransactionDetail() {
         fullWidth
         fullScreen={isMobile}
       >
-        <form onSubmit={handleSubmitPaiement(onSubmitPaiement)}>
+        <form noValidate onSubmit={handleSubmitPaiement(onSubmitPaiement)}>
           <DialogTitle>
             <Typography variant="h6" component="span">
               {editingPaiement ? '✏️ Modifier le Paiement' : '➕ Ajouter un Paiement'}
@@ -895,8 +901,9 @@ function TransactionDetail() {
             <Box sx={{ pt: 1 }}>
               {editingPaiement ? (
                 <PaiementForm
-                  defaultValues={{}}
-                  transaction={statutPaiement}
+                  defaultValues={editingPaiement}
+                  isEditing
+                  transaction={{ ...transaction, ...statutPaiement }}
                   register={registerPaiement}
                   errors={paiementErrors}
                   watch={watchPaiement}
@@ -906,7 +913,7 @@ function TransactionDetail() {
                 />
               ) : (
                 <MultiPaiementForm
-                  transaction={statutPaiement}
+                  transaction={{ ...transaction, ...statutPaiement }}
                   fields={fields}
                   append={append}
                   remove={remove}

@@ -46,11 +46,10 @@ const TYPES_PAIEMENT = [
  * @param {Function} props.watch - Fonction watch de react-hook-form
  * @param {Function} props.setValue - Fonction setValue de react-hook-form
  */
-function PaiementForm({ defaultValues, transaction, register, errors, watch, setValue }) {
+function PaiementForm({ defaultValues = {}, isEditing = false, transaction, register, errors, watch, setValue }) {
   const typePaiement = watch('type_paiement');
   const montant = watch('montant');
   const selectedLcId = watch('id_lc');
-  const [initialMontantSet, setInitialMontantSet] = useState(false);
   const [availableLcs, setAvailableLcs] = useState([]);
   const [loadingLcs, setLoadingLcs] = useState(false);
   
@@ -58,17 +57,9 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
   const montantRestant = transaction?.montant_restant || 0;
   const montantRestantApres = montantRestant - (parseFloat(montant) || 0);
 
-  // Mettre le montant par défaut au montant restant (une seule fois)
-  useEffect(() => {
-    if (!initialMontantSet && defaultValues?.montant === undefined && montantRestant > 0) {
-      setValue('montant', montantRestant);
-      setInitialMontantSet(true);
-    }
-  }, []);
-
   // Charger les LC disponibles quand le type est LC
   useEffect(() => {
-    if (typePaiement === 'lc') {
+    if (typePaiement === 'lc' && !isEditing) {
       const fetchLcs = async () => {
         setLoadingLcs(true);
         try {
@@ -86,20 +77,25 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
       };
       fetchLcs();
     }
-  }, [typePaiement, transaction]);
+  }, [typePaiement, transaction, isEditing]);
 
   // Si une LC est sélectionnée, mettre à jour le montant
   useEffect(() => {
-    if (typePaiement === 'lc' && selectedLcId) {
-      const selectedLc = availableLcs.find(l => l.id_lc === selectedLcId);
+    if (!isEditing && typePaiement === 'lc' && selectedLcId) {
+      const selectedLc = availableLcs.find(l => Number(l.id_lc) === Number(selectedLcId));
       if (selectedLc) {
         setValue('montant', parseFloat(selectedLc.montant));
       }
     }
-  }, [selectedLcId, availableLcs, typePaiement, setValue]);
+  }, [selectedLcId, availableLcs, typePaiement, setValue, isEditing]);
 
   return (
     <Box>
+      {isEditing && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          La date, le montant, le type de paiement et la LC sont fixes. Pour les corriger, annulez ce paiement puis créez-en un nouveau.
+        </Alert>
+      )}
       {/* Alerte montant restant */}
       {transaction && (
         <Alert severity="info" sx={{ mb: 2 }}>
@@ -107,7 +103,7 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
             <strong>Montant restant à payer : </strong>
             {formatMontant(montantRestant)}
           </Typography>
-          {montant > 0 && (
+          {!isEditing && montant > 0 && (
             <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
               Après ce paiement : {formatMontant(Math.max(0, montantRestantApres))}
             </Typography>
@@ -121,6 +117,7 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
           <DateField
             {...register('date_paiement')}
             label="Date du paiement"
+            disabled={isEditing}
 
             fullWidth
             required
@@ -141,6 +138,7 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
               }
             })}
             label="Montant (MAD)"
+            disabled={isEditing}
             type="number"
             fullWidth
             required
@@ -159,6 +157,7 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
             {...register('type_paiement')}
             select
             label="Type de paiement"
+            disabled={isEditing}
             fullWidth
             required
             error={!!errors.type_paiement}
@@ -270,12 +269,18 @@ function PaiementForm({ defaultValues, transaction, register, errors, watch, set
                 })}
                 select
                 label="Choisir une Lettre de Crédit"
+                value={selectedLcId || ''}
                 fullWidth
                 error={!!errors.id_lc}
                 helperText={errors.id_lc?.message || (availableLcs.length === 0 && !loadingLcs ? 'Aucune LC disponible pour ce partenaire' : '')}
-                disabled={loadingLcs}
+                disabled={loadingLcs || isEditing}
               >
-                {availableLcs.map((l) => (
+                {isEditing && defaultValues.id_lc && (
+                  <MenuItem value={defaultValues.id_lc}>
+                    {defaultValues.numero_reference_lc || `LC #${defaultValues.id_lc}`} ({formatMontant(defaultValues.montant)})
+                  </MenuItem>
+                )}
+                {!isEditing && availableLcs.map((l) => (
                   <MenuItem key={l.id_lc} value={l.id_lc}>
                     {l.numero_reference} - {l.banque_emettrice} ({formatMontant(l.montant)})
                   </MenuItem>
