@@ -1,21 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { Box, IconButton, InputAdornment, TextField } from '@mui/material';
 import { formatShortDate, parseShortDateInput } from './dateFormatting';
 
 /** A locale-independent date field. UI uses dd/MM/yy; state remains YYYY-MM-DD. */
-export default function DateField({
+const DateField = forwardRef(function DateField({
   value: controlledValue,
   onChange,
   onBlur,
   name,
-  ref: registrationRef,
   label,
   InputProps = {},
   InputLabelProps = {},
   inputProps = {},
   ...textFieldProps
-}) {
+}, registrationRef) {
   const pickerRef = useRef(null);
   const textInputRef = useRef(null);
   const isoValueRef = useRef(controlledValue || '');
@@ -117,6 +116,7 @@ export default function DateField({
         tabIndex={-1}
         type="date"
         value={value || ''}
+        disabled={textFieldProps.disabled}
         min={inputProps.min}
         max={inputProps.max}
         onChange={(event) => {
@@ -127,4 +127,6 @@ export default function DateField({
       />
     </Box>
   );
-}
+});
+
+export default DateField;
