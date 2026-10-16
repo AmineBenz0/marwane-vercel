@@ -95,6 +95,7 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} spacing={1}>
           <TextField select fullWidth label="Payé depuis" value={line.id_compte || ''} disabled={disabled}
+            SelectProps={{ displayEmpty: true }} InputLabelProps={{ shrink: true }}
             {...register(`${prefix}.id_compte`)}>
             <MenuItem value="">Caisse</MenuItem>
             {line.id_compte && !comptes.some((account) => Number(account.id_compte) === Number(line.id_compte)) &&

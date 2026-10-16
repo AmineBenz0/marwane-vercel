@@ -29,6 +29,7 @@ describe('Daily vaccine expenses', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter un vaccin' }));
     await selectVaccine();
+    expect(screen.getByRole('combobox', { name: 'Payé depuis' })).toHaveTextContent('Caisse');
     fireEvent.change(screen.getByLabelText('Quantité'), { target: { value: '2' } });
     expect(screen.getByText(/2 unités ×/)).toBeVisible();
     expect(screen.getByText(/Total :/).parentElement).toHaveTextContent(/90/);
