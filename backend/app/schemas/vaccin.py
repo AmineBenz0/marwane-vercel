@@ -14,7 +14,7 @@ class VaccinRead(BaseModel):
 class DepenseVaccinInput(BaseModel):
     id_charge: Optional[int] = Field(None, gt=0)
     id_vaccin: int = Field(..., gt=0)
-    quantite: Decimal = Field(..., gt=0, max_digits=12, decimal_places=3)
+    quantite: int = Field(..., gt=0, le=999_999_999)
     prix_unitaire: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     id_compte: Optional[int] = Field(None, gt=0)
 

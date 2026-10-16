@@ -42,6 +42,21 @@ describe('Daily vaccine expenses', () => {
     })));
   });
 
+  it('rejects zero and fractional vaccine quantities', async () => {
+    renderForm();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un vaccin' }));
+    await selectVaccine();
+
+    const quantity = screen.getByLabelText('Quantité');
+    for (const value of ['1.5', '0']) {
+      fireEvent.change(quantity, { target: { value } });
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      expect(await screen.findByText('La quantité doit être un entier positif')).toBeVisible();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it('updates catalogue prices for future entries while preserving current line snapshots', async () => {
     put.mockImplementation((path) => path === '/vaccins/3/prix'
       ? Promise.resolve({ id_vaccin: 3, nom: 'MA5', prix_defaut: '52.00', unite: 'unité' })

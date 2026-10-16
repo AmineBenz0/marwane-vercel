@@ -37,6 +37,15 @@ def correction(payload, day, **kwargs):
     return {**payload, "versions": day['versions'], "charge_versions": day['charge_versions'], **kwargs}
 
 
+
+@pytest.mark.parametrize('quantity', ['0', '1.5'])
+def test_daily_vaccine_quantity_must_be_a_positive_integer(client, db_session, auth_headers, vaccine_day, quantity):
+    vaccine_day['depenses_vaccins'][0]['quantite'] = quantity
+    response = client.post('/api/v1/productions/daily', json=vaccine_day, headers=auth_headers)
+    assert response.status_code == 422, response.text
+    assert db_session.query(Production).count() == 0
+    assert db_session.query(Charge).count() == 0
+
 def test_custom_price_snapshot_catalogue_and_single_bank_debit(client, db_session, auth_headers, vaccine_day):
     result = create(client, auth_headers, vaccine_day)
     line = result['depenses_vaccins'][0]
@@ -64,13 +73,13 @@ def test_price_correction_replaces_debit_and_rejects_stale_versions(client, db_s
     assert db_session.query(CompteBancaire).one().solde_actuel == Decimal('880')
 
 
-def test_multiple_lines_cash_rounding_removal_and_daily_cancellation(client, db_session, auth_headers, vaccine_day):
+def test_multiple_lines_cash_removal_and_daily_cancellation(client, db_session, auth_headers, vaccine_day):
     vaccine_day['depenses_vaccins'].append({
-        'id_vaccin': vaccine_day['depenses_vaccins'][0]['id_vaccin'], 'quantite': '1.005', 'prix_unitaire': '1',
+        'id_vaccin': vaccine_day['depenses_vaccins'][0]['id_vaccin'], 'quantite': '1', 'prix_unitaire': '1',
     })
     day = create(client, auth_headers, vaccine_day)
     cash = next(line for line in day['depenses_vaccins'] if line['id_compte'] is None)
-    assert Decimal(cash['montant']) == Decimal('1.01')
+    assert Decimal(cash['montant']) == Decimal('1.00')
     assert db_session.query(Caisse).filter_by(statut='active').count() == 1
     remaining = {**vaccine_day['depenses_vaccins'][1], 'id_charge': cash['id_charge']}
     response = client.put('/api/v1/productions/daily', json=correction(vaccine_day, day, depenses_vaccins=[remaining]), headers=auth_headers)

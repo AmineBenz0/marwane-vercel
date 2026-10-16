@@ -66,9 +66,10 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
         </TextField>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
           <TextField fullWidth type="number" label="Quantité" disabled={disabled}
-            inputProps={{ min: '0.001', step: '0.001', max: '999999999.999' }}
-            {...register(`${prefix}.quantite`, { required: 'Indiquez la quantité', min: { value: 0.001, message: 'La quantité doit être positive' },
-              validate: (value) => /^\d+(?:\.\d{1,3})?$/.test(String(value)) || 'Maximum 3 décimales' })}
+            inputProps={{ min: '1', step: '1', max: '999999999' }}
+            {...register(`${prefix}.quantite`, { required: 'Indiquez la quantité', min: { value: 1, message: 'La quantité doit être un entier positif' },
+              max: { value: 999999999, message: 'La quantité dépasse la limite autorisée' },
+              validate: (value) => /^[1-9]\d*$/.test(String(value)) || 'La quantité doit être un entier positif' })}
             error={!!lineErrors.quantite} helperText={lineErrors.quantite?.message || selected?.unite || line.unite || 'Unité'} />
           {isEditingPrice ? <Stack spacing={0.25}>
             <TextField fullWidth type="number" label="Prix unitaire (DH)" disabled={disabled}
