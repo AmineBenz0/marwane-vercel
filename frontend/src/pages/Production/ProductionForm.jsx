@@ -508,7 +508,7 @@ function ProductionForm({
             </Grid>
             <Grid item xs={12}>
               <VaccineExpenseFields control={control} register={register} setValue={setValue} errors={errors}
-                vaccins={vaccins} comptes={comptes} loading={vaccinesLoading} loadError={vaccinesError}
+                vaccins={vaccins} onVaccinsChange={setVaccins} comptes={comptes} loading={vaccinesLoading} loadError={vaccinesError}
                 disabled={isSubmitting || loadingDaily || !!loadError} />
             </Grid>
           </Grid>

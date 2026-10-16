@@ -17,3 +17,7 @@ class DepenseVaccinInput(BaseModel):
     quantite: Decimal = Field(..., gt=0, max_digits=12, decimal_places=3)
     prix_unitaire: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     id_compte: Optional[int] = Field(None, gt=0)
+
+
+class VaccinPriceUpdate(BaseModel):
+    prix_defaut: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)

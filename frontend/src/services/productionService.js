@@ -5,6 +5,7 @@ import { get, post, put, del } from './api';
  */
 export const productionService = {
   getVaccins: () => get('/vaccins'),
+  updateVaccinePrice: (id, data) => put(`/vaccins/${id}/prix`, data),
   getBuildingVaccineExpenses: async (idBatiment) => {
     const rows = [];
     let page;

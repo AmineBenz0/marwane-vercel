@@ -157,3 +157,39 @@ def test_financial_failure_after_first_expense_is_atomic(client, db_session, aut
     assert db_session.query(MouvementBancaire).count() == 0
     assert db_session.query(CompteBancaire).one().solde_actuel == 1000
 
+
+
+
+def test_update_catalogue_price_keeps_recorded_expense_snapshot(client, db_session, auth_headers, vaccine_day):
+    day = create(client, auth_headers, vaccine_day)
+    vaccine_id = day['depenses_vaccins'][0]['id_vaccin']
+
+    response = client.put(
+        f'/api/v1/vaccins/{vaccine_id}/prix',
+        json={'prix_defaut': '60.00'},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert Decimal(response.json()['prix_defaut']) == Decimal('60.00')
+    assert Decimal(db_session.query(Vaccin).one().prix_defaut) == Decimal('60.00')
+    assert Decimal(db_session.query(Charge).one().prix_unitaire) == Decimal('50.25')
+
+
+def test_catalogue_price_may_be_cleared_but_cannot_be_nonpositive(client, auth_headers, vaccine_day):
+    created = create(client, auth_headers, vaccine_day)
+    vaccine_id = created['depenses_vaccins'][0]['id_vaccin']
+
+    cleared = client.put(
+        f'/api/v1/vaccins/{vaccine_id}/prix',
+        json={'prix_defaut': None},
+        headers=auth_headers,
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()['prix_defaut'] is None
+
+    invalid = client.put(
+        f'/api/v1/vaccins/{vaccine_id}/prix',
+        json={'prix_defaut': '0'},
+        headers=auth_headers,
+    )
+    assert invalid.status_code == 422
