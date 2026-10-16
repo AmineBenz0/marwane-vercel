@@ -44,6 +44,14 @@ class ChargeRead(ChargeBase):
     Schéma pour lire une charge.
     """
     id_charge: int
+    source_journaliere: bool = False
+    id_vaccin: Optional[int] = None
+    nom_vaccin: Optional[str] = None
+    unite: Optional[str] = None
+    quantite: Optional[Decimal] = None
+    prix_unitaire: Optional[Decimal] = None
+    id_batiment: Optional[int] = None
+    id_cycle: Optional[int] = None
     date_creation: datetime
     date_modification: datetime
     id_utilisateur_creation: Optional[int]

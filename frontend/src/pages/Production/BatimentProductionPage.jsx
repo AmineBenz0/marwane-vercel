@@ -28,6 +28,7 @@ import useProductionView, { productionLink } from './useProductionView';
 import { DailyActivity, DailySectionHeader, StockSummary } from './ProductionViews';
 import useProductionStock from './useProductionStock';
 import { EGG_TYPE_LABELS, groupDailyProductions } from '../../utils/dailyProduction';
+import { formatVaccineMoney } from '../../utils/vaccineExpenses';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fr-FR');
 const formatDecimal = (value, decimals = 2) => Number(value || 0).toLocaleString('fr-FR', {
@@ -41,6 +42,7 @@ function BatimentProductionPage() {
   const notifySuccess = useNotificationStore((state) => state.success);
   const notifyError = useNotificationStore((state) => state.error);
   const [productions, setProductions] = useState([]);
+  const [vaccineExpenses, setVaccineExpenses] = useState([]);
   const [insightsCycleId, setInsightsCycleId] = useState(null);
   const [batiments, setBatiments] = useState([]);
   const [stockData, setStockData] = useState(null);
@@ -64,10 +66,11 @@ function BatimentProductionPage() {
     setLoading(true);
     setLoadError('');
     try {
-      const [batData, stock, productionData] = await Promise.all([
+      const [batData, stock, productionData, expenses] = await Promise.all([
         batimentService.getBatiments(),
         productionService.getDailyStock(selectedDate),
         productionService.getBuildingProductions(selectedBatimentId),
+        productionService.getBuildingVaccineExpenses(selectedBatimentId),
       ]);
 
       if (request !== loadRequest.current) return;
@@ -75,6 +78,7 @@ function BatimentProductionPage() {
       setStockData(stock);
       setLoadedDate(selectedDate);
       setProductions(productionData || []);
+      setVaccineExpenses(expenses || []);
     } catch (err) {
       if (request !== loadRequest.current) return;
       const message = err?.message || 'Erreur lors du chargement des données du bâtiment';
@@ -110,7 +114,9 @@ function BatimentProductionPage() {
     lost: Number(dailyBuildingStock?.lost_eggs || 0),
   }), [dailyBuildingStock]);
 
-  const dailyHistory = useMemo(() => groupDailyProductions(productions).filter((day) => day.date <= selectedDate), [productions, selectedDate]);
+  const dailyHistory = useMemo(() => groupDailyProductions(productions).filter((day) => day.date <= selectedDate).map((day) => ({
+    ...day, vaccineExpenses: vaccineExpenses.filter((expense) => expense.date_charge === day.date),
+  })), [productions, selectedDate, vaccineExpenses]);
   const selectedDay = dailyHistory.find((day) => day.date === selectedDate) || null;
   const latestTodayEntry = selectedDay?.representative || null;
   const stockCategories = (buildingStock?.categories || []).filter((category) => !['casse', 'perdu'].includes(category.type_oeuf));
@@ -148,12 +154,13 @@ function BatimentProductionPage() {
         return;
       }
       if (!window.confirm(
-        `Désactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} œufs collectés et ${formatNumber(currentDay.lost)} cassés ?`,
+        `Désactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} œufs collectés et ${formatNumber(currentDay.lost)} cassés ?${daily.depenses_vaccins?.length ? ' Les dépenses de vaccins et leurs débits seront aussi annulés.' : ''}`,
       )) return;
       await productionService.deleteDailyProduction({
         id_batiment: day.id_batiment,
         date_production: day.date,
         versions: daily.versions,
+        charge_versions: daily.charge_versions || {},
       });
       notifySuccess('Saisie quotidienne désactivée');
       await Promise.all([loadData(), reloadStock()]);
@@ -223,6 +230,20 @@ function BatimentProductionPage() {
           </>}
         </CardContent>
       </Card>
+      {dailyReady && selectedDay?.vaccineExpenses?.length > 0 && <Card variant="outlined" sx={{ mt: 3, borderRadius: 3 }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight={800}>Dépenses – Vaccins</Typography>
+          <Stack spacing={1} sx={{ mt: 1.5 }}>
+            {selectedDay.vaccineExpenses.map((expense) => <Stack key={expense.id_charge} direction="row" justifyContent="space-between" spacing={2}>
+              <Box><Typography fontWeight={600}>{expense.nom_vaccin}</Typography>
+                <Typography variant="body2" color="text.secondary">{formatDecimal(expense.quantite, 3)} {expense.unite} × {formatVaccineMoney(expense.prix_unitaire)}</Typography>
+              </Box>
+              <Typography fontWeight={800}>{formatVaccineMoney(expense.montant)}</Typography>
+            </Stack>)}
+            <Typography fontWeight={900} textAlign="right">Total : {formatVaccineMoney(selectedDay.vaccineExpenses.reduce((sum, expense) => sum + Number(expense.montant), 0))}</Typography>
+          </Stack>
+        </CardContent>
+      </Card>}
       {dailyReady && batiment && <HistoryCard key={selectedBatimentId + '-' + selectedDate} days={dailyHistory} onEdit={handleEdit} onDelete={handleDelete} />}
       <CycleWeeklyInsights cycleId={insightsCycleId} refreshKey={productions} />
       {dailyReady && batiment && <Box sx={{ mt: 3 }}><DailyActivity key={selectedDate} movements={buildingMovements} /></Box>}
@@ -268,7 +289,7 @@ function HistoryCard({ days, onEdit, onDelete }) {
         {!days.length ? <Typography color="text.secondary">Aucune saisie pour ce bâtiment.</Typography> : <>
           <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
             <Table size="small" aria-label="Saisies quotidiennes" sx={{ minWidth: 690 }}>
-              <TableHead><TableRow>{['Date', 'Collectés', 'Cassés', 'Mortalité', 'Aliment', 'Grammage', 'Actions'].map((label) => <TableCell key={label} sx={{ textTransform: 'none !important' }}>{label}</TableCell>)}</TableRow></TableHead>
+              <TableHead><TableRow>{['Date', 'Collectés', 'Cassés', 'Mortalité', 'Aliment', 'Grammage', 'Vaccins', 'Actions'].map((label) => <TableCell key={label} sx={{ textTransform: 'none !important' }}>{label}</TableCell>)}</TableRow></TableHead>
               <TableBody>{days.slice(visiblePage * 5, visiblePage * 5 + 5).map((day) => (
                 <TableRow key={day.key}>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatShortDate(day.date)}<Typography variant="caption" color="text.secondary" display="block">{formatNumber(day.cartons)} cartons</Typography></TableCell>
@@ -281,6 +302,7 @@ function HistoryCard({ days, onEdit, onDelete }) {
                   <TableCell>{formatNumber(day.mortality)}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.rows.some((row) => row.consommation_aliment_kg != null) ? formatDecimal(day.feed) + ' kg' : '—'}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.grammage != null ? formatDecimal(day.grammage, 1) + ' g' : '—'}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.vaccineExpenses?.length ? formatVaccineMoney(day.vaccineExpenses.reduce((sum, expense) => sum + Number(expense.montant), 0)) : '—'}</TableCell>
                   <TableCell><Stack direction="row">
                     <IconButton aria-label={'Modifier la journée du ' + formatShortDate(day.date)} size="small" onClick={() => onEdit(day.representative)}><EditIcon fontSize="small" /></IconButton>
                     <IconButton aria-label={'Désactiver la journée du ' + formatShortDate(day.date)} size="small" onClick={() => onDelete(day)}><DeleteIcon fontSize="small" /></IconButton>

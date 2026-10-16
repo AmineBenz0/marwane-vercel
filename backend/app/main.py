@@ -13,7 +13,7 @@ from app.config.logging_config import setup_logging
 from app.routers import (
     auth, users, clients, fournisseurs, produits, 
     transactions, caisse, paiements, lettres_credit, cessions_lc,
-    batiments, productions, cycles_production, lots_production, charges, comptes_bancaires, tasks,
+    batiments, productions, cycles_production, lots_production, charges, vaccins, comptes_bancaires, tasks,
     health, financials, alerts, jobs, product_boms, transformations, stock, search, reports,
 )
 from app.utils.rate_limit import limiter
@@ -172,6 +172,7 @@ app.include_router(productions.router, prefix=settings.API_V1_PREFIX)
 app.include_router(cycles_production.router, prefix=settings.API_V1_PREFIX)
 app.include_router(lots_production.router, prefix=settings.API_V1_PREFIX)
 app.include_router(charges.router, prefix=settings.API_V1_PREFIX)
+app.include_router(vaccins.router, prefix=settings.API_V1_PREFIX)
 app.include_router(comptes_bancaires.router, prefix=settings.API_V1_PREFIX)
 app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)
 app.include_router(health.router, prefix=settings.API_V1_PREFIX)

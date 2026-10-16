@@ -39,6 +39,8 @@ from app.utils.production_cycles import (
     refresh_cycle_status,
 )
 from app.models.user import Utilisateur
+from app.services.vaccine_expenses import daily_vaccine_expenses, expense_versions, sync_vaccine_expenses
+from app.services.charge_operations import cancel_charge
 
 router = APIRouter(prefix="/productions", tags=["Productions"])
 logger = logging.getLogger(__name__)
@@ -188,8 +190,11 @@ def _daily_records(db: Session, id_batiment: int, production_date: date):
     ).order_by(Production.id_production).all()
 
 
-def _daily_response(records, batiment):
+def _daily_response(records, batiment, db, day):
+    charges = daily_vaccine_expenses(db, batiment.id_batiment, day)
     return {
+        "depenses_vaccins": charges,
+        "charge_versions": expense_versions(charges),
         "records": [
             {
                 **{column.name: getattr(record, column.name) for column in record.__table__.columns},
@@ -214,7 +219,7 @@ def get_daily_production(
     batiment = db.query(Batiment).filter(Batiment.id_batiment == id_batiment).first()
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
-    return _daily_response(_daily_records(db, id_batiment, date_production), batiment)
+    return _daily_response(_daily_records(db, id_batiment, date_production), batiment, db, date_production)
 
 
 def _save_daily_production(prod_in, db, current_user, *, updating):
@@ -228,13 +233,14 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             raise HTTPException(status_code=404, detail="Batiment introuvable")
 
         existing = _daily_records(db, prod_in.id_batiment, prod_in.date_production)
+        charges = daily_vaccine_expenses(db, prod_in.id_batiment, prod_in.date_production)
         versions = {record.id_production: record.date_modification.isoformat() for record in existing}
         if updating:
             if not existing:
                 raise HTTPException(status_code=404, detail="Saisie quotidienne introuvable")
-            if prod_in.versions != versions:
+            if prod_in.versions != versions or prod_in.charge_versions != expense_versions(charges):
                 raise HTTPException(status_code=409, detail="La saisie a change. Fermez puis rouvrez le formulaire.")
-        elif existing:
+        elif existing or charges:
             raise HTTPException(status_code=409, detail="Cette journee est deja saisie. Modifiez la saisie existante.")
 
         quantities = dict(prod_in.quantites)
@@ -315,7 +321,8 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         db.flush()
         for record in records:
             db.refresh(record)
-        response = _daily_response(records, batiment)
+        sync_vaccine_expenses(db, prod_in, charges, cycle_id, current_user)
+        response = _daily_response(records, batiment, db, prod_in.date_production)
         db.commit()
         return response
     except HTTPException:
@@ -365,8 +372,11 @@ def delete_daily_production(
         if not records:
             raise HTTPException(status_code=404, detail="Saisie quotidienne introuvable")
         versions = {record.id_production: record.date_modification.isoformat() for record in records}
-        if versions != prod_in.versions:
+        charges = daily_vaccine_expenses(db, prod_in.id_batiment, prod_in.date_production)
+        if versions != prod_in.versions or expense_versions(charges) != prod_in.charge_versions:
             raise HTTPException(status_code=409, detail="La saisie a change. Actualisez la page.")
+        for charge in charges:
+            cancel_charge(db, charge, "Annulation de la saisie quotidienne", current_user)
         user_id = current_user.id_utilisateur if current_user else None
         for record in records:
             record.est_actif = False
@@ -1016,6 +1026,8 @@ def update_production(
         raise HTTPException(status_code=404, detail="Production introuvable")
 
     update_dict = prod_in.model_dump(exclude_unset=True)
+    if daily_vaccine_expenses(db, prod.id_batiment, prod.date_production):
+        raise HTTPException(status_code=409, detail="Modifiez cette journée et ses dépenses depuis la saisie journalière.")
     final_batiment_id = update_dict.get("id_batiment", prod.id_batiment)
     final_date = update_dict.get("date_production", prod.date_production)
     cycle = None
@@ -1089,6 +1101,8 @@ def delete_production(
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
 
+    if daily_vaccine_expenses(db, prod.id_batiment, prod.date_production):
+        raise HTTPException(status_code=409, detail="Annulez cette journée et ses dépenses depuis la saisie journalière.")
     prod.est_actif = False
     prod.date_annulation = datetime.now(timezone.utc)
     prod.motif_annulation = raison.strip()

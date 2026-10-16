@@ -19,6 +19,7 @@ from app.models.cycle_production import CycleProduction
 from app.models.production import Production
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.charge import Charge
+from app.models.vaccin import Vaccin
 from app.models.transformation import Transformation, TransformationLigne
 from app.models.nomenclature import Nomenclature, NomenclatureLigne
 from app.models.inventory import MouvementStock
@@ -48,6 +49,7 @@ __all__ = [
     "CompteBancaire",
     "MouvementBancaire",
     "Charge",
+    "Vaccin",
     "Transformation",
     "TransformationLigne",
     "Nomenclature",

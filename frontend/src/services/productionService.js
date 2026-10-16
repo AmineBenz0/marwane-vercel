@@ -4,6 +4,18 @@ import { get, post, put, del } from './api';
  * Service pour la gestion des productions.
  */
 export const productionService = {
+  getVaccins: () => get('/vaccins'),
+  getBuildingVaccineExpenses: async (idBatiment) => {
+    const rows = [];
+    let page;
+    do {
+      page = await get('/charges', { params: {
+        id_batiment: idBatiment, source_journaliere: true, skip: rows.length, limit: 500,
+      } });
+      rows.push(...page);
+    } while (page.length === 500);
+    return rows;
+  },
   getBuildingProductions: async (idBatiment) => {
     const rows = [];
     const pageSize = 500;

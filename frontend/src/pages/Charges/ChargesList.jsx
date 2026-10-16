@@ -41,6 +41,9 @@ import compteBancaireService from '../../services/compteBancaireService';
 import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
+import { useNavigate } from 'react-router-dom';
+import { productionLink } from '../Production/useProductionView';
+import { formatVaccineMoney } from '../../utils/vaccineExpenses';
 
 const CATEGORIES = [
   'Fixe (Loyer, Salaire...)',
@@ -91,6 +94,7 @@ const getPeriodStart = (period) => {
 };
 
 function ChargesList() {
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const notification = useNotification();
@@ -192,6 +196,10 @@ function ChargesList() {
   }, []);
 
   const handleOpenDialog = (charge = null) => {
+    if (charge?.source_journaliere) {
+      navigate(productionLink(charge.id_batiment, charge.date_charge));
+      return;
+    }
     if (charge) {
       setEditingCharge(charge);
       setFormData({
@@ -428,7 +436,11 @@ function ChargesList() {
                   {visibleCharges.map((charge) => (
                     <TableRow key={charge.id_charge} hover>
                       <TableCell>{formatDate(charge.date_charge)}</TableCell>
-                      <TableCell sx={{ fontWeight: 900 }}>{charge.libelle}</TableCell>
+                      <TableCell sx={{ fontWeight: 900 }}>{charge.libelle}
+                        {charge.source_journaliere && <Typography variant="caption" display="block" color="text.secondary">
+                          {Number(charge.quantite)} {charge.unite} × {formatVaccineMoney(charge.prix_unitaire)} · Saisie journalière
+                        </Typography>}
+                      </TableCell>
                       <TableCell>
                         <CategoryChip category={charge.categorie} />
                       </TableCell>
@@ -443,7 +455,7 @@ function ChargesList() {
                         <IconButton size="small" onClick={() => handleOpenDialog(charge)}>
                           <EditIcon fontSize="small" />
                         </IconButton>
-                        <IconButton size="small" color="error" onClick={() => setDeleteTarget(charge)}>
+                        <IconButton size="small" color="error" disabled={charge.source_journaliere} onClick={() => setDeleteTarget(charge)}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
@@ -548,6 +560,9 @@ function ExpenseMobileCard({ charge, paymentSource, onEdit, onDelete }) {
         <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
           <Box>
             <Typography fontWeight={900}>{charge.libelle}</Typography>
+            {charge.source_journaliere && <Typography variant="caption" color="text.secondary">
+              {Number(charge.quantite)} {charge.unite} × {formatVaccineMoney(charge.prix_unitaire)} · Saisie journalière
+            </Typography>}
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {formatDate(charge.date_charge)} · {paymentSource}
             </Typography>
@@ -562,7 +577,7 @@ function ExpenseMobileCard({ charge, paymentSource, onEdit, onDelete }) {
             <IconButton size="small" onClick={onEdit}>
               <EditIcon fontSize="small" />
             </IconButton>
-            <IconButton size="small" color="error" onClick={onDelete}>
+            <IconButton size="small" color="error" disabled={charge.source_journaliere} onClick={onDelete}>
               <DeleteIcon fontSize="small" />
             </IconButton>
           </Box>
