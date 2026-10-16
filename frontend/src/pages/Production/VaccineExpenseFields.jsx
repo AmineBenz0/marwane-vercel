@@ -12,14 +12,14 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
     <Divider sx={{ my: 0.5 }} />
     <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} spacing={0.75}>
       <Box>
-        <Typography variant="subtitle2" fontWeight={900}>D�penses - Vaccins</Typography>
+        <Typography variant="subtitle2" fontWeight={900}>Dépenses – Vaccins</Typography>
         <Typography variant="caption" color="text.secondary">
-          Les montants seront d�bit�s de la caisse ou du compte choisi.
+          Les montants seront débités de la caisse ou du compte choisi.
         </Typography>
       </Box>
       <Button size="small" variant="outlined" startIcon={<AddIcon />} disabled={disabled || loading || !!loadError || !vaccins.length || fields.length >= 100}
         onClick={() => append({ id_vaccin: '', quantite: '1', prix_unitaire: '', id_compte: '' })}>
-        {loading ? 'Chargement.' : 'Ajouter un vaccin'}
+        {loading ? 'Chargement…' : 'Ajouter un vaccin'}
       </Button>
     </Stack>
     {loadError && <Alert severity="warning">{loadError}</Alert>}
@@ -34,7 +34,7 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
           <Button color="error" size="small" startIcon={<DeleteIcon />} disabled={disabled} onClick={() => remove(index)}>Retirer</Button>
         </Stack>
         <TextField select fullWidth label="Vaccin" disabled={disabled}
-          {...register(`${prefix}.id_vaccin`, { required: 'S�lectionnez un vaccin' })}
+          {...register(`${prefix}.id_vaccin`, { required: 'Sélectionnez un vaccin' })}
           value={line.id_vaccin || ''} error={!!lineErrors.id_vaccin} helperText={lineErrors.id_vaccin?.message}
           onChange={(event) => {
             const vaccine = vaccins.find((item) => Number(item.id_vaccin) === Number(event.target.value));
@@ -45,19 +45,19 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
           {vaccins.map((vaccine) => <MenuItem key={vaccine.id_vaccin} value={vaccine.id_vaccin}>{vaccine.nom}</MenuItem>)}
         </TextField>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-          <TextField fullWidth type="number" label="Quantit�" disabled={disabled}
+          <TextField fullWidth type="number" label="Quantité" disabled={disabled}
             inputProps={{ min: '0.001', step: '0.001', max: '999999999.999' }}
-            {...register(`${prefix}.quantite`, { required: 'Indiquez la quantit�', min: { value: 0.001, message: 'La quantit� doit �tre positive' },
-              validate: (value) => /^\d+(?:\.\d{1,3})?$/.test(String(value)) || 'Maximum 3 d�cimales' })}
-            error={!!lineErrors.quantite} helperText={lineErrors.quantite?.message || selected?.unite || line.unite || 'Unit�'} />
+            {...register(`${prefix}.quantite`, { required: 'Indiquez la quantité', min: { value: 0.001, message: 'La quantité doit être positive' },
+              validate: (value) => /^\d+(?:\.\d{1,3})?$/.test(String(value)) || 'Maximum 3 décimales' })}
+            error={!!lineErrors.quantite} helperText={lineErrors.quantite?.message || selected?.unite || line.unite || 'Unité'} />
           <TextField fullWidth type="number" label="Prix unitaire (DH)" disabled={disabled}
             inputProps={{ min: '0.01', step: '0.01', max: '9999999999.99' }}
-            {...register(`${prefix}.prix_unitaire`, { required: 'Indiquez le prix', min: { value: 0.01, message: 'Le prix doit �tre positif' },
-              validate: (value) => /^\d+(?:\.\d{1,2})?$/.test(String(value)) || 'Maximum 2 d�cimales' })}
+            {...register(`${prefix}.prix_unitaire`, { required: 'Indiquez le prix', min: { value: 0.01, message: 'Le prix doit être positif' },
+              validate: (value) => /^\d+(?:\.\d{1,2})?$/.test(String(value)) || 'Maximum 2 décimales' })}
             error={!!lineErrors.prix_unitaire} helperText={lineErrors.prix_unitaire?.message} />
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} spacing={1}>
-          <TextField select fullWidth label="Pay� depuis" value={line.id_compte || ''} disabled={disabled}
+          <TextField select fullWidth label="Payé depuis" value={line.id_compte || ''} disabled={disabled}
             {...register(`${prefix}.id_compte`)}>
             <MenuItem value="">Caisse</MenuItem>
             {line.id_compte && !comptes.some((account) => Number(account.id_compte) === Number(line.id_compte)) &&
