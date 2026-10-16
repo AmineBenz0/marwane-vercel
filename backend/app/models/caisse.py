@@ -54,3 +54,13 @@ class Caisse(Base):
     charge = relationship("Charge", back_populates="mouvements_caisse")
     historiques_solde = relationship("CaisseSoldeHistorique", back_populates="mouvement")
 
+    @property
+    def source_journaliere(self):
+        return bool(self.charge and self.charge.source_journaliere)
+
+    @property
+    def nom_vaccin(self):
+        if self.source_journaliere and self.charge:
+            return self.charge.nom_vaccin
+        return None
+

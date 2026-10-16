@@ -19,6 +19,8 @@ import {
 import { useForm } from 'react-hook-form';
 import { productionService, cycleProductionService } from '../../services/productionService';
 import useNotification from '../../hooks/useNotification';
+import compteBancaireService from '../../services/compteBancaireService';
+import VaccineExpenseFields from './VaccineExpenseFields';
 
 const EGG_TYPES = [
   { value: 'normal', label: 'Oeufs normaux' },
@@ -62,7 +64,12 @@ function ProductionForm({
   const [loadingDaily, setLoadingDaily] = useState(!!initialData);
   const [loadError, setLoadError] = useState('');
   const [versions, setVersions] = useState({});
-  const { register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting } } = useForm({
+  const [chargeVersions, setChargeVersions] = useState({});
+  const [vaccins, setVaccins] = useState([]);
+  const [comptes, setComptes] = useState([]);
+  const [vaccinesLoading, setVaccinesLoading] = useState(false);
+  const [vaccinesError, setVaccinesError] = useState('');
+  const { control, register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       date_production: initialData?.date_production?.slice(0, 10) || preselectedDate,
       id_batiment: initialData?.id_batiment || preselectedBatimentId || '',
@@ -71,6 +78,7 @@ function ProductionForm({
       mortalite: '',
       consommation_aliment_kg: '',
       formule: '',
+      depenses_vaccins: [],
     },
   });
 
@@ -118,8 +126,13 @@ function ProductionForm({
         mortalite: rows.reduce((sum, row) => sum + Number(row.mortalite || 0), 0),
         consommation_aliment_kg: Number(rows.reduce((sum, row) => sum + Number(row.consommation_aliment_kg || 0), 0).toFixed(2)),
         formule: rows.find((row) => row.formule)?.formule || '',
+        depenses_vaccins: (daily.depenses_vaccins || []).map((line) => ({
+          id_charge: line.id_charge, id_vaccin: line.id_vaccin, nom_vaccin: line.nom_vaccin,
+          unite: line.unite, quantite: line.quantite, prix_unitaire: line.prix_unitaire, id_compte: line.id_compte || '',
+        })),
       });
       setVersions(daily.versions || {});
+      setChargeVersions(daily.charge_versions || {});
     }).catch(() => {
       if (!cancelled) setLoadError('Impossible de charger la saisie quotidienne. Fermez puis rouvrez le formulaire.');
     }).finally(() => {
@@ -127,6 +140,19 @@ function ProductionForm({
     });
     return () => { cancelled = true; };
   }, [open, initialData, reset]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    setVaccinesLoading(true);
+    setVaccinesError('');
+    Promise.all([productionService.getVaccins(), compteBancaireService.getComptes()]).then(([catalogue, accounts]) => {
+      if (!cancelled) { setVaccins(catalogue || []); setComptes(accounts || []); }
+    }).catch(() => {
+      if (!cancelled) setVaccinesError('Impossible de charger les vaccins ou les comptes. Rouvrez le formulaire pour ajouter une dépense.');
+    }).finally(() => { if (!cancelled) setVaccinesLoading(false); });
+    return () => { cancelled = true; };
+  }, [open]);
 
   useEffect(() => {
     const fetchFormules = async () => {
@@ -181,7 +207,7 @@ function ProductionForm({
     const counts = Object.fromEntries(Object.entries(data.quantites).map(
       ([type, count]) => [type, Number(count || 0)],
     ));
-    if (!Object.values(counts).some((count) => count > 0) && !Number(data.mortalite || 0) && !Number(data.consommation_aliment_kg || 0)) {
+    if (!Object.values(counts).some((count) => count > 0) && !Number(data.mortalite || 0) && !Number(data.consommation_aliment_kg || 0) && !data.depenses_vaccins.length) {
       setError('root', { message: "Indiquez au moins un nombre d'œufs." });
       return;
     }
@@ -195,7 +221,13 @@ function ProductionForm({
         consommation_aliment_kg: data.consommation_aliment_kg === ''
           ? null : Number(data.consommation_aliment_kg),
         formule: data.formule || null,
-        ...(initialData ? { versions } : {}),
+        depenses_vaccins: data.depenses_vaccins.map((line) => ({
+          ...(line.id_charge ? { id_charge: line.id_charge } : {}),
+          id_vaccin: Number(line.id_vaccin), quantite: String(line.quantite),
+          prix_unitaire: String(line.prix_unitaire), id_compte: line.id_compte ? Number(line.id_compte) : null,
+          ...(line.mettre_a_jour_tarif ? { mettre_a_jour_tarif: true } : {}),
+        })),
+        ...(initialData ? { versions, charge_versions: chargeVersions } : {}),
       };
       if (initialData) {
         await productionService.updateDailyProduction(payload);
@@ -474,6 +506,11 @@ function ProductionForm({
                   </MenuItem>
                 ))}
               </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <VaccineExpenseFields control={control} register={register} setValue={setValue} errors={errors}
+                vaccins={vaccins} onVaccinsChange={setVaccins} comptes={comptes} loading={vaccinesLoading} loadError={vaccinesError}
+                disabled={isSubmitting || loadingDaily || !!loadError} />
             </Grid>
           </Grid>
         </DialogContent>

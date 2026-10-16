@@ -2,6 +2,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from datetime import date, datetime
 from typing import Optional, List, Literal
 from decimal import Decimal
+from app.schemas.charge import ChargeRead
+from app.schemas.vaccin import DepenseVaccinInput
 
 class ProductionBase(BaseModel):
     date_production: date = Field(..., description="Date de la production")
@@ -199,12 +201,14 @@ class ProductionDailyInput(BaseModel):
     consommation_aliment_kg: Optional[Decimal] = Field(None, ge=0)
     formule: Optional[str] = Field(None, max_length=100)
     versions: dict[int, str] = Field(default_factory=dict)
+    depenses_vaccins: list[DepenseVaccinInput] = Field(default_factory=list, max_length=100)
+    charge_versions: dict[int, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_quantities(self) -> "ProductionDailyInput":
         if any(value < 0 for value in self.quantites.values()):
             raise ValueError("Les quantites doivent etre positives ou nulles")
-        if not any(self.quantites.values()) and not (self.mortalite or self.consommation_aliment_kg):
+        if not any(self.quantites.values()) and not (self.mortalite or self.consommation_aliment_kg or self.depenses_vaccins):
             raise ValueError("Indiquez au moins un nombre d'oeufs")
         return self
 
@@ -212,9 +216,12 @@ class ProductionDailyInput(BaseModel):
 class ProductionDailyRead(BaseModel):
     records: List[ProductionRead]
     versions: dict[int, str]
+    depenses_vaccins: list[ChargeRead] = Field(default_factory=list)
+    charge_versions: dict[int, str] = Field(default_factory=dict)
 
 
 class ProductionDailyCancel(BaseModel):
     date_production: date
     id_batiment: int = Field(..., gt=0)
     versions: dict[int, str]
+    charge_versions: dict[int, str] = Field(default_factory=dict)

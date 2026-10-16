@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Charges (Dépenses standalone).
 """
-from sqlalchemy import Column, Integer, String, Date, Numeric, DateTime, ForeignKey, Text, CheckConstraint
+from sqlalchemy import Boolean, Column, Integer, String, Date, Numeric, DateTime, ForeignKey, Text, CheckConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -35,6 +35,15 @@ class Charge(Base):
     
     # Lien optionnel avec un compte bancaire (si payé par virement/chèque)
     id_compte = Column(Integer, ForeignKey("comptes_bancaires.id_compte"), nullable=True)
+
+    source_journaliere = Column(Boolean, nullable=False, default=False, server_default="false")
+    id_vaccin = Column(Integer, ForeignKey("vaccins.id_vaccin"), nullable=True, index=True)
+    nom_vaccin = Column(String(150), nullable=True)
+    unite = Column(String(40), nullable=True)
+    quantite = Column(Numeric(12, 3), nullable=True)
+    prix_unitaire = Column(Numeric(12, 2), nullable=True)
+    id_batiment = Column(Integer, ForeignKey("batiments.id_batiment"), nullable=True, index=True)
+    id_cycle = Column(Integer, ForeignKey("cycles_production.id_cycle"), nullable=True, index=True)
     
     # Relations
     compte_bancaire = relationship("CompteBancaire", backref="charges")
@@ -53,6 +62,17 @@ class Charge(Base):
     mouvements_caisse = relationship("Caisse", back_populates="charge", cascade="all, delete-orphan")
 
     __table_args__ = (
+        Index("ix_charges_daily_vaccins", "id_batiment", "date_charge"),
+        CheckConstraint(
+            "NOT source_journaliere OR (id_vaccin IS NOT NULL AND nom_vaccin IS NOT NULL "
+            "AND unite IS NOT NULL AND quantite IS NOT NULL AND quantite > 0 "
+            "AND prix_unitaire IS NOT NULL AND prix_unitaire > 0 AND id_batiment IS NOT NULL)",
+            name="check_charge_vaccin_details",
+        ),
+        CheckConstraint(
+            "NOT source_journaliere OR montant = round(quantite * prix_unitaire, 2)",
+            name="check_charge_vaccin_total",
+        ).ddl_if(dialect="postgresql"),
         CheckConstraint("montant > 0", name="check_charge_montant_positif"),
         CheckConstraint("statut IN ('active', 'annule')", name="check_statut_charge_valide"),
     )

@@ -4,7 +4,7 @@ Gère les endpoints pour les mouvements, le solde et l'historique de la caisse.
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from datetime import datetime, date, timezone
 from decimal import Decimal
@@ -67,7 +67,7 @@ def get_mouvements(
     """
     # Mouvements de caisse filtrés : inclure les mouvements liés aux transactions actives 
     # OU les mouvements sans transaction (comme les dépenses/charges)
-    query = db.query(Caisse).outerjoin(
+    query = db.query(Caisse).options(joinedload(Caisse.charge)).outerjoin(
         Transaction, Caisse.id_transaction == Transaction.id_transaction
     ).filter(
         Caisse.statut == "active",

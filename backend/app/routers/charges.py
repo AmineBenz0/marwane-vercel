@@ -1,7 +1,7 @@
 """
 Router FastAPI pour la gestion des Charges / Dépenses.
 """
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,12 +9,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.caisse import Caisse
 from app.models.charge import Charge
 from app.models.user import Utilisateur
 from app.schemas.charge import ChargeCreate, ChargeRead, ChargeSummary, ChargeUpdate
-from app.services.financial_ledger import apply_charge_impact, create_cash_snapshot
-from app.services.ledger import record_correction, void_bank_movement, void_cash_movement
+from app.services.financial_ledger import apply_charge_impact
+from app.services.charge_operations import cancel_charge
+from app.services.ledger import record_correction
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/charges", tags=["Charges / Dépenses"])
@@ -25,6 +25,8 @@ def get_charges(
     skip: int = 0,
     limit: int = 100,
     categorie: Optional[str] = None,
+    id_batiment: Optional[int] = None,
+    source_journaliere: Optional[bool] = None,
     date_debut: Optional[date] = None,
     date_fin: Optional[date] = None,
     db: Session = Depends(get_db),
@@ -33,6 +35,10 @@ def get_charges(
     """Récupère la liste des dépenses avec filtres."""
     query = db.query(Charge).filter(Charge.statut == "active")
 
+    if id_batiment is not None:
+        query = query.filter(Charge.id_batiment == id_batiment)
+    if source_journaliere is not None:
+        query = query.filter(Charge.source_journaliere == source_journaliere)
     if categorie:
         query = query.filter(Charge.categorie == categorie)
     if date_debut:
@@ -116,6 +122,8 @@ def update_charge(
     charge = db.query(Charge).filter(Charge.id_charge == id).first()
     if not charge:
         raise HTTPException(status_code=404, detail="Dépense introuvable")
+    if charge.source_journaliere:
+        raise HTTPException(status_code=409, detail="Modifiez cette dépense depuis la saisie journalière du bâtiment.")
     if charge.statut == "annule":
         raise HTTPException(status_code=400, detail="La dépense est déjà annulée")
 
@@ -161,78 +169,11 @@ def delete_charge(
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
     """Supprime une dépense et son mouvement financier associé."""
-    from app.models.compte_bancaire import MouvementBancaire
-
-    charge = db.query(Charge).filter(Charge.id_charge == id).first()
+    charge = db.query(Charge).filter(Charge.id_charge == id).with_for_update().first()
     if not charge:
         raise HTTPException(status_code=404, detail="Dépense introuvable")
-    if charge.statut == "annule":
-        raise HTTPException(status_code=400, detail="La dépense est déjà annulée")
-
-    raison = raison.strip()
-    if not raison:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La raison de l'annulation est obligatoire",
-        )
-
-    bank_mvmt = db.query(MouvementBancaire).filter(
-        MouvementBancaire.id_charge == charge.id_charge,
-        MouvementBancaire.statut == "active",
-    ).first()
-    correction_pairs = []
-    if bank_mvmt:
-        bank_reversal = void_bank_movement(
-            db,
-            bank_mvmt,
-            raison=raison,
-            current_user=current_user,
-            create_reversal_record=True,
-        )
-        correction_pairs.append(
-            (bank_mvmt.id_mouvement, bank_reversal.id_mouvement if bank_reversal else None, "banque")
-        )
-
-    caisse_mvmt = db.query(Caisse).filter(Caisse.id_charge == charge.id_charge, Caisse.statut == "active").first()
-    if caisse_mvmt:
-        caisse_reversal = void_cash_movement(
-            db,
-            caisse_mvmt,
-            raison=raison,
-            current_user=current_user,
-            create_reversal_record=True,
-        )
-        correction_pairs.append(
-            (caisse_mvmt.id_mouvement, caisse_reversal.id_mouvement if caisse_reversal else None, "caisse")
-        )
-        create_cash_snapshot(db, caisse_mvmt.id_mouvement)
-
-    charge.statut = "annule"
-    charge.motif_annulation = raison[:1000]
-    charge.date_annulation = datetime.now(timezone.utc)
-    charge.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
-    if correction_pairs:
-        for original_id, reversal_id, movement_table in correction_pairs:
-            record_correction(
-                db,
-                type_entite="charge",
-                id_entite=charge.id_charge,
-                action="annulation",
-                raison=raison,
-                current_user=current_user,
-                id_mouvement_original=original_id,
-                id_mouvement_inverse=reversal_id,
-                details={"source": "charge", "movement_table": movement_table},
-            )
-    else:
-        record_correction(
-            db,
-            type_entite="charge",
-            id_entite=charge.id_charge,
-            action="annulation",
-            raison=raison,
-            current_user=current_user,
-            details={"source": "charge"},
-        )
+    if charge.source_journaliere:
+        raise HTTPException(status_code=409, detail="Modifiez cette dépense depuis la saisie journalière du bâtiment.")
+    cancel_charge(db, charge, raison, current_user)
     db.commit()
     return None
