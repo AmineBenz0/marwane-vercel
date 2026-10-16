@@ -61,6 +61,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportToPDF } from '../../utils/exportToPDF';
 import useNotification from '../../hooks/useNotification';
+import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 
 /**
@@ -427,44 +428,17 @@ function TransactionsList() {
       } else {
         // Mode création : vérifier si c'est un batch ou une transaction simple
         if (data.batch && data.transactions) {
-          // Création batch : POST /transactions/batch
-          result = await post('/transactions/batch', data.transactions);
-          
-          // Créer les paiements pour les lignes qui ont ajouter_paiement = true
-          if (result && Array.isArray(result) && data.lignesData) {
-            const allPaiementsInBatch = [];
-            
-            result.forEach((transaction, index) => {
-              const ligneData = data.lignesData[index];
-              if (ligneData?.ajouter_paiement && ligneData.paiements?.length > 0) {
-                ligneData.paiements.forEach(p => {
-                  allPaiementsInBatch.push({
-                    id_transaction: transaction.id_transaction,
-                    date_paiement: p.date,
-                    montant: parseFloat(p.montant),
-                    type_paiement: p.type,
-                    numero_cheque: p.numero_cheque || null,
-                    banque: p.banque || null,
-                    reference_virement: p.reference || null,
-                    id_lc: p.id_lc || null,
-                    notes: p.notes || null,
-                  });
-                });
-              }
-            });
-            
-            if (allPaiementsInBatch.length > 0) {
-              try {
-                await post('/paiements/batch', { paiements: allPaiementsInBatch });
-                notification.success(`${result.length} transactions créées avec ${allPaiementsInBatch.length} paiements.`);
-              } catch (err) {
-                console.error('Erreur lors de la création du batch de paiements:', err);
-                notification.warning(`${result.length} transactions créées mais échec de création des paiements.`);
-              }
-            } else {
-              notification.success(`${result.length} transaction(s) créée(s)`);
-            }
-          }
+          result = await post(
+            '/transactions/batch-with-payments',
+            buildTransactionPaymentBatch(data)
+          );
+          const paymentCount = result.reduce(
+            (total, item) => total + (item.paiements?.length || 0),
+            0
+          );
+          notification.success(
+            `${result.length} transaction(s) créée(s) avec ${paymentCount} paiement(s).`
+          );
         } else {
           // Création simple : POST /transactions
           result = await post('/transactions', data);
