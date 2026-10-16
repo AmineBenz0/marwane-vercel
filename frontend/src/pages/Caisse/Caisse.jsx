@@ -75,14 +75,19 @@ const getPeriodParams = (period) => {
 };
 
 const getMovementLabel = (movement) => {
-  if (movement.id_charge) return 'Dépense';
+  if (movement.id_charge) return movement.source_journaliere ? 'Dépense vaccin' : 'Dépense';
   if (movement.id_paiement) return movement.type_mouvement === 'ENTREE' ? 'Paiement client' : 'Paiement fournisseur';
   if (movement.id_transaction) return movement.type_mouvement === 'ENTREE' ? 'Vente encaissée' : 'Achat payé';
   return movement.type_mouvement === 'ENTREE' ? 'Entrée caisse' : 'Sortie caisse';
 };
 
 const getMovementOrigin = (movement) => {
-  if (movement.id_charge) return 'Dépense';
+  if (movement.id_charge) {
+    if (!movement.source_journaliere) return 'Dépense';
+    return movement.nom_vaccin
+      ? `Vaccin ${movement.nom_vaccin} · Saisie journalière`
+      : 'Saisie journalière des vaccins';
+  }
   if (movement.id_paiement) return `Paiement #${movement.id_paiement}`;
   if (movement.id_transaction) return `Transaction #${movement.id_transaction}`;
   return 'Caisse';

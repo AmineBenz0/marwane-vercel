@@ -68,6 +68,8 @@ class MouvementCaisseRead(MouvementCaisseBase):
     date_annulation: datetime | None = None
     id_utilisateur_annulation: int | None = None
     id_mouvement_inverse: int | None = None
+    source_journaliere: bool = False
+    nom_vaccin: str | None = None
 
     model_config = ConfigDict(from_attributes=True)  # Permet la conversion depuis un modèle SQLAlchemy
 

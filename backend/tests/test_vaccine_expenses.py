@@ -193,3 +193,21 @@ def test_catalogue_price_may_be_cleared_but_cannot_be_nonpositive(client, auth_h
         headers=auth_headers,
     )
     assert invalid.status_code == 422
+
+
+
+def test_cash_ledger_labels_daily_vaccine_payment(client, auth_headers, vaccine_day):
+    cash_day = {
+        **vaccine_day,
+        "depenses_vaccins": [
+            {**vaccine_day["depenses_vaccins"][0], "id_compte": None}
+        ],
+    }
+    created = create(client, auth_headers, cash_day)
+    charge_id = created["depenses_vaccins"][0]["id_charge"]
+
+    response = client.get("/api/v1/caisse/mouvements", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    movement = next(row for row in response.json() if row["id_charge"] == charge_id)
+    assert movement["source_journaliere"] is True
+    assert movement["nom_vaccin"] == "MA5"
