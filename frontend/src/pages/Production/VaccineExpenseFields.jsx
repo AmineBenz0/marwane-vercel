@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useFieldArray, useWatch } from 'react-hook-form';
-import { Alert, Box, Button, Divider, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Controller, useFieldArray, useWatch } from 'react-hook-form';
+import { Alert, Box, Button, Checkbox, Divider, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { formatVaccineMoney, vaccineExpenseTotal } from '../../utils/vaccineExpenses';
 import VaccinePriceManagerDialog from './VaccinePriceManagerDialog';
@@ -47,6 +47,10 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
       const unit = selected?.unite || line.unite || 'unité';
       const displayUnit = Number(line.quantite) > 1 && !unit.endsWith('s') ? `${unit}s` : unit;
       const hasCataloguePrice = selected?.prix_defaut !== null && selected?.prix_defaut !== undefined && selected?.prix_defaut !== '';
+      const priceDiffersFromCatalogue = hasCataloguePrice && Number(line.prix_unitaire) !== Number(selected?.prix_defaut);
+      const firstPriceWillBecomeCataloguePrice = !!selected && !hasCataloguePrice && !line.id_charge;
+      const canUpdateCataloguePrice = !!selected && !!line.prix_unitaire && !firstPriceWillBecomeCataloguePrice
+        && (!!line.mettre_a_jour_tarif || !hasCataloguePrice || priceDiffersFromCatalogue);
       return <Stack key={field.id} spacing={1.25} sx={{ p: 1.5, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="body2" fontWeight={700}>Vaccin {index + 1}</Typography>
@@ -59,6 +63,7 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
             const vaccine = vaccins.find((item) => Number(item.id_vaccin) === Number(event.target.value));
             setValue(`${prefix}.id_vaccin`, event.target.value, { shouldDirty: true, shouldValidate: true });
             setValue(`${prefix}.prix_unitaire`, vaccine?.prix_defaut ?? '', { shouldDirty: true, shouldValidate: true });
+            setValue(`${prefix}.mettre_a_jour_tarif`, false, { shouldDirty: true });
             setEditingPrices((current) => ({ ...current, [index]: !vaccine?.prix_defaut }));
           }}>
           {!selected && line.id_vaccin && <MenuItem value={line.id_vaccin}>{line.nom_vaccin || `Vaccin #${line.id_vaccin}`}</MenuItem>}
@@ -76,11 +81,36 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
               inputProps={{ min: '0.01', step: '0.01', max: '9999999999.99' }}
               {...register(`${prefix}.prix_unitaire`, { required: 'Indiquez le prix', min: { value: 0.01, message: 'Le prix doit être positif' },
                 validate: (value) => /^\d+(?:\.\d{1,2})?$/.test(String(value)) || 'Maximum 2 décimales' })}
-              error={!!lineErrors.prix_unitaire} helperText={lineErrors.prix_unitaire?.message || (!hasCataloguePrice ? 'Aucun tarif enregistré : indiquez le prix pour cette saisie.' : 'Ce prix ne vaut que pour cette saisie.')} />
+              error={!!lineErrors.prix_unitaire} helperText={lineErrors.prix_unitaire?.message || (!hasCataloguePrice
+                ? (firstPriceWillBecomeCataloguePrice
+                  ? 'Ce premier prix sera aussi enregistré comme tarif pour les prochaines saisies.'
+                  : 'Aucun tarif enregistré : indiquez le prix pour cette saisie.')
+                : 'Ce prix ne vaut que pour cette saisie.')} />
             {hasCataloguePrice && <Button size="small" sx={{ alignSelf: 'flex-start' }} disabled={disabled}
-              onClick={() => { setValue(`${prefix}.prix_unitaire`, selected.prix_defaut, { shouldDirty: true, shouldValidate: true }); setEditingPrices((current) => ({ ...current, [index]: false })); }}>
+              onClick={() => {
+                setValue(`${prefix}.prix_unitaire`, selected.prix_defaut, { shouldDirty: true, shouldValidate: true });
+                setValue(`${prefix}.mettre_a_jour_tarif`, false, { shouldDirty: true });
+                setEditingPrices((current) => ({ ...current, [index]: false }));
+              }}>
               Utiliser le tarif catalogue
             </Button>}
+            {canUpdateCataloguePrice && <FormControlLabel
+              control={<Controller
+                name={`${prefix}.mettre_a_jour_tarif`}
+                control={control}
+                defaultValue={false}
+                render={({ field: checkbox }) => <Checkbox
+                  size="small"
+                  checked={!!checkbox.value}
+                  onChange={(_, checked) => checkbox.onChange(checked)}
+                  onBlur={checkbox.onBlur}
+                  inputRef={checkbox.ref}
+                  disabled={disabled}
+                />}
+              />}
+              label="Enregistrer aussi comme tarif pour les prochaines saisies"
+              sx={{ ml: 0, '& .MuiFormControlLabel-label': { fontSize: '0.75rem', color: 'text.secondary' } }}
+            />}
           </Stack> :
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 56, px: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
               <Box>

@@ -8,8 +8,11 @@ liste fournie sont initialisés sans prix par défaut. L'unité est générique
 Le formulaire charge le catalogue via `GET /api/v1/vaccins`. Chaque ligne
 comporte un vaccin, une quantité, un prix unitaire modifiable et une caisse ou
 un compte bancaire. Le total est calculé côté serveur avec Decimal, arrondi au
-centime (ROUND_HALF_UP). Les prix par défaut ne sont jamais modifiés par une
-saisie. Le nom, l'unité et le prix appliqués restent conservés dans la dépense.
+centime (ROUND_HALF_UP). Quand un nouveau vaccin n'a pas encore de tarif par
+défaut, le premier prix saisi devient son tarif pour les prochaines saisies.
+Pour une dépense existante, l'utilisateur peut choisir d'enregistrer un prix
+modifié comme nouveau tarif par défaut. Dans tous les cas, le nom, l'unité et
+le prix appliqués restent conservés dans chaque dépense.
 
 Les endpoints `/api/v1/productions/daily` enregistrent la production et les
 dépenses dans une seule transaction. Ils acceptent une journée sans collecte,

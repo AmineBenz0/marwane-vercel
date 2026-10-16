@@ -225,6 +225,7 @@ function ProductionForm({
           ...(line.id_charge ? { id_charge: line.id_charge } : {}),
           id_vaccin: Number(line.id_vaccin), quantite: String(line.quantite),
           prix_unitaire: String(line.prix_unitaire), id_compte: line.id_compte ? Number(line.id_compte) : null,
+          ...(line.mettre_a_jour_tarif ? { mettre_a_jour_tarif: true } : {}),
         })),
         ...(initialData ? { versions, charge_versions: chargeVersions } : {}),
       };

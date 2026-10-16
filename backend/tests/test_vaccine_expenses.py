@@ -46,6 +46,17 @@ def test_daily_vaccine_quantity_must_be_a_positive_integer(client, db_session, a
     assert db_session.query(Production).count() == 0
     assert db_session.query(Charge).count() == 0
 
+def test_first_daily_price_sets_missing_catalogue_default(client, db_session, auth_headers, vaccine_day):
+    vaccine = db_session.query(Vaccin).one()
+    vaccine.prix_defaut = None
+    db_session.commit()
+
+    result = create(client, auth_headers, vaccine_day)
+
+    assert Decimal(db_session.query(Vaccin).one().prix_defaut) == Decimal('50.25')
+    assert Decimal(result['depenses_vaccins'][0]['prix_unitaire']) == Decimal('50.25')
+
+
 def test_custom_price_snapshot_catalogue_and_single_bank_debit(client, db_session, auth_headers, vaccine_day):
     result = create(client, auth_headers, vaccine_day)
     line = result['depenses_vaccins'][0]
@@ -66,11 +77,29 @@ def test_price_correction_replaces_debit_and_rejects_stale_versions(client, db_s
     response = client.put('/api/v1/productions/daily', json=correction(vaccine_day, day, depenses_vaccins=[line]), headers=auth_headers)
     assert response.status_code == 200, response.text
     assert db_session.query(CompteBancaire).one().solde_actuel == Decimal('880')
+    assert db_session.query(Vaccin).one().prix_defaut == Decimal('45.00')
     assert db_session.query(MouvementBancaire).filter_by(statut='active').count() == 1
     # A stale expense token alone must block a write even with fresh production tokens.
     stale = correction(vaccine_day, response.json(), depenses_vaccins=[line], charge_versions=day['charge_versions'])
     assert client.put('/api/v1/productions/daily', json=stale, headers=auth_headers).status_code == 409
     assert db_session.query(CompteBancaire).one().solde_actuel == Decimal('880')
+
+
+def test_daily_price_updates_future_default_only_with_explicit_opt_in(client, db_session, auth_headers, vaccine_day):
+    day = create(client, auth_headers, vaccine_day)
+    charge = day['depenses_vaccins'][0]
+    line = {
+        **vaccine_day['depenses_vaccins'][0],
+        'id_charge': charge['id_charge'],
+        'prix_unitaire': '60',
+        'mettre_a_jour_tarif': True,
+    }
+
+    response = client.put('/api/v1/productions/daily', json=correction(vaccine_day, day, depenses_vaccins=[line]), headers=auth_headers)
+
+    assert response.status_code == 200, response.text
+    assert Decimal(db_session.query(Vaccin).one().prix_defaut) == Decimal('60')
+    assert Decimal(db_session.query(Charge).one().prix_unitaire) == Decimal('60')
 
 
 def test_multiple_lines_cash_removal_and_daily_cancellation(client, db_session, auth_headers, vaccine_day):
@@ -146,6 +175,8 @@ def test_switch_bank_to_cash_and_rollback_cancellation_failure(client, db_sessio
 
 
 def test_financial_failure_after_first_expense_is_atomic(client, db_session, auth_headers, vaccine_day, monkeypatch):
+    db_session.query(Vaccin).one().prix_defaut = None
+    db_session.commit()
     from app.services import vaccine_expenses
     original = vaccine_expenses.apply_charge_impact
     calls = []
@@ -165,7 +196,7 @@ def test_financial_failure_after_first_expense_is_atomic(client, db_session, aut
     assert db_session.query(Charge).count() == 0
     assert db_session.query(MouvementBancaire).count() == 0
     assert db_session.query(CompteBancaire).one().solde_actuel == 1000
-
+    assert db_session.query(Vaccin).one().prix_defaut is None
 
 
 

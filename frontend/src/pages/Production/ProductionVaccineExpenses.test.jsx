@@ -42,6 +42,21 @@ describe('Daily vaccine expenses', () => {
     })));
   });
 
+  it('offers to save a changed daily price as the future catalogue tariff', async () => {
+    renderForm();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un vaccin' }));
+    await selectVaccine();
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier le prix' }));
+    fireEvent.change(screen.getByLabelText('Prix unitaire (DH)'), { target: { value: '52' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Enregistrer aussi comme tarif pour les prochaines saisies' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
+      depenses_vaccins: [expect.objectContaining({ prix_unitaire: '52', mettre_a_jour_tarif: true })],
+    })));
+  });
+
   it('rejects zero and fractional vaccine quantities', async () => {
     renderForm();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeEnabled());
@@ -93,7 +108,7 @@ describe('Daily vaccine expenses', () => {
     })));
   });
 
-  it('requires a price when a vaccine has no saved catalogue tariff', async () => {
+  it('requires a first price and explains that it will become the future tariff', async () => {
     get.mockImplementation((path) => path === '/vaccins'
       ? Promise.resolve([{ id_vaccin: 3, nom: 'MA5', prix_defaut: null, unite: 'unité' }])
       : Promise.resolve([]));
@@ -101,8 +116,15 @@ describe('Daily vaccine expenses', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter un vaccin' }));
     await selectVaccine();
+    expect(screen.getByText('Ce premier prix sera aussi enregistré comme tarif pour les prochaines saisies.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText('Indiquez le prix')).toBeVisible();
     expect(post).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('Prix unitaire (DH)'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
+      depenses_vaccins: [{ id_vaccin: 3, quantite: '1', prix_unitaire: '50', id_compte: null }],
+    })));
   });
 });

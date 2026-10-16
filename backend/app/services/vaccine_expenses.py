@@ -42,13 +42,19 @@ def sync_vaccine_expenses(db, data, existing, cycle_id, current_user):
 
     for line in data.depenses_vaccins:
         charge = by_id.get(line.id_charge)
-        vaccine = db.get(Vaccin, line.id_vaccin)
+        vaccine = db.query(Vaccin).filter(Vaccin.id_vaccin == line.id_vaccin).with_for_update().first()
         if vaccine is None or (not vaccine.est_actif and (charge is None or charge.id_vaccin != line.id_vaccin)):
             raise HTTPException(status_code=400, detail="Vaccin indisponible. Rouvrez le formulaire.")
         amount = (line.quantite * line.prix_unitaire).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         if amount <= 0 or amount >= Decimal("10000000000000"):
             raise HTTPException(status_code=400, detail="Le total de la dépense est hors limites.")
         creating = charge is None
+        if creating and vaccine.prix_defaut is None:
+            # The first price entered for a new daily expense becomes the future default.
+            vaccine.prix_defaut = line.prix_unitaire
+        elif line.mettre_a_jour_tarif:
+            # Explicit opt-in updates only future defaults; saved expenses keep their own price.
+            vaccine.prix_defaut = line.prix_unitaire
         if creating:
             charge = Charge(
                 source_journaliere=True, id_batiment=data.id_batiment,
