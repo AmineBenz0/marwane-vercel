@@ -27,6 +27,7 @@ const EGG_TYPES = [
   { value: 'double_jaune', label: 'Double jaune' },
   { value: 'blanc', label: 'Oeufs blancs' },
   { value: 'casse', label: 'Oeufs casses' },
+  { value: 'perdu', label: 'Oeuf perdu' },
 ];
 
 const quantityError = (value) => {
@@ -87,11 +88,11 @@ function ProductionForm({
   const watchedGrammage = watch('grammage');
   const watchedDate = watch('date_production');
   const totalEggs = EGG_TYPES.reduce(
-    (sum, type) => sum + (type.value === 'casse' ? 0 : previewCount(quantities[type.value])), 0,
+    (sum, type) => sum + (['casse', 'perdu'].includes(type.value) ? 0 : previewCount(quantities[type.value])), 0,
   );
   const cartonPreview = EGG_TYPES.reduce((sum, type) => {
     const count = previewCount(quantities[type.value]);
-    if (count <= 0 || type.value === 'casse') return sum;
+    if (count <= 0 || ['casse', 'perdu'].includes(type.value)) return sum;
     const cartons = Math.ceil(count / 30);
     return sum + (type.value.startsWith('double_jaune')
       ? (cartons * 2) + 1
@@ -110,7 +111,7 @@ function ProductionForm({
       const rows = daily.records || [];
       const counts = Object.fromEntries(EGG_TYPES.map((type) => [type.value, 0]));
       rows.forEach((row) => {
-        const type = row.type_oeuf === 'perdu' ? 'casse' : row.type_oeuf;
+        const type = row.type_oeuf;
         if (Object.hasOwn(counts, type)) counts[type] += Number(row.nombre_oeufs);
       });
       const weightRows = rows.filter((row) => !['casse', 'perdu'].includes(row.type_oeuf));
@@ -350,7 +351,7 @@ function ProductionForm({
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>Nombre d'œufs par type</Typography>
               <Typography variant="caption" color="text.secondary">
-                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés sont comptabilisés à part.
+                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés et perdus sont exclus du total collecté.
               </Typography>
             </Grid>
             {EGG_TYPES.map((type) => (
@@ -371,7 +372,7 @@ function ProductionForm({
             ))}
             <Grid item xs={12}>
               <Typography fontWeight={900}>
-                Total collecté (hors cassés) : {totalEggs.toLocaleString('fr-FR')} œufs
+                Total collecté (hors cassés et perdus) : {totalEggs.toLocaleString('fr-FR')} œufs
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
