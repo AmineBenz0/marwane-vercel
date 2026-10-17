@@ -71,6 +71,7 @@ def void_cash_movement(
             id_transaction=movement.id_transaction,
             id_paiement=movement.id_paiement,
             id_charge=movement.id_charge,
+            id_cession=movement.id_cession,
             date_mouvement=now,
             motif_annulation=raison[:1000],
             date_annulation=now,

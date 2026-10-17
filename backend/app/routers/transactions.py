@@ -10,6 +10,7 @@ from decimal import Decimal
 
 from app.database import get_db
 from app.models.transaction import Transaction
+from app.models.paiement import Paiement
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
@@ -23,10 +24,17 @@ from app.schemas.transaction import (
     TransactionRead,
     TransactionAuditRead
 )
+from app.schemas.paiement import PaiementCreate
+from app.schemas.transaction_payment import (
+    TransactionPaymentBatchCreate,
+    TransactionPaymentBatchItemRead,
+)
 from app.utils.dependencies import get_current_active_user
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
-from app.services.financial_ledger import void_payment
+from app.services.financial_ledger import void_payment, sync_payment_cash_movement
+from app.services.financial import validate_payment_date, validate_payment_idempotency
+from app.services.payment_validation import validate_lc_payment
 from app.services.ledger import record_correction
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
@@ -258,6 +266,164 @@ def create_transactions_batch(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Erreur lors de la création des transactions: {str(e)}"
+        )
+
+
+def _create_transaction_for_atomic_batch(
+    tx_data: TransactionCreate,
+    db: Session,
+    current_user: Utilisateur,
+) -> Transaction:
+    """Create one transaction and its stock movement without committing."""
+    if tx_data.id_client is not None and not db.query(Client).filter(
+        Client.id_client == tx_data.id_client
+    ).first():
+        raise HTTPException(status_code=400, detail=f"Client avec l'ID {tx_data.id_client} introuvable")
+    if tx_data.id_fournisseur is not None and not db.query(Fournisseur).filter(
+        Fournisseur.id_fournisseur == tx_data.id_fournisseur
+    ).first():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Fournisseur avec l'ID {tx_data.id_fournisseur} introuvable",
+        )
+
+    produit = db.query(Produit).filter(Produit.id_produit == tx_data.id_produit).first()
+    if not produit:
+        raise HTTPException(status_code=400, detail=f"Produit avec l'ID {tx_data.id_produit} introuvable")
+    if tx_data.id_client is not None and produit.usage != 'vendu':
+        raise HTTPException(
+            status_code=400,
+            detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients",
+        )
+    if tx_data.id_fournisseur is not None and produit.usage != 'achete':
+        raise HTTPException(
+            status_code=400,
+            detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs",
+        )
+
+    _validate_source_batiment(
+        id_batiment=tx_data.id_batiment,
+        id_client=tx_data.id_client,
+        produit=produit,
+        db=db,
+    )
+    id_cycle = _resolve_transaction_cycle(
+        id_cycle=tx_data.id_cycle,
+        id_batiment=tx_data.id_batiment,
+        id_client=tx_data.id_client,
+        date_transaction=tx_data.date_transaction,
+        produit=produit,
+        db=db,
+    )
+    montant_total = tx_data.montant_total
+    if montant_total is None:
+        montant_total = Decimal(str(tx_data.quantite)) * tx_data.prix_unitaire
+
+    transaction = Transaction(
+        date_transaction=tx_data.date_transaction,
+        id_produit=tx_data.id_produit,
+        quantite=tx_data.quantite,
+        prix_unitaire=tx_data.prix_unitaire,
+        montant_total=montant_total,
+        est_actif=tx_data.est_actif,
+        id_client=tx_data.id_client,
+        id_fournisseur=tx_data.id_fournisseur,
+        id_batiment=tx_data.id_batiment,
+        id_cycle=id_cycle,
+        date_echeance=tx_data.date_echeance,
+        id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
+    )
+    db.add(transaction)
+    db.flush()
+    if transaction.est_actif:
+        record_transaction_movement(db, transaction, current_user)
+    return transaction
+
+
+@router.post(
+    "/batch-with-payments",
+    response_model=List[TransactionPaymentBatchItemRead],
+    status_code=status.HTTP_201_CREATED,
+)
+def create_transactions_with_payments_batch(
+    batch_data: TransactionPaymentBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Create transactions, payments, LC usage, and ledgers in one DB commit."""
+    results = []
+    try:
+        for item in batch_data.items:
+            transaction = _create_transaction_for_atomic_batch(
+                item.transaction,
+                db,
+                current_user,
+            )
+            created_payments = []
+            for payment_input in item.paiements:
+                payment_data = PaiementCreate(
+                    id_transaction=transaction.id_transaction,
+                    **payment_input.model_dump(),
+                )
+
+                if payment_data.cle_idempotence:
+                    existing = db.query(Paiement).filter(
+                        Paiement.cle_idempotence == payment_data.cle_idempotence
+                    ).first()
+                    if existing:
+                        validate_payment_idempotency(existing, payment_data)
+                        created_payments.append(existing)
+                        continue
+
+                validate_payment_date(transaction, payment_data.date_paiement)
+                validate_lc_payment(db, payment_data, transaction, current_user)
+
+                payment_status = "valide"
+                if payment_data.type_paiement == "cheque":
+                    payment_status = (
+                        "valide" if payment_data.statut_cheque == "encaisse"
+                        else "rejete" if payment_data.statut_cheque in {"rejete", "annule"}
+                        else "en_attente"
+                    )
+                payment = Paiement(
+                    **payment_data.model_dump(),
+                    statut=payment_status,
+                    id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
+                )
+                db.add(payment)
+                db.flush()
+                sync_payment_cash_movement(
+                    db,
+                    payment,
+                    transaction,
+                    current_user=current_user,
+                    reason="Création du paiement avec la transaction",
+                )
+                created_payments.append(payment)
+
+            results.append((item.client_ref, transaction, created_payments))
+
+        # One commit covers all transaction, payment, LC, and ledger changes.
+        db.commit()
+        response = []
+        for client_ref, transaction, payments in results:
+            db.refresh(transaction)
+            for payment in payments:
+                db.refresh(payment)
+            response.append({
+                "client_ref": client_ref,
+                "transaction": transaction,
+                "paiements": payments,
+            })
+        return response
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de la création des transactions et paiements: {exc}",
         )
 
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.lettre_credit import LettreDeCredit
+from app.models.caisse import Caisse
 from app.models.fournisseur import Fournisseur
 from app.models.compte_bancaire import MouvementBancaire
 from app.models.cession_lc import CessionLC
@@ -20,7 +21,7 @@ from app.schemas.lettre_credit import (
     LettreCreditVerserBanque,
 )
 from app.utils.dependencies import get_current_active_user
-from app.services.financial_ledger import record_bank_movement, validate_bank_idempotency
+from app.services.financial_ledger import create_cash_snapshot, record_bank_movement, validate_bank_idempotency
 from app.services.letter_credit_cancellation import cancel_letter_credit
 from app.utils.business_date import business_date
 
@@ -338,6 +339,15 @@ def payer_fournisseur_lc(
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
     db.add(cession)
+    db.flush()
+    caisse_movement = Caisse(
+        montant=lc.montant,
+        type_mouvement="SORTIE",
+        id_cession=cession.id_cession,
+    )
+    db.add(caisse_movement)
+    db.flush()
+    create_cash_snapshot(db, caisse_movement.id_mouvement)
     db.commit()
     db.refresh(lc)
     return format_lc_read(lc)
