@@ -16,7 +16,10 @@ def upgrade() -> None:
         "fk_caisse_cession", "caisse", "cessions_lc", ["id_cession"], ["id_cession"], ondelete="SET NULL"
     )
     op.create_index("ix_caisse_id_cession", "caisse", ["id_cession"])
-    op.drop_constraint("check_caisse_mutual_exclusion", "caisse", type_="check")
+    # Production and staging schemas used different names for the previous
+    # origin check. Drop either name before allowing LC-linked cash rows.
+    op.execute("ALTER TABLE caisse DROP CONSTRAINT IF EXISTS check_caisse_mutual_exclusion")
+    op.execute("ALTER TABLE caisse DROP CONSTRAINT IF EXISTS check_caisse_origine")
     op.create_check_constraint(
         "check_caisse_mutual_exclusion",
         "caisse",
@@ -27,12 +30,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("check_caisse_mutual_exclusion", "caisse", type_="check")
+    op.execute("ALTER TABLE caisse DROP CONSTRAINT IF EXISTS check_caisse_mutual_exclusion")
+    op.execute("ALTER TABLE caisse DROP CONSTRAINT IF EXISTS check_caisse_origine")
     op.create_check_constraint(
-        "check_caisse_mutual_exclusion",
+        "check_caisse_origine",
         "caisse",
-        "(id_charge IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL) OR "
-        "(id_charge IS NULL AND (id_transaction IS NOT NULL OR id_paiement IS NOT NULL))",
+        "(id_transaction IS NOT NULL) OR (id_charge IS NOT NULL)",
     )
     op.drop_index("ix_caisse_id_cession", table_name="caisse")
     op.drop_constraint("fk_caisse_cession", "caisse", type_="foreignkey")
