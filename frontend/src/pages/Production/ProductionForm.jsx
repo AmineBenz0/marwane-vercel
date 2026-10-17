@@ -27,6 +27,7 @@ const EGG_TYPES = [
   { value: 'double_jaune', label: 'Double jaune' },
   { value: 'blanc', label: 'Oeufs blancs' },
   { value: 'casse', label: 'Oeufs casses' },
+  { value: 'perdu', label: 'Oeuf perdu' },
 ];
 
 const quantityError = (value) => {
@@ -87,11 +88,11 @@ function ProductionForm({
   const watchedGrammage = watch('grammage');
   const watchedDate = watch('date_production');
   const totalEggs = EGG_TYPES.reduce(
-    (sum, type) => sum + (type.value === 'casse' ? 0 : previewCount(quantities[type.value])), 0,
+    (sum, type) => sum + (['casse', 'perdu'].includes(type.value) ? 0 : previewCount(quantities[type.value])), 0,
   );
   const cartonPreview = EGG_TYPES.reduce((sum, type) => {
     const count = previewCount(quantities[type.value]);
-    if (count <= 0 || type.value === 'casse') return sum;
+    if (count <= 0 || ['casse', 'perdu'].includes(type.value)) return sum;
     const cartons = Math.ceil(count / 30);
     return sum + (type.value === 'double_jaune'
       ? (cartons * 2) + 1
@@ -110,7 +111,7 @@ function ProductionForm({
       const rows = daily.records || [];
       const counts = Object.fromEntries(EGG_TYPES.map((type) => [type.value, 0]));
       rows.forEach((row) => {
-        const type = row.type_oeuf === 'perdu' ? 'casse' : row.type_oeuf;
+        const type = row.type_oeuf;
         if (Object.hasOwn(counts, type)) counts[type] += Number(row.nombre_oeufs);
       });
       const weightRows = rows.filter((row) => !['casse', 'perdu'].includes(row.type_oeuf));
@@ -350,28 +351,43 @@ function ProductionForm({
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>Nombre d'œufs par type</Typography>
               <Typography variant="caption" color="text.secondary">
-                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés sont comptabilisés à part.
+                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés et perdus sont exclus du total collecté.
               </Typography>
             </Grid>
-            {EGG_TYPES.map((type) => (
-              <Grid item xs={12} sm={6} key={type.value}>
-                <TextField
-                  {...register(`quantites.${type.value}`, {
-                    validate: (value) => quantityError(value) || true,
-                  })}
-                  label={type.label}
-                  type="number"
-                  inputProps={{ min: 0, step: 1 }}
-                  fullWidth
-                  disabled={loadingDaily || !!loadError}
-                  error={!!quantityError(quantities[type.value])}
-                  helperText={quantityError(quantities[type.value])}
-                />
-              </Grid>
-            ))}
+            {EGG_TYPES.map((type, index) => {
+              const isLastField = index === EGG_TYPES.length - 1;
+              const isCenteredFinalPair = EGG_TYPES.length % 3 === 2
+                && index >= EGG_TYPES.length - 2;
+              return (
+                <Grid
+                  item
+                  xs={12}
+                  sm={6}
+                  md={4}
+                  key={type.value}
+                  sx={{
+                    ...(isLastField && { sm: { transform: 'translateX(50%)' } }),
+                    ...(isCenteredFinalPair && { md: { transform: 'translateX(50%)' } }),
+                  }}
+                >
+                  <TextField
+                    {...register(`quantites.${type.value}`, {
+                      validate: (value) => quantityError(value) || true,
+                    })}
+                    label={type.label}
+                    type="number"
+                    inputProps={{ min: 0, step: 1 }}
+                    fullWidth
+                    disabled={loadingDaily || !!loadError}
+                    error={!!quantityError(quantities[type.value])}
+                    helperText={quantityError(quantities[type.value])}
+                  />
+                </Grid>
+              );
+            })}
             <Grid item xs={12}>
               <Typography fontWeight={900}>
-                Total collecté (hors cassés) : {totalEggs.toLocaleString('fr-FR')} œufs
+                Total collecté (hors cassés et perdus) : {totalEggs.toLocaleString('fr-FR')} œufs
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>

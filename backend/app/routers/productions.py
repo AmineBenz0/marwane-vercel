@@ -244,7 +244,6 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             raise HTTPException(status_code=409, detail="Cette journee est deja saisie. Modifiez la saisie existante.")
 
         quantities = dict(prod_in.quantites)
-        quantities["casse"] = quantities.get("casse", 0) + quantities.pop("perdu", 0)
 
         user_id = current_user.id_utilisateur if current_user else None
         cycle_ids = {record.id_cycle for record in existing if record.id_cycle is not None}

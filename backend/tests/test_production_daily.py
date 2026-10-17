@@ -30,12 +30,12 @@ def test_daily_types_feed_stock_and_stats_once(client, db_session, auth_headers)
     response = client.post("/api/v1/productions/daily", json=payload, headers=auth_headers)
     assert response.status_code == 201, response.text
     rows = response.json()["records"]
-    assert len(rows) == 4
+    assert len(rows) == 5
     assert {row["type_oeuf"]: row["nombre_oeufs"] for row in rows} == {
-        "normal": 120, "double_jaune": 30, "casse": 10, "blanc": 10,
+        "normal": 120, "double_jaune": 30, "casse": 4, "perdu": 6, "blanc": 10,
     }
-    casse_row = next(row for row in rows if row["type_oeuf"] == "casse")
-    assert casse_row["nombre_cartons"] == 0
+    loss_rows = [row for row in rows if row["type_oeuf"] in {"casse", "perdu"}]
+    assert {row["type_oeuf"]: row["nombre_cartons"] for row in loss_rows} == {"casse": 0, "perdu": 0}
     assert {Decimal(row["grammage"]) for row in rows} == {Decimal("63.25")}
     assert sum(row["mortalite"] or 0 for row in rows) == 2
     assert sum(Decimal(row["consommation_aliment_kg"] or 0) for row in rows) == 12
@@ -76,7 +76,7 @@ def test_daily_update_removes_zero_types_and_preserves_audit(client, db_session,
     rows = response.json()["records"]
     assert len(rows) == 3
     assert {row["type_oeuf"]: row["nombre_oeufs"] for row in rows} == {
-        "double_jaune": 20, "blanc": 50, "casse": 2,
+        "double_jaune": 20, "blanc": 50, "perdu": 2,
     }
     assert all(Decimal(row["grammage"]) == 58 for row in rows)
     assert sum(row["mortalite"] or 0 for row in rows) == 3
@@ -130,13 +130,13 @@ def test_daily_cancel_is_atomic_and_checks_versions(client, db_session, auth_hea
     }
     conflict = client.request("DELETE", "/api/v1/productions/daily", json=cancel_payload, headers=auth_headers)
     assert conflict.status_code == 409
-    assert db_session.query(Production).filter(Production.est_actif.is_(True)).count() == 4
+    assert db_session.query(Production).filter(Production.est_actif.is_(True)).count() == 5
     response = client.request("DELETE", "/api/v1/productions/daily", json={
         **cancel_payload, "versions": daily["versions"],
     }, headers=auth_headers)
     assert response.status_code == 204, response.text
     assert db_session.query(Production).filter(Production.est_actif.is_(True)).count() == 0
-    assert db_session.query(Production).count() == 4
+    assert db_session.query(Production).count() == 5
     assert all(row.date_annulation for row in db_session.query(Production).all())
 
 
