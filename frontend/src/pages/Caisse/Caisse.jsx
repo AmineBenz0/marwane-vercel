@@ -75,7 +75,7 @@ const getPeriodParams = (period) => {
 };
 
 const getMovementLabel = (movement) => {
-  if (movement.id_cession) return 'Paiement fournisseur via LC';
+  if (movement.id_cession) return 'Dépense fournisseur via LC';
   if (movement.id_charge) return movement.source_journaliere ? 'Dépense vaccin' : 'Dépense';
   if (movement.id_paiement) return movement.type_mouvement === 'ENTREE' ? 'Paiement client' : 'Paiement fournisseur';
   if (movement.id_transaction) return movement.type_mouvement === 'ENTREE' ? 'Vente encaissée' : 'Achat payé';
