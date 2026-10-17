@@ -377,6 +377,7 @@ function ProductionForm({
                     label={type.label}
                     type="number"
                     inputProps={{ min: 0, step: 1 }}
+                    InputLabelProps={{ shrink: !!initialData }}
                     fullWidth
                     disabled={loadingDaily || !!loadError}
                     error={!!quantityError(quantities[type.value])}
@@ -399,6 +400,7 @@ function ProductionForm({
                 label="Grammage moyen global (g)"
                 type="number"
                 inputProps={{ min: 0, step: '0.01' }}
+                InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.grammage}
                 helperText={errors.grammage?.message || (totalEggs === 0 ? 'Facultatif en l’absence de collecte' : '')}
@@ -485,6 +487,7 @@ function ProductionForm({
                 label="Mortalité"
                 type="number"
                 inputProps={{ min: 0, step: 1 }}
+                InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.mortalite}
                 helperText={errors.mortalite?.message || 'Optionnel'}
@@ -498,6 +501,7 @@ function ProductionForm({
                 label="Aliment consommé (kg)"
                 type="number"
                 inputProps={{ step: '0.01' }}
+                InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.consommation_aliment_kg}
                 helperText={errors.consommation_aliment_kg?.message || 'Optionnel'}
