@@ -56,6 +56,14 @@ class Caisse(Base):
     paiement = relationship("Paiement", backref="mouvement_caisse")
     charge = relationship("Charge", back_populates="mouvements_caisse")
     historiques_solde = relationship("CaisseSoldeHistorique", back_populates="mouvement")
+    cession = relationship("CessionLC", foreign_keys=[id_cession])
+
+
+    @property
+    def numero_reference_lc(self):
+        if self.cession and self.cession.lettre_credit:
+            return self.cession.lettre_credit.numero_reference
+        return None
 
     @property
     def source_journaliere(self):

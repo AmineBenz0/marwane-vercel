@@ -72,7 +72,8 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     assert original_cash_movement.montant == lc.montant
     cash_response = client.get("/api/v1/caisse/mouvements", headers=auth_headers)
     assert cash_response.status_code == 200, cash_response.text
-    assert any(row["id_cession"] == original_cession_1.id_cession for row in cash_response.json())
+    cash_row = next(row for row in cash_response.json() if row["id_cession"] == original_cession_1.id_cession)
+    assert cash_row["numero_reference_lc"] == lc.numero_reference
 
     first_cancel = cancel(1)
     assert first_cancel.status_code == 200, first_cancel.text
