@@ -354,22 +354,37 @@ function ProductionForm({
                 Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés et perdus sont exclus du total collecté.
               </Typography>
             </Grid>
-            {EGG_TYPES.map((type) => (
-              <Grid item xs={12} sm={6} key={type.value}>
-                <TextField
-                  {...register(`quantites.${type.value}`, {
-                    validate: (value) => quantityError(value) || true,
-                  })}
-                  label={type.label}
-                  type="number"
-                  inputProps={{ min: 0, step: 1 }}
-                  fullWidth
-                  disabled={loadingDaily || !!loadError}
-                  error={!!quantityError(quantities[type.value])}
-                  helperText={quantityError(quantities[type.value])}
-                />
-              </Grid>
-            ))}
+            {EGG_TYPES.map((type, index) => {
+              const isLastField = index === EGG_TYPES.length - 1;
+              const isCenteredFinalPair = EGG_TYPES.length % 3 === 2
+                && index >= EGG_TYPES.length - 2;
+              return (
+                <Grid
+                  item
+                  xs={12}
+                  sm={6}
+                  md={4}
+                  key={type.value}
+                  sx={{
+                    ...(isLastField && { sm: { transform: 'translateX(50%)' } }),
+                    ...(isCenteredFinalPair && { md: { transform: 'translateX(50%)' } }),
+                  }}
+                >
+                  <TextField
+                    {...register(`quantites.${type.value}`, {
+                      validate: (value) => quantityError(value) || true,
+                    })}
+                    label={type.label}
+                    type="number"
+                    inputProps={{ min: 0, step: 1 }}
+                    fullWidth
+                    disabled={loadingDaily || !!loadError}
+                    error={!!quantityError(quantities[type.value])}
+                    helperText={quantityError(quantities[type.value])}
+                  />
+                </Grid>
+              );
+            })}
             <Grid item xs={12}>
               <Typography fontWeight={900}>
                 Total collecté (hors cassés et perdus) : {totalEggs.toLocaleString('fr-FR')} œufs
