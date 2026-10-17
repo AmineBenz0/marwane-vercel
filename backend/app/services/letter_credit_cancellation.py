@@ -5,11 +5,12 @@ from sqlalchemy.orm import Session, aliased
 
 from app.models.compte_bancaire import MouvementBancaire
 from app.models.cession_lc import CessionLC
+from app.models.caisse import Caisse
 from app.models.lettre_credit import LettreDeCredit
 from app.models.paiement import Paiement
 from app.models.user import Utilisateur
 from app.services.financial_ledger import void_payment
-from app.services.ledger import record_correction, void_bank_movement
+from app.services.ledger import record_correction, void_bank_movement, void_cash_movement
 from app.utils.business_date import business_date
 
 
@@ -98,6 +99,18 @@ def cancel_letter_credit(
         db.flush()
 
         reversal_cession.id_cession_origine = cession.id_cession
+
+        for cash_movement in db.query(Caisse).filter(
+            Caisse.id_cession == cession.id_cession,
+            Caisse.statut == "active",
+        ).with_for_update().all():
+            void_cash_movement(
+                db,
+                cash_movement,
+                raison=reason,
+                current_user=current_user,
+                create_reversal_record=True,
+            )
 
         # Reverse in newest-first order to restore the original LC holder.
         lc.type_detenteur = cession.type_cedant

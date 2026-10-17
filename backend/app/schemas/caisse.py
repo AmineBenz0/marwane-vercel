@@ -33,6 +33,10 @@ class MouvementCaisseBase(BaseModel):
         None,
         description="ID du paiement associé"
     )
+    id_cession: int | None = Field(
+        None,
+        description="ID de la cession de lettre de crédit associée"
+    )
     statut: Literal['active', 'annule'] = 'active'
 
 

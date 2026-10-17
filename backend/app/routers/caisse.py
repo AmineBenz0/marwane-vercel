@@ -220,6 +220,7 @@ def get_solde_complet(
     ).filter(
         Caisse.type_mouvement == 'SORTIE',
         Caisse.statut == 'active',
+        Caisse.id_cession.is_(None),
         or_(
             Transaction.est_actif,
             Caisse.id_transaction.is_(None)

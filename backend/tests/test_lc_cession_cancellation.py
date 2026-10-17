@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from app.models.cession_lc import CessionLC
+from app.models.caisse import Caisse
 from app.models.client import Client
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.financial_correction import CorrectionFinanciere
@@ -63,12 +64,24 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     assert first_use.json()["statut"] == "utilisee"
     assert first_use.json()["version_utilisation"] == 1
     original_cession_1 = db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).one()
+    original_cash_movement = db_session.query(Caisse).filter_by(
+        id_cession=original_cession_1.id_cession,
+        statut="active",
+    ).one()
+    assert original_cash_movement.type_mouvement == "SORTIE"
+    assert original_cash_movement.montant == lc.montant
+    cash_response = client.get("/api/v1/caisse/mouvements", headers=auth_headers)
+    assert cash_response.status_code == 200, cash_response.text
+    assert any(row["id_cession"] == original_cession_1.id_cession for row in cash_response.json())
 
     first_cancel = cancel(1)
     assert first_cancel.status_code == 200, first_cancel.text
     assert first_cancel.json()["statut"] == "active"
     assert first_cancel.json()["version_utilisation"] == 1
     db_session.expire_all()
+    assert db_session.query(Caisse).filter_by(
+        id_mouvement=original_cash_movement.id_mouvement
+    ).one().statut == "annule"
 
     stored_lc = db_session.query(LettreDeCredit).filter_by(id_lc=lc.id_lc).one()
     assert stored_lc.est_disponible
