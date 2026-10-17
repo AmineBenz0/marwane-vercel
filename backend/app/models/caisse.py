@@ -36,6 +36,7 @@ class Caisse(Base):
     id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=True, index=True)
     id_paiement = Column(Integer, ForeignKey("paiements.id_paiement"), nullable=True, index=True)
     id_charge = Column(Integer, ForeignKey("charges.id_charge"), nullable=True, index=True)
+    id_cession = Column(Integer, ForeignKey("cessions_lc.id_cession"), nullable=True, index=True)
     
     # Contraintes au niveau SQLAlchemy (seront aussi ajoutées via migrations)
     __table_args__ = (
@@ -43,7 +44,9 @@ class Caisse(Base):
         CheckConstraint("type_mouvement IN ('ENTREE', 'SORTIE')", name='check_type_mouvement'),
         CheckConstraint("statut IN ('active', 'annule')", name='check_statut_caisse_valide'),
         CheckConstraint(
-            "(id_transaction IS NOT NULL) OR (id_charge IS NOT NULL)",
+            "(id_charge IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_cession IS NULL) OR "
+            "(id_cession IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_charge IS NULL) OR "
+            "(id_charge IS NULL AND id_cession IS NULL AND (id_transaction IS NOT NULL OR id_paiement IS NOT NULL))",
             name='check_caisse_origine'
         ),
     )
@@ -53,6 +56,14 @@ class Caisse(Base):
     paiement = relationship("Paiement", backref="mouvement_caisse")
     charge = relationship("Charge", back_populates="mouvements_caisse")
     historiques_solde = relationship("CaisseSoldeHistorique", back_populates="mouvement")
+    cession = relationship("CessionLC", foreign_keys=[id_cession])
+
+
+    @property
+    def numero_reference_lc(self):
+        if self.cession and self.cession.lettre_credit:
+            return self.cession.lettre_credit.numero_reference
+        return None
 
     @property
     def source_journaliere(self):

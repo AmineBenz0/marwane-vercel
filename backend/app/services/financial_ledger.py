@@ -234,7 +234,10 @@ def create_cash_snapshot(db: Session, movement_id: int) -> CaisseSoldeHistorique
             ),
             0,
         )
-    ).filter(Caisse.statut == "active").scalar() or Decimal("0.00")
+    ).filter(
+        Caisse.statut == "active",
+        Caisse.id_cession.is_(None),
+    ).scalar() or Decimal("0.00")
     snapshot = CaisseSoldeHistorique(
         solde=balance,
         id_mouvement=movement_id,

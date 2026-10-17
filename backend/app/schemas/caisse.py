@@ -33,6 +33,10 @@ class MouvementCaisseBase(BaseModel):
         None,
         description="ID du paiement associé"
     )
+    id_cession: int | None = Field(
+        None,
+        description="ID de la cession de lettre de crédit associée"
+    )
     statut: Literal['active', 'annule'] = 'active'
 
 
@@ -62,6 +66,7 @@ class MouvementCaisseRead(MouvementCaisseBase):
     Schéma pour lire un mouvement de caisse.
     Inclut les champs générés automatiquement (id, date).
     """
+    numero_reference_lc: str | None = Field(None, description="Référence de la lettre de crédit associée")
     id_mouvement: int = Field(..., description="Identifiant unique du mouvement de caisse")
     date_mouvement: datetime = Field(..., description="Date et heure du mouvement")
     motif_annulation: str | None = None

@@ -75,6 +75,9 @@ const getPeriodParams = (period) => {
 };
 
 const getMovementLabel = (movement) => {
+  if (movement.id_cession) return movement.numero_reference_lc
+    ? `Paiement fournisseur LC n° ${movement.numero_reference_lc}`
+    : `Paiement fournisseur LC #${movement.id_cession}`;
   if (movement.id_charge) return movement.source_journaliere ? 'Dépense vaccin' : 'Dépense';
   if (movement.id_paiement) return movement.type_mouvement === 'ENTREE' ? 'Paiement client' : 'Paiement fournisseur';
   if (movement.id_transaction) return movement.type_mouvement === 'ENTREE' ? 'Vente encaissée' : 'Achat payé';
@@ -82,6 +85,7 @@ const getMovementLabel = (movement) => {
 };
 
 const getMovementOrigin = (movement) => {
+  if (movement.id_cession) return `Cession LC #${movement.id_cession}`;
   if (movement.id_charge) {
     if (!movement.source_journaliere) return 'Dépense';
     return movement.nom_vaccin
