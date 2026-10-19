@@ -256,7 +256,7 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             if not cycle and db.query(CycleProduction.id_cycle).filter(
                 CycleProduction.id_batiment == prod_in.id_batiment,
             ).first():
-                raise HTTPException(status_code=400, detail="Aucun cycle pour cette date. Démarrez un cycle depuis le bâtiment.")
+                raise HTTPException(status_code=400, detail="Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez la date et la répartition dans Gestion des lots.")
             cycle_id = cycle.id_cycle if cycle else None
         if cycle:
             validate_cycle_date(cycle, prod_in.date_production)
@@ -418,7 +418,7 @@ def create_production(
         if not cycle and db.query(CycleProduction.id_cycle).filter(
             CycleProduction.id_batiment == prod_in.id_batiment,
         ).first():
-            raise HTTPException(status_code=400, detail="Aucun cycle pour cette date.")
+            raise HTTPException(status_code=400, detail="Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez Gestion des lots.")
     if cycle:
         validate_cycle_date(cycle, prod_in.date_production)
         if prod_in.date_production > date.today():

@@ -56,11 +56,11 @@ def _lock_buildings(db, ids, *, require_active=False):
         raise HTTPException(status_code=400, detail="La répartition nécessite des bâtiments actifs.")
 
 
-def _lock_lot(db, id_lot):
+def _lock_lot(db, id_lot, extra_building_ids=()):
     lot = db.query(LotProduction).filter(LotProduction.id_lot == id_lot).populate_existing().with_for_update().first()
     if not lot:
         raise HTTPException(status_code=404, detail="Lot introuvable.")
-    _lock_buildings(db, [row.id_batiment for row in lot.allocations])
+    _lock_buildings(db, sorted({row.id_batiment for row in lot.allocations} | set(extra_building_ids)))
     # Refresh after waiting on any concurrent production writer.
     for row in lot.allocations:
         db.refresh(row)
@@ -149,11 +149,15 @@ def get_lot_egg_evolution(id_lot: int, db: Session = Depends(get_db),
 @router.put("/{id_lot}")
 def update_lot(id_lot: int, payload: LotProductionCreate, db: Session = Depends(get_db),
                current_user: Utilisateur = Depends(get_current_active_user)):
-    lot = _lock_lot(db, id_lot)
+    requested_ids = {row.id_batiment for row in payload.repartitions}
+    lot = _lock_lot(db, id_lot, requested_ids)
     if lot.statut == "termine":
         raise HTTPException(status_code=400, detail="Ce lot est terminé.")
-    if {row.id_batiment for row in payload.repartitions} != {row.id_batiment for row in lot.allocations}:
-        raise HTTPException(status_code=400, detail="Les bâtiments d'un lot démarré ne peuvent pas changer.")
+    existing_ids = {row.id_batiment for row in lot.allocations}
+    if not existing_ids.issubset(requested_ids):
+        raise HTTPException(status_code=400, detail="Une affectation existante doit être conservée pour préserver son historique.")
+    new_ids = requested_ids - existing_ids
+    _lock_buildings(db, sorted(new_ids), require_active=True)
     ids = [row.id_cycle for row in lot.allocations]
     _validate_start(db, payload, ids)
     if db.query(Production).filter(
@@ -168,6 +172,13 @@ def update_lot(id_lot: int, payload: LotProductionCreate, db: Session = Depends(
     for cycle in lot.allocations:
         cycle.effectif_initial = counts[cycle.id_batiment]
         _sync_allocation(cycle, lot)
+    for building_id in sorted(new_ids):
+        cycle = CycleProduction(
+            id_batiment=building_id, effectif_initial=counts[building_id],
+            id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
+        )
+        _sync_allocation(cycle, lot)
+        lot.allocations.append(cycle)
     db.commit()
     db.refresh(lot)
     return lot_to_dict(db, lot)

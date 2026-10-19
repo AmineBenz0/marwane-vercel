@@ -51,6 +51,43 @@ def test_shared_age_formula_and_independent_results(client, db_session, auth_hea
         assert weeks["semaines"][-1]["age_semaines"] == 18
 
 
+def test_add_building_to_existing_lot_preserves_records_and_shared_closure(client, db_session, auth_headers):
+    payload, lot = make_arrival(client, db_session, auth_headers)
+    first = lot["repartitions"][0]
+    assert daily(client, auth_headers, first["id_batiment"], 3).status_code == 201
+    extra = Batiment(nom="Shared C", est_actif=True)
+    db_session.add(extra)
+    db_session.commit()
+    payload["repartitions"][0]["effectif_initial"] = 50
+    payload["repartitions"].append({"id_batiment": extra.id_batiment, "effectif_initial": 50})
+    result = client.put(f"/api/v1/lots-production/{lot['id_lot']}", json=payload, headers=auth_headers)
+    assert result.status_code == 200, result.text
+    allocations = result.json()["repartitions"]
+    assert len(allocations) == 3
+    assert {row["id_cycle"] for row in lot["repartitions"]}.issubset({row["id_cycle"] for row in allocations})
+    added = next(row for row in allocations if row["id_batiment"] == extra.id_batiment)
+    assert added["id_lot"] == lot["id_lot"]
+    assert added["age_semaines"] == first["age_semaines"]
+    assert daily(client, auth_headers, extra.id_batiment, 2).status_code == 201
+    saved = client.get("/api/v1/productions/daily", params={
+        "id_batiment": first["id_batiment"], "date_production": str(date.today()),
+    }, headers=auth_headers).json()
+    assert saved["records"][0]["id_cycle"] == first["id_cycle"]
+    closed = client.post(f"/api/v1/lots-production/{lot['id_lot']}/terminer", json={}, headers=auth_headers)
+    assert closed.status_code == 200, closed.text
+    assert {row["statut"] for row in closed.json()["repartitions"]} == {"termine"}
+
+
+def test_edit_lot_cannot_drop_an_existing_building(client, db_session, auth_headers):
+    payload, lot = make_arrival(client, db_session, auth_headers)
+    payload["repartitions"] = [payload["repartitions"][0]]
+    payload["repartitions"][0]["effectif_initial"] = 300
+    result = client.put(f"/api/v1/lots-production/{lot['id_lot']}", json=payload, headers=auth_headers)
+    assert result.status_code == 400
+    db_session.expire_all()
+    assert db_session.query(CycleProduction).filter(CycleProduction.id_lot == lot["id_lot"]).count() == 2
+
+
 @pytest.mark.parametrize("change", ["total", "duplicate", "negative", "empty"])
 def test_invalid_distribution_is_rejected_atomically(client, db_session, auth_headers, change):
     payload, _ = make_arrival(client, db_session, auth_headers)

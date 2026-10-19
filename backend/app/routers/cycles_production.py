@@ -190,7 +190,7 @@ def update_cycle(
 
     if cycle.id_lot:
         if len(cycle.lot.allocations) > 1:
-            raise HTTPException(status_code=409, detail="Modifiez le lot partagé depuis Production & stock.")
+            raise HTTPException(status_code=409, detail="Modifiez le lot partagé depuis Gestion des lots.")
         data = {
             "nom_lot": cycle.lot.nom_lot, "souche": cycle.lot.souche,
             "date_debut": cycle.lot.date_debut, "age_depart_semaines": cycle.lot.age_depart_semaines,
@@ -263,7 +263,7 @@ def terminate_cycle(
 
     if cycle.id_lot:
         if len(cycle.lot.allocations) > 1:
-            raise HTTPException(status_code=409, detail="Terminez le lot partagé depuis Production & stock.")
+            raise HTTPException(status_code=409, detail="Terminez le lot partagé depuis Gestion des lots.")
         return terminate_lot(cycle.id_lot, payload, db, current_user)["repartitions"][0]
 
     _ensure_batiment(db, cycle.id_batiment)

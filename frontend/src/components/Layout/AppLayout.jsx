@@ -69,6 +69,7 @@ const NAV_SECTIONS = [
     label: 'Travail terrain',
     items: [
       { text: 'Production & stock', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/production' },
+      { text: 'Gestion des lots', icon: <InventoryIcon sx={{ fontSize: 20 }} />, path: '/production/lots' },
       { text: 'Par bâtiment', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/batiment' },
     ],
   },

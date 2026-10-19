@@ -123,7 +123,7 @@ def require_active_cycle_for_date(
     if not cycle:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucun lot actif pour ce batiment. Commencez un lot avant de saisir la production.",
+            detail="Aucun lot actif n'est affecté à ce bâtiment. Vérifiez la date et la répartition dans Gestion des lots.",
         )
 
     if target_date < cycle.date_debut:

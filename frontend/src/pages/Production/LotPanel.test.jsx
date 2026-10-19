@@ -30,7 +30,7 @@ describe('LotPanel allocation limits', () => {
   it('blocks an allocation that would exceed the incoming total and identifies that field', async () => {
     render(
       <MemoryRouter>
-        <LotPanel buildings={buildings} refreshKey={0} onChange={vi.fn()} />
+        <LotPanel buildings={buildings} management refreshKey={0} onChange={vi.fn()} />
       </MemoryRouter>,
     );
 
@@ -74,7 +74,7 @@ const historicalLot = {
 };
 
 function renderPanel() {
-  return render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} onChange={vi.fn()} /></MemoryRouter>);
+  return render(<MemoryRouter><LotPanel buildings={buildings} management refreshKey={0} onChange={vi.fn()} /></MemoryRouter>);
 }
 
 describe('LotPanel single active lot and history', () => {

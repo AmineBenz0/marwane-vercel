@@ -305,7 +305,9 @@ function ProductionForm({
           {loadingDaily && <Typography sx={{ mb: 2 }}>Chargement de la saisie...</Typography>}
           {contextLoading && <Typography sx={{ mb: 2 }}>Chargement du cycle...</Typography>}
           {contextError && <Alert severity="error" sx={{ mb: 2 }}>{contextError}</Alert>}
-          {missingCycle && <Alert severity="warning" sx={{ mb: 2 }}>Aucun cycle pour cette date. Démarrez un cycle depuis la page du bâtiment.</Alert>}
+          {missingCycle && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" href="/production/lots">Gestion des lots</Button>}>
+            Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez la date et la répartition dans Gestion des lots.
+          </Alert>}
           {cycleContext?.cycle && <Box sx={{ p: 1.5, mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
             <Typography fontWeight={800}>{cycleContext.cycle.nom_cycle}</Typography>
             <Typography variant="body2" color="text.secondary">

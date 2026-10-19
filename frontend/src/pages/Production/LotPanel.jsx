@@ -4,6 +4,7 @@ import {
   Divider, Stack, TextField, Typography,
 } from '@mui/material';
 import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { lotProductionService } from '../../services/productionService';
@@ -16,7 +17,8 @@ const message = (error) => {
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
 };
 
-export default function LotPanel({ buildings, refreshKey, onChange }) {
+export default function LotPanel({ buildings, refreshKey, onChange, management = false }) {
+  const navigate = useNavigate();
   const [lots, setLots] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -45,15 +47,17 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
     .flatMap((lot) => (lot.repartitions || []).map((row) => Number(row.id_batiment))));
   const available = buildings.filter((building) => building.est_actif !== false && !occupied.has(Number(building.id_batiment)));
   const distributionBuildings = dialog === 'edit'
-    ? (selected?.repartitions || []).map((row) => ({ id_batiment: row.id_batiment, nom: row.nom_batiment }))
+    ? [...(selected?.repartitions || []).map((row) => ({ id_batiment: row.id_batiment, nom: row.nom_batiment })), ...available]
     : available;
+  const existingBuildingIds = new Set((selected?.repartitions || []).map((row) => Number(row.id_batiment)));
+  const minimumAllocation = (building) => dialog === 'edit' && existingBuildingIds.has(Number(building.id_batiment)) ? 1 : 0;
   const assigned = distributionBuildings.reduce((sum, building) => sum + Number(counts[building.id_batiment] || 0), 0);
   const allocationLimit = (buildingId) => Math.max(0, Number(values.effectif_initial || 0)
     - distributionBuildings.filter((building) => building.id_batiment !== buildingId)
       .reduce((sum, building) => sum + Number(counts[building.id_batiment] || 0), 0));
   const allocationError = (building) => {
     const count = Number(counts[building.id_batiment] || 0);
-    return !Number.isInteger(count) || count < (dialog === 'edit' ? 1 : 0) || count > allocationLimit(building.id_batiment);
+    return !Number.isInteger(count) || count < minimumAllocation(building) || count > allocationLimit(building.id_batiment);
   };
   const balanced = Number(values.effectif_initial) > 0 && assigned === Number(values.effectif_initial)
     && !allocationErrorBuildingId
@@ -102,7 +106,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
       setSelectedId(String(result.id_lot));
       setDialog('');
       setRevision((old) => old + 1);
-      onChange();
+      onChange?.();
     } catch (err) { setError(message(err)); }
     finally { setSaving(false); }
   };
@@ -126,7 +130,8 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
           {loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
-          {loaded && !activeLot && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
+          {!management && <Button variant="outlined" onClick={() => navigate('/production/lots')}>Gestion des lots</Button>}
+          {management && loaded && !activeLot && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
         </Stack>
       </Stack>
       {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
@@ -141,11 +146,20 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
           <Fact label="Formule d’aliment" value={selected.formule_suggeree || '—'} />
         </Box>
         <Divider sx={{ mt: 2.5, mb: 2 }} />
-        {selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        {management && <Box component="section" aria-label="Répartition du lot" sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1 }}>Répartition par bâtiment</Typography>
+          <Stack spacing={1} divider={<Divider />}>
+            {(selected.repartitions || []).map((row) => <Stack key={row.id_cycle} direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
+              <Typography fontWeight={600}>{row.nom_batiment}</Typography>
+              <Typography variant="body2" color="text.secondary">{number(row.effectif_initial)} entrants · {number(row.effectif_actuel)} restants</Typography>
+            </Stack>)}
+          </Stack>
+        </Box>}
+        {management && selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
           <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}
             sx={{ color: 'error.main', borderColor: 'error.main', '&:hover': { color: 'error.dark', borderColor: 'error.dark', bgcolor: 'action.hover' } }}>Terminer le lot</Button>
-        </Stack> : <Typography variant="body2" color="text.secondary">Progression arrêtée à la date de fin pour tous les bâtiments.</Typography>}
+        </Stack> : selected.statut === 'termine' && <Typography variant="body2" color="text.secondary">Progression arrêtée à la date de fin pour tous les bâtiments.</Typography>}
         <LotEggChart key={selected.id_lot} lotId={selected.id_lot} refreshKey={`${refreshKey}-${revision}`} />
       </>}
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="sm" fullWidth>
@@ -179,12 +193,13 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
                 <TextField label="Nombre total de poussins entrants" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => { setAllocationErrorBuildingId(''); field('effectif_initial', event.target.value); }} />
                 <TextField label="Âge à l’arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="Le même âge et la même formule suggérée pour tous les bâtiments." />
                 <Typography fontWeight={800}>Répartition par bâtiment</Typography>
+                {dialog === 'edit' && <Typography variant="body2" color="text.secondary">Ajoutez un bâtiment disponible en lui affectant un effectif. Le total réparti doit correspondre au nombre de poussins entrants.</Typography>}
                 {distributionBuildings.map((building) => {
                   const limit = allocationLimit(building.id_batiment);
                   const overLimit = Number(counts[building.id_batiment] || 0) > limit;
                   const attemptedOvershoot = allocationErrorBuildingId === String(building.id_batiment);
                   return <TextField key={building.id_batiment} label={'Poussins · ' + building.nom} type="number"
-                    inputProps={{ min: dialog === 'edit' ? 1 : 0, max: limit, step: 1 }}
+                    inputProps={{ min: minimumAllocation(building), max: limit, step: 1 }}
                     value={counts[building.id_batiment] ?? ''}
                     error={allocationError(building) || attemptedOvershoot}
                     helperText={overLimit || attemptedOvershoot ? 'La quantité dépasse le nombre total de poussins entrants.' : undefined}
