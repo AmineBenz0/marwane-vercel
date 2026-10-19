@@ -54,7 +54,6 @@ function ProductionForm({
   preselectedBatimentId = '',
   preselectedDate = new Date().toISOString().split('T')[0],
   title,
-  description,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
