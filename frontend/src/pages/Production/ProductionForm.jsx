@@ -340,22 +340,57 @@ function ProductionForm({
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('id_batiment', { required: 'Batiment requis' })}
-                select
-                value={watchedBatiment || ''}
-                onChange={(event) => setValue('id_batiment', event.target.value, { shouldValidate: true })}
-                label="Batiment"
-                fullWidth
-                SelectProps={{ readOnly: !!preselectedBatimentId || !!initialData }}
-                error={!!errors.id_batiment}
-                helperText={errors.id_batiment?.message}
-              >
-                <MenuItem value="" disabled>Selectionner un batiment</MenuItem>
-                {batiments.map((batiment) => (
-                  <MenuItem key={batiment.id_batiment} value={batiment.id_batiment}>{batiment.nom}</MenuItem>
-                ))}
-              </TextField>
+              {preselectedBatimentId || initialData ? (
+                <>
+                  <input
+                    type="hidden"
+                    {...register('id_batiment', { required: 'Bâtiment requis' })}
+                  />
+                  <Box
+                    role="group"
+                    aria-label="Bâtiment"
+                    sx={{
+                      minHeight: 56,
+                      px: 2,
+                      py: 1,
+                      borderRadius: 2,
+                      bgcolor: 'action.hover',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      gap: 0.25,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                      Bâtiment
+                    </Typography>
+                    <Typography variant="body1" fontWeight={700}>
+                      {batiments.find((batiment) => String(batiment.id_batiment) === String(watchedBatiment))?.nom || '—'}
+                    </Typography>
+                  </Box>
+                  {errors.id_batiment?.message && (
+                    <Typography variant="caption" color="error.main">
+                      {errors.id_batiment.message}
+                    </Typography>
+                  )}
+                </>
+              ) : (
+                <TextField
+                  {...register('id_batiment', { required: 'Bâtiment requis' })}
+                  select
+                  value={watchedBatiment || ''}
+                  onChange={(event) => setValue('id_batiment', event.target.value, { shouldValidate: true })}
+                  label="Bâtiment"
+                  fullWidth
+                  error={!!errors.id_batiment}
+                  helperText={errors.id_batiment?.message}
+                >
+                  <MenuItem value="" disabled>Sélectionner un bâtiment</MenuItem>
+                  {batiments.map((batiment) => (
+                    <MenuItem key={batiment.id_batiment} value={batiment.id_batiment}>{batiment.nom}</MenuItem>
+                  ))}
+                </TextField>
+              )}
             </Grid>
 
             <Grid item xs={12}><Divider sx={{ my: 1 }} /></Grid>
