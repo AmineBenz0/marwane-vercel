@@ -116,7 +116,6 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
                 <Typography variant="body2" color="text.secondary">
                   {line.prix_unitaire ? `${line.quantite || 0} ${displayUnit} × ${formatVaccineMoney(line.prix_unitaire)}` : 'À renseigner'}
                 </Typography>
-                {!!line.prix_unitaire && }
               </Box>
               <Button size="small" disabled={disabled} onClick={() => setEditingPrices((current) => ({ ...current, [index]: true }))}>
                 Modifier le prix
