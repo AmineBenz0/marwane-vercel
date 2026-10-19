@@ -38,16 +38,16 @@ describe('Building production views', () => {
     renderPage();
     expect(await screen.findByText('Stock disponible maintenant')).toBeVisible();
     expect(await screen.findByText('Production non saisie')).toBeVisible();
-    expect(screen.getAllByText('125 œufs')).toHaveLength(2);
+    expect(screen.getAllByText('125 oufs')).toHaveLength(2);
     expect(screen.getByText(/^Normal - Gros :/)).toBeVisible();
-    expect(screen.getByText('Aliment consommé')).toBeVisible();
+    expect(screen.getByText('Aliment consomm�')).toBeVisible();
     expect(screen.getByText('Historique des saisies')).toBeVisible();
     expect(screen.queryByText('Oeufs casses')).not.toBeInTheDocument();
     expect(screen.queryByText('99,00 kg')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Cycle des volailles' })).getByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
-    expect(screen.queryByRole('link', { name: 'Gérer les lots' })).not.toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Journée sélectionnée' })).queryByRole('button', { name: 'Saisir la journée' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Production du b�timent' })).getByRole('button', { name: 'Saisir la journ�e' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Gestion des lots' })).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Journ�e s�lectionn�e' })).queryByRole('button', { name: 'Saisir la journ�e' })).not.toBeInTheDocument();
   });
   it('accepts legacy links and preserves the daily date without applying it to stock', async () => {
     renderPage('/production/batiment/7?view=stocks&date=2026-10-05');
@@ -58,7 +58,7 @@ describe('Building production views', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Vue globale' }));
     expect(navigate).toHaveBeenCalledWith('/production?date=2026-10-05');
   });
-  it('retains shared grammage, feed, mortality, cartons, type counts and history in Journée', async () => {
+  it('retains shared grammage, feed, mortality, cartons, type counts and history in Journ�e', async () => {
     const rows = [
       { id_production: 1, id_batiment: 7, date_production: '2026-10-05', type_oeuf: 'normal', nombre_oeufs: 100, grammage: 62, nombre_cartons: 1, mortalite: 2, consommation_aliment_kg: 3 },
       { id_production: 2, id_batiment: 7, date_production: '2026-10-05', type_oeuf: 'double_jaune', nombre_oeufs: 20, grammage: 62, nombre_cartons: 0 },
@@ -67,38 +67,38 @@ describe('Building production views', () => {
     ];
     mockData({ rows, dayData: { ...daily, batiments: [{ ...daily.batiments[0], produced_eggs: 120, lost_eggs: 5, mortalite: 2, consommation_aliment_kg: 3, entries_count: 3 }] } });
     renderPage();
-    expect((await screen.findAllByText('120 œufs'))[0]).toBeVisible();
-    expect(within(screen.getByRole('region', { name: 'Journée sélectionnée' })).getByText('62,0 g')).toBeVisible();
-    expect(within(screen.getByRole('region', { name: 'Journée sélectionnée' })).getByText('3,00 kg')).toBeVisible();
-    expect(screen.getByText('5 œufs')).toBeVisible();
+    expect((await screen.findAllByText('120 oufs'))[0]).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Journ�e s�lectionn�e' })).getByText('62,0 g')).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Journ�e s�lectionn�e' })).getByText('3,00 kg')).toBeVisible();
+    expect(screen.getByText('5 oufs')).toBeVisible();
     expect(screen.getAllByText('Normaux : 100')).toHaveLength(2);
     expect(screen.getAllByText('Doubles jaunes : 20')).toHaveLength(2);
     expect(within(screen.getByRole('table', { name: 'Saisies quotidiennes' })).getByText('5', { selector: 'td' })).toBeVisible();
-    expect(within(screen.getByRole('region', { name: 'Cycle des volailles' })).getByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Modifier la journée du 05/10/26' })).toBeVisible();
-    expect(screen.queryByText('999 œufs collectés')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Production du b�timent' })).getByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Modifier la journ�e du 05/10/26' })).toBeVisible();
+    expect(screen.queryByText('999 oufs collect�s')).not.toBeInTheDocument();
   });
 
   it('scopes daily activity to the building and displays broken eggs separately from stock', async () => {
     mockData({ dayData: { ...daily, movements: [
-      { type: 'sale', id_batiment: 7, label: 'Vente bâtiment 7', quantity: -20 },
-      { type: 'sale', id_batiment: 8, label: 'Vente autre bâtiment', quantity: -99 },
-      { type: 'loss', id_batiment: 7, label: 'Œufs cassés', quantity: -5 },
+      { type: 'sale', id_batiment: 7, label: 'Vente b�timent 7', quantity: -20 },
+      { type: 'sale', id_batiment: 8, label: 'Vente autre b�timent', quantity: -99 },
+      { type: 'loss', id_batiment: 7, label: 'Oufs cass�s', quantity: -5 },
     ] } });
     renderPage('/production/batiment/7?view=stocks&date=2026-10-05');
-    expect(await screen.findByText('Activité de la journée')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Activité de la journée' })).toHaveAttribute('aria-expanded', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'Activité de la journée' }));
-    expect(screen.getByText('Vente bâtiment 7')).toBeVisible();
-    expect(screen.queryByText('Vente autre bâtiment')).not.toBeInTheDocument();
-    expect(screen.getByText('Œufs cassés')).toBeVisible();
+    expect(await screen.findByText('Activit� de la journ�e')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Activit� de la journ�e' })).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Activit� de la journ�e' }));
+    expect(screen.getByText('Vente b�timent 7')).toBeVisible();
+    expect(screen.queryByText('Vente autre b�timent')).not.toBeInTheDocument();
+    expect(screen.getByText('Oufs cass�s')).toBeVisible();
     expect(screen.queryByText('Oeufs casses')).not.toBeInTheDocument();
   });
 
   it('warns when unassigned sales make the building stock uncertain', async () => {
     mockData({ stockData: { ...stock, totals: { unassigned_sold_eggs: 10 } } });
     renderPage();
-    expect(await screen.findByRole('alert')).toHaveTextContent('le stock de ce bâtiment peut être surestimé');
+    expect(await screen.findByRole('alert')).toHaveTextContent('le stock de ce b�timent peut �tre surestim�');
   });
   it('keeps current stock visible while loading another daily date', async () => {
     mockData();
@@ -108,22 +108,22 @@ describe('Building production views', () => {
     get.mockImplementation((path, options) => path === '/productions/stock/daily' && options?.params?.date_stock === '2026-10-06'
       ? new Promise(() => {}) : defaultMock(path, options));
     fireEvent.change(screen.getByRole('textbox', { name: 'Date' }), { target: { value: '06/10/26' } });
-    await waitFor(() => expect(screen.getByRole('progressbar', { name: 'Chargement de la journée' })).toBeVisible());
+    await waitFor(() => expect(screen.getByRole('progressbar', { name: 'Chargement de la journ�e' })).toBeVisible());
     expect(screen.getByText('Stock disponible maintenant')).toBeVisible();
     expect(screen.queryByText('Production non saisie')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Saisir la journée' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Saisir la journ�e' })).toBeDisabled();
     expect(get.mock.calls.filter(([path]) => path === '/productions/stock')).toHaveLength(1);
   });
   it('retains inventory when daily loading fails', async () => {
     mockData();
     const defaultMock = get.getMockImplementation();
     get.mockImplementation((path, options) => path === '/productions/stock/daily'
-      ? Promise.reject(new Error('Journée indisponible')) : defaultMock(path, options));
+      ? Promise.reject(new Error('Journ�e indisponible')) : defaultMock(path, options));
     renderPage();
-    expect(await screen.findByText('Journée indisponible')).toBeVisible();
+    expect(await screen.findByText('Journ�e indisponible')).toBeVisible();
     expect(within(screen.getByRole('region', { name: 'Stock actuel' })).getByText('Stock disponible maintenant')).toBeVisible();
     mockData();
-    fireEvent.click(screen.getByRole('button', { name: 'Réessayer la journée' }));
+    fireEvent.click(screen.getByRole('button', { name: 'R�essayer la journ�e' }));
     expect(await screen.findByText('Production non saisie')).toBeVisible();
   });
 
@@ -139,7 +139,7 @@ describe('Building production views', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Page suivante' }));
     expect(within(table).getByText('20/09/26')).toBeVisible();
     expect(within(table).getAllByRole('row')).toHaveLength(3);
-    expect(within(table).getByRole('button', { name: 'Modifier la journée du 20/09/26' })).toBeVisible();
+    expect(within(table).getByRole('button', { name: 'Modifier la journ�e du 20/09/26' })).toBeVisible();
   });
 
 });
