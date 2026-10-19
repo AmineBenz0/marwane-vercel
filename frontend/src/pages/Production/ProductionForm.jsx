@@ -361,9 +361,6 @@ function ProductionForm({
                       gap: 0.25,
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                      Bâtiment
-                    </Typography>
                     <Typography variant="body1" fontWeight={700}>
                       {batiments.find((batiment) => String(batiment.id_batiment) === String(watchedBatiment))?.nom || '—'}
                     </Typography>
