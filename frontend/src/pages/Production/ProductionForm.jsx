@@ -89,6 +89,14 @@ function ProductionForm({
   const quantities = watch('quantites') || {};
   const watchedBatiment = watch('id_batiment');
   const trayWeight = watch('poids_plateau');
+  const watchedMortality = watch('mortalite');
+  const watchedFeed = watch('consommation_aliment_kg');
+  const watchedFormula = watch('formule');
+  const vaccineExpenses = watch('depenses_vaccins') || [];
+  const lostEggs = previewCount(quantities.casse) + previewCount(quantities.perdu);
+  const vaccineTotal = vaccineExpenses.reduce(
+    (sum, line) => sum + (Number(line.quantite) || 0) * (Number(line.prix_unitaire) || 0), 0,
+  );
   const averageEggWeight = trayWeight !== '' && Number.isFinite(Number(trayWeight)) && Number(trayWeight) > 60
     ? eggWeightFromTray(trayWeight) : null;
   const watchedDate = watch('date_production');
@@ -255,7 +263,7 @@ function ProductionForm({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="sm"
+      maxWidth="lg"
       fullWidth
       fullScreen={isMobile}
       PaperProps={{
@@ -319,7 +327,9 @@ function ProductionForm({
               {cycleContext.cycle.age_semaines} semaines · {Number(cycleContext.cycle.effectif_actuel || 0).toLocaleString('fr-FR')} volailles restantes à cette date
             </Typography>
           </Box>}
-          <Grid container spacing={2.5}>
+          <Grid container spacing={3} alignItems="flex-start">
+            <Grid item xs={12} md={8}>
+            <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6}>
               <DateField
                 {...register('date_production', { required: 'Date requise' })}
@@ -464,33 +474,6 @@ function ProductionForm({
               </Grid>
             )}
 
-            <Grid item xs={12}>
-              <Box
-                sx={{
-                  p: 2.5,
-                  bgcolor: 'primary.50',
-                  borderRadius: 2,
-                  border: '1px dashed',
-                  borderColor: 'primary.main',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    Calcul automatique des cartons
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Base sur les regles de stockage et de securite
-                  </Typography>
-                </Box>
-                <Typography variant="h4" color="primary.main" fontWeight="bold">
-                  {cartonPreview}
-                </Typography>
-              </Box>
-            </Grid>
-
             <Grid item xs={12}><Divider sx={{ my: 1 }} /></Grid>
 
             <Grid item xs={12}>
@@ -565,6 +548,66 @@ function ProductionForm({
                 vaccins={vaccins} onVaccinsChange={setVaccins} comptes={comptes} loading={vaccinesLoading} loadError={vaccinesError}
                 disabled={isSubmitting || loadingDaily || !!loadError} />
             </Grid>
+          </Grid>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <Box
+              component="aside"
+              aria-label="Recapitulatif de la journee"
+              sx={{
+                p: 2.5,
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.default',
+                position: { md: 'sticky' },
+                top: 8,
+              }}
+            >
+              <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2 }}>
+                Recapitulatif de la journee
+              </Typography>
+              <Box sx={{ display: 'grid', gap: 1.5 }}>
+                {[
+                  ['Oeufs collectes', `${totalEggs.toLocaleString('fr-FR')} oeufs`],
+                  ['Casses et perdus', `${lostEggs.toLocaleString('fr-FR')} oeufs`],
+                  ['Poids moyen', averageEggWeight === null
+                    ? '-'
+                    : `${averageEggWeight.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} g`],
+                  ['Calibre', deducedCalibre?.label || '-'],
+                  ['Cartons calcules', `${cartonPreview}`],
+                  ['Mortalite', watchedMortality !== '' && watchedMortality != null
+                    ? `${Number(watchedMortality).toLocaleString('fr-FR')} sujets`
+                    : '-'],
+                  ['Aliment consomme', watchedFeed !== '' && watchedFeed != null
+                    ? `${Number(watchedFeed).toLocaleString('fr-FR')} kg`
+                    : '-'],
+                  ['Formule', formules.find((item) => item.value === watchedFormula)?.label || 'Non precisee'],
+                  ['Depenses vaccins', `${vaccineTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`],
+                ].map(([label, value], index, items) => (
+                  <Box
+                    key={label}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 2,
+                      alignItems: 'baseline',
+                      pb: 1,
+                      borderBottom: index < items.length - 1 ? '1px solid' : 'none',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">{label}</Typography>
+                    <Typography variant="body2" fontWeight={800} textAlign="right">{value}</Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                Le recapitulatif se met a jour pendant la saisie.
+              </Typography>
+            </Box>
+          </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, flexShrink: 0, bgcolor: 'background.paper' }}>
