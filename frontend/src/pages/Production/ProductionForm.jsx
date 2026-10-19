@@ -350,15 +350,14 @@ function ProductionForm({
                     role="group"
                     aria-label="Bâtiment"
                     sx={{
+                      height: 56,
                       minHeight: 56,
+                      boxSizing: 'border-box',
                       px: 2,
-                      py: 1,
                       borderRadius: 2,
                       bgcolor: 'action.hover',
                       display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      gap: 0.25,
+                      alignItems: 'center',
                     }}
                   >
                     <Typography variant="body1" fontWeight={700}>
