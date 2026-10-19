@@ -38,8 +38,8 @@ describe('ProductionForm', () => {
     fireEvent.change(screen.getByLabelText("Double jaune"), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText("Oeufs blancs"), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText('Oeufs casses'), { target: { value: '4' } });
-    fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '63' } });
-    expect(screen.getByText(/Total collecté \(hors cassés\) : 160 œufs/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1950' } });
+    expect(screen.getByText(/Total collecté \(hors cassés et perdus\) : 160 œufs/)).toBeVisible();
     expect(screen.getByText('10', { exact: true })).toBeVisible();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -47,7 +47,7 @@ describe('ProductionForm', () => {
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       date_production: '2026-09-01',
       id_batiment: 7,
-      quantites: { normal: 120, double_jaune: 30, blanc: 10, casse: 4 },
+      quantites: { normal: 120, double_jaune: 30, blanc: 10, casse: 4, perdu: 0 },
       grammage: 63,
     })));
 
@@ -72,7 +72,7 @@ describe('ProductionForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       formule: '25-1% Sem vita', consommation_aliment_kg: 10, grammage: 0,
-      quantites: { normal: 0, double_jaune: 0, blanc: 0, casse: 0 },
+      quantites: { normal: 0, double_jaune: 0, blanc: 0, casse: 0, perdu: 0 },
     })));
   });
 
@@ -99,7 +99,7 @@ describe('ProductionForm', () => {
   it('rejects an empty collection and fractional counts', async () => {
     render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
-    fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '55' } });
+    fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1710' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText("Indiquez au moins un nombre d'œufs.")).toBeVisible();
@@ -117,11 +117,11 @@ describe('ProductionForm', () => {
         batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
       fireEvent.change(screen.getByLabelText('Oeufs normaux'), { target: { value: '120' } });
       fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '10' } });
-      fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '55' } });
+      fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1710' } });
       fireEvent.change(screen.getByLabelText(label), { target: { value: '-5' } });
       expect(await screen.findByText('Minimum 0')).toBeVisible();
       const total = label === 'Oeufs normaux' ? 10 : label === 'Oeufs blancs' ? 120 : 130;
-      expect(screen.getByText(`Total collecté (hors cassés) : ${total} œufs`)).toBeVisible();
+      expect(screen.getByText(`Total collecté (hors cassés et perdus) : ${total} œufs`)).toBeVisible();
       fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
       await waitFor(() => expect(screen.getByText('Minimum 0')).toBeVisible());
       expect(post).not.toHaveBeenCalled();
@@ -144,14 +144,14 @@ describe('ProductionForm', () => {
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} />);
     await waitFor(() => expect(screen.getByLabelText('Oeufs normaux')).toHaveValue(120));
     expect(screen.getByLabelText('Oeufs blancs')).toHaveValue(20);
-    expect(screen.getByLabelText('Oeufs casses')).toHaveValue(10);
-    expect(screen.queryByLabelText(/perdus/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Grammage moyen global (g)')).toHaveValue(63);
+    expect(screen.getByLabelText('Oeufs casses')).toHaveValue(7);
+    expect(screen.getByLabelText('Oeuf perdu')).toHaveValue(3);
+    expect(screen.getByLabelText('Poids du plateau (g)')).toHaveValue(1950);
     fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Mettre a jour' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       date_production: '2026-09-01', id_batiment: 7, grammage: 63,
-      quantites: { normal: 120, blanc: 25, double_jaune: 0, casse: 10 },
+      quantites: { normal: 120, blanc: 25, double_jaune: 0, casse: 7, perdu: 3 },
       mortalite: 2, consommation_aliment_kg: 12, versions: { 1: 'v1', 2: 'v2', 3: 'v3', 4: 'v4' },
     })));
   });

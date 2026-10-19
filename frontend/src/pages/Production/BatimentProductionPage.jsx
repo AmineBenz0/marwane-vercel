@@ -140,7 +140,7 @@ function BatimentProductionPage() {
     setEditingProduction(production);
     setPreselectedEggType(production.type_oeuf || 'normal');
     setFormTitle('Modifier la saisie');
-    setFormDescription('Mettez à jour les quantités par type et le grammage global de cette journée.');
+    setFormDescription('Mettez à jour les quantités par type et le poids du plateau de cette journée.');
     setOpenForm(true);
   };
 

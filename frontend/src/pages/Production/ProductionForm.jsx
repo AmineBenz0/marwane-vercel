@@ -37,6 +37,9 @@ const quantityError = (value) => {
   return Number.isInteger(count) ? '' : 'Indiquez un nombre entier positif ou nul';
 };
 
+// Match the two-decimal precision of the stored average egg weight.
+const eggWeightFromTray = (value) => Number((Number(value) / 30 - 2).toFixed(2));
+
 const previewCount = (value) => {
   const count = Number(value || 0);
   return Number.isInteger(count) && count >= 0 ? count : 0;
@@ -75,7 +78,7 @@ function ProductionForm({
       date_production: initialData?.date_production?.slice(0, 10) || preselectedDate,
       id_batiment: initialData?.id_batiment || preselectedBatimentId || '',
       quantites: Object.fromEntries(EGG_TYPES.map((type) => [type.value, ''])),
-      grammage: '',
+      poids_plateau: '',
       mortalite: '',
       consommation_aliment_kg: '',
       formule: '',
@@ -85,7 +88,9 @@ function ProductionForm({
 
   const quantities = watch('quantites') || {};
   const watchedBatiment = watch('id_batiment');
-  const watchedGrammage = watch('grammage');
+  const trayWeight = watch('poids_plateau');
+  const averageEggWeight = trayWeight !== '' && Number.isFinite(Number(trayWeight)) && Number(trayWeight) > 60
+    ? eggWeightFromTray(trayWeight) : null;
   const watchedDate = watch('date_production');
   const totalEggs = EGG_TYPES.reduce(
     (sum, type) => sum + (['casse', 'perdu'].includes(type.value) ? 0 : previewCount(quantities[type.value])), 0,
@@ -123,7 +128,7 @@ function ProductionForm({
         date_production: initialData.date_production.slice(0, 10),
         id_batiment: initialData.id_batiment,
         quantites: counts,
-        grammage: Number((weightCount ? avgWeight : 0).toFixed(2)),
+        poids_plateau: weightCount ? Number(((Number(avgWeight.toFixed(2)) + 2) * 30).toFixed(2)) : '',
         mortalite: rows.reduce((sum, row) => sum + Number(row.mortalite || 0), 0),
         consommation_aliment_kg: Number(rows.reduce((sum, row) => sum + Number(row.consommation_aliment_kg || 0), 0).toFixed(2)),
         formule: rows.find((row) => row.formule)?.formule || '',
@@ -193,7 +198,7 @@ function ProductionForm({
 
   const missingCycle = !!cycleContext?.has_cycles && !cycleContext?.cycle;
   const deducedCalibre = (() => {
-    const gramValue = Number(watchedGrammage);
+    const gramValue = averageEggWeight;
     if (!Number.isFinite(gramValue) || gramValue <= 0) return null;
     const match = calibreThresholds.find((threshold) => {
       const min = threshold.min_grammage === null || threshold.min_grammage === undefined ? null : Number(threshold.min_grammage);
@@ -217,7 +222,7 @@ function ProductionForm({
         date_production: data.date_production,
         id_batiment: Number(data.id_batiment),
         quantites: counts,
-        grammage: Number(data.grammage),
+        grammage: data.poids_plateau === '' ? 0 : eggWeightFromTray(data.poids_plateau),
         mortalite: data.mortalite === '' ? null : Number(data.mortalite),
         consommation_aliment_kg: data.consommation_aliment_kg === ''
           ? null : Number(data.consommation_aliment_kg),
@@ -291,7 +296,7 @@ function ProductionForm({
           }}
         >
           <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
-            {description || 'Indiquez le nombre de chaque type et un grammage moyen commun à toute la collecte.'}
+            {description || 'Indiquez le nombre de chaque type et le poids d’un plateau de 30 œufs.'}
           </Typography>
 
           {initialData && (
@@ -395,21 +400,35 @@ function ProductionForm({
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                {...register('grammage', {
-                  validate: (value) => totalEggs > 0 && value === '' ? 'Champ requis' : true,
-                  min: { value: 0, message: 'Doit etre positif' },
+                {...register('poids_plateau', {
+                  validate: (value) => {
+                    if (value === '') return totalEggs > 0 ? 'Champ requis' : true;
+                    return (Number.isFinite(Number(value)) && Number(value) > 60)
+                      || 'Le poids du plateau doit être supérieur à 60 g.';
+                  },
                 })}
-                label="Grammage moyen global (g)"
+                label="Poids du plateau (g)"
                 type="number"
-                inputProps={{ min: 0, step: '0.01' }}
+                inputProps={{ min: 60.01, step: '0.01' }}
                 InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
-                error={!!errors.grammage}
-                helperText={errors.grammage?.message || (totalEggs === 0 ? 'Facultatif en l’absence de collecte' : '')}
+                disabled={loadingDaily || !!loadError}
+                error={!!errors.poids_plateau}
+                helperText={errors.poids_plateau?.message || 'Plateau de 30 œufs, poids en grammes.'}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Poids moyen de l’œuf (g)"
+                value={averageEggWeight === null ? '' : averageEggWeight.toFixed(2)}
+                InputProps={{ readOnly: true }}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                helperText="Calcul : (poids du plateau ÷ 30) − 2 g."
               />
             </Grid>
             {Number(quantities.normal || 0) > 0 && (
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
                 <Box
                   sx={{
                     p: 2,
@@ -424,10 +443,10 @@ function ProductionForm({
                     Calibre déduit
                   </Typography>
                   <Typography variant="h6" fontWeight={900}>
-                    {deducedCalibre?.label || 'Saisir le grammage'}
+                    {deducedCalibre?.label || 'Saisir le poids du plateau'}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Calibre des œufs normaux déduit du grammage global.
+                    Calibre des œufs normaux déduit du poids moyen calculé.
                   </Typography>
                 </Box>
               </Grid>
