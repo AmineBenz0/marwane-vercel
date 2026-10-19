@@ -410,7 +410,7 @@ function ProductionForm({
                 label="Poids du plateau (g)"
                 type="number"
                 inputProps={{ min: 60.01, step: '0.01' }}
-                InputLabelProps={{ shrink: !!initialData }}
+                value={trayWeight ?? ''}
                 fullWidth
                 disabled={loadingDaily || !!loadError}
                 error={!!errors.poids_plateau}
@@ -418,14 +418,25 @@ function ProductionForm({
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                label="Poids moyen de l’œuf (g)"
-                value={averageEggWeight === null ? '' : averageEggWeight.toFixed(2)}
-                InputProps={{ readOnly: true }}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                helperText="Calcul : (poids du plateau ÷ 30) − 2 g."
-              />
+              <Box
+                component="output"
+                aria-label="Poids moyen de l’œuf"
+                aria-live="polite"
+                aria-atomic="true"
+                sx={{ display: 'block', p: 2, borderRadius: 2, bgcolor: 'primary.50' }}
+              >
+                <Typography variant="caption" color="text.secondary" fontWeight={800}>
+                  Poids moyen de l’œuf
+                </Typography>
+                <Typography variant="h5" color="primary.main" fontWeight={900} sx={{ my: 0.25 }}>
+                  {averageEggWeight === null ? '—' : `${averageEggWeight.toLocaleString('fr-FR', {
+                    minimumFractionDigits: 2, maximumFractionDigits: 2,
+                  })} g`}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Calcul : (poids du plateau ÷ 30) − 2 g.
+                </Typography>
+              </Box>
             </Grid>
             {Number(quantities.normal || 0) > 0 && (
               <Grid item xs={12}>
