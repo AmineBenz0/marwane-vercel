@@ -284,6 +284,7 @@ function ProductionForm({
         <DialogContent
           sx={{
             py: 2,
+            '&&.MuiDialogContent-root': { pt: 2 },
             minHeight: 0,
             flex: '1 1 auto',
             overflowY: 'auto',
