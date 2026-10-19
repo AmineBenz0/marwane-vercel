@@ -285,6 +285,7 @@ function ProductionForm({
         <DialogContent
           sx={{
             py: 2,
+            '&&.MuiDialogContent-root': { pt: 2 },
             minHeight: 0,
             flex: '1 1 auto',
             overflowY: 'auto',
@@ -303,13 +304,9 @@ function ProductionForm({
             '&::-webkit-scrollbar-thumb:hover': { backgroundColor: 'rgba(100, 116, 139, 0.6)' },
           }}
         >
-          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
-            {description || 'Indiquez le nombre de chaque type et le poids d’un plateau de 30 œufs.'}
-          </Typography>
-
           {initialData && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              La modification porte sur tous les types de ce bâtiment pour cette journée.
+              Remplace toute la saisie du jour.
             </Alert>
           )}
           {(loadError || errors.root?.message) && (
@@ -476,13 +473,10 @@ function ProductionForm({
 
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>
-                Suivi du bâtiment
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Ces champs aident l'utilisateur à suivre la mortalité, l'aliment et la formule du jour.
+                Suivi
               </Typography>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 {...register('mortalite', {
                   min: { value: 0, message: 'Doit etre positif' },
@@ -504,10 +498,10 @@ function ProductionForm({
                 InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.mortalite}
-                helperText={errors.mortalite?.message || 'Optionnel'}
+                helperText={errors.mortalite?.message}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 {...register('consommation_aliment_kg', {
                   min: { value: 0, message: 'Doit etre positif' },
@@ -518,10 +512,10 @@ function ProductionForm({
                 InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.consommation_aliment_kg}
-                helperText={errors.consommation_aliment_kg?.message || 'Optionnel'}
+                helperText={errors.consommation_aliment_kg?.message}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 {...register('formule')}
                 select
@@ -529,9 +523,6 @@ function ProductionForm({
                 value={watch('formule') || ''}
                 onChange={(event) => { manualFormula.current = true; setValue('formule', event.target.value); }}
                 fullWidth
-                helperText={cycleContext?.cycle && !initialData
-                  ? 'Préselection selon l’âge du lot. Vous pouvez la modifier.'
-                  : 'Formule utilisée ce jour'}
               >
                 <MenuItem value="">Non précisée</MenuItem>
                 {formules.map((formule) => (
