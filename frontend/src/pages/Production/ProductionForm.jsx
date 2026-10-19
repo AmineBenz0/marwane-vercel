@@ -465,7 +465,7 @@ function ProductionForm({
                 Suivi
               </Typography>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 {...register('mortalite', {
                   min: { value: 0, message: 'Doit etre positif' },
@@ -490,7 +490,7 @@ function ProductionForm({
                 helperText={errors.mortalite?.message}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 {...register('consommation_aliment_kg', {
                   min: { value: 0, message: 'Doit etre positif' },
@@ -504,7 +504,7 @@ function ProductionForm({
                 helperText={errors.consommation_aliment_kg?.message}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 {...register('formule')}
                 select
