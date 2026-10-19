@@ -54,7 +54,6 @@ function ProductionForm({
   preselectedBatimentId = '',
   preselectedDate = new Date().toISOString().split('T')[0],
   title,
-  description,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -303,13 +302,9 @@ function ProductionForm({
             '&::-webkit-scrollbar-thumb:hover': { backgroundColor: 'rgba(100, 116, 139, 0.6)' },
           }}
         >
-          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
-            {description || 'Indiquez le nombre de chaque type et le poids d’un plateau de 30 œufs.'}
-          </Typography>
-
           {initialData && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              La modification porte sur tous les types de ce bâtiment pour cette journée.
+              Remplace toute la saisie du jour.
             </Alert>
           )}
           {(loadError || errors.root?.message) && (
@@ -319,12 +314,11 @@ function ProductionForm({
           {contextLoading && <Typography sx={{ mb: 2 }}>Chargement du cycle...</Typography>}
           {contextError && <Alert severity="error" sx={{ mb: 2 }}>{contextError}</Alert>}
           {missingCycle && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" href="/production/lots">Gestion des lots</Button>}>
-            Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez la date et la répartition dans Gestion des lots.
+            Aucun lot affecté à cette date.
           </Alert>}
-          {cycleContext?.cycle && <Box sx={{ p: 1.5, mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-            <Typography fontWeight={800}>{cycleContext.cycle.nom_cycle}</Typography>
+          {cycleContext?.cycle && <Box sx={{ mb: 2 }}>
             <Typography variant="body2" color="text.secondary">
-              {cycleContext.cycle.age_semaines} semaines · {Number(cycleContext.cycle.effectif_actuel || 0).toLocaleString('fr-FR')} volailles restantes à cette date
+              <strong>{cycleContext.cycle.nom_cycle}</strong> · {cycleContext.cycle.age_semaines} sem. · {Number(cycleContext.cycle.effectif_actuel || 0).toLocaleString('fr-FR')} sujets
             </Typography>
           </Box>}
           <Grid container spacing={3} alignItems="flex-start">
@@ -367,9 +361,6 @@ function ProductionForm({
 
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>Nombre d'œufs par type</Typography>
-              <Typography variant="caption" color="text.secondary">
-                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés et perdus sont exclus du total collecté.
-              </Typography>
             </Grid>
             {EGG_TYPES.map((type, index) => {
               const isLastField = index === EGG_TYPES.length - 1;
@@ -403,11 +394,6 @@ function ProductionForm({
                 </Grid>
               );
             })}
-            <Grid item xs={12}>
-              <Typography fontWeight={900}>
-                Total collecté (hors cassés et perdus) : {totalEggs.toLocaleString('fr-FR')} œufs
-              </Typography>
-            </Grid>
             <Grid item xs={12}>
               <Grid container spacing={2.5} alignItems="center">
                 <Grid item xs={12} sm={6}>
@@ -465,10 +451,7 @@ function ProductionForm({
                     Calibre déduit
                   </Typography>
                   <Typography variant="h6" fontWeight={900}>
-                    {deducedCalibre?.label || 'Saisir le poids du plateau'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Calibre des œufs normaux déduit du poids moyen calculé.
+                    {deducedCalibre?.label || '—'}
                   </Typography>
                 </Box>
               </Grid>
@@ -478,10 +461,7 @@ function ProductionForm({
 
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>
-                Suivi du bâtiment
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Ces champs aident l'utilisateur à suivre la mortalité, l'aliment et la formule du jour.
+                Suivi
               </Typography>
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -506,7 +486,7 @@ function ProductionForm({
                 InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.mortalite}
-                helperText={errors.mortalite?.message || 'Optionnel'}
+                helperText={errors.mortalite?.message}
               />
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -520,7 +500,7 @@ function ProductionForm({
                 InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.consommation_aliment_kg}
-                helperText={errors.consommation_aliment_kg?.message || 'Optionnel'}
+                helperText={errors.consommation_aliment_kg?.message}
               />
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -531,9 +511,6 @@ function ProductionForm({
                 value={watch('formule') || ''}
                 onChange={(event) => { manualFormula.current = true; setValue('formule', event.target.value); }}
                 fullWidth
-                helperText={cycleContext?.cycle && !initialData
-                  ? 'Préselection selon l’âge du lot. Vous pouvez la modifier.'
-                  : 'Formule utilisée ce jour'}
               >
                 <MenuItem value="">Non précisée</MenuItem>
                 {formules.map((formule) => (
@@ -603,9 +580,6 @@ function ProductionForm({
                   </Box>
                 ))}
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-                Le recapitulatif se met a jour pendant la saisie.
-              </Typography>
             </Box>
           </Grid>
           </Grid>
