@@ -338,6 +338,29 @@ const useAuthStore = create(
   )
 );
 
+
+// Keep Zustand in sync when API requests refresh or invalidate a session.
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:session-refreshed', (event) => {
+    const { accessToken, refreshToken } = event.detail || {};
+    const user = extractUserFromToken(accessToken);
+    if (user?.id && user?.email) {
+      useAuthStore.setState({
+        user,
+        accessToken,
+        refreshToken,
+        isAuthenticated: true,
+        isRecovering: false,
+        isRecoveryAttempting: false,
+      });
+    }
+  });
+  window.addEventListener('auth:session-expired', () => useAuthStore.getState().logout());
+  window.addEventListener('auth:recovery-needed', () => {
+    useAuthStore.setState({ isRecovering: true, isRecoveryAttempting: false });
+  });
+}
+
 // Initialiser le store au chargement si les tokens existent dans localStorage
 // mais ne sont pas encore dans le store (cas de première utilisation)
 if (typeof window !== 'undefined') {
