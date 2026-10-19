@@ -322,7 +322,7 @@ function ProductionForm({
             </Typography>
           </Box>}
           <Grid container spacing={3} alignItems="flex-start">
-            <Grid item xs={12} md={8}>
+            <Grid item xs={12} lg={8}>
             <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6}>
               <DateField
@@ -371,11 +371,11 @@ function ProductionForm({
                   item
                   xs={12}
                   sm={6}
-                  md={4}
+                  lg={4}
                   key={type.value}
                   sx={{
                     ...(isLastField && { sm: { transform: 'translateX(50%)' } }),
-                    ...(isCenteredFinalPair && { md: { transform: 'translateX(50%)' } }),
+                    ...(isCenteredFinalPair && { lg: { transform: 'translateX(50%)' } }),
                   }}
                 >
                   <TextField
@@ -528,7 +528,7 @@ function ProductionForm({
           </Grid>
           </Grid>
 
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} lg={4}>
             <Box
               component="aside"
               aria-label="Recapitulatif de la journee"
@@ -538,7 +538,7 @@ function ProductionForm({
                 border: '1px solid',
                 borderColor: 'divider',
                 bgcolor: 'background.default',
-                position: { md: 'sticky' },
+                position: { lg: 'sticky' },
                 top: 8,
               }}
             >
