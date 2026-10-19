@@ -81,7 +81,7 @@ function BatimentProductionPage() {
       setVaccineExpenses(expenses || []);
     } catch (err) {
       if (request !== loadRequest.current) return;
-      const message = err?.message || 'Erreur lors du chargement des donn�es du b�timent';
+      const message = err?.message || 'Erreur lors du chargement des données du bâtiment';
       setLoadError(message);
       notifyError(message);
     } finally {
@@ -140,7 +140,7 @@ function BatimentProductionPage() {
     setEditingProduction(production);
     setPreselectedEggType(production.type_oeuf || 'normal');
     setFormTitle('Modifier la saisie');
-    setFormDescription('Mettez � jour les quantit�s par type et le grammage global de cette journ�e.');
+    setFormDescription('Mettez à jour les quantités par type et le grammage global de cette journée.');
     setOpenForm(true);
   };
 
@@ -149,12 +149,12 @@ function BatimentProductionPage() {
       const daily = await productionService.getDailyProduction(day.id_batiment, day.date);
       const currentDay = groupDailyProductions(daily.records)[0];
       if (!currentDay) {
-        notifyError('Cette journ�e a d�j� �t� d�sactiv�e.');
+        notifyError('Cette journée a déjà été désactivée.');
         await loadData();
         return;
       }
       if (!window.confirm(
-        `D�sactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} oufs collect�s et ${formatNumber(currentDay.lost)} cass�s ?${daily.depenses_vaccins?.length ? ' Les d�penses de vaccins et leurs d�bits seront aussi annul�s.' : ''}`,
+        `Désactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} œufs collectés et ${formatNumber(currentDay.lost)} cassés ?${daily.depenses_vaccins?.length ? ' Les dépenses de vaccins et leurs débits seront aussi annulés.' : ''}`,
       )) return;
       await productionService.deleteDailyProduction({
         id_batiment: day.id_batiment,
@@ -162,10 +162,10 @@ function BatimentProductionPage() {
         versions: daily.versions,
         charge_versions: daily.charge_versions || {},
       });
-      notifySuccess('Saisie quotidienne d�sactiv�e');
+      notifySuccess('Saisie quotidienne désactivée');
       await Promise.all([loadData(), reloadStock()]);
     } catch (err) {
-      notifyError(err?.message || 'Erreur lors de la d�sactivation');
+      notifyError(err?.message || 'Erreur lors de la désactivation');
     }
   };
 
@@ -173,14 +173,14 @@ function BatimentProductionPage() {
   const stockContent = (
     <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
       {stockLoading ? <CircularProgress size={24} aria-label="Chargement du stock actuel" /> : stockError ? (
-        <Alert severity="error" action={<Button color="inherit" onClick={reloadStock}>R�essayer le stock</Button>}>{stockError}</Alert>
+        <Alert severity="error" action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>
       ) : buildingStock ? <>
         <StockSummary embedded label="Stock disponible maintenant" available={buildingStock.available_eggs} categories={stockCategories} />
-        {lowStockCategory && <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>Stock bas sur {lowStockCategory.label} : {formatNumber(lowStockCategory.available_eggs)} oufs disponibles.</Typography>}
+        {lowStockCategory && <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>Stock bas sur {lowStockCategory.label} : {formatNumber(lowStockCategory.available_eggs)} œufs disponibles.</Typography>}
         {Number(currentStock?.totals?.unassigned_sold_eggs || 0) > 0 && <Alert severity="warning" sx={{ mt: 2 }}>
-          Certaines ventes ne sont pas attribu�es � un b�timent. Elles sont d�duites du stock global, mais le stock de ce b�timent peut �tre surestim�.
+          Certaines ventes ne sont pas attribuées à un bâtiment. Elles sont déduites du stock global, mais le stock de ce bâtiment peut être surestimé.
         </Alert>}
-      </> : <Alert severity="warning">Stock indisponible pour ce b�timent.</Alert>}
+      </> : <Alert severity="warning">Stock indisponible pour ce bâtiment.</Alert>}
     </Box>
   );
 
@@ -189,28 +189,28 @@ function BatimentProductionPage() {
       <Box sx={{ mb: 2.5 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(productionLink(null, selectedDate))} sx={{ mb: 1.5 }}>Vue globale</Button>
         <Typography component="h1" variant="h3" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, letterSpacing: '-0.04em', overflowWrap: 'anywhere' }}>
-          {batiment?.nom || buildingStock?.nom_batiment || 'B�timent'}
+          {batiment?.nom || buildingStock?.nom_batiment || 'Bâtiment'}
         </Typography>
       </Box>
       <CyclePanel buildingId={selectedBatimentId} refreshKey={productions} onSelectCycle={setInsightsCycleId}
         stockContent={stockContent}
         actions={<Button variant="contained" disabled={!dailyReady || !batiment} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
           onClick={() => hasProduction ? handleEdit(latestTodayEntry) : handleAddProduction()}>
-          {hasProduction ? 'Modifier la saisie' : 'Saisir la journ�e'}
+          {hasProduction ? 'Modifier la saisie' : 'Saisir la journée'}
         </Button>} />
-      <Card variant="outlined" component="section" aria-label="Journ�e s�lectionn�e" aria-busy={!dailyReady} sx={{ borderRadius: 3, minWidth: 0 }}>
+      <Card variant="outlined" component="section" aria-label="Journée sélectionnée" aria-busy={!dailyReady} sx={{ borderRadius: 3, minWidth: 0 }}>
         <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-          <DailySectionHeader title="Journ�e s�lectionn�e" selectedDate={selectedDate} onDateChange={setSelectedDate}
-            actions={dailyReady && batiment ? <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'A saisir'} /> : null} />
-          {loadError ? <Alert severity="error" action={<Button color="inherit" onClick={loadData}>R�essayer la journ�e</Button>}>{loadError}</Alert> : !dailyReady ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Chargement de la journ�e" /></Box>
-          ) : !batiment ? <Alert severity="warning">B�timent introuvable.</Alert> : <>
-            {Number(dailyBuildingStock?.mortalite || 0) >= 10 && <Alert severity="error" sx={{ mb: 2 }}>Mortalit� �lev�e pour cette journ�e : {formatNumber(dailyBuildingStock.mortalite)} volailles.</Alert>}
+          <DailySectionHeader title="Journée sélectionnée" selectedDate={selectedDate} onDateChange={setSelectedDate}
+            actions={dailyReady && batiment ? <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'À saisir'} /> : null} />
+          {loadError ? <Alert severity="error" action={<Button color="inherit" onClick={loadData}>Réessayer la journée</Button>}>{loadError}</Alert> : !dailyReady ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Chargement de la journée" /></Box>
+          ) : !batiment ? <Alert severity="warning">Bâtiment introuvable.</Alert> : <>
+            {Number(dailyBuildingStock?.mortalite || 0) >= 10 && <Alert severity="error" sx={{ mb: 2 }}>Mortalité élevée pour cette journée : {formatNumber(dailyBuildingStock.mortalite)} volailles.</Alert>}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 2, md: 4 } }}>
               <Box sx={{ minWidth: 0 }}>
                 <Typography component="h3" variant="body1" fontWeight={700}>Collecte du jour</Typography>
-                <Typography variant={hasProduction ? 'h4' : 'h6'} fontWeight={800} sx={{ mt: 0.5 }}>{hasProduction ? formatNumber(todayStats.produced) + ' oufs' : 'Production non saisie'}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Hors oufs cass�s.</Typography>
+                <Typography variant={hasProduction ? 'h4' : 'h6'} fontWeight={800} sx={{ mt: 0.5 }}>{hasProduction ? formatNumber(todayStats.produced) + ' œufs' : 'Production non saisie'}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Hors œufs cassés.</Typography>
                 {hasProduction && <Stack spacing={0.75} sx={{ mt: 2 }}>
                   {Object.entries(selectedDay.counts).filter(([type, count]) => !['casse', 'perdu'].includes(type) && count > 0).map(([type, count]) => (
                     <Typography key={type} variant="body2">{EGG_TYPE_LABELS[type] || type} : {formatNumber(count)}</Typography>
@@ -218,12 +218,12 @@ function BatimentProductionPage() {
                 </Stack>}
               </Box>
               <Box component="dl" sx={{ m: 0, minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', columnGap: 2, rowGap: 1 }}>
-                <DayFact label="Ventes du jour" value={formatNumber(todayStats.sold) + ' oufs'} />
-                <DayFact label="Cass�s du jour" value={hasProduction ? formatNumber(todayStats.lost) + ' oufs' : '-'} />
-                <DayFact label="Mortalit� du jour" value={hasProduction ? formatNumber(dailyBuildingStock?.mortalite || 0) : '-'} />
-                <DayFact label="Aliment consomm�" value={latestAliment} />
+                <DayFact label="Ventes du jour" value={formatNumber(todayStats.sold) + ' œufs'} />
+                <DayFact label="Cassés du jour" value={hasProduction ? formatNumber(todayStats.lost) + ' œufs' : '—'} />
+                <DayFact label="Mortalité du jour" value={hasProduction ? formatNumber(dailyBuildingStock?.mortalite || 0) : '—'} />
+                <DayFact label="Aliment consommé" value={latestAliment} />
                 <DayFact label="Grammage global" value={latestGrammage} />
-                <DayFact label="Cartons du jour" value={hasProduction ? formatNumber(selectedDay.cartons) : '-'} />
+                <DayFact label="Cartons du jour" value={hasProduction ? formatNumber(selectedDay.cartons) : '—'} />
               </Box>
             </Box>
           </>}
@@ -231,11 +231,11 @@ function BatimentProductionPage() {
       </Card>
       {dailyReady && selectedDay?.vaccineExpenses?.length > 0 && <Card variant="outlined" sx={{ mt: 3, borderRadius: 3 }}>
         <CardContent>
-          <Typography variant="h6" fontWeight={800}>D�penses - Vaccins</Typography>
+          <Typography variant="h6" fontWeight={800}>Dépenses – Vaccins</Typography>
           <Stack spacing={1} sx={{ mt: 1.5 }}>
             {selectedDay.vaccineExpenses.map((expense) => <Stack key={expense.id_charge} direction="row" justifyContent="space-between" spacing={2}>
               <Box><Typography fontWeight={600}>{expense.nom_vaccin}</Typography>
-                <Typography variant="body2" color="text.secondary">{formatDecimal(expense.quantite, 3)} {expense.unite} x {formatVaccineMoney(expense.prix_unitaire)}</Typography>
+                <Typography variant="body2" color="text.secondary">{formatDecimal(expense.quantite, 3)} {expense.unite} × {formatVaccineMoney(expense.prix_unitaire)}</Typography>
               </Box>
               <Typography fontWeight={800}>{formatVaccineMoney(expense.montant)}</Typography>
             </Stack>)}
@@ -284,34 +284,34 @@ function HistoryCard({ days, onEdit, onDelete }) {
     <Card variant="outlined" component="section" aria-label="Historique des saisies" sx={{ mt: 3, borderRadius: 3, minWidth: 0 }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography component="h2" variant="h6" fontWeight={800}>Historique des saisies</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>Une ligne par journ�e, jusqu'� la date consult�e.</Typography>
-        {!days.length ? <Typography color="text.secondary">Aucune saisie pour ce b�timent.</Typography> : <>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>Une ligne par journée, jusqu’à la date consultée.</Typography>
+        {!days.length ? <Typography color="text.secondary">Aucune saisie pour ce bâtiment.</Typography> : <>
           <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
             <Table size="small" aria-label="Saisies quotidiennes" sx={{ minWidth: 690 }}>
-              <TableHead><TableRow>{['Date', 'Collect�s', 'Cass�s', 'Mortalit�', 'Aliment', 'Grammage', 'Vaccins', 'Actions'].map((label) => <TableCell key={label} sx={{ textTransform: 'none !important' }}>{label}</TableCell>)}</TableRow></TableHead>
+              <TableHead><TableRow>{['Date', 'Collectés', 'Cassés', 'Mortalité', 'Aliment', 'Grammage', 'Vaccins', 'Actions'].map((label) => <TableCell key={label} sx={{ textTransform: 'none !important' }}>{label}</TableCell>)}</TableRow></TableHead>
               <TableBody>{days.slice(visiblePage * 5, visiblePage * 5 + 5).map((day) => (
                 <TableRow key={day.key}>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatShortDate(day.date)}<Typography variant="caption" color="text.secondary" display="block">{formatNumber(day.cartons)} cartons</Typography></TableCell>
-                  <TableCell><Typography variant="body2" fontWeight={600}>{formatNumber(day.collected)} oufs</Typography>
+                  <TableCell><Typography variant="body2" fontWeight={600}>{formatNumber(day.collected)} œufs</Typography>
                     {Object.entries(day.counts).filter(([type, count]) => !['casse', 'perdu'].includes(type) && count > 0).map(([type, count]) => (
                       <Typography key={type} variant="caption" color="text.secondary" display="block" sx={{ whiteSpace: 'nowrap' }}>{EGG_TYPE_LABELS[type] || type} : {formatNumber(count)}</Typography>
                     ))}
                   </TableCell>
                   <TableCell>{formatNumber(day.lost)}</TableCell>
                   <TableCell>{formatNumber(day.mortality)}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.rows.some((row) => row.consommation_aliment_kg != null) ? formatDecimal(day.feed) + ' kg' : '-'}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.grammage != null ? formatDecimal(day.grammage, 1) + ' g' : '-'}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.vaccineExpenses?.length ? formatVaccineMoney(day.vaccineExpenses.reduce((sum, expense) => sum + Number(expense.montant), 0)) : '-'}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.rows.some((row) => row.consommation_aliment_kg != null) ? formatDecimal(day.feed) + ' kg' : '—'}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.grammage != null ? formatDecimal(day.grammage, 1) + ' g' : '—'}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.vaccineExpenses?.length ? formatVaccineMoney(day.vaccineExpenses.reduce((sum, expense) => sum + Number(expense.montant), 0)) : '—'}</TableCell>
                   <TableCell><Stack direction="row">
-                    <IconButton aria-label={'Modifier la journ�e du ' + formatShortDate(day.date)} size="small" onClick={() => onEdit(day.representative)}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton aria-label={'D�sactiver la journ�e du ' + formatShortDate(day.date)} size="small" onClick={() => onDelete(day)}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton aria-label={'Modifier la journée du ' + formatShortDate(day.date)} size="small" onClick={() => onEdit(day.representative)}><EditIcon fontSize="small" /></IconButton>
+                    <IconButton aria-label={'Désactiver la journée du ' + formatShortDate(day.date)} size="small" onClick={() => onDelete(day)}><DeleteIcon fontSize="small" /></IconButton>
                   </Stack></TableCell>
                 </TableRow>
               ))}</TableBody>
             </Table>
           </TableContainer>
-          <TablePagination component="div" count={days.length} page={visiblePage} onPageChange={(_, next) => setPage(next)} rowsPerPage={5} rowsPerPageOptions={[5]} getItemAriaLabel={(type) => type === 'next' ? 'Page suivante' : 'Page pr�c�dente'}
-            labelDisplayedRows={({ from, to, count }) => from + '-' + to + ' sur ' + count} sx={{ '& .MuiTablePagination-toolbar': { flexWrap: 'wrap' } }} />
+          <TablePagination component="div" count={days.length} page={visiblePage} onPageChange={(_, next) => setPage(next)} rowsPerPage={5} rowsPerPageOptions={[5]} getItemAriaLabel={(type) => type === 'next' ? 'Page suivante' : 'Page précédente'}
+            labelDisplayedRows={({ from, to, count }) => from + '–' + to + ' sur ' + count} sx={{ '& .MuiTablePagination-toolbar': { flexWrap: 'wrap' } }} />
         </>}
       </CardContent>
     </Card>

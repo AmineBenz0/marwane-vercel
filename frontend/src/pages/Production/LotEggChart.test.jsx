@@ -38,13 +38,13 @@ describe('Lot egg chart', () => {
 
   it('hides all sample controls in production, including for empty lots and failed requests', async () => {
     const view = render(<LotEggChart lotId={7} refreshKey={0} />);
-    await screen.findByRole('button', { name: 'Normaux � 350' });
+    await screen.findByRole('button', { name: 'Normaux · 350' });
     expect(screen.queryByRole('button', { name: 'Voir un exemple' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Exemple � visualiser' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Exemple à visualiser' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Lot fictif/)).not.toBeInTheDocument();
     getEggEvolution.mockResolvedValueOnce({ semaines: [], totaux: {} });
     view.rerender(<LotEggChart lotId={7} refreshKey={1} />);
-    await screen.findByText('Aucune production enregistr�e pour ce lot.');
+    await screen.findByText('Aucune production enregistrée pour ce lot.');
     expect(screen.queryByRole('button', { name: 'Voir un exemple' })).not.toBeInTheDocument();
     getEggEvolution.mockRejectedValueOnce(new Error('Network'));
     view.rerender(<LotEggChart lotId={7} refreshKey={2} />);
@@ -55,40 +55,40 @@ describe('Lot egg chart', () => {
   it('uses real lot data in production even if a sample was previously selected', async () => {
     vi.stubEnv('VITE_DEPLOYMENT_ENV', 'preview');
     const view = render(<LotEggChart lotId={7} refreshKey={0} />);
-    await screen.findByRole('button', { name: 'Normaux � 350' });
+    await screen.findByRole('button', { name: 'Normaux · 350' });
     fireEvent.click(screen.getByRole('button', { name: 'Voir un exemple' }));
     expect(screen.getByText(/Lot fictif/)).toBeVisible();
     vi.stubEnv('VITE_DEPLOYMENT_ENV', 'production');
     view.rerender(<LotEggChart lotId={7} refreshKey={0} />);
-    expect(screen.getByRole('button', { name: 'Normaux � 350' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: /Voir un exemple|Revenir aux donn�es/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Exemple � visualiser' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Normaux · 350' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Voir un exemple|Revenir aux données/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Exemple à visualiser' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Lot fictif/)).not.toBeInTheDocument();
   });
 
   it('loads the lot, toggles curves and exposes exact weekly values with missing-week gaps', async () => {
     render(<LotEggChart lotId={7} refreshKey={0} />);
-    const normal = await screen.findByRole('button', { name: 'Normaux � 350' });
+    const normal = await screen.findByRole('button', { name: 'Normaux · 350' });
     expect(getEggEvolution).toHaveBeenCalledWith(7);
     expect(normal).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(normal);
     expect(normal).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
-    expect(screen.getByRole('table', { name: "Quantit�s d'oufs par semaine" })).toBeVisible();
+    expect(screen.getByRole('table', { name: "Quantités d'œufs par semaine" })).toBeVisible();
     expect(screen.getByText('350', { selector: 'td' })).toBeVisible();
-    expect(screen.getAllByText('-', { selector: 'td' })).toHaveLength(4);
-    expect(screen.getByText('0 / 14 saisies � Incompl�te')).toBeVisible();
+    expect(screen.getAllByText('—', { selector: 'td' })).toHaveLength(4);
+    expect(screen.getByText('0 / 14 saisies · Incomplète')).toBeVisible();
   });
 
   it('handles errors, retry, refresh and an empty lot', async () => {
     getEggEvolution.mockRejectedValueOnce(new Error('Network')).mockResolvedValueOnce(data);
     const view = render(<LotEggChart lotId={7} refreshKey={0} />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de charger');
-    fireEvent.click(screen.getByRole('button', { name: 'R�essayer' }));
-    await screen.findByRole('button', { name: 'Normaux � 350' });
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    await screen.findByRole('button', { name: 'Normaux · 350' });
     getEggEvolution.mockResolvedValue({ semaines: [], totaux: {} });
     view.rerender(<LotEggChart lotId={7} refreshKey={1} />);
-    expect(await screen.findByText('Aucune production enregistr�e pour ce lot.')).toBeVisible();
+    expect(await screen.findByText('Aucune production enregistrée pour ce lot.')).toBeVisible();
     expect(getEggEvolution).toHaveBeenCalledTimes(3);
   });
 
@@ -98,20 +98,20 @@ describe('Lot egg chart', () => {
       semaines: [{ ...data.semaines[0] }],
     });
     render(<LotEggChart lotId={7} refreshKey={0} />);
-    expect(await screen.findByText(/Semaine 1 �/)).toBeVisible();
-    const graph = screen.getByRole('figure', { name: /Graphique des quantit�s d'oufs/ });
+    expect(await screen.findByText(/Semaine 1 ·/)).toBeVisible();
+    const graph = screen.getByRole('figure', { name: /Graphique des quantités d’œufs/ });
     expect(graph.querySelectorAll('.recharts-line-dots .recharts-dot')).toHaveLength(4);
     expect(graph.querySelector('.recharts-line-dots .recharts-dot')).toHaveAttribute('r', '6');
-    expect(screen.queryByText('Doubles jaunes d�marrage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Doubles jaunes démarrage')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Options' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('combobox', { name: 'De' })).not.toBeInTheDocument();
   });
 
   it('shows dates, exact values and recording coverage in the tooltip', () => {
     render(<WeekTooltip active payload={[{ dataKey: 'normal', name: 'Normaux', color: '#2563eb', value: 350, payload: { ...data.semaines[0], incomplete: true } }]} />);
-    expect(screen.getByText('01/09/26 - 07/09/26')).toBeVisible();
+    expect(screen.getByText('01/09/26 – 07/09/26')).toBeVisible();
     expect(screen.getByText('350')).toBeVisible();
-    expect(screen.getByText(/Donn�es incompl�tes/)).toBeVisible();
+    expect(screen.getByText(/Données incomplètes/)).toBeVisible();
   });
 
   it('keeps large and rare quantities on one graph, rescales a chosen week and offers a linear scale', async () => {
@@ -124,20 +124,20 @@ describe('Lot egg chart', () => {
       })),
     });
     render(<LotEggChart lotId={7} refreshKey={0} />);
-    const normal = await screen.findByRole('figure', { name: 'Graphique des quantit�s d'oufs' });
+    const normal = await screen.findByRole('figure', { name: 'Graphique des quantités d’œufs' });
     expect(screen.getAllByRole('figure')).toHaveLength(1);
-    expect(normal).toHaveTextContent('�chelle adapt�e');
-    expect(normal.textContent.replace(/\s/g, '')).toContain('0-300000');
+    expect(normal).toHaveTextContent('Échelle adaptée');
+    expect(normal.textContent.replace(/\s/g, '')).toContain('0–300000');
     expect(screen.queryByRole('combobox', { name: 'De' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Options' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'De' }), { target: { value: '1' } });
-    expect(normal.textContent.replace(/\s/g, '')).toContain('0-80000');
+    expect(normal.textContent.replace(/\s/g, '')).toContain('0–80000');
     expect(screen.getByRole('button', { name: 'Tout le lot' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Lin�aire' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Linéaire' }));
     expect(screen.getAllByRole('figure')).toHaveLength(1);
-    expect(normal).toHaveTextContent('�chelle lin�aire');
+    expect(normal).toHaveTextContent('Échelle linéaire');
     fireEvent.click(screen.getByRole('button', { name: 'Tout le lot' }));
-    expect(screen.getByRole('figure').textContent.replace(/\s/g, '')).toContain('0-300000');
+    expect(screen.getByRole('figure').textContent.replace(/\s/g, '')).toContain('0–300000');
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
     expect(screen.getByText('12', { selector: 'td' })).toBeVisible();
     expect(screen.getByText((text, element) => element.tagName === 'TD' && text.replace(/\s/g, '') === '240000')).toBeVisible();
@@ -157,23 +157,23 @@ describe('Lot egg chart', () => {
     vi.stubEnv('VITE_DEPLOYMENT_ENV', 'preview');
     getEggEvolution.mockResolvedValue({ semaines: [], totaux: {} });
     render(<LotEggChart lotId={7} refreshKey={0} />);
-    await screen.findByText('Aucune production enregistr�e pour ce lot.');
+    await screen.findByText('Aucune production enregistrée pour ce lot.');
     fireEvent.click(screen.getByRole('button', { name: 'Voir un exemple' }));
-    expect(screen.getByText('Lot fictif � Donn�es de d�monstration')).toBeVisible();
+    expect(screen.getByText('Lot fictif · Données de démonstration')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
     expect(screen.getAllByRole('row')).toHaveLength(21);
     const missing = screen.getByRole('row', { name: /^S\. 5 / });
-    expect(within(missing).getAllByText('-', { selector: 'td' })).toHaveLength(4);
+    expect(within(missing).getAllByText('—', { selector: 'td' })).toHaveLength(4);
     const zero = screen.getByRole('row', { name: /^S\. 8 / });
     expect(within(zero).getAllByText('0', { selector: 'td' })).toHaveLength(4);
-    expect(zero).not.toHaveTextContent('Incompl�te');
-    expect(screen.getByRole('row', { name: /^S\. 10 / })).toHaveTextContent('9 / 21 saisies � Incompl�te');
+    expect(zero).not.toHaveTextContent('Incomplète');
+    expect(screen.getByRole('row', { name: /^S\. 10 / })).toHaveTextContent('9 / 21 saisies · Incomplète');
     const spike = screen.getByRole('row', { name: /^S\. 15 / });
     expect(within(spike).getByText((value) => value.replace(/\s/g, '') === '240000')).toBeVisible();
     expect(screen.getByRole('row', { name: /^S\. 20 / })).toHaveTextContent('Partielle');
-    fireEvent.click(screen.getByRole('button', { name: 'Revenir aux donn�es du lot' }));
-    expect(screen.getByText('Aucune production enregistr�e pour ce lot.')).toBeVisible();
-    expect(screen.queryByText('Lot fictif � Donn�es de d�monstration')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Revenir aux données du lot' }));
+    expect(screen.getByText('Aucune production enregistrée pour ce lot.')).toBeVisible();
+    expect(screen.queryByText('Lot fictif · Données de démonstration')).not.toBeInTheDocument();
     expect(getEggEvolution).toHaveBeenCalledTimes(1);
   });
 
@@ -187,20 +187,20 @@ describe('Lot egg chart', () => {
     fireEvent.click(normal);
     expect(normal).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple � visualiser' }), { target: { value: 'long' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple à visualiser' }), { target: { value: 'long' } });
     expect(screen.getByRole('button', { name: /^Normaux/ })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
     expect(screen.getAllByRole('row')).toHaveLength(105);
     finishRequest(data);
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Normaux � 350' })).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple � visualiser' }), { target: { value: 'zero' } });
-    expect(screen.getByRole('button', { name: 'Normaux � 0' })).toBeVisible();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple � visualiser' }), { target: { value: 'empty' } });
-    expect(screen.getByText('Aucune production enregistr�e pour ce lot.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Revenir aux donn�es du lot' }));
-    expect(await screen.findByRole('button', { name: 'Normaux � 350' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Normaux · 350' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple à visualiser' }), { target: { value: 'zero' } });
+    expect(screen.getByRole('button', { name: 'Normaux · 0' })).toBeVisible();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Exemple à visualiser' }), { target: { value: 'empty' } });
+    expect(screen.getByText('Aucune production enregistrée pour ce lot.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Revenir aux données du lot' }));
+    expect(await screen.findByRole('button', { name: 'Normaux · 350' })).toBeVisible();
     expect(getEggEvolution).toHaveBeenCalledTimes(1);
   });
 
@@ -212,12 +212,12 @@ describe('Lot egg chart', () => {
       { id_lot: 2, nom_lot: 'Lot ancien', statut: 'termine', date_debut: '2026-07-01', repartitions: [] },
     ]);
     render(<ProductionLotChart refreshKey={0} />);
-    await screen.findByRole('combobox', { name: 'Lot � analyser' });
+    await screen.findByRole('combobox', { name: 'Lot à analyser' });
     await waitFor(() => expect(getEggEvolution).toHaveBeenCalledWith(1));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Lot � analyser' }), { target: { value: '2' } });
-    await screen.findByRole('button', { name: 'Normaux � 999' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Lot à analyser' }), { target: { value: '2' } });
+    await screen.findByRole('button', { name: 'Normaux · 999' });
     finishOldRequest(data);
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Normaux � 350' })).not.toBeInTheDocument());
-    expect(screen.getByRole('combobox', { name: 'Lot � analyser' })).toHaveValue('2');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Normaux · 350' })).not.toBeInTheDocument());
+    expect(screen.getByRole('combobox', { name: 'Lot à analyser' })).toHaveValue('2');
   });
 });
