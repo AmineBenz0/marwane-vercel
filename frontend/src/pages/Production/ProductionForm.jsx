@@ -23,11 +23,11 @@ import compteBancaireService from '../../services/compteBancaireService';
 import VaccineExpenseFields from './VaccineExpenseFields';
 
 const EGG_TYPES = [
-  { value: 'normal', label: 'Oeufs normaux' },
+  { value: 'normal', label: 'Œufs normaux' },
   { value: 'double_jaune', label: 'Double jaune' },
-  { value: 'blanc', label: 'Oeufs blancs' },
-  { value: 'casse', label: 'Oeufs casses' },
-  { value: 'perdu', label: 'Oeuf perdu' },
+  { value: 'blanc', label: 'Œufs blancs' },
+  { value: 'casse', label: 'Œufs cassés' },
+  { value: 'perdu', label: 'Œuf perdu' },
 ];
 
 const quantityError = (value) => {
@@ -344,7 +344,7 @@ function ProductionForm({
                 select
                 value={watchedBatiment || ''}
                 onChange={(event) => setValue('id_batiment', event.target.value, { shouldValidate: true })}
-                label="Batiment"
+                label="Bâtiment"
                 fullWidth
                 SelectProps={{ readOnly: !!preselectedBatimentId || !!initialData }}
                 error={!!errors.id_batiment}
@@ -478,7 +478,7 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('mortalite', {
-                  min: { value: 0, message: 'Doit etre positif' },
+                  min: { value: 0, message: 'Doit être positif' },
                 })}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -503,7 +503,7 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('consommation_aliment_kg', {
-                  min: { value: 0, message: 'Doit etre positif' },
+                  min: { value: 0, message: 'Doit être positif' },
                 })}
                 label="Aliment consommé (kg)"
                 type="number"
@@ -542,7 +542,7 @@ function ProductionForm({
           <Grid item xs={12} md={4}>
             <Box
               component="aside"
-              aria-label="Recapitulatif de la journee"
+              aria-label="Récapitulatif de la journée"
               sx={{
                 p: 2.5,
                 borderRadius: 3,
@@ -554,25 +554,25 @@ function ProductionForm({
               }}
             >
               <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2 }}>
-                Recapitulatif de la journee
+                Récapitulatif de la journée
               </Typography>
               <Box sx={{ display: 'grid', gap: 1.5 }}>
                 {[
-                  ['Oeufs collectes', `${totalEggs.toLocaleString('fr-FR')} oeufs`],
-                  ['Casses et perdus', `${lostEggs.toLocaleString('fr-FR')} oeufs`],
+                  ['Œufs collectés', `${totalEggs.toLocaleString('fr-FR')} œufs`],
+                  ['Cassés et perdus', `${lostEggs.toLocaleString('fr-FR')} œufs`],
                   ['Poids moyen', averageEggWeight === null
                     ? '-'
                     : `${averageEggWeight.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} g`],
                   ['Calibre', deducedCalibre?.label || '-'],
-                  ['Cartons calcules', `${cartonPreview}`],
-                  ['Mortalite', watchedMortality !== '' && watchedMortality != null
+                  ['Cartons calculés', `${cartonPreview}`],
+                  ['Mortalité', watchedMortality !== '' && watchedMortality != null
                     ? `${Number(watchedMortality).toLocaleString('fr-FR')} sujets`
                     : '-'],
-                  ['Aliment consomme', watchedFeed !== '' && watchedFeed != null
+                  ['Aliment consommé', watchedFeed !== '' && watchedFeed != null
                     ? `${Number(watchedFeed).toLocaleString('fr-FR')} kg`
                     : '-'],
                   ['Formule', formules.find((item) => item.value === watchedFormula)?.label || 'Non precisee'],
-                  ['Depenses vaccins', `${vaccineTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`],
+                  ['Dépenses vaccins', `${vaccineTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`],
                 ].map(([label, value], index, items) => (
                   <Box
                     key={label}
@@ -592,7 +592,7 @@ function ProductionForm({
                 ))}
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-                Le recapitulatif se met a jour pendant la saisie.
+                Le récapitulatif se met à jour pendant la saisie.
               </Typography>
             </Box>
           </Grid>
@@ -606,7 +606,7 @@ function ProductionForm({
             disabled={isSubmitting || loadingDaily || !!loadError || contextLoading || !!contextError || missingCycle}
             sx={{ px: 4, borderRadius: 2 }}
           >
-            {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre a jour' : 'Enregistrer')}
+            {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre à jour' : 'Enregistrer')}
           </Button>
         </DialogActions>
       </form>
