@@ -398,45 +398,46 @@ function ProductionForm({
                 Total collecté (hors cassés et perdus) : {totalEggs.toLocaleString('fr-FR')} œufs
               </Typography>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('poids_plateau', {
-                  validate: (value) => {
-                    if (value === '') return totalEggs > 0 ? 'Champ requis' : true;
-                    return (Number.isFinite(Number(value)) && Number(value) > 60)
-                      || 'Le poids du plateau doit être supérieur à 60 g.';
-                  },
-                })}
-                label="Poids du plateau (g)"
-                type="number"
-                inputProps={{ min: 60.01, step: '0.01' }}
-                value={trayWeight ?? ''}
-                fullWidth
-                disabled={loadingDaily || !!loadError}
-                error={!!errors.poids_plateau}
-                helperText={errors.poids_plateau?.message || 'Plateau de 30 œufs, poids en grammes.'}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box
-                component="output"
-                aria-label="Poids moyen de l’œuf"
-                aria-live="polite"
-                aria-atomic="true"
-                sx={{ display: 'block', p: 2, borderRadius: 2, bgcolor: 'primary.50' }}
-              >
-                <Typography variant="caption" color="text.secondary" fontWeight={800}>
-                  Poids moyen de l’œuf
-                </Typography>
-                <Typography variant="h5" color="primary.main" fontWeight={900} sx={{ my: 0.25 }}>
-                  {averageEggWeight === null ? '—' : `${averageEggWeight.toLocaleString('fr-FR', {
-                    minimumFractionDigits: 2, maximumFractionDigits: 2,
-                  })} g`}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Calcul : (poids du plateau ÷ 30) − 2 g.
-                </Typography>
-              </Box>
+            <Grid item xs={12}>
+              <Grid container spacing={2.5} alignItems="center">
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    {...register('poids_plateau', {
+                      validate: (value) => {
+                        if (value === '') return totalEggs > 0 ? 'Champ requis' : true;
+                        return (Number.isFinite(Number(value)) && Number(value) > 60)
+                          || 'Le poids du plateau doit être supérieur à 60 g.';
+                      },
+                    })}
+                    label="Poids du plateau (g)"
+                    type="number"
+                    inputProps={{ min: 60.01, step: '0.01' }}
+                    value={trayWeight ?? ''}
+                    fullWidth
+                    disabled={loadingDaily || !!loadError}
+                    error={!!errors.poids_plateau}
+                    helperText={errors.poids_plateau?.message}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Box
+                    component="output"
+                    aria-label="Poids moyen de l’œuf"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    sx={{ display: 'block', px: 2 }}
+                  >
+                    <Typography variant="caption" color="text.secondary" fontWeight={800}>
+                      Poids moyen de l’œuf
+                    </Typography>
+                    <Typography variant="h5" color="primary.main" fontWeight={900} sx={{ my: 0.25 }}>
+                      {averageEggWeight === null ? '—' : `${averageEggWeight.toLocaleString('fr-FR', {
+                        minimumFractionDigits: 2, maximumFractionDigits: 2,
+                      })} g`}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
             </Grid>
             {Number(quantities.normal || 0) > 0 && (
               <Grid item xs={12}>
