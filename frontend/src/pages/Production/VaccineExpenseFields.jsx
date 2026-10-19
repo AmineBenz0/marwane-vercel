@@ -54,7 +54,7 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
       return <Stack key={field.id} spacing={1.25} sx={{ p: 1.5, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="body2" fontWeight={700}>Vaccin {index + 1}</Typography>
-          <Button color="error" size="small" startIcon={<DeleteIcon />} disabled={disabled} onClick={() => remove(index)}>Retirer</Button>
+          <Button color="error" variant="contained" size="small" startIcon={<DeleteIcon />} disabled={disabled} onClick={() => remove(index)}>Retirer</Button>
         </Stack>
         <TextField select fullWidth label="Vaccin" disabled={disabled}
           {...register(`${prefix}.id_vaccin`, { required: 'Sélectionnez un vaccin' })}
