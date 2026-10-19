@@ -24,7 +24,6 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
       <Box>
         <Typography variant="subtitle2" fontWeight={900}>Dépenses – Vaccins</Typography>
         <Typography variant="caption" color="text.secondary">
-          Le tarif enregistré s’applique automatiquement aux prochaines saisies.
         </Typography>
       </Box>
       <Stack direction="row" spacing={0.5} justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
@@ -83,16 +82,16 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
                 validate: (value) => /^\d+(?:\.\d{1,2})?$/.test(String(value)) || 'Maximum 2 décimales' })}
               error={!!lineErrors.prix_unitaire} helperText={lineErrors.prix_unitaire?.message || (!hasCataloguePrice
                 ? (firstPriceWillBecomeCataloguePrice
-                  ? 'Ce premier prix sera aussi enregistré comme tarif pour les prochaines saisies.'
-                  : 'Aucun tarif enregistré : indiquez le prix pour cette saisie.')
-                : 'Ce prix ne vaut que pour cette saisie.')} />
+                  ? 'Tarif mémorisé pour les prochaines saisies.'
+                  : 'Aucun tarif défini.')
+                : 'Tarif ponctuel.')} />
             {hasCataloguePrice && <Button size="small" sx={{ alignSelf: 'flex-start' }} disabled={disabled}
               onClick={() => {
                 setValue(`${prefix}.prix_unitaire`, selected.prix_defaut, { shouldDirty: true, shouldValidate: true });
                 setValue(`${prefix}.mettre_a_jour_tarif`, false, { shouldDirty: true });
                 setEditingPrices((current) => ({ ...current, [index]: false }));
               }}>
-              Utiliser le tarif catalogue
+              Tarif catalogue
             </Button>}
             {canUpdateCataloguePrice && <FormControlLabel
               control={<Controller
@@ -108,16 +107,16 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
                   disabled={disabled}
                 />}
               />}
-              label="Enregistrer aussi comme tarif pour les prochaines saisies"
+              label="Mémoriser ce tarif"
               sx={{ ml: 0, '& .MuiFormControlLabel-label': { fontSize: '0.75rem', color: 'text.secondary' } }}
             />}
           </Stack> :
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 56, px: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {line.prix_unitaire ? `${line.quantite || 0} ${displayUnit} × ${formatVaccineMoney(line.prix_unitaire)}` : 'Prix à renseigner'}
+                  {line.prix_unitaire ? `${line.quantite || 0} ${displayUnit} × ${formatVaccineMoney(line.prix_unitaire)}` : 'À renseigner'}
                 </Typography>
-                {!!line.prix_unitaire && <Typography variant="caption" color="text.secondary">Prix par unité</Typography>}
+                {!!line.prix_unitaire && }
               </Box>
               <Button size="small" disabled={disabled} onClick={() => setEditingPrices((current) => ({ ...current, [index]: true }))}>
                 Modifier le prix
