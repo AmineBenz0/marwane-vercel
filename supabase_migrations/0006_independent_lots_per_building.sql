@@ -167,20 +167,6 @@ BEGIN
            OR NEW.id_batiment IS DISTINCT FROM OLD.id_batiment THEN
             RAISE EXCEPTION 'A cycle cannot be moved to another lot or building.';
         END IF;
-        IF pg_trigger_depth() = 1 AND (
-            NEW.nom_cycle IS DISTINCT FROM OLD.nom_cycle
-            OR NEW.souche IS DISTINCT FROM OLD.souche
-            OR NEW.date_debut IS DISTINCT FROM OLD.date_debut
-            OR NEW.age_depart_semaines IS DISTINCT FROM OLD.age_depart_semaines
-            OR NEW.effectif_initial IS DISTINCT FROM OLD.effectif_initial
-            OR NEW.duree_semaines IS DISTINCT FROM OLD.duree_semaines
-            OR NEW.date_fin_prevue IS DISTINCT FROM OLD.date_fin_prevue
-            OR NEW.date_fin_reelle IS DISTINCT FROM OLD.date_fin_reelle
-            OR NEW.statut IS DISTINCT FROM OLD.statut
-            OR NEW.notes IS DISTINCT FROM OLD.notes
-        ) THEN
-            RAISE EXCEPTION 'Update lifecycle fields on lots_production, not the cycle snapshot.';
-        END IF;
     END IF;
 
     SELECT * INTO parent_lot
@@ -190,9 +176,28 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Cycle requires an existing parent lot.';
     END IF;
-    IF NEW.effectif_initial IS DISTINCT FROM parent_lot.effectif_initial
-       AND TG_OP = 'INSERT' THEN
+    IF TG_OP = 'INSERT'
+       AND NEW.effectif_initial IS DISTINCT FROM parent_lot.effectif_initial THEN
         RAISE EXCEPTION 'Lot and building cycle initial flock sizes must match.';
+    END IF;
+    IF TG_OP = 'UPDATE' AND pg_trigger_depth() = 1 AND (
+        (NEW.nom_cycle IS DISTINCT FROM OLD.nom_cycle AND NEW.nom_cycle IS DISTINCT FROM parent_lot.nom_lot)
+        OR (NEW.souche IS DISTINCT FROM OLD.souche AND NEW.souche IS DISTINCT FROM parent_lot.souche)
+        OR (NEW.date_debut IS DISTINCT FROM OLD.date_debut AND NEW.date_debut IS DISTINCT FROM parent_lot.date_debut)
+        OR (NEW.age_depart_semaines IS DISTINCT FROM OLD.age_depart_semaines
+            AND NEW.age_depart_semaines IS DISTINCT FROM parent_lot.age_depart_semaines)
+        OR (NEW.effectif_initial IS DISTINCT FROM OLD.effectif_initial
+            AND NEW.effectif_initial IS DISTINCT FROM parent_lot.effectif_initial)
+        OR (NEW.duree_semaines IS DISTINCT FROM OLD.duree_semaines
+            AND NEW.duree_semaines IS DISTINCT FROM parent_lot.duree_semaines)
+        OR (NEW.date_fin_prevue IS DISTINCT FROM OLD.date_fin_prevue
+            AND NEW.date_fin_prevue IS DISTINCT FROM parent_lot.date_fin_prevue)
+        OR (NEW.date_fin_reelle IS DISTINCT FROM OLD.date_fin_reelle
+            AND NEW.date_fin_reelle IS DISTINCT FROM parent_lot.date_fin_reelle)
+        OR (NEW.statut IS DISTINCT FROM OLD.statut AND NEW.statut IS DISTINCT FROM parent_lot.statut)
+        OR (NEW.notes IS DISTINCT FROM OLD.notes AND NEW.notes IS DISTINCT FROM parent_lot.notes)
+    ) THEN
+        RAISE EXCEPTION 'Update lifecycle fields on lots_production, not the cycle snapshot.';
     END IF;
 
     NEW.nom_cycle := parent_lot.nom_lot;

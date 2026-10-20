@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.models.batiment import Batiment
@@ -186,3 +187,19 @@ def test_database_prevents_one_lot_from_linking_multiple_cycles(db_session):
     with pytest.raises(IntegrityError):
         db_session.commit()
     db_session.rollback()
+
+
+def test_database_parent_update_synchronizes_cycle_snapshot(client, db_session, auth_headers):
+    building = make_building(db_session, "Database snapshot trigger")
+    lot = create_lot(client, auth_headers, building.id_batiment)
+    cycle_id = lot["repartitions"][0]["id_cycle"]
+
+    db_session.execute(text(
+        "UPDATE lots_production SET age_depart_semaines = :age WHERE id_lot = :id_lot"
+    ), {"age": 9, "id_lot": lot["id_lot"]})
+    db_session.commit()
+    db_session.expire_all()
+
+    parent = db_session.query(LotProduction).filter_by(id_lot=lot["id_lot"]).one()
+    cycle = db_session.query(CycleProduction).filter_by(id_cycle=cycle_id).one()
+    assert parent.age_depart_semaines == cycle.age_depart_semaines == 9
