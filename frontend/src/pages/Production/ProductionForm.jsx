@@ -339,7 +339,7 @@ function ProductionForm({
                 helperText={errors.date_production?.message}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={6} sx={{ display: 'flex', flexDirection: 'column' }}>
               {preselectedBatimentId || initialData ? (
                 <>
                   <input
@@ -350,17 +350,17 @@ function ProductionForm({
                     role="group"
                     aria-label="Bâtiment"
                     sx={{
-                      height: 56,
-                      minHeight: 56,
+                      flex: 1,
+                      minHeight: 40,
                       boxSizing: 'border-box',
-                      px: 2,
-                      borderRadius: 2,
+                      px: '14px',
+                      borderRadius: '8px',
                       bgcolor: 'action.hover',
                       display: 'flex',
                       alignItems: 'center',
                     }}
                   >
-                    <Typography variant="body1" fontWeight={700}>
+                    <Typography variant="body1" fontWeight={700} noWrap sx={{ lineHeight: '1.4375em' }}>
                       {batiments.find((batiment) => String(batiment.id_batiment) === String(watchedBatiment))?.nom || '—'}
                     </Typography>
                   </Box>
