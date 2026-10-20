@@ -194,6 +194,17 @@ def test_database_parent_update_synchronizes_cycle_snapshot(client, db_session, 
     lot = create_lot(client, auth_headers, building.id_batiment)
     cycle_id = lot["repartitions"][0]["id_cycle"]
 
+    trigger_definition = db_session.execute(text("""
+        SELECT pg_get_triggerdef(trigger.oid)
+        FROM pg_trigger trigger
+        WHERE trigger.tgrelid = 'public.lots_production'::regclass
+          AND trigger.tgname = 'lots_production_sync_cycle'
+          AND NOT trigger.tgisinternal
+    """)).scalar()
+    assert trigger_definition and "AFTER UPDATE" in trigger_definition, (
+        f"Expected parent-to-cycle trigger; got {trigger_definition!r}"
+    )
+
     db_session.execute(text(
         "UPDATE lots_production SET age_depart_semaines = :age WHERE id_lot = :id_lot"
     ), {"age": 9, "id_lot": lot["id_lot"]})
