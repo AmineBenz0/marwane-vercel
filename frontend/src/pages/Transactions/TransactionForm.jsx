@@ -20,7 +20,8 @@ import DateField from '../../utils/DateField';
  * @param {string} errorMessage - Message d'erreur serveur à afficher
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { keyframes } from '@emotion/react';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
@@ -65,6 +66,21 @@ import { transactionValidationSchema } from './transactionValidation';
 
 const today = () => new Date().toISOString().split('T')[0];
 
+const requiredFieldShake = keyframes`
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+`;
+
+const getRequiredFieldAnimation = (error, animateInvalidFields) => (
+  error && animateInvalidFields
+    ? {
+      animation: `${requiredFieldShake} 420ms ease-in-out`,
+      '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+    }
+    : undefined
+);
+
 const createPaymentDefaults = (date = today()) => ({
   date,
   montant: '',
@@ -90,7 +106,7 @@ const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
  * Encapsule la logique de chargement des LC disponibles pour éviter les mises à jour d'état
  * pendant le rendu du composant parent.
  */
-const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, loading, formatMontant }) => {
+const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, loading, formatMontant, animateInvalidFields }) => {
   const [lcs, setLcs] = React.useState([]);
   const [fetching, setFetching] = React.useState(false);
   
@@ -143,6 +159,7 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
           fullWidth
           label="Choisir une Lettre de Crédit"
           error={!!error}
+          sx={getRequiredFieldAnimation(error, animateInvalidFields)}
           helperText={error?.message || (lcs.length === 0 && !fetching ? 'Aucune LC disponible pour ce partenaire' : '')}
           disabled={loading || fetching}
           size="small"
@@ -191,6 +208,8 @@ function TransactionForm({
   const [produits, setProduits] = useState([]);
   const [batiments, setBatiments] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [animateInvalidFields, setAnimateInvalidFields] = useState(false);
+  const validationAnimationTimer = useRef(null);
   
   // État pour gérer les paiements par ligne (tableau de booleans)
   // État pour stocker les paiements existants (en mode édition)
@@ -219,6 +238,10 @@ function TransactionForm({
     },
     mode: 'onChange',
   });
+
+  useEffect(() => () => {
+    if (validationAnimationTimer.current) clearTimeout(validationAnimationTimer.current);
+  }, []);
 
   // Observer les valeurs du formulaire pour calculer le total
   const watchedLignes = watch('lignes');
@@ -479,10 +502,19 @@ function TransactionForm({
   };
 
   const handleInvalidSubmit = (formErrors) => {
+    if (validationAnimationTimer.current) clearTimeout(validationAnimationTimer.current);
+    setAnimateInvalidFields(false);
+    validationAnimationTimer.current = setTimeout(() => {
+      setAnimateInvalidFields(true);
+      validationAnimationTimer.current = setTimeout(() => {
+        setAnimateInvalidFields(false);
+        validationAnimationTimer.current = null;
+      }, 460);
+    }, 20);
     const firstErrorPath = findFirstErrorPath(formErrors);
     setError('root', {
       type: 'validation',
-      message: 'Certains champs sont invalides. Vérifiez les champs signalés en rouge.',
+      message: 'Les champs obligatoires manquants ou invalides sont signalés ci-dessous.',
     });
     if (firstErrorPath) setTimeout(() => setFocus(firstErrorPath), 0);
   };
@@ -744,6 +776,7 @@ function TransactionForm({
                     label="Date de transaction"
                     size="small"
                     error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || ''}
                     required
                     disabled={loading}
@@ -768,6 +801,7 @@ function TransactionForm({
                     label="Date d'échéance du paiement (optionnel)"
                     size="small"
                     error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || 'Date limite pour le paiement'}
                     disabled={loading}
                     margin="dense"
@@ -827,6 +861,7 @@ function TransactionForm({
                       margin="dense"
                       size="small"
                       error={!!error}
+                      sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
                       disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
                       value={field.value || ''}
@@ -859,6 +894,7 @@ function TransactionForm({
                       margin="dense"
                       size="small"
                       error={!!error}
+                      sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
                       disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                       value={field.value || ''}
@@ -958,7 +994,7 @@ function TransactionForm({
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
-                                <FormControl fullWidth size="small" error={!!error} disabled={loading}>
+                                <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
                                   <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
@@ -1010,6 +1046,7 @@ function TransactionForm({
                                     inputProps={{ min: 1, step: 1 }}
                                     value={field.value ?? ''}
                                     error={!!error}
+                                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || (shouldShowBatimentSource ? "Pour garder le stock juste, entrez le nombre d'oeufs." : '')}
                                     size="small"
                                     disabled={loading}
@@ -1042,6 +1079,7 @@ function TransactionForm({
                                     inputProps={{ min: 0, step: 0.01 }}
                                     value={field.value ?? ''}
                                     error={!!error}
+                                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || ''}
                                     size="small"
                                     disabled={loading}
@@ -1074,6 +1112,7 @@ function TransactionForm({
                                     size="small"
                                     value={field.value || ''}
                                     error={!!error}
+                                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || "Ce choix permet de retirer les oeufs vendus du bon batiment."}
                                     disabled={loading}
                                   >
@@ -1227,6 +1266,7 @@ function TransactionForm({
                                               label="Montant (MAD)"
                                               type="number"
                                               error={!!error}
+                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                               helperText={error?.message}
                                               disabled={loading}
                                               inputProps={{ step: '0.01', min: '0.01' }}
@@ -1249,6 +1289,7 @@ function TransactionForm({
                                               fullWidth
                                               label="Mode de paiement"
                                               error={!!error}
+                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                               helperText={error?.message}
                                               disabled={loading}
                                               size="small"
@@ -1294,6 +1335,7 @@ function TransactionForm({
                                               label="Date du paiement"
 
                                               error={!!error}
+                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                               helperText={error?.message}
                                               disabled={loading}
                                               InputLabelProps={{ shrink: true }}
@@ -1349,6 +1391,7 @@ function TransactionForm({
                                             setValue={setValue}
                                             loading={loading}
                                             formatMontant={formatMontant}
+                                            animateInvalidFields={animateInvalidFields}
                                           />
                                         </Grid>
                                       )}
