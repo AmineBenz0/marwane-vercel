@@ -82,6 +82,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install -r requirements.txt
+      - name: Create runtime role required by database migrations
+        run: psql postgresql://postgres:postgres@localhost:5432/comptabilite_db -v ON_ERROR_STOP=1 -c "CREATE ROLE app_runtime NOLOGIN"
       - run: python -m alembic upgrade heads
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
