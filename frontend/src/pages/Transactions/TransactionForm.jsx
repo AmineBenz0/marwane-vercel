@@ -81,6 +81,76 @@ const getRequiredFieldAnimation = (error, animateInvalidFields) => (
     : undefined
 );
 
+const getFieldLabel = (path) => {
+  const line = path.match(/^lignes\\.(\\d+)/);
+  const lineSuffix = line ? ` (ligne ${Number(line[1]) + 1})` : '';
+  const field = path.split('.').at(-1);
+  const labels = {
+    date_transaction: 'Date de transaction',
+    date_echeance: 'Date d’échéance',
+    id_client: 'Client',
+    id_fournisseur: 'Fournisseur',
+    type_entite: 'Type de transaction',
+    id_produit: 'Produit',
+    quantite: 'Quantité',
+    prix_unitaire: 'Prix unitaire',
+    date: 'Date du paiement',
+    montant: 'Montant du paiement',
+    type: 'Mode de paiement',
+    id_lc: 'Lettre de crédit',
+  };
+  if (path === 'lignes') return 'Produit et paiement';
+  return `${labels[field] || 'Information requise'}${['id_client', 'id_fournisseur', 'date_transaction', 'date_echeance', 'type_entite'].includes(field) ? '' : lineSuffix}`;
+};
+
+const getFieldErrorPaths = (errors, prefix = '') => {
+  if (!errors || typeof errors !== 'object') return [];
+  if (typeof errors.message === 'string') return prefix ? [prefix] : [];
+  return Object.entries(errors).flatMap(([key, value]) => {
+    if (['ref', 'type', 'types', 'root'].includes(key)) return [];
+    return getFieldErrorPaths(value, prefix ? `${prefix}.${key}` : key);
+  });
+};
+
+const mapApiLocationToFormPath = (location) => {
+  if (!Array.isArray(location)) return null;
+  const parts = location.filter((part) => !['body', 'query', 'path'].includes(part));
+  const itemsIndex = parts.indexOf('items');
+  const transactionIndex = parts.indexOf('transaction');
+  const paymentsIndex = parts.indexOf('paiements');
+  const rowIndex = itemsIndex >= 0
+    ? Number(parts[itemsIndex + 1] || 0)
+    : transactionIndex > 0
+      ? Number(parts[transactionIndex - 1] || 0)
+      : Number(parts[0] || 0);
+  const field = parts.at(-1);
+  if (!Number.isInteger(rowIndex) || rowIndex < 0 || !field) return null;
+  if (paymentsIndex >= 0) {
+    const paymentIndex = Number(parts[paymentsIndex + 1] || 0);
+    const paymentField = {
+      date_paiement: 'date',
+      type_paiement: 'type',
+      reference_virement: 'reference',
+    }[field] || field;
+    return `lignes.${rowIndex}.paiements.${Number.isInteger(paymentIndex) ? paymentIndex : 0}.${paymentField}`;
+  }
+  const transactionFields = ['date_transaction', 'date_echeance', 'id_client', 'id_fournisseur'];
+  if (transactionFields.includes(field)) return field;
+  const lineField = {
+    id_produit: 'id_produit',
+    quantite: 'quantite',
+    prix_unitaire: 'prix_unitaire',
+    id_batiment: 'id_batiment',
+  }[field];
+  return lineField ? `lignes.${rowIndex}.${lineField}` : null;
+};
+
+const localizeValidationMessage = (message) => {
+  if (/^field required$/i.test(message || '')) return 'Champ obligatoire.';
+  if (/greater than 0|must be positive/i.test(message || '')) return 'La valeur doit être supérieure à 0.';
+  return message || 'Champ invalide.';
+};
+
 const createPaymentDefaults = (date = today()) => ({
   date,
   montant: '',
@@ -446,32 +516,30 @@ function TransactionForm({
         const detail = error.data.detail;
         
         if (Array.isArray(detail)) {
-          detail.forEach((err) => {
-            if (err.loc && err.loc.length > 1) {
-              const fieldPath = err.loc.slice(1);
-              
-              // Gérer les erreurs dans les lignes
-              if (fieldPath[0] === 'lignes' && fieldPath.length === 3) {
-                const ligneIndex = parseInt(fieldPath[1]);
-                const fieldName = fieldPath[2];
-                
-                setError(`lignes.${ligneIndex}.${fieldName}`, {
-                  type: 'server',
-                  message: err.msg,
-                });
-              } else {
-                const fieldName = fieldPath[fieldPath.length - 1];
-                setError(fieldName, {
-                  type: 'server',
-                  message: err.msg,
-                });
-              }
-            }
+          const mappedPaths = [];
+          detail.forEach((apiError) => {
+            const fieldPath = mapApiLocationToFormPath(apiError.loc);
+            if (!fieldPath) return;
+            mappedPaths.push(fieldPath);
+            setError(fieldPath, {
+              type: 'server',
+              message: localizeValidationMessage(apiError.msg),
+            });
           });
-        } else if (typeof detail === 'string') {
+          const uniquePaths = [...new Set(mappedPaths)];
           setError('root', {
             type: 'server',
-            message: detail,
+            message: uniquePaths.length
+              ? `À compléter ou corriger : ${uniquePaths.map(getFieldLabel).join(', ')}.`
+              : 'La transaction contient un champ obligatoire manquant. Vérifiez les champs signalés.',
+          });
+        } else if (typeof detail === 'string') {
+          const isGenericRequired = /field required|field is required/i.test(detail);
+          setError('root', {
+            type: 'server',
+            message: isGenericRequired
+              ? 'Une information obligatoire manque. Vérifiez les champs signalés en rouge.'
+              : detail,
           });
         }
       } else if (error?.message) {
@@ -501,6 +569,12 @@ function TransactionForm({
     return null;
   };
 
+  const focusValidationField = (path) => {
+    setFocus(path);
+    const field = [...document.querySelectorAll('[name]')].find((element) => element.name === path);
+    field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  };
+
   const handleInvalidSubmit = (formErrors) => {
     if (validationAnimationTimer.current) clearTimeout(validationAnimationTimer.current);
     setAnimateInvalidFields(false);
@@ -512,11 +586,15 @@ function TransactionForm({
       }, 460);
     }, 20);
     const firstErrorPath = findFirstErrorPath(formErrors);
+    const invalidPaths = getFieldErrorPaths(formErrors);
+    const invalidLabels = [...new Set(invalidPaths.map(getFieldLabel))];
     setError('root', {
       type: 'validation',
-      message: 'Les champs obligatoires manquants ou invalides sont signalés ci-dessous.',
+      message: invalidLabels.length
+        ? `À compléter ou corriger : ${invalidLabels.join(', ')}.`
+        : 'Vérifiez les champs signalés en rouge.',
     });
-    if (firstErrorPath) setTimeout(() => setFocus(firstErrorPath), 0);
+    if (firstErrorPath) setTimeout(() => focusValidationField(firstErrorPath), 0);
   };
 
   /**
@@ -655,11 +733,36 @@ function TransactionForm({
 
         <DialogContent dividers sx={{ backgroundColor: 'background.default', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
           {/* Afficher l'erreur serveur générale si présente */}
-          {(errorMessage || errors.root) && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {errorMessage || errors.root?.message}
-            </Alert>
-          )}
+          {(errorMessage || errors.root) && (() => {
+            const fieldPaths = [...new Set(getFieldErrorPaths(errors))];
+            const genericError = /field required|field is required/i.test(errorMessage || '');
+            const summary = fieldPaths.length
+              ? `À compléter ou corriger : ${fieldPaths.map(getFieldLabel).join(', ')}.`
+              : genericError
+                ? 'Une information obligatoire manque. Vérifiez les champs signalés en rouge.'
+                : errors.root?.message || errorMessage;
+            return (
+              <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                <Typography fontWeight={800}>{summary}</Typography>
+                {fieldPaths.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
+                    {fieldPaths.map((fieldPath) => (
+                      <Button
+                        key={fieldPath}
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        onClick={() => focusValidationField(fieldPath)}
+                        sx={{ borderRadius: 5, textTransform: 'none', fontWeight: 700 }}
+                      >
+                        {getFieldLabel(fieldPath)} · Aller au champ
+                      </Button>
+                    ))}
+                  </Box>
+                )}
+              </Alert>
+            );
+          })()}
 
           {loadingData ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
