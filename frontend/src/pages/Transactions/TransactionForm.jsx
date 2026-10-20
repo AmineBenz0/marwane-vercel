@@ -82,7 +82,7 @@ const getRequiredFieldAnimation = (error, animateInvalidFields) => (
 );
 
 const getFieldLabel = (path) => {
-  const line = path.match(/^lignes\\.(\\d+)/);
+  const line = path.match(/^lignes\.(\d+)/);
   const lineSuffix = line ? ` (ligne ${Number(line[1]) + 1})` : '';
   const field = path.split('.').at(-1);
   const labels = {
