@@ -1,7 +1,7 @@
-"""Manage one arrival and all building allocations in a single transaction."""
+"""Manage independent building lots and their single operational cycles."""
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -60,7 +60,9 @@ def _lock_lot(db, id_lot):
     lot = db.query(LotProduction).filter(LotProduction.id_lot == id_lot).populate_existing().with_for_update().first()
     if not lot:
         raise HTTPException(status_code=404, detail="Lot introuvable.")
-    _lock_buildings(db, [row.id_batiment for row in lot.allocations])
+    if lot.cycle is None:
+        raise HTTPException(status_code=409, detail="Ce lot n'est pas associé à un cycle bâtiment.")
+    _lock_buildings(db, [lot.cycle.id_batiment])
     # Refresh after waiting on any concurrent production writer.
     for row in lot.allocations:
         db.refresh(row)
@@ -91,6 +93,7 @@ def _apply_schedule(lot, payload, user):
 def _sync_allocation(cycle, lot):
     # Keep existing SQL reports and dated lookups compatible during rollout.
     cycle.nom_cycle = lot.nom_lot
+    cycle.effectif_initial = lot.effectif_initial
     for field in ("souche", "date_debut", "age_depart_semaines", "duree_semaines", "date_fin_prevue", "date_fin_reelle", "statut", "notes"):
         setattr(cycle, field, getattr(lot, field))
     cycle.id_utilisateur_modification = lot.id_utilisateur_modification
@@ -99,7 +102,7 @@ def _sync_allocation(cycle, lot):
 @router.get("")
 def list_lots(db: Session = Depends(get_db), current_user: Utilisateur = Depends(get_current_active_user)):
     lots = db.query(LotProduction).options(
-        selectinload(LotProduction.allocations).selectinload(CycleProduction.batiment),
+        selectinload(LotProduction.cycle).selectinload(CycleProduction.batiment),
     ).order_by(LotProduction.date_debut.desc(), LotProduction.id_lot.desc()).all()
     return [lot_to_dict(db, lot) for lot in lots]
 
@@ -107,17 +110,9 @@ def list_lots(db: Session = Depends(get_db), current_user: Utilisateur = Depends
 @router.post("", status_code=201)
 def create_lot(payload: LotProductionCreate, db: Session = Depends(get_db),
                current_user: Utilisateur = Depends(get_current_active_user)):
-    # Serialize arrivals across the whole farm, even with disjoint building IDs.
-    # The transaction-scoped PostgreSQL lock also covers the first-ever arrival
-    # when there is no lot row to lock, and is released on commit or rollback.
-    if db.get_bind().dialect.name == "postgresql":
-        db.execute(text("SELECT pg_advisory_xact_lock(741026, 1)"))
+    # Lock the single building. A partial unique index is the final defense
+    # against duplicate active cycles if a concurrent writer bypasses this lock.
     _lock_buildings(db, [row.id_batiment for row in payload.repartitions], require_active=True)
-    if db.query(LotProduction).filter(LotProduction.statut != "termine").first():
-        raise HTTPException(
-            status_code=400,
-            detail="Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot.",
-        )
     _validate_start(db, payload)
     lot = LotProduction(statut="actif", id_utilisateur_creation=current_user.id_utilisateur if current_user else None)
     _apply_schedule(lot, payload, current_user)
@@ -138,7 +133,7 @@ def create_lot(payload: LotProductionCreate, db: Session = Depends(get_db),
 @router.get("/{id_lot}/egg-evolution")
 def get_lot_egg_evolution(id_lot: int, db: Session = Depends(get_db),
                          current_user: Utilisateur = Depends(get_current_active_user)):
-    lot = db.query(LotProduction).options(selectinload(LotProduction.allocations)).filter(
+    lot = db.query(LotProduction).options(selectinload(LotProduction.cycle)).filter(
         LotProduction.id_lot == id_lot,
     ).first()
     if not lot:

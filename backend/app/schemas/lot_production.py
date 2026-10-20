@@ -16,20 +16,15 @@ class LotProductionCreate(BaseModel):
     duree_semaines: int = Field(100, gt=0)
     date_fin_prevue: date | None = None
     notes: str | None = None
-    repartitions: list[LotAllocation] = Field(..., min_length=1)
+    repartitions: list[LotAllocation] = Field(..., min_length=1, max_length=1)
 
     @model_validator(mode="after")
-    def validate_distribution(self):
-        ids = [row.id_batiment for row in self.repartitions]
-        if len(ids) != len(set(ids)):
-            raise ValueError("Un bâtiment ne peut apparaître qu'une fois dans la répartition.")
-        oversized = next((row for row in self.repartitions if row.effectif_initial > self.effectif_initial), None)
-        if oversized:
-            raise ValueError(
-                "La quantité affectée à un bâtiment ne peut pas dépasser le nombre total de poussins du lot."
-            )
-        if sum(row.effectif_initial for row in self.repartitions) != self.effectif_initial:
-            raise ValueError("La répartition doit correspondre au nombre total de poussins entrants.")
+    def validate_single_building_lot(self):
+        if len(self.repartitions) != 1:
+            raise ValueError("Un lot doit être rattaché à un seul bâtiment.")
+        allocation = self.repartitions[0]
+        if allocation.effectif_initial != self.effectif_initial:
+            raise ValueError("L'effectif initial du lot doit correspondre à celui de son cycle bâtiment.")
         if self.date_fin_prevue and self.date_fin_prevue < self.date_debut:
             raise ValueError("La date de fin prévue doit suivre l'arrivée.")
         return self

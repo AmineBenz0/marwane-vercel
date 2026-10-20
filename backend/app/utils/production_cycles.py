@@ -49,7 +49,9 @@ def suggested_formula(age_weeks: int) -> str:
 def refresh_cycle_status(db: Session, cycle: Optional[CycleProduction], today: Optional[date] = None) -> Optional[CycleProduction]:
     # Only an explicit user action closes a flock, including legacy overdue lots.
     if cycle and cycle.statut == "a_cloturer":
-        cycle.statut = "actif"
+        # The parent lot owns lifecycle state and syncs the compatibility snapshot.
+        target = getattr(cycle, "lot", None) or cycle
+        target.statut = "actif"
         db.flush()
     return cycle
 

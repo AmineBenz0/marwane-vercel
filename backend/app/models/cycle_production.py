@@ -1,7 +1,7 @@
 """
 SQLAlchemy model for production cycles/lots.
 """
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text, UniqueConstraint, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -10,17 +10,26 @@ from app.database import Base
 
 class CycleProduction(Base):
     """
-    Represents the chicks allocated to one building within a shared lot.
+    Represents the operational cycle for exactly one independent building lot.
     """
     __tablename__ = "cycles_production"
 
-    __table_args__ = (UniqueConstraint("id_lot", "id_batiment", name="uq_cycle_lot_batiment"),)
+    __table_args__ = (
+        UniqueConstraint("id_lot", name="uq_cycles_production_id_lot"),
+        Index(
+            "uq_cycles_production_one_active_per_building",
+            "id_batiment",
+            unique=True,
+            postgresql_where=text("statut IN ('actif', 'a_cloturer')"),
+            sqlite_where=text("statut IN ('actif', 'a_cloturer')"),
+        ),
+    )
 
-    id_lot = Column(Integer, ForeignKey("lots_production.id_lot"), nullable=True, index=True)
-    lot = relationship("LotProduction", back_populates="allocations")
+    id_lot = Column(Integer, ForeignKey("lots_production.id_lot"), nullable=False, index=True)
+    lot = relationship("LotProduction", back_populates="cycle")
 
-    # Common fields remain as compatibility snapshots for old reports. Shared lot
-    # writes synchronize them atomically; the parent is authoritative for age.
+    # Compatibility snapshots mirror authoritative parent lot metadata. The lot
+    # row owns dates, age, lifecycle, and flock size; cycle writes go through it.
     id_cycle = Column(Integer, primary_key=True, index=True)
     id_batiment = Column(Integer, ForeignKey("batiments.id_batiment"), nullable=False, index=True)
     nom_cycle = Column(String(100), nullable=False)
