@@ -25,7 +25,7 @@ class CycleProduction(Base):
         ),
     )
 
-    id_lot = Column(Integer, ForeignKey("lots_production.id_lot"), nullable=False, index=True)
+    id_lot = Column(Integer, ForeignKey("lots_production.id_lot"), nullable=False)
     lot = relationship("LotProduction", back_populates="cycle")
 
     # Compatibility snapshots mirror authoritative parent lot metadata. The lot

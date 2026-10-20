@@ -135,9 +135,8 @@ $foreign_key$;
 ALTER TABLE public.cycles_production VALIDATE CONSTRAINT fk_cycles_production_lot;
 ALTER TABLE public.cycles_production ALTER COLUMN id_lot SET NOT NULL;
 
-ALTER TABLE public.cycles_production
-    DROP CONSTRAINT IF EXISTS uq_cycle_lot_batiment;
 DROP INDEX IF EXISTS public.uq_cycle_lot_batiment;
+DROP INDEX IF EXISTS public.ix_cycles_production_id_lot;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cycles_production_id_lot
     ON public.cycles_production (id_lot);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cycles_production_one_active_per_building
@@ -290,6 +289,9 @@ BEGIN
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
         REVOKE ALL ON public.independent_lot_migration_map FROM app_runtime;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+        REVOKE ALL ON public.independent_lot_migration_map FROM service_role;
     END IF;
 END
 $permissions$;

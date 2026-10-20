@@ -65,7 +65,7 @@ Stock snapshot semantics: the daily stock endpoint is date-scoped, cycle-aware, 
 
 Read-only counts: 6 buildings, 3 parent lots, 3 cycles, 2 active lots/cycles. Each lot currently has one child cycle (buildings 7, 8, 9). No parentless cycles, parents without cycles, shared lots, duplicate active cycles per building, overlapping periods, missing/nonpositive flock sizes, or parent allocation total mismatches.
 
-Each of the three parent/cycle pairs differs in `name` and `notes`; audited schedule, status, strain, age, and flock fields match. These are three metadata mismatches. Confirm which record is authoritative before synchronizing.
+Each of the three parent/cycle pairs differs in `name` and `notes`; audited schedule, status, strain, age, and flock fields match. The Phase 3 model decision makes the parent lot authoritative for name and notes. The migration records both pre-migration snapshots in a restricted mapping table before synchronizing the cycle snapshots.
 
 | Cycle | Building | State and period | Starting flock | Active linked production | Active mortality | Active feed | Linked transaction gross | Linked charges |
 | --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: |

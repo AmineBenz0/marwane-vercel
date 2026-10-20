@@ -158,37 +158,31 @@ def test_database_partial_index_rejects_two_active_cycles_in_one_building(db_ses
     db_session.rollback()
 
 
-def test_concurrent_same_building_creates_are_serialized(db_session):
-    if db_session.get_bind().dialect.name != "postgresql":
-        pytest.skip("Concurrent row-lock behavior requires PostgreSQL.")
-    from concurrent.futures import ThreadPoolExecutor
-    from threading import Barrier
+def test_database_prevents_one_lot_from_linking_multiple_cycles(db_session):
+    building_a = make_building(db_session, "One-to-one A")
+    building_b = make_building(db_session, "One-to-one B")
+    start = date.today()
+    lot = LotProduction(
+        nom_lot="Single parent", date_debut=start, age_depart_semaines=0,
+        effectif_initial=10, duree_semaines=100,
+        date_fin_prevue=start + timedelta(days=699), statut="actif",
+    )
+    db_session.add(lot)
+    db_session.flush()
+    db_session.add(CycleProduction(
+        id_lot=lot.id_lot, id_batiment=building_a.id_batiment,
+        nom_cycle="Single parent", date_debut=start, age_depart_semaines=0,
+        effectif_initial=10, duree_semaines=100,
+        date_fin_prevue=start + timedelta(days=699), statut="actif",
+    ))
+    db_session.commit()
 
-    from fastapi import HTTPException
-    from sqlalchemy.orm import sessionmaker
-    from app.routers.lots_production import create_lot
-    from app.schemas.lot_production import LotProductionCreate
-
-    building = make_building(db_session, "Concurrent building")
-    session_factory = sessionmaker(bind=db_session.get_bind(), autoflush=False)
-    barrier = Barrier(2)
-
-    def start():
-        with session_factory() as session:
-            payload = LotProductionCreate(
-                nom_lot="Concurrent lot", date_debut=date.today(),
-                age_depart_semaines=0, effectif_initial=25,
-                repartitions=[{"id_batiment": building.id_batiment, "effectif_initial": 25}],
-            )
-            barrier.wait(timeout=10)
-            try:
-                create_lot(payload, db=session, current_user=None)
-                return 201
-            except HTTPException as error:
-                session.rollback()
-                return error.status_code
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        outcomes = list(executor.map(lambda _: start(), range(2)))
-    assert sorted(outcomes) == [201, 400]
-    assert db_session.query(CycleProduction).filter_by(id_batiment=building.id_batiment).count() == 1
+    db_session.add(CycleProduction(
+        id_lot=lot.id_lot, id_batiment=building_b.id_batiment,
+        nom_cycle="Single parent", date_debut=start, age_depart_semaines=0,
+        effectif_initial=10, duree_semaines=100,
+        date_fin_prevue=start + timedelta(days=699), statut="termine",
+    ))
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
