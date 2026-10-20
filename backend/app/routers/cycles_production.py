@@ -22,7 +22,6 @@ from app.schemas.cycle_production import (
 from app.utils.dependencies import get_current_active_user
 from app.utils.production_cycles import (
     ACTIVE_CYCLE_STATUSES,
-    calculate_cycle_end_date,
     cycle_to_dict,
     find_active_cycle,
     find_cycle_for_date,
