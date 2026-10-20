@@ -81,7 +81,7 @@ const getRequiredFieldAnimation = (error, animateInvalidFields) => (
     : undefined
 );
 
-const getFieldLabel = (path) => {
+const getFieldLabel = (path, typeEntite = 'client') => {
   const line = path.match(/^lignes\.(\d+)/);
   const lineSuffix = line ? ` (ligne ${Number(line[1]) + 1})` : '';
   const field = path.split('.').at(-1);
@@ -91,7 +91,7 @@ const getFieldLabel = (path) => {
     id_client: 'Client',
     id_fournisseur: 'Fournisseur',
     type_entite: 'Type de transaction',
-    id_produit: 'Produit',
+    id_produit: typeEntite === 'client' ? 'Produit vendu' : 'Produit acheté',
     quantite: 'Quantité',
     prix_unitaire: 'Prix unitaire',
     date: 'Date du paiement',
@@ -530,7 +530,7 @@ function TransactionForm({
           setError('root', {
             type: 'server',
             message: uniquePaths.length
-              ? `À compléter ou corriger : ${uniquePaths.map(getFieldLabel).join(', ')}.`
+              ? `À compléter ou corriger : ${uniquePaths.map((path) => getFieldLabel(path, watchedTypeEntite)).join(', ')}.`
               : 'La transaction contient un champ obligatoire manquant. Vérifiez les champs signalés.',
           });
         } else if (typeof detail === 'string') {
@@ -592,7 +592,7 @@ function TransactionForm({
     }, 20);
     const firstErrorPath = findFirstErrorPath(formErrors);
     const invalidPaths = getFieldErrorPaths(formErrors);
-    const invalidLabels = [...new Set(invalidPaths.map(getFieldLabel))];
+    const invalidLabels = [...new Set(invalidPaths.map((path) => getFieldLabel(path, watchedTypeEntite)))];
     setError('root', {
       type: 'validation',
       message: invalidLabels.length
@@ -744,7 +744,7 @@ function TransactionForm({
             const fieldPaths = [...new Set(getFieldErrorPaths(errors))];
             const genericError = /field required|field is required/i.test(errorMessage || '');
             const summary = fieldPaths.length
-              ? `À compléter ou corriger : ${fieldPaths.map(getFieldLabel).join(', ')}.`
+              ? `À compléter ou corriger : ${fieldPaths.map((path) => getFieldLabel(path, watchedTypeEntite)).join(', ')}.`
               : genericError
                 ? 'Une information obligatoire manque. Vérifiez les champs signalés en rouge.'
                 : errors.root?.message || errorMessage;
@@ -762,7 +762,7 @@ function TransactionForm({
                         onClick={() => focusValidationField(fieldPath)}
                         sx={{ borderRadius: 5, textTransform: 'none', fontWeight: 700 }}
                       >
-                        {getFieldLabel(fieldPath)} · Aller au champ
+                        {getFieldLabel(fieldPath, watchedTypeEntite)} · Aller au champ
                       </Button>
                     ))}
                   </Box>
@@ -1134,7 +1134,9 @@ function TransactionForm({
                                     </Select>
                                     {error && (
                                       <FormHelperText error>
-                                        {error.message}
+                                        {error.message === 'Le produit est requis'
+                                          ? `Veuillez sélectionner ${watchedTypeEntite === 'client' ? 'le produit vendu' : 'le produit acheté'}.`
+                                          : error.message}
                                       </FormHelperText>
                                     )}
                                   </FormControl>
