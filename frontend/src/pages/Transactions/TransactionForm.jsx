@@ -686,7 +686,9 @@ function TransactionForm({
       maxWidth="lg"
       fullWidth
       PaperProps={{
+        // Let React Hook Form render consistent French errors for every required field.
         component: 'form',
+        noValidate: true,
         onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
         sx: {
           minHeight: '640px',
