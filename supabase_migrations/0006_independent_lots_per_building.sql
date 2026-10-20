@@ -137,8 +137,18 @@ ALTER TABLE public.cycles_production ALTER COLUMN id_lot SET NOT NULL;
 
 DROP INDEX IF EXISTS public.uq_cycle_lot_batiment;
 DROP INDEX IF EXISTS public.ix_cycles_production_id_lot;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_cycles_production_id_lot
-    ON public.cycles_production (id_lot);
+DO $one_to_one$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.cycles_production'::regclass
+          AND conname = 'uq_cycles_production_id_lot'
+    ) THEN
+        ALTER TABLE public.cycles_production
+            ADD CONSTRAINT uq_cycles_production_id_lot UNIQUE (id_lot);
+    END IF;
+END
+$one_to_one$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cycles_production_one_active_per_building
     ON public.cycles_production (id_batiment)
     WHERE statut IN ('actif', 'a_cloturer');

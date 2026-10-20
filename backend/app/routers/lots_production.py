@@ -160,9 +160,7 @@ def update_lot(id_lot: int, payload: LotProductionCreate, db: Session = Depends(
     for cycle in lot.allocations:
         validate_cycle_mortality(db, cycle, 0, limit=counts[cycle.id_batiment])
     _apply_schedule(lot, payload, current_user)
-    for cycle in lot.allocations:
-        cycle.effectif_initial = counts[cycle.id_batiment]
-        _sync_allocation(cycle, lot)
+    # The database parent trigger updates the compatibility snapshot atomically.
     db.commit()
     db.refresh(lot)
     return lot_to_dict(db, lot)
@@ -186,8 +184,7 @@ def terminate_lot(id_lot: int, payload: CycleProductionTerminate, db: Session = 
     lot.date_fin_reelle = end
     if current_user:
         lot.id_utilisateur_modification = current_user.id_utilisateur
-    for cycle in lot.allocations:
-        _sync_allocation(cycle, lot)
+    # The database parent trigger updates the compatibility snapshot atomically.
     db.commit()
     db.refresh(lot)
     return lot_to_dict(db, lot)

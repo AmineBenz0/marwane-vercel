@@ -51,7 +51,7 @@ PostgreSQL partial indexes index only rows matching their predicate, so the acti
 
 ## Migration and release sequence
 
-1. Apply `supabase_migrations/0006_independent_lots_per_building.sql` only after verifying the database target and taking a restorable backup.
+1. Apply `supabase_migrations/0006_independent_lots_per_building.sql` only after verifying the database target and taking a restorable backup. The same SQL is wrapped by `backend/alembic/versions/independent_lots_per_building.py` for environments managed through Alembic; use one migration runner per target and record its history.
 2. Review `independent_lot_migration_map` and reconcile per-building lot counts and field snapshots. No production or staging database has been migrated by this change.
 3. Deploy application code that creates and updates one lot/cycle pair per building. Keep all existing cycle IDs and foreign keys.
 4. Compare per-building and per-cycle production, mortality, feed, transactions, charges, stock snapshots, and authoritative financial totals before and after.
