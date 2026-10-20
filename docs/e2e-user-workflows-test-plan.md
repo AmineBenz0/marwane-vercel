@@ -30,7 +30,7 @@ The script creates visible test data prefixed with `E2E`, so it is easy to recog
 | --- | --- | --- | --- |
 | E2E-10 | User sees today's work quickly | Open `Accueil quotidien` | Quick actions are visible first; no redundant top card; batiment cards are simple and not overloaded. |
 | E2E-11 | User starts production from dashboard | Click `Saisir` on a batiment card | User is taken to the related batiment daily entry flow. |
-| E2E-12 | User checks current lot | Look at the lot summary on dashboard/production | Lot name is visible as `Lot date`; no redundant `Commun` label. |
+| E2E-12 | User checks current lot | Look at the lot summary on a building's production page | The current lot and its status belong to that building only; other buildings may have different active lots. |
 
 ## Calendar And Tasks
 
@@ -46,9 +46,14 @@ The script creates visible test data prefixed with `E2E`, so it is easy to recog
 | ID | User situation | Steps | Expected result |
 | --- | --- | --- | --- |
 | E2E-30 | User sees production overview | Open `Production & stock` | Page acts as overview/redirector, not a duplicate of each batiment detail page. |
-| E2E-31 | User starts a lot once | From Production overview, create a lot with `Lot date` and incoming chickens per batiment | A lot is created for each batiment with the entered chicken count; counts are not split automatically unless user entered that. |
+| E2E-31 | User starts independent lots | Start a lot for Building A, then start a lot for Building B while A's lot remains active | Both lots are active independently; each has its own arrival date, starting age, strain, and flock size. No flock count is split or copied implicitly. |
 | E2E-32 | User sees batiment cards side-by-side | Open Production on desktop | Batiment cards sit next to each other where space allows; mobile stacks them cleanly. |
 | E2E-33 | User opens a batiment | Click `Voir le batiment` | User lands on `/production/batiment/:id` with the selected batiment details. |
+| E2E-34 | User cannot start overlapping lots in one building | With an active lot in Building A, attempt to start another lot in Building A | The operation is rejected with a clear message; active lots in other buildings remain unaffected. |
+| E2E-35 | User closes one building's lot | Close Building A's active lot while Building B also has an active lot | Only Building A's lot closes; Building B's lot remains active and accepts valid entries. |
+| E2E-36 | User starts a successor on the closing date | Close Building A's lot on date D, then start its successor on date D | The successor is allowed; a new unassigned entry for date D resolves to it, while previously saved cycle-linked entries keep their existing association. |
+| E2E-37 | User reaches a planned end date | Leave a lot active after its planned end date | The lot remains active until the user explicitly closes it. |
+| E2E-38 | User reviews lot-specific reporting | Compare progression/charts for active lots in two buildings | Each lot's chart, flock count, mortality, and feed use only its own building cycle; farm totals may aggregate both and are labelled accordingly. |
 
 ## Batiment Daily Production
 
