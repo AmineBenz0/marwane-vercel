@@ -1063,7 +1063,7 @@ function TransactionForm({
                   )}
                 </Box>
 
-                {errors.lignes && (
+                {typeof errors.lignes?.message === 'string' && (
                   <Alert severity="error" sx={{ mb: 2 }}>
                     {errors.lignes.message}
                   </Alert>
