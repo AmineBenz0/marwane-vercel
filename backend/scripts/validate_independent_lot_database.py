@@ -4,6 +4,10 @@ All fixture rows are created inside one transaction and rolled back. This must r
 after Alembic migrations; ORM-created test schemas do not include SQL triggers.
 """
 from datetime import date, timedelta
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
