@@ -20,7 +20,8 @@ import DateField from '../../utils/DateField';
  * @param {string} errorMessage - Message d'erreur serveur à afficher
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { keyframes } from '@emotion/react';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
@@ -65,6 +66,91 @@ import { transactionValidationSchema } from './transactionValidation';
 
 const today = () => new Date().toISOString().split('T')[0];
 
+const requiredFieldShake = keyframes`
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+`;
+
+const getRequiredFieldAnimation = (error, animateInvalidFields) => (
+  error && animateInvalidFields
+    ? {
+      animation: `${requiredFieldShake} 420ms ease-in-out`,
+      '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+    }
+    : undefined
+);
+
+const getFieldLabel = (path, typeEntite = 'client') => {
+  const line = path.match(/^lignes\.(\d+)/);
+  const lineSuffix = line ? ` (ligne ${Number(line[1]) + 1})` : '';
+  const field = path.split('.').at(-1);
+  const labels = {
+    date_transaction: 'Date de transaction',
+    date_echeance: 'Date d’échéance',
+    id_client: 'Client',
+    id_fournisseur: 'Fournisseur',
+    type_entite: 'Type de transaction',
+    id_produit: typeEntite === 'client' ? 'Produit vendu' : 'Produit acheté',
+    quantite: 'Quantité',
+    prix_unitaire: 'Prix unitaire',
+    date: 'Date du paiement',
+    montant: 'Montant du paiement',
+    type: 'Mode de paiement',
+    id_lc: 'Lettre de crédit',
+  };
+  if (path === 'lignes') return 'Produit et paiement';
+  return `${labels[field] || 'Information requise'}${['id_client', 'id_fournisseur', 'date_transaction', 'date_echeance', 'type_entite'].includes(field) ? '' : lineSuffix}`;
+};
+
+const getFieldErrorPaths = (errors, prefix = '') => {
+  if (!errors || typeof errors !== 'object') return [];
+  if (typeof errors.message === 'string') return prefix ? [prefix] : [];
+  return Object.entries(errors).flatMap(([key, value]) => {
+    if (['ref', 'type', 'types', 'root'].includes(key)) return [];
+    return getFieldErrorPaths(value, prefix ? `${prefix}.${key}` : key);
+  });
+};
+
+const mapApiLocationToFormPath = (location) => {
+  if (!Array.isArray(location)) return null;
+  const parts = location.filter((part) => !['body', 'query', 'path'].includes(part));
+  const itemsIndex = parts.indexOf('items');
+  const transactionIndex = parts.indexOf('transaction');
+  const paymentsIndex = parts.indexOf('paiements');
+  const rowIndex = itemsIndex >= 0
+    ? Number(parts[itemsIndex + 1] || 0)
+    : transactionIndex > 0
+      ? Number(parts[transactionIndex - 1] || 0)
+      : Number(parts[0] || 0);
+  const field = parts.at(-1);
+  if (!Number.isInteger(rowIndex) || rowIndex < 0 || !field) return null;
+  if (paymentsIndex >= 0) {
+    const paymentIndex = Number(parts[paymentsIndex + 1] || 0);
+    const paymentField = {
+      date_paiement: 'date',
+      type_paiement: 'type',
+      reference_virement: 'reference',
+    }[field] || field;
+    return `lignes.${rowIndex}.paiements.${Number.isInteger(paymentIndex) ? paymentIndex : 0}.${paymentField}`;
+  }
+  const transactionFields = ['date_transaction', 'date_echeance', 'id_client', 'id_fournisseur'];
+  if (transactionFields.includes(field)) return field;
+  const lineField = {
+    id_produit: 'id_produit',
+    quantite: 'quantite',
+    prix_unitaire: 'prix_unitaire',
+    id_batiment: 'id_batiment',
+  }[field];
+  return lineField ? `lignes.${rowIndex}.${lineField}` : null;
+};
+
+const localizeValidationMessage = (message) => {
+  if (/^field required$/i.test(message || '')) return 'Champ obligatoire.';
+  if (/greater than 0|must be positive/i.test(message || '')) return 'La valeur doit être supérieure à 0.';
+  return message || 'Champ invalide.';
+};
+
 const createPaymentDefaults = (date = today()) => ({
   date,
   montant: '',
@@ -90,7 +176,7 @@ const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
  * Encapsule la logique de chargement des LC disponibles pour éviter les mises à jour d'état
  * pendant le rendu du composant parent.
  */
-const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, loading, formatMontant }) => {
+const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, loading, formatMontant, animateInvalidFields }) => {
   const [lcs, setLcs] = React.useState([]);
   const [fetching, setFetching] = React.useState(false);
   
@@ -143,6 +229,7 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
           fullWidth
           label="Choisir une Lettre de Crédit"
           error={!!error}
+          sx={getRequiredFieldAnimation(error, animateInvalidFields)}
           helperText={error?.message || (lcs.length === 0 && !fetching ? 'Aucune LC disponible pour ce partenaire' : '')}
           disabled={loading || fetching}
           size="small"
@@ -191,6 +278,8 @@ function TransactionForm({
   const [produits, setProduits] = useState([]);
   const [batiments, setBatiments] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [animateInvalidFields, setAnimateInvalidFields] = useState(false);
+  const validationAnimationTimer = useRef(null);
   
   // État pour gérer les paiements par ligne (tableau de booleans)
   // État pour stocker les paiements existants (en mode édition)
@@ -219,6 +308,10 @@ function TransactionForm({
     },
     mode: 'onChange',
   });
+
+  useEffect(() => () => {
+    if (validationAnimationTimer.current) clearTimeout(validationAnimationTimer.current);
+  }, []);
 
   // Observer les valeurs du formulaire pour calculer le total
   const watchedLignes = watch('lignes');
@@ -423,32 +516,30 @@ function TransactionForm({
         const detail = error.data.detail;
         
         if (Array.isArray(detail)) {
-          detail.forEach((err) => {
-            if (err.loc && err.loc.length > 1) {
-              const fieldPath = err.loc.slice(1);
-              
-              // Gérer les erreurs dans les lignes
-              if (fieldPath[0] === 'lignes' && fieldPath.length === 3) {
-                const ligneIndex = parseInt(fieldPath[1]);
-                const fieldName = fieldPath[2];
-                
-                setError(`lignes.${ligneIndex}.${fieldName}`, {
-                  type: 'server',
-                  message: err.msg,
-                });
-              } else {
-                const fieldName = fieldPath[fieldPath.length - 1];
-                setError(fieldName, {
-                  type: 'server',
-                  message: err.msg,
-                });
-              }
-            }
+          const mappedPaths = [];
+          detail.forEach((apiError) => {
+            const fieldPath = mapApiLocationToFormPath(apiError.loc);
+            if (!fieldPath) return;
+            mappedPaths.push(fieldPath);
+            setError(fieldPath, {
+              type: 'server',
+              message: localizeValidationMessage(apiError.msg),
+            });
           });
-        } else if (typeof detail === 'string') {
+          const uniquePaths = [...new Set(mappedPaths)];
           setError('root', {
             type: 'server',
-            message: detail,
+            message: uniquePaths.length
+              ? `À compléter ou corriger : ${uniquePaths.map((path) => getFieldLabel(path, watchedTypeEntite)).join(', ')}.`
+              : 'La transaction contient un champ obligatoire manquant. Vérifiez les champs signalés.',
+          });
+        } else if (typeof detail === 'string') {
+          const isGenericRequired = /field required|field is required/i.test(detail);
+          setError('root', {
+            type: 'server',
+            message: isGenericRequired
+              ? 'Une information obligatoire manque. Vérifiez les champs signalés en rouge.'
+              : detail,
           });
         }
       } else if (error?.message) {
@@ -478,13 +569,37 @@ function TransactionForm({
     return null;
   };
 
+  const focusValidationField = (path) => {
+    setFocus(path);
+    const field = [...document.querySelectorAll('[name]')].find((element) => element.name === path);
+    const formControl = field?.closest('.MuiFormControl-root');
+    const visibleControl = formControl?.querySelector('[role="combobox"]') || field;
+    window.requestAnimationFrame(() => {
+      visibleControl?.focus?.();
+      (formControl || visibleControl)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
   const handleInvalidSubmit = (formErrors) => {
+    if (validationAnimationTimer.current) clearTimeout(validationAnimationTimer.current);
+    setAnimateInvalidFields(false);
+    validationAnimationTimer.current = setTimeout(() => {
+      setAnimateInvalidFields(true);
+      validationAnimationTimer.current = setTimeout(() => {
+        setAnimateInvalidFields(false);
+        validationAnimationTimer.current = null;
+      }, 460);
+    }, 20);
     const firstErrorPath = findFirstErrorPath(formErrors);
+    const invalidPaths = getFieldErrorPaths(formErrors);
+    const invalidLabels = [...new Set(invalidPaths.map((path) => getFieldLabel(path, watchedTypeEntite)))];
     setError('root', {
       type: 'validation',
-      message: 'Certains champs sont invalides. Vérifiez les champs signalés en rouge.',
+      message: invalidLabels.length
+        ? `À compléter ou corriger : ${invalidLabels.join(', ')}.`
+        : 'Vérifiez les champs signalés en rouge.',
     });
-    if (firstErrorPath) setTimeout(() => setFocus(firstErrorPath), 0);
+    if (firstErrorPath) setTimeout(() => focusValidationField(firstErrorPath), 0);
   };
 
   /**
@@ -571,7 +686,9 @@ function TransactionForm({
       maxWidth="lg"
       fullWidth
       PaperProps={{
+        // Let React Hook Form render consistent French errors for every required field.
         component: 'form',
+        noValidate: true,
         onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
         sx: {
           minHeight: '640px',
@@ -623,11 +740,36 @@ function TransactionForm({
 
         <DialogContent dividers sx={{ backgroundColor: 'background.default', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
           {/* Afficher l'erreur serveur générale si présente */}
-          {(errorMessage || errors.root) && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {errorMessage || errors.root?.message}
-            </Alert>
-          )}
+          {(errorMessage || errors.root) && (() => {
+            const fieldPaths = [...new Set(getFieldErrorPaths(errors))];
+            const genericError = /field required|field is required/i.test(errorMessage || '');
+            const summary = fieldPaths.length
+              ? `À compléter ou corriger : ${fieldPaths.map((path) => getFieldLabel(path, watchedTypeEntite)).join(', ')}.`
+              : genericError
+                ? 'Une information obligatoire manque. Vérifiez les champs signalés en rouge.'
+                : errors.root?.message || errorMessage;
+            return (
+              <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                <Typography fontWeight={800}>{summary}</Typography>
+                {fieldPaths.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
+                    {fieldPaths.map((fieldPath) => (
+                      <Button
+                        key={fieldPath}
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        onClick={() => focusValidationField(fieldPath)}
+                        sx={{ borderRadius: 5, textTransform: 'none', fontWeight: 700 }}
+                      >
+                        {getFieldLabel(fieldPath, watchedTypeEntite)} · Aller au champ
+                      </Button>
+                    ))}
+                  </Box>
+                )}
+              </Alert>
+            );
+          })()}
 
           {loadingData ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -744,6 +886,7 @@ function TransactionForm({
                     label="Date de transaction"
                     size="small"
                     error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || ''}
                     required
                     disabled={loading}
@@ -768,6 +911,7 @@ function TransactionForm({
                     label="Date d'échéance du paiement (optionnel)"
                     size="small"
                     error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || 'Date limite pour le paiement'}
                     disabled={loading}
                     margin="dense"
@@ -827,6 +971,7 @@ function TransactionForm({
                       margin="dense"
                       size="small"
                       error={!!error}
+                      sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
                       disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
                       value={field.value || ''}
@@ -859,6 +1004,7 @@ function TransactionForm({
                       margin="dense"
                       size="small"
                       error={!!error}
+                      sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
                       disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                       value={field.value || ''}
@@ -917,7 +1063,7 @@ function TransactionForm({
                   )}
                 </Box>
 
-                {errors.lignes && (
+                {typeof errors.lignes?.message === 'string' && (
                   <Alert severity="error" sx={{ mb: 2 }}>
                     {errors.lignes.message}
                   </Alert>
@@ -958,7 +1104,7 @@ function TransactionForm({
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
-                                <FormControl fullWidth size="small" error={!!error} disabled={loading}>
+                                <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
                                   <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
@@ -988,7 +1134,9 @@ function TransactionForm({
                                     </Select>
                                     {error && (
                                       <FormHelperText error>
-                                        {error.message}
+                                        {error.message === 'Le produit est requis'
+                                          ? `Veuillez sélectionner ${watchedTypeEntite === 'client' ? 'le produit vendu' : 'le produit acheté'}.`
+                                          : error.message}
                                       </FormHelperText>
                                     )}
                                   </FormControl>
@@ -1010,6 +1158,7 @@ function TransactionForm({
                                     inputProps={{ min: 1, step: 1 }}
                                     value={field.value ?? ''}
                                     error={!!error}
+                                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || (shouldShowBatimentSource ? "Pour garder le stock juste, entrez le nombre d'oeufs." : '')}
                                     size="small"
                                     disabled={loading}
@@ -1042,6 +1191,7 @@ function TransactionForm({
                                     inputProps={{ min: 0, step: 0.01 }}
                                     value={field.value ?? ''}
                                     error={!!error}
+                                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || ''}
                                     size="small"
                                     disabled={loading}
@@ -1074,6 +1224,7 @@ function TransactionForm({
                                     size="small"
                                     value={field.value || ''}
                                     error={!!error}
+                                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || "Ce choix permet de retirer les oeufs vendus du bon batiment."}
                                     disabled={loading}
                                   >
@@ -1227,6 +1378,7 @@ function TransactionForm({
                                               label="Montant (MAD)"
                                               type="number"
                                               error={!!error}
+                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                               helperText={error?.message}
                                               disabled={loading}
                                               inputProps={{ step: '0.01', min: '0.01' }}
@@ -1249,6 +1401,7 @@ function TransactionForm({
                                               fullWidth
                                               label="Mode de paiement"
                                               error={!!error}
+                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                               helperText={error?.message}
                                               disabled={loading}
                                               size="small"
@@ -1294,6 +1447,7 @@ function TransactionForm({
                                               label="Date du paiement"
 
                                               error={!!error}
+                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                               helperText={error?.message}
                                               disabled={loading}
                                               InputLabelProps={{ shrink: true }}
@@ -1349,6 +1503,7 @@ function TransactionForm({
                                             setValue={setValue}
                                             loading={loading}
                                             formatMontant={formatMontant}
+                                            animateInvalidFields={animateInvalidFields}
                                           />
                                         </Grid>
                                       )}
