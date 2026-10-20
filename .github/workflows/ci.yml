@@ -37,7 +37,7 @@ jobs:
           app/models/financial_correction.py
           app/models/inventory.py app/models/job_execution.py
           app/models/nomenclature.py app/models/production.py app/models/lot_production.py
-          scripts/check_database_schema.py tests/test_database_schema.py
+          scripts/check_database_schema.py scripts/validate_independent_lot_database.py tests/test_database_schema.py
           tests/test_lc_schema_migration.py tests/test_shared_lot_migration.py
           app/schemas/batiment.py
           app/schemas/compte_bancaire.py app/schemas/cycle_production.py app/schemas/lot_production.py
@@ -100,7 +100,13 @@ jobs:
         env:
           POSTGRES_MIGRATION_TEST_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
 
-      - name: Verify single active lot and concurrent arrivals on PostgreSQL
+      - name: Verify independent-lot constraints and snapshot triggers on PostgreSQL
+        run: python scripts/validate_independent_lot_database.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: development
+          SECRET_KEY: ci-only-secret
+      - name: Verify per-building lot API behavior
         run: python -m pytest --override-ini addopts='' tests/test_independent_lots.py -q
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
