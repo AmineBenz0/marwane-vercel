@@ -239,10 +239,7 @@ $function$;
 
 DROP TRIGGER IF EXISTS lots_production_sync_cycle ON public.lots_production;
 CREATE TRIGGER lots_production_sync_cycle
-AFTER UPDATE OF nom_lot, souche, date_debut, age_depart_semaines,
-    effectif_initial, duree_semaines, date_fin_prevue, date_fin_reelle,
-    statut, notes, id_utilisateur_modification
-ON public.lots_production
+AFTER UPDATE ON public.lots_production
 FOR EACH ROW EXECUTE FUNCTION public.sync_lot_metadata_to_cycle();
 
 -- A deferred constraint trigger permits parent+cycle creation in one tx but
