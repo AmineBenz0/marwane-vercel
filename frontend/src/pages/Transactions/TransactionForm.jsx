@@ -572,7 +572,12 @@ function TransactionForm({
   const focusValidationField = (path) => {
     setFocus(path);
     const field = [...document.querySelectorAll('[name]')].find((element) => element.name === path);
-    field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    const formControl = field?.closest('.MuiFormControl-root');
+    const visibleControl = formControl?.querySelector('[role="combobox"]') || field;
+    window.requestAnimationFrame(() => {
+      visibleControl?.focus?.();
+      (formControl || visibleControl)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    });
   };
 
   const handleInvalidSubmit = (formErrors) => {
