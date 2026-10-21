@@ -2,6 +2,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,6 +10,7 @@ from app.routers.lots_production import create_lot, update_lot, terminate_lot
 from app.schemas.lot_production import LotProductionCreate
 from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
+from app.models.lot_production import LotProduction
 from app.models.user import Utilisateur
 from app.models.production import Production
 from app.utils.cycle_insights import cycle_insights
@@ -44,23 +46,21 @@ def _ensure_batiment(db: Session, id_batiment: int) -> Batiment:
 
 @router.get("", response_model=List[CycleProductionRead])
 def list_cycles(
-    id_batiment: Optional[int] = None,
-    statut: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: Utilisateur = Depends(get_current_active_user),
+    id_batiment: Optional[int] = None, statut: Optional[str] = None,
+    db: Session = Depends(get_db), current_user: Utilisateur = Depends(get_current_active_user),
 ):
-    query = db.query(CycleProduction).join(Batiment)
+    start_date = func.coalesce(LotProduction.date_debut, CycleProduction.date_debut)
+    status_value = func.coalesce(LotProduction.statut, CycleProduction.statut)
+    query = db.query(CycleProduction).join(Batiment).outerjoin(LotProduction, LotProduction.id_lot == CycleProduction.id_lot)
     if id_batiment is not None:
         query = query.filter(CycleProduction.id_batiment == id_batiment)
     if statut:
-        query = query.filter(CycleProduction.statut == statut)
-
-    cycles = query.order_by(CycleProduction.date_debut.desc()).all()
+        query = query.filter(status_value == statut)
+    cycles = query.order_by(start_date.desc()).all()
     for cycle in cycles:
         refresh_cycle_status(db, cycle)
     db.commit()
     return [cycle_to_dict(db, cycle) for cycle in cycles]
-
 
 @router.get("/active/{id_batiment}", response_model=Optional[CycleProductionRead])
 def get_active_cycle(

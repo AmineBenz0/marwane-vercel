@@ -13,6 +13,8 @@ from app.main import app
 from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
 from app.models.lot_production import LotProduction
+from app.models.production import Production
+from app.utils.production_cycles import suggested_formula
 
 
 def make_building(db_session, name):
@@ -22,11 +24,11 @@ def make_building(db_session, name):
     return building
 
 
-def create_lot(client, headers, building_id, *, name="Independent lot", count=100, start=None):
+def create_lot(client, headers, building_id, *, name="Independent lot", count=100, start=None, age=0):
     payload = {
         "nom_lot": name,
         "date_debut": str(start or date.today()),
-        "age_depart_semaines": 0,
+        "age_depart_semaines": age,
         "effectif_initial": count,
         "repartitions": [{"id_batiment": building_id, "effectif_initial": count}],
     }
@@ -305,3 +307,102 @@ def test_database_prevents_one_lot_from_linking_multiple_cycles(db_session):
     db_session.rollback()
 
 
+def test_lot_calculations_use_each_parent_schedule_and_farm_stock_aggregates_lots(
+    client, db_session, auth_headers,
+):
+    today = date.today()
+    start_a = today - timedelta(days=14)
+    start_b = today - timedelta(days=7)
+    building_a = make_building(db_session, "Schedule A")
+    building_b = make_building(db_session, "Schedule B")
+    lot_a = create_lot(client, auth_headers, building_a.id_batiment, name="Older flock",
+                       count=100, start=start_a, age=10)
+    lot_b = create_lot(client, auth_headers, building_b.id_batiment, name="Younger flock",
+                       count=200, start=start_b, age=24)
+    cycle_a = lot_a["repartitions"][0]
+    cycle_b = lot_b["repartitions"][0]
+
+    # Deliberately stale compatibility snapshots must not drive lot calculations.
+    row_a = db_session.query(CycleProduction).filter_by(id_cycle=cycle_a["id_cycle"]).one()
+    row_a.age_depart_semaines = 99
+    row_a.effectif_initial = 999
+    row_a.date_debut = today
+    row_a.statut = "termine"
+    row_a.date_fin_reelle = start_a
+    db_session.commit()
+
+    entries = [
+        (building_a, start_a, 50, 2, "5"),
+        (building_b, start_b, 120, 3, "10"),
+    ]
+    for building, start, eggs, mortality, feed in entries:
+        response = client.post("/api/v1/productions/daily", json={
+            "date_production": str(start),
+            "id_batiment": building.id_batiment,
+            "quantites": {"normal": eggs},
+            "mortalite": mortality,
+            "consommation_aliment_kg": feed,
+        }, headers=auth_headers)
+        assert response.status_code == 201, response.text
+        expected_age = 10 if building.id_batiment == building_a.id_batiment else 24
+        assert response.json()["records"][0]["formule"] == suggested_formula(expected_age)
+
+    insights_a = client.get(
+        f"/api/v1/cycles-production/{cycle_a['id_cycle']}/insights", headers=auth_headers,
+    ).json()
+    insights_b = client.get(
+        f"/api/v1/cycles-production/{cycle_b['id_cycle']}/insights", headers=auth_headers,
+    ).json()
+    assert insights_a["cycle"]["age_semaines"] == 12
+    assert insights_a["cycle"]["effectif_initial"] == 100
+    assert insights_a["cycle"]["effectif_actuel"] == 98
+    assert insights_a["semaines"][0]["age_semaines"] == 10
+    assert insights_a["semaines"][0]["effectif_debut"] == 100
+    assert insights_b["cycle"]["age_semaines"] == 25
+    assert insights_b["cycle"]["effectif_initial"] == 200
+    assert insights_b["cycle"]["effectif_actuel"] == 197
+    assert insights_b["semaines"][0]["age_semaines"] == 24
+
+    performance_a = client.get(
+        "/api/v1/productions/performance", params={"id_cycle": cycle_a["id_cycle"]},
+        headers=auth_headers,
+    ).json()
+    day = next(row for row in performance_a["rows"] if row["rowType"] == "day")
+    assert day["effectif_debut"] == 100
+    assert day["effectif_fin"] == 98
+    assert day["age_semaines"] == 10
+
+    farm_stock = client.get("/api/v1/productions/stock", params={
+        "date_stock": str(today),
+    }, headers=auth_headers).json()
+    assert farm_stock["totals"]["produced_eggs"] == 170
+    by_building = {row["id_batiment"]: row for row in farm_stock["batiments"]}
+    assert by_building[building_a.id_batiment]["produced_eggs"] == 50
+    assert by_building[building_b.id_batiment]["produced_eggs"] == 120
+
+
+def test_closing_a_flock_does_not_remove_its_remaining_egg_stock(client, db_session, auth_headers):
+    building = make_building(db_session, "Stock survives closure")
+    lot = create_lot(client, auth_headers, building.id_batiment, count=100)
+    cycle = lot["repartitions"][0]
+    db_session.add(Production(
+        id_cycle=cycle["id_cycle"], id_batiment=building.id_batiment,
+        date_production=date.today(), type_oeuf="normal", nombre_oeufs=80,
+        grammage=60, nombre_cartons=Production.calculer_cartons(80, "normal"),
+    ))
+    db_session.commit()
+
+    before = client.get("/api/v1/productions/stock", params={
+        "date_stock": str(date.today()),
+    }, headers=auth_headers).json()
+    closed = client.post(f"/api/v1/lots-production/{lot['id_lot']}/terminer", json={
+        "date_fin_reelle": str(date.today()),
+    }, headers=auth_headers)
+    after = client.get("/api/v1/productions/stock", params={
+        "date_stock": str(date.today()),
+    }, headers=auth_headers).json()
+
+    assert closed.status_code == 200, closed.text
+    assert before["totals"]["available_eggs"] == 80
+    assert after["totals"]["available_eggs"] == 80
+    assert after["batiments"][0]["available_eggs"] == 80

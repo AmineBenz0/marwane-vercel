@@ -31,6 +31,7 @@ from app.utils.date_formatting import DISPLAY_DATE_FORMAT
 from app.utils.egg_product_sync import ensure_sellable_egg_product, parse_sellable_egg_product_name
 from app.utils.production_cycles import (
     cycle_to_dict,
+    cycle_schedule,
     find_cycle_for_date,
     validate_cycle_date,
     validate_cycle_mortality,
@@ -269,7 +270,8 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             quantities["normal"] = 0
         formula = prod_in.formule
         if not updating and cycle and "formule" not in prod_in.model_fields_set:
-            age = cycle.age_depart_semaines + (prod_in.date_production - cycle.date_debut).days // 7
+            schedule = cycle_schedule(cycle)
+            age = schedule.age_depart_semaines + (prod_in.date_production - schedule.date_debut).days // 7
             formula = suggested_formula(age)
 
         by_type = {}
@@ -840,9 +842,13 @@ def get_cycle_performance(
         raise HTTPException(status_code=404, detail="Lot introuvable")
 
     refresh_cycle_status(db, cycle)
+    schedule = cycle_schedule(cycle)
+    performance_end = min(schedule.date_fin_reelle or date.today(), date.today())
     productions = db.query(Production).filter(
         Production.id_cycle == id_cycle,
         Production.est_actif.is_(True),
+        Production.date_production >= schedule.date_debut,
+        Production.date_production <= performance_end,
     ).order_by(Production.date_production.asc(), Production.id_production.asc()).all()
 
     daily = {}
@@ -871,7 +877,7 @@ def get_cycle_performance(
             day["oeufs"] += int(prod.nombre_oeufs or 0)
 
     rows = []
-    effectif_running = cycle.effectif_initial
+    effectif_running = schedule.effectif_initial
     cumulative_week_eggs = 0
     current_week_key = None
     week_summary = None
@@ -918,7 +924,7 @@ def get_cycle_performance(
                 "calibres": set(),
                 "effectif_debut": effectif_running,
                 "effectif_fin": effectif_running,
-                "age_semaines": cycle.age_depart_semaines + max((day_date - cycle.date_debut).days, 0) // 7,
+                "age_semaines": schedule.age_depart_semaines + max((day_date - schedule.date_debut).days, 0) // 7,
             }
             rows.append({
                 "id": f"week-{week_key}",
@@ -933,7 +939,7 @@ def get_cycle_performance(
         total_out = day["mort"]
         effectif_fin = max(effectif_debut - total_out, 0) if effectif_debut is not None else None
         cumulative_week_eggs += day["oeufs"]
-        age_semaines = cycle.age_depart_semaines + max((day_date - cycle.date_debut).days, 0) // 7
+        age_semaines = schedule.age_depart_semaines + max((day_date - schedule.date_debut).days, 0) // 7
 
         rows.append({
             "id": f"day-{day_date.isoformat()}",

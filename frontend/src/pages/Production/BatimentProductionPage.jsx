@@ -197,8 +197,7 @@ function BatimentProductionPage() {
         actions={<Button variant="contained" disabled={!dailyReady || !batiment} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
           onClick={() => hasProduction ? handleEdit(latestTodayEntry) : handleAddProduction()}>
           {hasProduction ? 'Modifier la saisie' : 'Saisir la journée'}
-        </Button>}
-        onChange={() => { loadData(); reloadStock(); }} />
+        </Button>} />
       <Card variant="outlined" component="section" aria-label="Journée sélectionnée" aria-busy={!dailyReady} sx={{ borderRadius: 3, minWidth: 0 }}>
         <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
           <DailySectionHeader title="Journée sélectionnée" selectedDate={selectedDate} onDateChange={setSelectedDate}

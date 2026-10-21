@@ -4,10 +4,11 @@ from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.cycle_production import CycleProduction
+from app.models.lot_production import LotProduction
 from app.models.production import Production
 
 
@@ -57,17 +58,13 @@ def refresh_cycle_status(db: Session, cycle: Optional[CycleProduction], today: O
 
 
 def find_cycle_for_date(db: Session, id_batiment: int, target_date: date) -> Optional[CycleProduction]:
-    return db.query(CycleProduction).filter(
-        CycleProduction.id_batiment == id_batiment,
-        CycleProduction.date_debut <= target_date,
-        or_(
-            CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES),
-            CycleProduction.date_fin_reelle >= target_date,
-        ),
-    # The new arrival owns the shared boundary date, even when both lots
-    # started on the same day. Existing records retain their explicit id_cycle.
-    ).order_by(CycleProduction.date_debut.desc(), CycleProduction.id_cycle.desc()).first()
-
+    start_date = func.coalesce(LotProduction.date_debut, CycleProduction.date_debut)
+    end_date = case((LotProduction.id_lot.isnot(None), LotProduction.date_fin_reelle), else_=CycleProduction.date_fin_reelle)
+    status_value = func.coalesce(LotProduction.statut, CycleProduction.statut)
+    return db.query(CycleProduction).outerjoin(LotProduction, LotProduction.id_lot == CycleProduction.id_lot).filter(
+        CycleProduction.id_batiment == id_batiment, start_date <= target_date,
+        or_(status_value.in_(ACTIVE_CYCLE_STATUSES), end_date >= target_date),
+    ).order_by(start_date.desc(), CycleProduction.id_cycle.desc()).first()
 
 def cycle_schedule(cycle: CycleProduction):
     """The parent owns arrival, age and lifecycle; old unlinked rows still work."""
@@ -83,36 +80,34 @@ def validate_cycle_date(cycle: CycleProduction, target_date: date) -> None:
 
 
 def validate_cycle_mortality(db: Session, cycle: CycleProduction, mortality: int, excluding_ids=(), *, limit=None) -> None:
+    schedule = cycle_schedule(cycle)
     query = db.query(func.coalesce(func.sum(Production.mortalite), 0)).filter(
         Production.id_cycle == cycle.id_cycle, Production.est_actif.is_(True),
+        Production.date_production >= schedule.date_debut,
     )
     if excluding_ids:
         query = query.filter(Production.id_production.notin_(excluding_ids))
-    initial = cycle.effectif_initial if limit is None else limit
+    initial = schedule.effectif_initial if limit is None else limit
     if initial is not None and int(query.scalar() or 0) + mortality > initial:
         raise HTTPException(status_code=400, detail="La mortalité dépasse l'effectif du cycle.")
 
-
 def find_active_cycle(
-    db: Session,
-    id_batiment: int,
-    target_date: Optional[date] = None,
+    db: Session, id_batiment: int, target_date: Optional[date] = None,
 ) -> Optional[CycleProduction]:
-    query = db.query(CycleProduction).filter(
+    query = db.query(CycleProduction).outerjoin(
+        LotProduction, LotProduction.id_lot == CycleProduction.id_lot,
+    ).filter(
         CycleProduction.id_batiment == id_batiment,
-        CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES),
+        func.coalesce(LotProduction.statut, CycleProduction.statut).in_(ACTIVE_CYCLE_STATUSES),
     )
-
+    start_date = func.coalesce(LotProduction.date_debut, CycleProduction.date_debut)
     if target_date:
-        query = query.filter(CycleProduction.date_debut <= target_date)
-
-    cycle = query.order_by(CycleProduction.date_debut.desc()).first()
+        query = query.filter(start_date <= target_date)
+    cycle = query.order_by(start_date.desc()).first()
     if not cycle:
         return None
-
     refresh_cycle_status(db, cycle)
     return cycle
-
 
 def require_active_cycle_for_date(
     db: Session,
@@ -128,7 +123,7 @@ def require_active_cycle_for_date(
             detail="Aucun lot actif pour ce batiment. Commencez un lot avant de saisir la production.",
         )
 
-    if target_date < cycle.date_debut:
+    if target_date < cycle_schedule(cycle).date_debut:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La date choisie est avant le debut du lot actif.",
@@ -138,22 +133,17 @@ def require_active_cycle_for_date(
 
 
 def calculate_cycle_effectif(db: Session, cycle: CycleProduction, through_date: Optional[date] = None) -> Optional[int]:
-    if cycle.effectif_initial is None:
+    schedule = cycle_schedule(cycle)
+    initial = schedule.effectif_initial
+    if initial is None:
         return None
-
-    query = db.query(
-        func.coalesce(func.sum(func.coalesce(Production.mortalite, 0)), 0)
-    ).filter(
-        Production.id_cycle == cycle.id_cycle,
-        Production.est_actif.is_(True),
+    current_day = min(through_date or date.today(), date.today())
+    query = db.query(func.coalesce(func.sum(func.coalesce(Production.mortalite, 0)), 0)).filter(
+        Production.id_cycle == cycle.id_cycle, Production.est_actif.is_(True),
+        Production.date_production >= schedule.date_debut, Production.date_production <= current_day,
     )
-
-    if through_date:
-        query = query.filter(Production.date_production <= through_date)
-
     total_out = int(query.scalar() or 0)
-    return max(int(cycle.effectif_initial) - total_out, 0)
-
+    return max(int(initial) - total_out, 0)
 
 def cycle_to_dict(db: Session, cycle: CycleProduction, today: Optional[date] = None) -> dict:
     allocation = cycle
@@ -177,7 +167,7 @@ def cycle_to_dict(db: Session, cycle: CycleProduction, today: Optional[date] = N
         "souche": cycle.souche,
         "date_debut": cycle.date_debut,
         "age_depart_semaines": cycle.age_depart_semaines,
-        "effectif_initial": allocation.effectif_initial,
+        "effectif_initial": cycle.effectif_initial,
         "duree_semaines": cycle.duree_semaines,
         "date_fin_prevue": cycle.date_fin_prevue,
         "date_fin_reelle": cycle.date_fin_reelle,

@@ -29,6 +29,7 @@ def lot_to_dict(db, lot):
         CycleProduction, Production.id_cycle == CycleProduction.id_cycle,
     ).filter(
         CycleProduction.id_lot == lot.id_lot, Production.est_actif.is_(True),
+        Production.date_production >= lot.date_debut,
         Production.date_production <= (lot.date_fin_reelle or date.today()),
     ).scalar() or 0
     return {

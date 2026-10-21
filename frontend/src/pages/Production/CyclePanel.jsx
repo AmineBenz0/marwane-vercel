@@ -1,131 +1,66 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Collapse, Divider, Stack, Typography,
+  Alert, Box, Button, Chip, Collapse, MenuItem, Stack, TextField, Typography,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
 } from '@mui/material';
-import { HistoryOutlined, KeyboardArrowDown, KeyboardArrowUp } from '@mui/icons-material';
-import DateField from '../../utils/DateField';
+import { KeyboardArrowDown, KeyboardArrowUp } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { cycleProductionService } from '../../services/productionService';
-import { localToday } from './useProductionView';
 
-const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
+const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
 const errorMessage = (error) => {
   const detail = error.data?.detail || error.response?.data?.detail;
-  return typeof detail === 'string' ? detail : error.message || 'Impossible d’enregistrer le cycle.';
+  return typeof detail === 'string' ? detail : error.message || 'Impossible de charger le lot.';
 };
 
-export default function CyclePanel({ buildingId, refreshKey, onChange, onSelectCycle, stockContent, actions }) {
+export default function CyclePanel({ buildingId, refreshKey, onSelectCycle, stockContent, actions }) {
+  const navigate = useNavigate();
   const [cycles, setCycles] = useState([]);
   const [selectedId, setSelectedId] = useState('');
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
-  const [dialog, setDialog] = useState(false);
-  const [values, setValues] = useState({});
-  const [saving, setSaving] = useState(false);
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
     setError('');
-    cycleProductionService.getCycles({ id_batiment: buildingId }).then((data) => {
-      if (!cancelled) { setCycles(data || []); setLoaded(true); }
+    cycleProductionService.getCycles({ id_batiment: buildingId }).then((rows) => {
+      if (!cancelled) { setCycles(rows || []); setLoaded(true); }
     }).catch((err) => { if (!cancelled) setError(errorMessage(err)); });
     return () => { cancelled = true; };
   }, [buildingId, refreshKey, revision]);
   const active = cycles.find((cycle) => cycle.statut !== 'termine');
-  const selected = cycles.find((cycle) => String(cycle.id_cycle) === String(selectedId)) || active || cycles[0];
+  const selected = cycles.find((cycle) => String(cycle.id_cycle) === selectedId) || active || cycles[0];
   useEffect(() => { onSelectCycle(selected?.id_cycle || null); }, [selected?.id_cycle, onSelectCycle]);
 
-  const submit = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await cycleProductionService.assignHistory(selected.id_cycle, values);
-      setDialog(false);
-      setRevision((old) => old + 1);
-      onChange();
-    } catch (err) { setError(errorMessage(err)); }
-    finally { setSaving(false); }
-  };
   return (
-    <Box component="section" aria-label="Cycle des volailles" sx={{ mb: 3, minWidth: 0 }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
-          {loaded && selected ? <>
-            <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: 'anywhere' }}>{selected.nom_cycle}</Typography>
-            <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'} color={selected.statut === 'termine' ? 'default' : 'success'} />
-            <Typography variant="body2" color="text.secondary">{selected.age_semaines == null ? '—' : selected.age_semaines + ' semaines'} · {selected.formule_suggeree || '—'}</Typography>
-          </> : <Typography variant="body2" color="text.secondary">{loaded ? 'Aucun lot actif dans ce bâtiment.' : 'Chargement du lot…'}</Typography>}
-        </Stack>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {cycles.length > 1 && <Button size="small" startIcon={<HistoryOutlined />} onClick={() => setHistoryOpen(true)}>Historique des lots</Button>}
+    <Box component="section" aria-label="Production du bâtiment" sx={{ mb: 3, minWidth: 0 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} sx={{ mb: 2 }}>
+        <Box sx={{ minWidth: 0 }}>
+          {loaded && active ? <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <Typography variant="body2" fontWeight={600}>{active.nom_cycle}</Typography>
+            <Chip size="small" variant="outlined" label="Actif" color="success" />
+          </Stack> : <Typography variant="body2" color="text.secondary">{loaded ? 'Aucun lot actif dans ce bâtiment.' : 'Chargement du lot...'}</Typography>}
+        </Box>
+        <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button size="small" onClick={() => navigate('/production/lots')}>Gestion des lots</Button>
           {actions}
         </Stack>
       </Stack>
-      {error && !dialog && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer le lot</Button>}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
       <Box sx={{ p: { xs: 2, md: 2.5 }, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
-        <Typography component="h2" variant="h6" fontWeight={800} sx={{ mb: 2 }}>{selected?.statut === 'termine' ? 'Situation en fin de lot' : 'Situation actuelle'}</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 2, md: 4 } }}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body1" fontWeight={700}>{selected?.statut === 'termine' ? 'Volailles en fin de lot' : 'Volailles restantes'}</Typography>
-            <Typography variant="h4" fontWeight={800} sx={{ mt: 0.5 }}>{loaded && selected ? number(selected.effectif_actuel) : '—'}</Typography>
-            {loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              sur {number(selected.effectif_initial)} entrantes · {selected.effectif_initial == null ? '—' : number(selected.effectif_initial - selected.effectif_actuel)} mortalités cumulées
-              {selected.effectif_initial > 0 ? ' (' + number(((selected.effectif_initial - selected.effectif_actuel) / selected.effectif_initial * 100).toFixed(2)) + ' %)' : ''}
-            </Typography>}
-            {loaded && selected && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Arrivée le {formatShortDate(selected.date_debut)}{selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}
-            </Typography>}
-            {loaded && !selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Affectez les poussins depuis la gestion des lots.</Typography>}
-          </Box>
-          <Box sx={{ minWidth: 0, borderLeft: { md: '1px solid' }, borderTop: { xs: '1px solid', md: 'none' }, borderColor: 'divider', pl: { md: 3 }, pt: { xs: 2, md: 0 } }}>{stockContent}</Box>
-        </Box>
-        {loaded && selected && <>
-          <Divider sx={{ mt: 2, mb: 1 }} />
-          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {selected.statut === 'termine' && <Typography variant="caption" color="text.secondary">Âge et effectif arrêtés à la date de fin du lot.</Typography>}
-            <Button size="small" onClick={() => { setError(''); setValues({ date_debut: selected.date_debut, date_fin: selected.date_fin_reelle || localToday() }); setDialog(true); }}>Rattacher des saisies antérieures</Button>
-          </Stack>
-        </>}
+        {stockContent}
       </Box>
-      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Historique des lots du bâtiment</DialogTitle>
-        <DialogContent><Stack spacing={1} sx={{ pt: 1 }}>
-          {cycles.map((item) => <Button key={item.id_cycle} color="inherit" onClick={() => { setSelectedId(String(item.id_cycle)); setHistoryOpen(false); }}
-            sx={{ justifyContent: 'space-between', gap: 2, textAlign: 'left' }}>
-            <Box sx={{ minWidth: 0 }}><Typography fontWeight={600} sx={{ overflowWrap: 'anywhere' }}>{item.nom_cycle}</Typography>
-              <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(item.date_debut)}</Typography></Box>
-            <Chip size="small" variant="outlined" label={item.statut === 'termine' ? 'Terminé' : 'Actif'} color={item.statut === 'termine' ? 'default' : 'success'} />
-          </Button>)}
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setHistoryOpen(false)}>Fermer</Button></DialogActions>
-      </Dialog>
-      <Dialog open={dialog} onClose={() => { if (!saving) { setDialog(false); setError(''); } }} maxWidth="sm" fullWidth>
-        <Box component="form" onSubmit={submit}>
-          <DialogTitle>Rattacher les saisies antérieures</DialogTitle>
-          <DialogContent>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <Typography color="text.secondary">Seules les saisies de ce bâtiment sans lot seront rattachées sur cette période. Les formules et quantités enregistrées restent conservées.</Typography>
-              <DateField label="Début de la période" required value={values.date_debut || ''} onChange={(event) => setValues((old) => ({ ...old, date_debut: event.target.value }))} />
-              <DateField label="Fin de la période" required value={values.date_fin || ''} onChange={(event) => setValues((old) => ({ ...old, date_fin: event.target.value }))} />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button color="inherit" disabled={saving} onClick={() => { setDialog(false); setError(''); }}>Annuler</Button>
-            <Button type="submit" variant="contained" disabled={saving}>{saving ? 'Enregistrement...' : 'Rattacher'}</Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+      {loaded && cycles.length > 1 && <TextField select size="small" label="Lot pour la progression hebdomadaire"
+        value={selected?.id_cycle || ''} onChange={(event) => setSelectedId(String(event.target.value))}
+        sx={{ mt: 2, minWidth: { xs: '100%', sm: 300 } }}>
+        {cycles.map((cycle) => <MenuItem key={cycle.id_cycle} value={cycle.id_cycle}>{cycle.nom_cycle} ({cycle.statut === 'termine' ? 'terminé' : 'actif'})</MenuItem>)}
+      </TextField>}
     </Box>
   );
 }
-
 function Fact({ label, value }) {
   return <Box sx={{ minWidth: 0 }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>{value}</Typography></Box>;
 }
