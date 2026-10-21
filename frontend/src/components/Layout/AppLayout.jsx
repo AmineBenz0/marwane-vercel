@@ -70,6 +70,7 @@ const NAV_SECTIONS = [
     items: [
       { text: 'Production & stock', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/production' },
       { text: 'Par bâtiment', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/batiment' },
+      { text: 'Gestion des lots', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/lots' },
     ],
   },
   {

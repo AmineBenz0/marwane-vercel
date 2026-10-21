@@ -16,7 +16,7 @@ const message = (error) => {
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
 };
 
-export default function LotPanel({ buildings, refreshKey, onChange }) {
+export default function LotPanel({ buildings, refreshKey, onChange, managementMode = false }) {
   const [lots, setLots] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -28,6 +28,8 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
+  const [buildingFilter, setBuildingFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -40,8 +42,15 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
   }, [refreshKey, revision]);
 
   const activeLots = lots.filter((lot) => lot.statut !== 'termine');
-  const selected = lots.find((lot) => String(lot.id_lot) === selectedId)
-    || activeLots[0] || lots[0];
+  const filteredLots = managementMode ? lots.filter((lot) => {
+    const cycle = lot.repartitions?.[0];
+    const matchesBuilding = !buildingFilter || String(cycle?.id_batiment) === buildingFilter;
+    const matchesStatus = statusFilter === 'all'
+      || (statusFilter === 'active' ? lot.statut !== 'termine' : lot.statut === 'termine');
+    return matchesBuilding && matchesStatus;
+  }) : lots;
+  const selected = filteredLots.find((lot) => String(lot.id_lot) === selectedId)
+    || filteredLots.find((lot) => lot.statut !== 'termine') || filteredLots[0];
   const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
   const available = buildings.filter((building) => building.est_actif !== false
     && !occupied.has(Number(building.id_batiment)));
@@ -133,6 +142,35 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
           {loaded && available.length > 0 && <Button variant="contained" onClick={() => open('create')} disabled={!!error}>D�marrer un lot</Button>}
         </Stack>
       </Stack>
+      {managementMode && loaded && <>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
+          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
+            value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
+            sx={{ minWidth: { xs: '100%', sm: 220 } }}>
+            <option value="">Tous les bâtiments</option>
+            {buildings.map((building) => <option key={building.id_batiment} value={building.id_batiment}>{building.nom}</option>)}
+          </TextField>
+          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par statut"
+            value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}
+            sx={{ minWidth: { xs: '100%', sm: 220 } }}>
+            <option value="all">Tous les statuts</option>
+            <option value="active">Actifs</option>
+            <option value="finished">Terminés</option>
+          </TextField>
+        </Stack>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}
+          aria-label="Lots filtrés">
+          {filteredLots.map((lot) => {
+            const cycle = lot.repartitions?.[0];
+            const label = `${cycle?.nom_batiment || 'Bâtiment'} | ${lot.nom_lot} | ${formatShortDate(lot.date_debut)}`;
+            return <Button key={lot.id_lot} size="small" variant={String(lot.id_lot) === String(selected?.id_lot) ? 'contained' : 'outlined'}
+              onClick={() => setSelectedId(String(lot.id_lot))} aria-pressed={String(lot.id_lot) === String(selected?.id_lot)}>
+              {label} · {lot.statut === 'termine' ? 'Terminé' : 'Actif'}
+            </Button>;
+          })}
+          {!filteredLots.length && <Typography color="text.secondary">Aucun lot ne correspond à ces filtres.</Typography>}
+        </Stack>
+      </>}
       {activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par batiment">
         {activeLots.map((lot) => {
           const cycle = lot.repartitions?.[0];

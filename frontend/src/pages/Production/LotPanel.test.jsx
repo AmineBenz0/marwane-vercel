@@ -92,5 +92,16 @@ describe('LotPanel independent building lots', () => {
     await waitFor(() => expect(terminateLot).toHaveBeenCalledWith(1, { date_fin_reelle: expect.any(String) }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible());
   });
+  it('filters lot management by building and status', async () => {
+    getLots.mockResolvedValue([activeLot, lotB, historicalLot]);
+    render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
+    expect(await screen.findByRole('button', { name: /A \| Lot en cours/ })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Filtrer par bâtiment'), { target: { value: '2' } });
+    expect(screen.getByRole('button', { name: /B \| Lot B/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /A \| Lot en cours/ })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filtrer par statut'), { target: { value: 'finished' } });
+    expect(screen.getByText('Aucun lot ne correspond à ces filtres.')).toBeVisible();
+  });
+
 });
 
