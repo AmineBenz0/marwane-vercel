@@ -63,7 +63,7 @@ describe('LotPanel independent building lots', () => {
     expect(await screen.findByRole('button', { name: 'B : Lot B' })).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: 'B : Lot B' }));
     expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible();
-    expect(screen.getByText('Effectif restant')).toBeVisible();
+    expect(screen.getByText('Volailles présentes')).toBeVisible();
     expect(screen.getByRole('region', { name: 'Bâtiment du lot' })).toBeVisible();
   });
 
