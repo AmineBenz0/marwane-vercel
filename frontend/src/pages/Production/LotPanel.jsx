@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, MenuItem, Stack, TextField, Typography,
+  Divider, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
-import { cycleProductionService, lotProductionService } from '../../services/productionService';
+import { cycleProductionService, lotProductionService, productionService } from '../../services/productionService';
+import LotEggChart from './LotEggChart';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
@@ -30,6 +31,12 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [buildingFilter, setBuildingFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
   const [managementView, setManagementView] = useState('overview');
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyVaccines, setHistoryVaccines] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +60,39 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const selected = managementMode
     ? lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0]
     : lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0];
-  const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
+  useEffect(() => {
+    if (!managementMode || managementView !== 'history' || !selected || !selectedCycle) return undefined;
+    let cancelled = false;
+    const dateFrom = historyFrom || selected.date_debut;
+    const dateTo = historyTo || selected.date_fin_reelle || localToday();
+    setHistoryLoading(true);
+    setHistoryError('');
+    const loadRows = async () => {
+      const rows = [];
+      let page;
+      do {
+        page = await productionService.getProductions({
+          id_cycle: selectedCycle.id_cycle, date_debut: dateFrom, date_fin: dateTo,
+          skip: rows.length, limit: 500,
+        });
+        rows.push(...page);
+      } while (page.length === 500);
+      return rows;
+    };
+    Promise.all([
+      loadRows(),
+      productionService.getBuildingVaccineExpenses(selectedCycle.id_batiment),
+    ]).then(([rows, charges]) => {
+      if (cancelled) return;
+      setHistoryRows(rows);
+      setHistoryVaccines((charges || []).filter((charge) => Number(charge.id_cycle) === Number(selectedCycle.id_cycle)
+        && charge.date_charge >= dateFrom && charge.date_charge <= dateTo));
+    }).catch((err) => {
+      if (!cancelled) setHistoryError(message(err));
+    }).finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [managementMode, managementView, selected?.id_lot, selected?.repartitions?.[0]?.id_cycle, historyFrom, historyTo]);
+    const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
   const available = buildings.filter((building) => building.est_actif !== false
     && !occupied.has(Number(building.id_batiment)));
   const selectedCycle = selected?.repartitions?.[0];
@@ -144,6 +183,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
           {!managementMode && loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
           {managementMode && loaded && managementView === 'details' && <Button size="small" onClick={() => { setManagementView('overview'); setStatusFilter(selected?.statut === 'termine' ? 'finished' : 'active'); }}>Tous les lots</Button>}
+          {managementMode && loaded && managementView === 'history' && <Button size="small" onClick={() => setManagementView('details')}>Résumé du lot</Button>}
           {loaded && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
         </Stack>
       </Stack>
@@ -208,7 +248,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
       {loaded && !selected && !managementMode && <Typography color="text.secondary" sx={{ mt: 2 }}>Démarrez un lot indépendant pour chaque bâtiment actif.</Typography>}
-      {loaded && selected && (!managementMode || managementView === 'details') && <>
+      {loaded && selected && (!managementMode || ['details', 'history'].includes(managementView)) && <>
         {managementMode && <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
           <Typography variant="subtitle1" fontWeight={800}>{selectedCycle?.nom_batiment || 'Bâtiment'} · {selected.statut === 'termine' ? 'Lot terminé' : 'Lot en cours'}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Arrivée le {formatShortDate(selected.date_debut)}{selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}</Typography>
@@ -239,11 +279,72 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             </Stack>
           </Stack>
         </Box>}
-        {selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        {managementMode && managementView === 'details' && <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+          <Button variant="outlined" startIcon={<History />} onClick={() => {
+            setHistoryFrom(selected.date_debut);
+            setHistoryTo(selected.date_fin_reelle || localToday());
+            setManagementView('history');
+          }}>Historique de production</Button>
+        </Stack>}
+        {managementMode && managementView === 'history' && <Box component="section" aria-label="Historique de production" sx={{ mt: 3 }}>
+          <Typography variant="h6" fontWeight={800}>Historique de production</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Saisies rattachées à {selectedCycle?.nom_batiment} et à ce lot uniquement.</Typography>
+          <LotEggChart key={selected.id_lot} lotId={selected.id_lot} refreshKey={revision} />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} sx={{ my: 2 }}>
+            <TextField type="date" size="small" label="Du" InputLabelProps={{ shrink: true }} value={historyFrom}
+              inputProps={{ min: selected.date_debut, max: historyTo || selected.date_fin_reelle || localToday() }}
+              onChange={(event) => setHistoryFrom(event.target.value)} />
+            <TextField type="date" size="small" label="Au" InputLabelProps={{ shrink: true }} value={historyTo}
+              inputProps={{ min: historyFrom || selected.date_debut, max: selected.date_fin_reelle || localToday() }}
+              onChange={(event) => setHistoryTo(event.target.value)} />
+            <Button variant="outlined" disabled={historyLoading || (!historyRows.length && !historyVaccines.length)} onClick={() => {
+              const rows = [
+                ['Catégorie', 'Date', 'Lot', 'Type / détail', 'Œufs', 'Mortalité', 'Aliment (kg)', 'Montant'],
+                ...historyRows.map((row) => ['Production', row.date_production, selected.nom_lot, row.type_oeuf, row.nombre_oeufs, row.mortalite ?? '', row.consommation_aliment_kg ?? '', '']),
+                ...historyVaccines.map((row) => ['Vaccin', row.date_charge, selected.nom_lot, row.nom_vaccin || row.libelle, '', '', '', row.montant]),
+              ];
+              const escape = (value) => {
+                const safe = String(value ?? '').replace(/^[=+@-]/, "'$&");
+                return '"' + safe.replace(/"/g, '""') + '"';
+              };
+              const csv = '\uFEFF' + rows.map((row) => row.map(escape).join(';')).join('\r\n');
+              const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+              const link = document.createElement('a');
+              link.href = url; link.download = 'historique-' + selected.id_lot + '.csv'; link.click();
+              URL.revokeObjectURL(url);
+            }}>Exporter l’historique</Button>
+          </Stack>
+          {historyError && <Alert severity="error" sx={{ mb: 2 }}>{historyError}</Alert>}
+          {historyLoading ? <Typography>Chargement de l’historique...</Typography> : <>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Saisies quotidiennes</Typography>
+            {historyRows.length ? <TableContainer sx={{ maxHeight: 420, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Table size="small" stickyHeader aria-label="Saisies de production historiques">
+                <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Type d’œuf</TableCell><TableCell align="right">Œufs</TableCell><TableCell align="right">Mortalité</TableCell><TableCell align="right">Aliment (kg)</TableCell></TableRow></TableHead>
+                <TableBody>{historyRows.map((row) => <TableRow key={row.id_production}>
+                  <TableCell>{formatShortDate(row.date_production)}</TableCell><TableCell>{row.type_oeuf}</TableCell>
+                  <TableCell align="right">{number(row.nombre_oeufs)}</TableCell>
+                  <TableCell align="right">{number(row.mortalite)}</TableCell>
+                  <TableCell align="right">{number(row.consommation_aliment_kg)}</TableCell>
+                </TableRow>)}</TableBody>
+              </Table>
+            </TableContainer> : <Typography color="text.secondary">Aucune saisie de production sur cette période.</Typography>}
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 2, mb: 1 }}>Dépenses de vaccins</Typography>
+            {historyVaccines.length ? <TableContainer sx={{ maxHeight: 300, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Table size="small" stickyHeader aria-label="Dépenses de vaccins historiques">
+                <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Vaccin</TableCell><TableCell align="right">Quantité</TableCell><TableCell align="right">Montant</TableCell></TableRow></TableHead>
+                <TableBody>{historyVaccines.map((row) => <TableRow key={row.id_charge}>
+                  <TableCell>{formatShortDate(row.date_charge)}</TableCell><TableCell>{row.nom_vaccin || row.libelle}</TableCell>
+                  <TableCell align="right">{number(row.quantite)} {row.unite || ''}</TableCell><TableCell align="right">{number(row.montant)}</TableCell>
+                </TableRow>)}</TableBody>
+              </Table>
+            </TableContainer> : <Typography color="text.secondary">Aucune dépense de vaccin rattachée à ce lot sur cette période.</Typography>}
+          </>}
+        </Box>}
+        {(!managementMode || managementView === 'details') && (selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
           <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}
             sx={{ color: 'error.main', borderColor: 'error.main', '&:hover': { color: 'error.dark', borderColor: 'error.dark', bgcolor: 'action.hover' } }}>Terminer ce lot</Button>
-        </Stack> : <Typography variant="body2" color="text.secondary">Ce lot est terminé pour son bâtiment.</Typography>}
+        </Stack> : <Typography variant="body2" color="text.secondary">Ce lot est terminé pour son bâtiment.</Typography>)}
       </>}
       <Dialog open={!!historyCycle} onClose={() => { if (!saving) { setHistoryCycle(null); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submitHistory}>
