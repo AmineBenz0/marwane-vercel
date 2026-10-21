@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, ButtonBase, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+  Divider, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
-import { cycleProductionService, lotProductionService, productionService } from '../../services/productionService';
-import LotEggChart from './LotEggChart';
+import { cycleProductionService, lotProductionService } from '../../services/productionService';
+import LotDetails from './LotDetails';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
@@ -18,7 +18,7 @@ const message = (error) => {
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
 };
 
-export default function LotPanel({ buildings, refreshKey, onChange, managementMode = false }) {
+export default function LotPanel({ buildings, refreshKey, onChange, managementMode = false, onViewChange }) {
   const [lots, setLots] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -33,12 +33,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [buildingFilter, setBuildingFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
   const [managementView, setManagementView] = useState('overview');
-  const [historyRows, setHistoryRows] = useState([]);
-  const [historyVaccines, setHistoryVaccines] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState('');
-  const [historyFrom, setHistoryFrom] = useState('');
-  const [historyTo, setHistoryTo] = useState('');
+
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +44,8 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     }).catch((err) => { if (!cancelled) setError(message(err)); });
     return () => { cancelled = true; };
   }, [refreshKey, revision]);
+
+  useEffect(() => { onViewChange?.(managementView); }, [managementView, onViewChange]);
 
   const activeLots = lots.filter((lot) => lot.statut !== 'termine');
   const filteredLots = managementMode ? lots.filter((lot) => {
@@ -63,43 +60,6 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     ? lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0]
     : lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0];
   const selectedCycle = selected?.repartitions?.[0];
-  const selectedLotId = selected?.id_lot;
-  const selectedStartDate = selected?.date_debut;
-  const selectedEndDate = selected?.date_fin_reelle;
-  const selectedCycleId = selectedCycle?.id_cycle;
-  const selectedBuildingId = selectedCycle?.id_batiment;
-  useEffect(() => {
-    if (!managementMode || managementView !== 'history' || !selectedLotId || !selectedCycleId || !selectedBuildingId) return undefined;
-    let cancelled = false;
-    const dateFrom = historyFrom || selectedStartDate;
-    const dateTo = historyTo || selectedEndDate || localToday();
-    setHistoryLoading(true);
-    setHistoryError('');
-    const loadRows = async () => {
-      const rows = [];
-      let page;
-      do {
-        page = await productionService.getProductions({
-          id_cycle: selectedCycleId, date_debut: dateFrom, date_fin: dateTo,
-          skip: rows.length, limit: 500,
-        });
-        rows.push(...page);
-      } while (page.length === 500);
-      return rows;
-    };
-    Promise.all([
-      loadRows(),
-      productionService.getBuildingVaccineExpenses(selectedBuildingId),
-    ]).then(([rows, charges]) => {
-      if (cancelled) return;
-      setHistoryRows(rows);
-      setHistoryVaccines((charges || []).filter((charge) => Number(charge.id_cycle) === Number(selectedCycleId)
-        && charge.date_charge >= dateFrom && charge.date_charge <= dateTo));
-    }).catch((err) => {
-      if (!cancelled) setHistoryError(message(err));
-    }).finally(() => { if (!cancelled) setHistoryLoading(false); });
-    return () => { cancelled = true; };
-  }, [managementMode, managementView, selectedLotId, selectedStartDate, selectedEndDate, selectedCycleId, selectedBuildingId, historyFrom, historyTo]);
   const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
   const available = buildings.filter((building) => building.est_actif !== false
     && !occupied.has(Number(building.id_batiment)));
@@ -170,48 +130,48 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   };
 
   return (
-    <Box component="section" aria-label="Lots de volailles" sx={{ mb: 3, p: { xs: 2, md: 2.5 }, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
+    <Box component="section" aria-label="Lots de volailles" sx={{ mb: 3, p: { xs: 2, md: 2.5 }, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper', ...(managementMode && managementView === 'details' ? { p: 0, border: 0, bgcolor: 'transparent' } : {}) }}>
+      {(!managementMode || managementView === 'overview') && <>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: managementMode && managementView === 'overview' ? 'center' : 'flex-start' }} spacing={1.5}>
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
             {managementMode && loaded && managementView === 'overview' && (
-              <Stack direction="row" spacing={1} role="tablist" aria-label="État des lots">
+              <Stack direction="row" spacing={1} role="tablist" aria-label="�tat des lots">
                 <Button role="tab" aria-selected={statusFilter === 'active'} variant={statusFilter === 'active' ? 'contained' : 'outlined'}
                   onClick={() => { setStatusFilter('active'); setSelectedId(''); }}>En cours ({activeLots.length})</Button>
                 <Button role="tab" aria-selected={statusFilter === 'finished'} variant={statusFilter === 'finished' ? 'contained' : 'outlined'}
-                  onClick={() => { setStatusFilter('finished'); setSelectedId(''); }}>Terminés ({lots.length - activeLots.length})</Button>
+                  onClick={() => { setStatusFilter('finished'); setSelectedId(''); }}>Termin�s ({lots.length - activeLots.length})</Button>
               </Stack>
             )}
             {!(managementMode && managementView === 'overview') && <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
-              {managementMode ? displayLotName(selected) || 'Détail du lot' : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
+              {managementMode ? displayLotName(selected) || 'D�tail du lot' : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
             </Typography>}
-            {!managementMode && loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
+            {!managementMode && loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Termin�' : 'Actif'}
               color={selected.statut === 'termine' ? 'default' : 'success'} />}
           </Stack>
           {!managementMode && loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
-            {selectedCycle?.nom_batiment || 'Bâtiment'} | Arrivée le {formatShortDate(selected.date_debut)}
+            {selectedCycle?.nom_batiment || 'B�timent'} | Arriv�e le {formatShortDate(selected.date_debut)}
             {selected.souche ? ' | Souche : ' + selected.souche : ''}
-            {selected.date_fin_prevue ? ' | Fin prévue le ' + formatShortDate(selected.date_fin_prevue) : ''}
+            {selected.date_fin_prevue ? ' | Fin pr�vue le ' + formatShortDate(selected.date_fin_prevue) : ''}
             {selected.date_fin_reelle ? ' | Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}
           </Typography>}
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
           {!managementMode && loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
-          {managementMode && loaded && managementView === 'details' && <Button size="small" onClick={() => { setManagementView('overview'); setStatusFilter(selected?.statut === 'termine' ? 'finished' : 'active'); }}>Tous les lots</Button>}
-          {managementMode && loaded && managementView === 'history' && <Button size="small" onClick={() => setManagementView('details')}>Résumé du lot</Button>}
-          {loaded && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
+          {loaded && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>D�marrer un lot</Button>}
         </Stack>
       </Stack>
+      </>}
       {managementMode && loaded && managementView === 'overview' && <>
         {statusFilter === 'finished' && <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
+          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par b�timent"
             value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
             sx={{ minWidth: { xs: '100%', sm: 220 } }}>
-            <option value="all">Tous les bâtiments</option>
+            <option value="all">Tous les b�timents</option>
             {buildings.map((building) => <option key={building.id_batiment} value={building.id_batiment}>{building.nom}</option>)}
           </TextField>
         </Stack>}
-        {filteredLots.length ? <Box component="section" aria-label={statusFilter === 'active' ? 'Lots en cours' : 'Lots terminés'}
+        {filteredLots.length ? <Box component="section" aria-label={statusFilter === 'active' ? 'Lots en cours' : 'Lots termin�s'}
           sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
           {filteredLots.map((lot) => {
             const cycle = lot.repartitions?.[0];
@@ -224,16 +184,16 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lotName}</Typography>
                 </Box>
-                {finished && <Chip size="small" label="Terminé" />}
+                {finished && <Chip size="small" label="Termin�" />}
               </Stack>
               <Box sx={{ mt: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                <Fact label={finished ? 'Volailles à la fin' : 'Volailles présentes'} value={number(lot.effectif_actuel)} />
-                <Fact label={finished ? 'Âge à la fin' : 'Âge aujourd’hui'} value={lot.age_semaines == null ? '-' : lot.age_semaines + ' semaines'} />
+                <Fact label={finished ? 'Volailles � la fin' : 'Volailles pr�sentes'} value={number(lot.effectif_actuel)} />
+                <Fact label={finished ? 'Age � la fin' : 'Age aujourd'hui'} value={lot.age_semaines == null ? '-' : lot.age_semaines + ' semaines'} />
               </Box>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    {cycle?.nom_batiment || 'Bâtiment'} · Arrivée le {formatShortDate(lot.date_debut)}
+                    {cycle?.nom_batiment || 'B�timent'} � Arriv�e le {formatShortDate(lot.date_debut)}
                   </Typography>
                   {finished && lot.date_fin_reelle && <Typography variant="body2" color="text.secondary">Fin le {formatShortDate(lot.date_fin_reelle)}</Typography>}
                 </Box>
@@ -241,42 +201,37 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             </ButtonBase>;
           })}
         </Box> : <Box sx={{ mt: 3, p: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
-          <Typography fontWeight={700}>Aucun lot {statusFilter === 'active' ? 'en cours' : 'terminé'}{statusFilter === 'finished' && buildingFilter ? ' dans ce bâtiment' : ''}</Typography>
+          <Typography fontWeight={700}>Aucun lot {statusFilter === 'active' ? 'en cours' : 'termin�'}{statusFilter === 'finished' && buildingFilter !== 'all' ? ' dans ce b�timent' : ''}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {statusFilter === 'active' ? 'Démarrez un lot pour accueillir de nouvelles volailles.' : 'Les lots terminés apparaîtront ici.'}
+            {statusFilter === 'active' ? 'D�marrez un lot pour accueillir de nouvelles volailles.' : 'Les lots termin�s appara�tront ici.'}
           </Typography>
         </Box>}
       </>}
-      {!managementMode && activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par bâtiment">
+      {!managementMode && activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par b�timent">
         {activeLots.map((lot) => {
           const cycle = lot.repartitions?.[0];
           return <Chip key={lot.id_lot} clickable color={String(lot.id_lot) === String(selected?.id_lot) ? 'primary' : 'default'}
-            label={`${cycle?.nom_batiment || 'Bâtiment'} : ${lot.nom_lot}`}
+            label={`${cycle?.nom_batiment || 'B�timent'} : ${lot.nom_lot}`}
             onClick={() => setSelectedId(String(lot.id_lot))} />;
         })}
       </Stack>}
-      {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
+      {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>R�essayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
-      {loaded && !selected && !managementMode && <Typography color="text.secondary" sx={{ mt: 2 }}>Démarrez un lot indépendant pour chaque bâtiment actif.</Typography>}
-      {loaded && selected && (!managementMode || ['details', 'history'].includes(managementView)) && <>
-        {managementMode && <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-          <Typography variant="subtitle1" fontWeight={800}>{selectedCycle?.nom_batiment || 'Bâtiment'} · {selected.statut === 'termine' ? 'Lot terminé' : 'Lot en cours'}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Arrivée le {formatShortDate(selected.date_debut)}{selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}</Typography>
-          <Divider sx={{ my: 1.5 }} />
-          <Typography variant="body2">Souche : {selected.souche || 'Non renseignée'} · Âge à l’arrivée : {selected.age_depart_semaines ?? 0} semaines</Typography>
-          {selected.date_fin_prevue && <Typography variant="body2" sx={{ mt: 0.5 }}>Fin prévue : {formatShortDate(selected.date_fin_prevue)} (indicative)</Typography>}
-          {selected.notes && <Typography variant="body2" sx={{ mt: 0.5 }}>Notes : {selected.notes}</Typography>}
-        </Box>}
+      {loaded && !selected && !managementMode && <Typography color="text.secondary" sx={{ mt: 2 }}>D�marrez un lot ind�pendant pour chaque b�timent actif.</Typography>}
+      {loaded && selected && managementMode && managementView === 'details' && <LotDetails key={selected.id_lot + '-' + selected.statut} lot={selected} refreshKey={refreshKey + '-' + revision}
+        onBack={() => { setManagementView('overview'); setStatusFilter(selected.statut === 'termine' ? 'finished' : 'active'); }}
+        onEdit={() => open('edit')} onEnd={() => open('end')} />}
+      {loaded && selected && !managementMode && <>
         {!managementMode && selected.statut === 'termine' && activeLots.length > 0 && <Button size="small" onClick={() => setSelectedId(String(activeLots[0].id_lot))} sx={{ mt: 1 }}>Revenir aux lots en cours</Button>}
         <Box sx={{ mt: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 } }}>
-          <Fact label={selected.statut === 'termine' ? 'Volailles à la fin' : 'Volailles présentes'} value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' à l’arrivée'} color="primary.main" />
-          <Fact label="Mortalité cumulée" value={number(selected.mortalite_totale)} />
-          <Fact label={selected.statut === 'termine' ? 'Âge à la fin' : 'Âge aujourd’hui'} value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
+          <Fact label={selected.statut === 'termine' ? 'Volailles � la fin' : 'Volailles pr�sentes'} value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' � l'arriv�e'} color="primary.main" />
+          <Fact label="Mortalit� cumul�e" value={number(selected.mortalite_totale)} />
+          <Fact label={selected.statut === 'termine' ? 'Age � la fin' : 'Age aujourd'hui'} value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
           <Fact label="Formule d'aliment" value={selected.formule_suggeree || '-'} />
         </Box>
         <Divider sx={{ mt: 2.5, mb: 2 }} />
-        {selectedCycle && !managementMode && <Box component="section" aria-label="Bâtiment du lot" sx={{ mb: 2 }}>
-          <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1 }}>Bâtiment rattaché</Typography>
+        {selectedCycle && !managementMode && <Box component="section" aria-label="B�timent du lot" sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1 }}>B�timent rattach�</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1}>
             <Typography fontWeight={600}>{selectedCycle.nom_batiment}</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} spacing={1}>
@@ -289,82 +244,21 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             </Stack>
           </Stack>
         </Box>}
-        {managementMode && managementView === 'details' && <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
-          <Button variant="outlined" startIcon={<History />} onClick={() => {
-            setHistoryFrom(selected.date_debut);
-            setHistoryTo(selected.date_fin_reelle || localToday());
-            setManagementView('history');
-          }}>Historique de production</Button>
-        </Stack>}
-        {managementMode && managementView === 'history' && <Box component="section" aria-label="Historique de production" sx={{ mt: 3 }}>
-          <Typography variant="h6" fontWeight={800}>Historique de production</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Saisies rattachées à {selectedCycle?.nom_batiment} et à ce lot uniquement.</Typography>
-          <LotEggChart key={selected.id_lot} lotId={selected.id_lot} refreshKey={revision} />
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} sx={{ my: 2 }}>
-            <TextField type="date" size="small" label="Du" InputLabelProps={{ shrink: true }} value={historyFrom}
-              inputProps={{ min: selected.date_debut, max: historyTo || selected.date_fin_reelle || localToday() }}
-              onChange={(event) => setHistoryFrom(event.target.value)} />
-            <TextField type="date" size="small" label="Au" InputLabelProps={{ shrink: true }} value={historyTo}
-              inputProps={{ min: historyFrom || selected.date_debut, max: selected.date_fin_reelle || localToday() }}
-              onChange={(event) => setHistoryTo(event.target.value)} />
-            <Button variant="outlined" disabled={historyLoading || (!historyRows.length && !historyVaccines.length)} onClick={() => {
-              const rows = [
-                ['Catégorie', 'Date', 'Lot', 'Type / détail', 'Œufs', 'Mortalité', 'Aliment (kg)', 'Montant'],
-                ...historyRows.map((row) => ['Production', row.date_production, selected.nom_lot, row.type_oeuf, row.nombre_oeufs, row.mortalite ?? '', row.consommation_aliment_kg ?? '', '']),
-                ...historyVaccines.map((row) => ['Vaccin', row.date_charge, selected.nom_lot, row.nom_vaccin || row.libelle, '', '', '', row.montant]),
-              ];
-              const escape = (value) => {
-                const safe = String(value ?? '').replace(/^[=+@-]/, "'$&");
-                return '"' + safe.replace(/"/g, '""') + '"';
-              };
-              const csv = '\uFEFF' + rows.map((row) => row.map(escape).join(';')).join('\r\n');
-              const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-              const link = document.createElement('a');
-              link.href = url; link.download = 'historique-' + selected.id_lot + '.csv'; link.click();
-              URL.revokeObjectURL(url);
-            }}>Exporter l’historique</Button>
-          </Stack>
-          {historyError && <Alert severity="error" sx={{ mb: 2 }}>{historyError}</Alert>}
-          {historyLoading ? <Typography>Chargement de l’historique...</Typography> : <>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Saisies quotidiennes</Typography>
-            {historyRows.length ? <TableContainer sx={{ maxHeight: 420, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-              <Table size="small" stickyHeader aria-label="Saisies de production historiques">
-                <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Type d’œuf</TableCell><TableCell align="right">Œufs</TableCell><TableCell align="right">Mortalité</TableCell><TableCell align="right">Aliment (kg)</TableCell></TableRow></TableHead>
-                <TableBody>{historyRows.map((row) => <TableRow key={row.id_production}>
-                  <TableCell>{formatShortDate(row.date_production)}</TableCell><TableCell>{row.type_oeuf}</TableCell>
-                  <TableCell align="right">{number(row.nombre_oeufs)}</TableCell>
-                  <TableCell align="right">{number(row.mortalite)}</TableCell>
-                  <TableCell align="right">{number(row.consommation_aliment_kg)}</TableCell>
-                </TableRow>)}</TableBody>
-              </Table>
-            </TableContainer> : <Typography color="text.secondary">Aucune saisie de production sur cette période.</Typography>}
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 2, mb: 1 }}>Dépenses de vaccins</Typography>
-            {historyVaccines.length ? <TableContainer sx={{ maxHeight: 300, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-              <Table size="small" stickyHeader aria-label="Dépenses de vaccins historiques">
-                <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Vaccin</TableCell><TableCell align="right">Quantité</TableCell><TableCell align="right">Montant</TableCell></TableRow></TableHead>
-                <TableBody>{historyVaccines.map((row) => <TableRow key={row.id_charge}>
-                  <TableCell>{formatShortDate(row.date_charge)}</TableCell><TableCell>{row.nom_vaccin || row.libelle}</TableCell>
-                  <TableCell align="right">{number(row.quantite)} {row.unite || ''}</TableCell><TableCell align="right">{number(row.montant)}</TableCell>
-                </TableRow>)}</TableBody>
-              </Table>
-            </TableContainer> : <Typography color="text.secondary">Aucune dépense de vaccin rattachée à ce lot sur cette période.</Typography>}
-          </>}
-        </Box>}
         {(!managementMode || managementView === 'details') && (selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
           <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}
             sx={{ color: 'error.main', borderColor: 'error.main', '&:hover': { color: 'error.dark', borderColor: 'error.dark', bgcolor: 'action.hover' } }}>Terminer ce lot</Button>
-        </Stack> : <Typography variant="body2" color="text.secondary">Ce lot est terminé pour son bâtiment.</Typography>)}
+        </Stack> : <Typography variant="body2" color="text.secondary">Ce lot est termin� pour son b�timent.</Typography>)}
       </>}
       <Dialog open={!!historyCycle} onClose={() => { if (!saving) { setHistoryCycle(null); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submitHistory}>
-          <DialogTitle>Rattacher les saisies à {historyCycle?.nom_batiment}</DialogTitle>
+          <DialogTitle>Rattacher les saisies � {historyCycle?.nom_batiment}</DialogTitle>
           <DialogContent>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Seules les saisies sans cycle de ce bâtiment seront rattachées. Leurs valeurs restent conservées.</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Seules les saisies sans cycle de ce b�timent seront rattach�es. Leurs valeurs restent conserv�es.</Typography>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              <DateField label="Début de la période" required value={historyPeriod.date_debut || ''} onChange={(event) => setHistoryPeriod((old) => ({ ...old, date_debut: event.target.value }))} />
-              <DateField label="Fin de la période" required value={historyPeriod.date_fin || ''} onChange={(event) => setHistoryPeriod((old) => ({ ...old, date_fin: event.target.value }))} />
+              <DateField label="D�but de la p�riode" required value={historyPeriod.date_debut || ''} onChange={(event) => setHistoryPeriod((old) => ({ ...old, date_debut: event.target.value }))} />
+              <DateField label="Fin de la p�riode" required value={historyPeriod.date_fin || ''} onChange={(event) => setHistoryPeriod((old) => ({ ...old, date_fin: event.target.value }))} />
             </Stack>
           </DialogContent>
           <DialogActions>
@@ -380,10 +274,10 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             {lots.map((lot) => <Button key={lot.id_lot} color="inherit" onClick={() => { setSelectedId(String(lot.id_lot)); setHistoryOpen(false); }}
               sx={{ justifyContent: 'space-between', gap: 2, textAlign: 'left', p: 1.5 }}>
               <Box sx={{ minWidth: 0 }}>
-                <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.repartitions?.[0]?.nom_batiment || 'Bâtiment'} | {lot.nom_lot}</Typography>
-                <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(lot.date_debut)}</Typography>
+                <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.repartitions?.[0]?.nom_batiment || 'B�timent'} | {lot.nom_lot}</Typography>
+                <Typography variant="body2" color="text.secondary">Arriv�e le {formatShortDate(lot.date_debut)}</Typography>
               </Box>
-              <Chip size="small" variant="outlined" label={lot.statut === 'termine' ? 'Terminé' : 'Actif'} color={lot.statut === 'termine' ? 'default' : 'success'} />
+              <Chip size="small" variant="outlined" label={lot.statut === 'termine' ? 'Termin�' : 'Actif'} color={lot.statut === 'termine' ? 'default' : 'success'} />
             </Button>)}
           </Stack>
         </DialogContent>
@@ -391,24 +285,24 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       </Dialog>
       <Dialog open={!!dialog} onClose={() => { if (!saving) { setDialog(''); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submit}>
-          <DialogTitle>{dialog === 'create' ? 'Démarrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
+          <DialogTitle>{dialog === 'create' ? 'D�marrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
           <DialogContent>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Stack spacing={2} sx={{ pt: 1 }}>
               {dialog === 'end' ? <>
-                <Typography>Cette action termine uniquement ce lot et son bâtiment. Les autres lots restent actifs.</Typography>
-                <DateField label="Date de fin" required value={values.date_fin_reelle || ''} onChange={(event) => field('date_fin_reelle', event.target.value)} />
+                <Typography>Ce lot passera dans les lots termin�s. Ses saisies et son historique resteront consultables.</Typography>
+                <DateField label="Date de fin" required inputProps={{ min: selected?.date_debut, max: localToday() }} value={values.date_fin_reelle || ''} onChange={(event) => field('date_fin_reelle', event.target.value)} />
               </> : <>
                 <TextField label="Nom du lot" required inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => field('nom_lot', event.target.value)} />
-                <TextField select label="Bâtiment" required value={values.id_batiment ?? ''} disabled={dialog === 'edit'} onChange={(event) => field('id_batiment', event.target.value)}>
+                <TextField select label="B�timent" required value={values.id_batiment ?? ''} disabled={dialog === 'edit'} onChange={(event) => field('id_batiment', event.target.value)}>
                   {(dialog === 'edit' ? buildings.filter((row) => Number(row.id_batiment) === Number(values.id_batiment)) : available)
                     .map((building) => <MenuItem key={building.id_batiment} value={building.id_batiment}>{building.nom}</MenuItem>)}
                 </TextField>
-                <DateField label="Date d'arrivée" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
-                <TextField label="Effectif initial dans ce bâtiment" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
-                <TextField label="Âge à l'arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="L'âge est propre à ce lot." />
-                <TextField label="Durée prévue (semaines)" required type="number" inputProps={{ min: 1, step: 1 }} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)} />
-                <DateField label="Date de fin prévue (facultatif)" value={values.date_fin_prevue || ''} onChange={(event) => field('date_fin_prevue', event.target.value)} helperText="Cette date est indicative. La clôture reste une action manuelle." />
+                <DateField label="Date d'arriv�e" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
+                <TextField label="Effectif initial dans ce b�timent" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
+                <TextField label="Age � l'arriv�e (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="L'�ge est propre � ce lot." />
+                <TextField label="Dur�e pr�vue (semaines)" required type="number" inputProps={{ min: 1, step: 1 }} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)} />
+                <DateField label="Date de fin pr�vue (facultatif)" value={values.date_fin_prevue || ''} onChange={(event) => field('date_fin_prevue', event.target.value)} helperText="Cette date est indicative. La cl�ture reste une action manuelle." />
                 <TextField label="Souche (facultatif)" inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
                 <TextField label="Notes (facultatif)" multiline minRows={2} value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
               </>}

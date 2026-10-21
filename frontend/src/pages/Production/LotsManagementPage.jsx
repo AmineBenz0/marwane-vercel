@@ -7,6 +7,7 @@ export default function LotsManagementPage() {
   const [buildings, setBuildings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [view, setView] = useState('overview');
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -16,7 +17,7 @@ export default function LotsManagementPage() {
     batimentService.getBatiments().then((rows) => {
       if (!cancelled) setBuildings(rows || []);
     }).catch(() => {
-      if (!cancelled) setError('Impossible de charger les bâtiments.');
+      if (!cancelled) setError('Impossible de charger les b�timents.');
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -24,10 +25,10 @@ export default function LotsManagementPage() {
   }, [revision]);
 
   return <Box sx={{ pb: 4, minWidth: 0 }}>
-    <Typography component="h1" variant="h3" fontWeight={800} sx={{ mb: 1 }}>Gestion des lots</Typography>
-    <Typography color="text.secondary" sx={{ mb: 3 }}>Gérez les lots indépendants par bâtiment. Chaque lot conserve son propre cycle et sa propre clôture.</Typography>
-    {loading ? <CircularProgress aria-label="Chargement des bâtiments" />
-      : error ? <Alert severity="error" action={<Button onClick={() => setRevision((value) => value + 1)}>Réessayer</Button>}>{error}</Alert>
-        : <LotPanel buildings={buildings} managementMode />}
+    {view === 'overview' && <><Typography component="h1" variant="h3" fontWeight={800} sx={{ mb: 1 }}>Gestion des lots</Typography>
+    <Typography color="text.secondary" sx={{ mb: 3 }}>Retrouvez les lots en cours et termin�s de chaque b�timent.</Typography></>}
+    {loading ? <CircularProgress aria-label="Chargement des b�timents" />
+      : error ? <Alert severity="error" action={<Button onClick={() => setRevision((value) => value + 1)}>R�essayer</Button>}>{error}</Alert>
+        : <LotPanel buildings={buildings} managementMode onViewChange={setView} />}
   </Box>;
 }
