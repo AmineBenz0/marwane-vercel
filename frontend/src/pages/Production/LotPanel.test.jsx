@@ -98,6 +98,7 @@ describe('LotPanel independent building lots', () => {
 
     const activeTab = await screen.findByRole('tab', { name: /En cours/ });
     expect(activeTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('heading', { name: 'Gestion des lots' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Filtrer par bâtiment')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Lots en cours' })).toBeVisible();
     expect(screen.getAllByRole('button', { name: /Ouvrir le lot/ })).toHaveLength(2);
@@ -111,7 +112,7 @@ describe('LotPanel independent building lots', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Terminés/ }));
     const buildingFilter = screen.getByLabelText('Filtrer par bâtiment');
-    expect(buildingFilter).toHaveValue('');
+    expect(buildingFilter).toHaveValue('all');
     expect(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' })).toBeVisible();
 
     fireEvent.change(buildingFilter, { target: { value: '2' } });
