@@ -1,6 +1,6 @@
 """Manage independent building lots and their single operational cycles."""
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
@@ -46,14 +46,14 @@ def lot_to_dict(db, lot):
 
 
 def _lock_buildings(db, ids, *, require_active=False):
-    # All writers lock buildings in ID order, including production entry writers.
+    # Lifecycle and production-entry writers use the same ordered building lock.
     rows = db.query(Batiment).filter(Batiment.id_batiment.in_(ids)).order_by(
         Batiment.id_batiment,
     ).populate_existing().with_for_update().all()
     if len(rows) != len(ids):
-        raise HTTPException(status_code=400, detail="Un bâtiment de la répartition est introuvable.")
+        raise HTTPException(status_code=400, detail="Un b�timent de la r�partition est introuvable.")
     if require_active and any(not row.est_actif for row in rows):
-        raise HTTPException(status_code=400, detail="La répartition nécessite des bâtiments actifs.")
+        raise HTTPException(status_code=400, detail="La r�partition n�cessite des b�timents actifs.")
 
 
 def _lock_lot(db, id_lot):
@@ -61,7 +61,7 @@ def _lock_lot(db, id_lot):
     if not lot:
         raise HTTPException(status_code=404, detail="Lot introuvable.")
     if lot.cycle is None:
-        raise HTTPException(status_code=409, detail="Ce lot n'est pas associé à un cycle bâtiment.")
+        raise HTTPException(status_code=409, detail="Ce lot n'est pas associ� � un cycle b�timent.")
     _lock_buildings(db, [lot.cycle.id_batiment])
     # Refresh after waiting on any concurrent production writer.
     for row in lot.allocations:
@@ -77,9 +77,12 @@ def _validate_start(db, payload, excluded=()):
     if excluded:
         conflicts = conflicts.filter(CycleProduction.id_cycle.notin_(excluded))
     if conflicts.filter(CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES)).first():
-        raise HTTPException(status_code=400, detail="Un bâtiment a déjà un lot actif. Terminez ce lot avant une nouvelle arrivée.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce b�timent a d�j� un lot actif. Actualisez puis r�essayez apr�s sa cl�ture.",
+        )
     if conflicts.filter(CycleProduction.date_fin_reelle > payload.date_debut).first():
-        raise HTTPException(status_code=400, detail="Cette arrivée chevauche un lot précédent dans un bâtiment.")
+        raise HTTPException(status_code=400, detail="Cette arriv�e chevauche un lot pr�c�dent dans un b�timent.")
 
 
 def _apply_schedule(lot, payload, user):
@@ -100,10 +103,22 @@ def _sync_allocation(cycle, lot):
 
 
 @router.get("")
-def list_lots(db: Session = Depends(get_db), current_user: Utilisateur = Depends(get_current_active_user)):
-    lots = db.query(LotProduction).options(
+def list_lots(
+    id_batiment: int | None = None,
+    statut: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    query = db.query(LotProduction).join(
+        CycleProduction, CycleProduction.id_lot == LotProduction.id_lot,
+    ).options(
         selectinload(LotProduction.cycle).selectinload(CycleProduction.batiment),
-    ).order_by(LotProduction.date_debut.desc(), LotProduction.id_lot.desc()).all()
+    )
+    if id_batiment is not None:
+        query = query.filter(CycleProduction.id_batiment == id_batiment)
+    if statut:
+        query = query.filter(LotProduction.statut == statut)
+    lots = query.order_by(LotProduction.date_debut.desc(), LotProduction.id_lot.desc()).all()
     return [lot_to_dict(db, lot) for lot in lots]
 
 
@@ -146,16 +161,19 @@ def update_lot(id_lot: int, payload: LotProductionCreate, db: Session = Depends(
                current_user: Utilisateur = Depends(get_current_active_user)):
     lot = _lock_lot(db, id_lot)
     if lot.statut == "termine":
-        raise HTTPException(status_code=400, detail="Ce lot est terminé.")
+        raise HTTPException(status_code=400, detail="Ce lot est termin�.")
     if {row.id_batiment for row in payload.repartitions} != {row.id_batiment for row in lot.allocations}:
-        raise HTTPException(status_code=400, detail="Les bâtiments d'un lot démarré ne peuvent pas changer.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le b�timent d'un lot d�marr� ne peut pas changer.",
+        )
     ids = [row.id_cycle for row in lot.allocations]
     _validate_start(db, payload, ids)
     if db.query(Production).filter(
         Production.id_cycle.in_(ids), Production.est_actif.is_(True),
         Production.date_production < payload.date_debut,
     ).first():
-        raise HTTPException(status_code=400, detail="Des saisies précèdent cette nouvelle date d'arrivée.")
+        raise HTTPException(status_code=400, detail="Des saisies pr�c�dent cette nouvelle date d'arriv�e.")
     counts = {row.id_batiment: row.effectif_initial for row in payload.repartitions}
     for cycle in lot.allocations:
         validate_cycle_mortality(db, cycle, 0, limit=counts[cycle.id_batiment])
@@ -176,12 +194,12 @@ def terminate_lot(id_lot: int, payload: CycleProductionTerminate, db: Session = 
         return lot_to_dict(db, lot)
     end = payload.date_fin_reelle or date.today()
     if end < lot.date_debut or end > date.today():
-        raise HTTPException(status_code=400, detail="La date de fin doit être entre l'arrivée et aujourd'hui.")
+        raise HTTPException(status_code=400, detail="La date de fin doit �tre entre l'arriv�e et aujourd'hui.")
     if db.query(Production).filter(
         Production.id_cycle.in_([row.id_cycle for row in lot.allocations]),
         Production.est_actif.is_(True), Production.date_production > end,
     ).first():
-        raise HTTPException(status_code=400, detail="Des saisies existent après cette date de fin dans un bâtiment.")
+        raise HTTPException(status_code=400, detail="Des saisies existent apr�s cette date de fin dans un b�timent.")
     lot.statut = "termine"
     lot.date_fin_reelle = end
     if current_user:
@@ -192,4 +210,5 @@ def terminate_lot(id_lot: int, payload: CycleProductionTerminate, db: Session = 
     db.commit()
     db.refresh(lot)
     return lot_to_dict(db, lot)
+
 
