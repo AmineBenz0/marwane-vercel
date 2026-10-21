@@ -55,8 +55,8 @@ describe('LotPanel independent building lots', () => {
   it('allows a new lot for a free building while another building has an active lot', async () => {
     getLots.mockResolvedValue([activeLot]);
     renderPanel();
-    fireEvent.click(await screen.findByRole('button', { name: 'D�marrer un lot' }));
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif initial dans ce b�timent' }), {
+    fireEvent.click(await screen.findByRole('button', { name: 'Démarrer un lot' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif initial dans ce bâtiment' }), {
       target: { value: '80' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -72,8 +72,8 @@ describe('LotPanel independent building lots', () => {
     expect(await screen.findByRole('button', { name: 'B : Lot B' })).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: 'B : Lot B' }));
     expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible();
-    expect(screen.getByText('Volailles pr�sentes')).toBeVisible();
-    expect(screen.getByRole('region', { name: 'B�timent du lot' })).toBeVisible();
+    expect(screen.getByText('Volailles présentes')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Bâtiment du lot' })).toBeVisible();
   });
 
   it('keeps start available while viewing history and an active lot exists elsewhere', async () => {
@@ -83,7 +83,7 @@ describe('LotPanel independent building lots', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Historique' }));
     fireEvent.click(screen.getByRole('button', { name: /Ancien lot/ }));
     expect(await screen.findByRole('heading', { name: 'Ancien lot' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'D�marrer un lot' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Démarrer un lot' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Modifier le lot' })).not.toBeInTheDocument();
   });
 
@@ -102,7 +102,7 @@ describe('LotPanel independent building lots', () => {
     const activeTab = await screen.findByRole('tab', { name: /En cours/ });
     expect(activeTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('heading', { name: 'Gestion des lots' })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Filtrer par b�timent')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Filtrer par bâtiment')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Lots en cours' })).toBeVisible();
     expect(screen.getAllByRole('button', { name: /Ouvrir le lot/ })).toHaveLength(2);
     const activeCard = screen.getByRole('button', { name: 'Ouvrir le lot Lot' });
@@ -113,20 +113,20 @@ describe('LotPanel independent building lots', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retour aux lots' }));
     expect(screen.getByRole('tab', { name: /En cours/ })).toHaveAttribute('aria-selected', 'true');
 
-    fireEvent.click(screen.getByRole('tab', { name: /Termin�s/ }));
-    const buildingFilter = screen.getByLabelText('Filtrer par b�timent');
+    fireEvent.click(screen.getByRole('tab', { name: /Terminés/ }));
+    const buildingFilter = screen.getByLabelText('Filtrer par bâtiment');
     expect(buildingFilter).toHaveValue('all');
     expect(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' })).toBeVisible();
 
     fireEvent.change(buildingFilter, { target: { value: '2' } });
-    expect(screen.getByText('Aucun lot termin� dans ce b�timent')).toBeVisible();
+    expect(screen.getByText('Aucun lot terminé dans ce bâtiment')).toBeVisible();
     fireEvent.change(buildingFilter, { target: { value: '1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
 
     expect(await screen.findByRole('heading', { name: 'Ancien lot' })).toBeVisible();
-    expect(screen.getByText('Pertes depuis l'arriv�e')).toBeVisible();
+    expect(screen.getByText('Pertes depuis l’arrivée')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Retour aux lots' }));
-    expect(screen.getByRole('tab', { name: /Termin�s/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Terminés/ })).toHaveAttribute('aria-selected', 'true');
   });
   it('loads historical records and vaccine expenses for the selected lot cycle', async () => {
     getLots.mockResolvedValue([activeLot, lotB, historicalLot]);
@@ -140,7 +140,7 @@ describe('LotPanel independent building lots', () => {
     }]);
     render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole('tab', { name: /Termin�s/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Terminés/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Production' }));
 
@@ -149,8 +149,9 @@ describe('LotPanel independent building lots', () => {
       id_cycle: 1, date_debut: '2026-09-01', date_fin: '2026-09-30',
     })));
     expect(within(screen.getByRole('table', { name: 'Saisies quotidiennes du lot' })).getByText('80')).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'Vaccins et d�penses' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Vaccins et dépenses' }));
     expect(await screen.findByText('Vaccin A')).toBeVisible();
   });
 
 });
+

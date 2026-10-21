@@ -17,7 +17,7 @@ export default function LotsManagementPage() {
     batimentService.getBatiments().then((rows) => {
       if (!cancelled) setBuildings(rows || []);
     }).catch(() => {
-      if (!cancelled) setError('Impossible de charger les b�timents.');
+      if (!cancelled) setError('Impossible de charger les bâtiments.');
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -26,9 +26,10 @@ export default function LotsManagementPage() {
 
   return <Box sx={{ pb: 4, minWidth: 0 }}>
     {view === 'overview' && <><Typography component="h1" variant="h3" fontWeight={800} sx={{ mb: 1 }}>Gestion des lots</Typography>
-    <Typography color="text.secondary" sx={{ mb: 3 }}>Retrouvez les lots en cours et termin�s de chaque b�timent.</Typography></>}
-    {loading ? <CircularProgress aria-label="Chargement des b�timents" />
-      : error ? <Alert severity="error" action={<Button onClick={() => setRevision((value) => value + 1)}>R�essayer</Button>}>{error}</Alert>
+    <Typography color="text.secondary" sx={{ mb: 3 }}>Retrouvez les lots en cours et terminés de chaque bâtiment.</Typography></>}
+    {loading ? <CircularProgress aria-label="Chargement des bâtiments" />
+      : error ? <Alert severity="error" action={<Button onClick={() => setRevision((value) => value + 1)}>Réessayer</Button>}>{error}</Alert>
         : <LotPanel buildings={buildings} managementMode onViewChange={setView} />}
   </Box>;
 }
+

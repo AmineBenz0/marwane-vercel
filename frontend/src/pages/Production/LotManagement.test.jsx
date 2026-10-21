@@ -31,11 +31,11 @@ describe('Independent lot management', () => {
     render(<MemoryRouter><LotPanel buildings={buildings} managementMode /></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir le lot Lot A' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Modifier le lot' }));
-    expect(screen.getByRole('combobox', { name: 'B�timent' })).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif initial dans ce b�timent' }), {
+    expect(screen.getByRole('combobox', { name: 'Bâtiment' })).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif initial dans ce bâtiment' }), {
       target: { value: '90' },
     });
-    fireEvent.change(screen.getByRole('spinbutton', { name: "Age � l'arriv�e (semaines)" }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: "Âge à l'arrivée (semaines)" }), {
       target: { value: '20' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -52,8 +52,8 @@ describe('Independent lot management', () => {
     expect(await screen.findByRole('heading', { name: 'Lot A' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Modifier le lot' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Terminer le lot' })).toBeVisible();
-    expect(screen.getByRole('tab', { name: 'Vue d'ensemble' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('button', { name: 'D�marrer un lot' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Vue d’ensemble' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: 'Démarrer un lot' })).not.toBeInTheDocument();
   });
 
   it('attaches only the selected building cycle to earlier unassigned entries', async () => {
@@ -66,3 +66,4 @@ describe('Independent lot management', () => {
     })));
   });
 });
+

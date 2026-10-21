@@ -27,7 +27,7 @@ export function lotChartDays(rows, start, end) {
 export function downloadLotCsv(lot, rows) {
   const escape = (value) => '"' + String(value ?? '').replace(/^[=+@-]/, "'$&").replace(/"/g, '""') + '"';
   const data = [
-    ['Date', 'Lot', 'Normaux', 'Doubles jaunes', 'Blancs', 'Cass�s / perdus', 'Pertes de volailles', 'Aliment (kg)'],
+    ['Date', 'Lot', 'Normaux', 'Doubles jaunes', 'Blancs', 'Cassés / perdus', 'Pertes de volailles', 'Aliment (kg)'],
     ...rows.map((day) => [day.date, lot.nom_lot, day.counts.normal || 0, day.counts.double_jaune || 0,
       day.counts.blanc || 0, day.counts.casse || 0, day.mortality, day.feed]),
   ];
