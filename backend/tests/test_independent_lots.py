@@ -1,7 +1,14 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
+from threading import Barrier
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+
+from app.database import get_db
+from app.main import app
 
 from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
@@ -123,6 +130,73 @@ def test_closing_one_lot_leaves_other_building_active_and_turnover_keeps_cycle_i
     assert context["cycle"]["id_cycle"] == successor_cycle["id_cycle"]
     assert successor_cycle["id_cycle"] != cycle_a["id_cycle"]
     assert db_session.query(CycleProduction).filter_by(id_cycle=cycle_a["id_cycle"]).one().id_lot == lot_a["id_lot"]
+
+
+def test_simultaneous_lot_requests_for_one_building_create_only_one_active_lot(
+    client, db_session, auth_headers
+):
+    if db_session.get_bind().dialect.name != "postgresql":
+        pytest.skip("The concurrent row-lock test requires PostgreSQL.")
+
+    building = make_building(db_session, "Concurrent arrivals")
+    session_factory = sessionmaker(
+        bind=db_session.get_bind(),
+        autocommit=False,
+        autoflush=False,
+    )
+
+    def independent_db_session():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    original_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = independent_db_session
+    start = str(date.today())
+    payloads = [
+        {
+            "nom_lot": f"Concurrent lot {index}",
+            "date_debut": start,
+            "age_depart_semaines": 0,
+            "effectif_initial": 100 + index,
+            "repartitions": [{
+                "id_batiment": building.id_batiment,
+                "effectif_initial": 100 + index,
+            }],
+        }
+        for index in (1, 2)
+    ]
+    barrier = Barrier(3)
+
+    def submit(payload):
+        barrier.wait(timeout=10)
+        return client.post("/api/v1/lots-production", json=payload, headers=auth_headers)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            requests = [executor.submit(submit, payload) for payload in payloads]
+            barrier.wait(timeout=10)
+            responses = [request.result(timeout=30) for request in requests]
+    finally:
+        if original_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = original_override
+
+    assert sorted(response.status_code for response in responses) == [201, 400], [
+        response.text for response in responses
+    ]
+    db_session.expire_all()
+    active_cycles = db_session.query(CycleProduction).filter(
+        CycleProduction.id_batiment == building.id_batiment,
+        CycleProduction.statut.in_(("actif", "a_cloturer")),
+    ).all()
+    assert len(active_cycles) == 1
+    assert db_session.query(LotProduction).filter(
+        LotProduction.id_lot == active_cycles[0].id_lot
+    ).count() == 1
 
 
 def test_database_partial_index_rejects_two_active_cycles_in_one_building(db_session):
