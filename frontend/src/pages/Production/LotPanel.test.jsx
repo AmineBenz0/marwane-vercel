@@ -104,6 +104,10 @@ describe('LotPanel independent building lots', () => {
     const activeCard = screen.getByRole('button', { name: 'Ouvrir le lot Lot' });
     expect(within(activeCard).queryByText('Lot en cours')).not.toBeInTheDocument();
     expect(within(activeCard).queryByText('Voir le lot')).not.toBeInTheDocument();
+    fireEvent.click(activeCard);
+    expect(await screen.findByRole('heading', { name: 'Lot' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Tous les lots' }));
+    expect(screen.getByRole('tab', { name: /En cours/ })).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.click(screen.getByRole('tab', { name: /Terminés/ }));
     const buildingFilter = screen.getByLabelText('Filtrer par bâtiment');
