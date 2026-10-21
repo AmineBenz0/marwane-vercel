@@ -72,19 +72,19 @@ describe('LotPanel independent building lots', () => {
 
     const dialog = screen.getByRole('dialog');
     const lotName = within(dialog).getByRole('textbox', { name: 'Nom du lot' });
-    const arrivalDate = within(dialog).getByLabelText('Date de mise en place');
+    const arrivalDate = within(dialog).getByRole('textbox', { name: 'Date de mise en place' });
     expect(lotName.value).toMatch(/^Bat A - /);
     expect(within(dialog).queryByLabelText(/Âge à l'arrivée/)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText(/Durée prévue/)).not.toBeInTheDocument();
 
-    fireEvent.change(arrivalDate, { target: { value: '2026-10-21' } });
+    fireEvent.change(arrivalDate, { target: { value: '21/10/26' } });
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Souche (facultatif)' }), {
       target: { value: 'Lohmann' },
     });
     expect(lotName).toHaveValue('Bat A - 21/10/26 - Lohmann');
 
     fireEvent.change(lotName, { target: { value: 'Mon lot' } });
-    fireEvent.change(arrivalDate, { target: { value: '2026-10-22' } });
+    fireEvent.change(arrivalDate, { target: { value: '22/10/26' } });
     expect(lotName).toHaveValue('Mon lot');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Rétablir le nom automatique' }));
     expect(lotName).toHaveValue('Bat A - 22/10/26 - Lohmann');

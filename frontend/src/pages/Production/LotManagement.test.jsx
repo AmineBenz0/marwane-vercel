@@ -32,7 +32,7 @@ describe('Independent lot management', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir le lot Lot A' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Modifier le lot' }));
     expect(screen.getByRole('combobox', { name: 'Bâtiment' })).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif initial dans ce bâtiment' }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif de départ' }), {
       target: { value: '90' },
     });
     fireEvent.change(screen.getByRole('spinbutton', { name: "Âge à l'arrivée (semaines)" }), {
