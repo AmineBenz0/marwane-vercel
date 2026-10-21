@@ -171,9 +171,17 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
 
   return (
     <Box component="section" aria-label="Lots de volailles" sx={{ mb: 3, p: { xs: 2, md: 2.5 }, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-start' }} spacing={1.5}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: managementMode && managementView === 'overview' ? 'center' : 'flex-start' }} spacing={1.5}>
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
+            {managementMode && loaded && managementView === 'overview' && (
+              <Stack direction="row" spacing={1} role="tablist" aria-label="État des lots">
+                <Button role="tab" aria-selected={statusFilter === 'active'} variant={statusFilter === 'active' ? 'contained' : 'outlined'}
+                  onClick={() => { setStatusFilter('active'); setSelectedId(''); }}>En cours ({activeLots.length})</Button>
+                <Button role="tab" aria-selected={statusFilter === 'finished'} variant={statusFilter === 'finished' ? 'contained' : 'outlined'}
+                  onClick={() => { setStatusFilter('finished'); setSelectedId(''); }}>Terminés ({lots.length - activeLots.length})</Button>
+              </Stack>
+            )}
             {!(managementMode && managementView === 'overview') && <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
               {managementMode ? displayLotName(selected) || 'Détail du lot' : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
             </Typography>}
@@ -195,20 +203,14 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         </Stack>
       </Stack>
       {managementMode && loaded && managementView === 'overview' && <>
-        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} sx={{ mt: 2 }}>
-          <Stack direction="row" spacing={1} role="tablist" aria-label="État des lots">
-            <Button role="tab" aria-selected={statusFilter === 'active'} variant={statusFilter === 'active' ? 'contained' : 'outlined'}
-              onClick={() => { setStatusFilter('active'); setSelectedId(''); }}>En cours ({activeLots.length})</Button>
-            <Button role="tab" aria-selected={statusFilter === 'finished'} variant={statusFilter === 'finished' ? 'contained' : 'outlined'}
-              onClick={() => { setStatusFilter('finished'); setSelectedId(''); }}>Terminés ({lots.length - activeLots.length})</Button>
-          </Stack>
-          {statusFilter === 'finished' && <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
+        {statusFilter === 'finished' && <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
             value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
             sx={{ minWidth: { xs: '100%', sm: 220 } }}>
             <option value="all">Tous les bâtiments</option>
             {buildings.map((building) => <option key={building.id_batiment} value={building.id_batiment}>{building.nom}</option>)}
-          </TextField>}
-        </Stack>
+          </TextField>
+        </Stack>}
         {filteredLots.length ? <Box component="section" aria-label={statusFilter === 'active' ? 'Lots en cours' : 'Lots terminés'}
           sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
           {filteredLots.map((lot) => {
