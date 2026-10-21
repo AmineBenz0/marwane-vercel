@@ -65,12 +65,37 @@ def test_second_active_lot_is_rejected_only_for_the_same_building(client, db_ses
         "age_depart_semaines": 0, "effectif_initial": 50,
         "repartitions": [{"id_batiment": building_a.id_batiment, "effectif_initial": 50}],
     }, headers=auth_headers)
-    assert duplicate.status_code == 400
-    assert "déjà un lot actif" in duplicate.json()["detail"]
+    assert duplicate.status_code == 409
+    assert "d�j� un lot actif" in duplicate.json()["detail"]
 
     independent = create_lot(client, auth_headers, building_b.id_batiment, name="Lot B", count=50)
     assert independent["repartitions"][0]["id_batiment"] == building_b.id_batiment
     assert db_session.query(LotProduction).count() == 2
+
+
+def test_lot_list_filters_by_building_and_status(client, db_session, auth_headers):
+    building_a = make_building(db_session, "Lot filter A")
+    building_b = make_building(db_session, "Lot filter B")
+    active_a = create_lot(client, auth_headers, building_a.id_batiment, name="Active A")
+    create_lot(client, auth_headers, building_b.id_batiment, name="Active B")
+    closed = client.post(f"/api/v1/lots-production/{active_a['id_lot']}/terminer", json={
+        "date_fin_reelle": str(date.today()),
+    }, headers=auth_headers)
+    assert closed.status_code == 200, closed.text
+    next_a = create_lot(client, auth_headers, building_a.id_batiment, name="Next A")
+
+    by_building = client.get("/api/v1/lots-production", params={
+        "id_batiment": building_a.id_batiment,
+    }, headers=auth_headers)
+    by_status = client.get("/api/v1/lots-production", params={"statut": "termine"}, headers=auth_headers)
+    by_both = client.get("/api/v1/lots-production", params={
+        "id_batiment": building_a.id_batiment, "statut": "actif",
+    }, headers=auth_headers)
+
+    assert by_building.status_code == by_status.status_code == by_both.status_code == 200
+    assert {lot["id_lot"] for lot in by_building.json()} == {active_a["id_lot"], next_a["id_lot"]}
+    assert [lot["id_lot"] for lot in by_status.json()] == [active_a["id_lot"]]
+    assert [lot["id_lot"] for lot in by_both.json()] == [next_a["id_lot"]]
 
 
 @pytest.mark.parametrize("allocations,total", [
@@ -105,6 +130,24 @@ def test_cycle_update_changes_parent_and_snapshot_together(client, db_session, a
     assert parent.age_depart_semaines == cycle.age_depart_semaines == 6
     assert parent.souche == cycle.souche == "Souche A"
     assert parent.effectif_initial == cycle.effectif_initial == 100
+
+
+def test_established_lot_cannot_be_moved_to_another_building(client, db_session, auth_headers):
+    building_a = make_building(db_session, "Fixed building A")
+    building_b = make_building(db_session, "Fixed building B")
+    lot = create_lot(client, auth_headers, building_a.id_batiment)
+    response = client.put(f"/api/v1/lots-production/{lot['id_lot']}", json={
+        "nom_lot": "Moved lot",
+        "date_debut": str(date.today()),
+        "age_depart_semaines": 0,
+        "effectif_initial": 100,
+        "repartitions": [{"id_batiment": building_b.id_batiment, "effectif_initial": 100}],
+    }, headers=auth_headers)
+
+    assert response.status_code == 409
+    db_session.expire_all()
+    cycle = db_session.query(CycleProduction).filter_by(id_cycle=lot["repartitions"][0]["id_cycle"]).one()
+    assert cycle.id_batiment == building_a.id_batiment
 
 
 def test_closing_one_lot_leaves_other_building_active_and_turnover_keeps_cycle_ids(client, db_session, auth_headers):
@@ -185,7 +228,7 @@ def test_simultaneous_lot_requests_for_one_building_create_only_one_active_lot(
         else:
             app.dependency_overrides[get_db] = original_override
 
-    assert sorted(response.status_code for response in responses) == [201, 400], [
+    assert sorted(response.status_code for response in responses) == [201, 409], [
         response.text for response in responses
     ]
     db_session.expire_all()
@@ -260,4 +303,5 @@ def test_database_prevents_one_lot_from_linking_multiple_cycles(db_session):
     with pytest.raises(IntegrityError):
         db_session.commit()
     db_session.rollback()
+
 
