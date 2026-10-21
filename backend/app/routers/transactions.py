@@ -30,6 +30,7 @@ from app.schemas.transaction_payment import (
     TransactionPaymentBatchItemRead,
 )
 from app.utils.dependencies import get_current_active_user
+from app.utils.production_cycles import cycle_schedule
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
@@ -94,7 +95,8 @@ def _resolve_transaction_cycle(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Lot introuvable pour ce batiment",
             )
-        if date_transaction < cycle.date_debut or date_transaction > cycle.date_fin_prevue:
+        schedule = cycle_schedule(cycle)
+        if date_transaction < schedule.date_debut or date_transaction > schedule.date_fin_prevue:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="La date de vente est en dehors du lot",

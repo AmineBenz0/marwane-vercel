@@ -20,8 +20,8 @@ export function createLotEggDemo(scenario = 'mixed') {
     const zero = scenario === 'zero' || (scenario === 'mixed' && week === 8);
     const partial = scenario === 'single' || (scenario === 'mixed' && week === length);
     const days = partial ? 4 : 7;
-    const expected = days * 3;
-    const entered = missing ? 0 : scenario === 'mixed' && week === 10 ? 9 : expected;
+    const expected = days;
+    const entered = missing ? 0 : scenario === 'mixed' && week === 10 ? 3 : expected;
     const normal = scenario === 'mixed' && week === 15 ? 240000 : Math.round(60000 + index * 1900 + Math.sin(index / 2) * 7000);
     const factor = partial ? 4 / 7 : entered / expected;
     return {

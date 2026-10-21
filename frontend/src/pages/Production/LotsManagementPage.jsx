@@ -25,9 +25,9 @@ export default function LotsManagementPage() {
 
   return <Box sx={{ pb: 4, minWidth: 0 }}>
     <Typography component="h1" variant="h3" fontWeight={800} sx={{ mb: 1 }}>Gestion des lots</Typography>
-    <Typography color="text.secondary" sx={{ mb: 3 }}>Gérez les arrivées, la répartition entre bâtiments et la clôture du lot partagé.</Typography>
+    <Typography color="text.secondary" sx={{ mb: 3 }}>Gérez les lots indépendants par bâtiment. Chaque lot conserve son propre cycle et sa propre clôture.</Typography>
     {loading ? <CircularProgress aria-label="Chargement des bâtiments" />
       : error ? <Alert severity="error" action={<Button onClick={() => setRevision((value) => value + 1)}>Réessayer</Button>}>{error}</Alert>
-        : <LotPanel buildings={buildings} />}
+        : <LotPanel buildings={buildings} managementMode />}
   </Box>;
 }

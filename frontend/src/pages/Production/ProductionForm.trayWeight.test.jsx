@@ -41,7 +41,7 @@ describe('Daily tray weight', () => {
     fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: tray } });
     const result = screen.getByRole('status', { name: 'Poids moyen de l\u2019\u0153uf' });
     expect(result).toHaveTextContent(`${average.replace('.', ',')} g`);
-    expect(await screen.findByText(category)).toBeVisible();
+    await waitFor(() => expect(screen.getByText('Calibre').parentElement).toHaveTextContent(category));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
     await waitFor(() => expect(productionService.createDailyProduction).toHaveBeenCalledWith(expect.objectContaining({ grammage: Number(average) })));

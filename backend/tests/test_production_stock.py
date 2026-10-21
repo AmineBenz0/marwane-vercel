@@ -7,13 +7,13 @@ import pytest
 
 from app.models.batiment import Batiment
 from app.models.client import Client
-from app.models.cycle_production import CycleProduction
 from app.models.produit import Produit
 from app.models.production import Production
 from app.models.transaction import Transaction
 from app.utils.dependencies import get_current_active_user
 from app.utils.egg_product_sync import build_sellable_egg_product_name
 from app.main import app
+from tests.lot_test_helpers import add_lot_cycle
 
 
 def test_daily_stock_counts_production_sales_and_losses(client, db_session, auth_headers, test_user):
@@ -27,18 +27,9 @@ def test_daily_stock_counts_production_sales_and_losses(client, db_session, auth
     db_session.commit()
     db_session.refresh(batiment)
     db_session.refresh(client_row)
-    cycle = CycleProduction(
-        id_batiment=batiment.id_batiment,
-        nom_cycle="Lot Stock Test",
-        date_debut=date.today(),
-        age_depart_semaines=40,
-        effectif_initial=1000,
-        duree_semaines=80,
-        date_fin_prevue=date.today() + timedelta(weeks=80),
-        statut="actif",
-    )
-    db_session.add(cycle)
-    db_session.commit()
+    _, cycle = add_lot_cycle(db_session, batiment, name="Lot Stock Test",
+                             date_debut=date.today(), age_depart_semaines=40,
+                             effectif_initial=1000, duree_semaines=80)
 
     production_payload = {
         "date_production": str(date.today()),
@@ -97,18 +88,9 @@ def test_daily_production_and_losses_roll_back_together_on_database_failure(
     db_session.add(batiment)
     db_session.commit()
     db_session.refresh(batiment)
-    cycle = CycleProduction(
-        id_batiment=batiment.id_batiment,
-        nom_cycle="Lot Atomic Test",
-        date_debut=date.today(),
-        age_depart_semaines=40,
-        effectif_initial=1000,
-        duree_semaines=80,
-        date_fin_prevue=date.today() + timedelta(weeks=80),
-        statut="actif",
-    )
-    db_session.add(cycle)
-    db_session.commit()
+    _, cycle = add_lot_cycle(db_session, batiment, name="Lot Atomic Test",
+                             date_debut=date.today(), age_depart_semaines=40,
+                             effectif_initial=1000, duree_semaines=80)
 
     def fail_after_flush():
         db_session.flush()
@@ -289,18 +271,9 @@ def test_production_delete_is_audited_and_removed_from_active_stock(
     db_session.add(batiment)
     db_session.commit()
     db_session.refresh(batiment)
-    cycle = CycleProduction(
-        id_batiment=batiment.id_batiment,
-        nom_cycle="Lot Production Archive",
-        date_debut=date.today(),
-        age_depart_semaines=40,
-        effectif_initial=1000,
-        duree_semaines=80,
-        date_fin_prevue=date.today() + timedelta(weeks=80),
-        statut="actif",
-    )
-    db_session.add(cycle)
-    db_session.commit()
+    _, cycle = add_lot_cycle(db_session, batiment, name="Lot Production Archive",
+                             date_debut=date.today(), age_depart_semaines=40,
+                             effectif_initial=1000, duree_semaines=80)
 
     response = client.post(
         "/api/v1/productions",

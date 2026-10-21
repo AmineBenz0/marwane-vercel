@@ -1,4 +1,4 @@
-"""One arrival shared by all of its building allocations."""
+"""Independent lot metadata and lifecycle, linked to one building cycle."""
 from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -14,7 +14,7 @@ class LotProduction(Base):
     souche = Column(String(100))
     date_debut = Column(Date, nullable=False, index=True)
     age_depart_semaines = Column(Integer, nullable=False, default=0)
-    effectif_initial = Column(Integer)  # Unknown only for imported historical lots.
+    effectif_initial = Column(Integer)  # Legacy imports may remain unknown; new lots require a positive count.
     duree_semaines = Column(Integer, nullable=False, default=100)
     date_fin_prevue = Column(Date, nullable=False)
     date_fin_reelle = Column(Date)
@@ -25,4 +25,10 @@ class LotProduction(Base):
     id_utilisateur_creation = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"))
     id_utilisateur_modification = Column(Integer, ForeignKey("utilisateurs.id_utilisateur"))
 
-    allocations = relationship("CycleProduction", back_populates="lot", order_by="CycleProduction.id_batiment")
+    # One lot has exactly one cycle after the independent-lot migration.
+    cycle = relationship("CycleProduction", back_populates="lot", uselist=False)
+
+    @property
+    def allocations(self):
+        """Compatibility view for response payloads while callers migrate to cycle."""
+        return [self.cycle] if self.cycle is not None else []

@@ -1,7 +1,7 @@
-"""Manage one arrival and all building allocations in a single transaction."""
+"""Manage independent building lots and their single operational cycles."""
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, text
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -29,6 +29,7 @@ def lot_to_dict(db, lot):
         CycleProduction, Production.id_cycle == CycleProduction.id_cycle,
     ).filter(
         CycleProduction.id_lot == lot.id_lot, Production.est_actif.is_(True),
+        Production.date_production >= lot.date_debut,
         Production.date_production <= (lot.date_fin_reelle or date.today()),
     ).scalar() or 0
     return {
@@ -46,7 +47,7 @@ def lot_to_dict(db, lot):
 
 
 def _lock_buildings(db, ids, *, require_active=False):
-    # All writers lock buildings in ID order, including production entry writers.
+    # Lifecycle and production-entry writers use the same ordered building lock.
     rows = db.query(Batiment).filter(Batiment.id_batiment.in_(ids)).order_by(
         Batiment.id_batiment,
     ).populate_existing().with_for_update().all()
@@ -56,11 +57,13 @@ def _lock_buildings(db, ids, *, require_active=False):
         raise HTTPException(status_code=400, detail="La répartition nécessite des bâtiments actifs.")
 
 
-def _lock_lot(db, id_lot, extra_building_ids=()):
+def _lock_lot(db, id_lot):
     lot = db.query(LotProduction).filter(LotProduction.id_lot == id_lot).populate_existing().with_for_update().first()
     if not lot:
         raise HTTPException(status_code=404, detail="Lot introuvable.")
-    _lock_buildings(db, sorted({row.id_batiment for row in lot.allocations} | set(extra_building_ids)))
+    if lot.cycle is None:
+        raise HTTPException(status_code=409, detail="Ce lot n'est pas associé à un cycle bâtiment.")
+    _lock_buildings(db, [lot.cycle.id_batiment])
     # Refresh after waiting on any concurrent production writer.
     for row in lot.allocations:
         db.refresh(row)
@@ -75,7 +78,10 @@ def _validate_start(db, payload, excluded=()):
     if excluded:
         conflicts = conflicts.filter(CycleProduction.id_cycle.notin_(excluded))
     if conflicts.filter(CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES)).first():
-        raise HTTPException(status_code=400, detail="Un bâtiment a déjà un lot actif. Terminez ce lot avant une nouvelle arrivée.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce bâtiment a déjà un lot actif. Actualisez puis réessayez après sa clôture.",
+        )
     if conflicts.filter(CycleProduction.date_fin_reelle > payload.date_debut).first():
         raise HTTPException(status_code=400, detail="Cette arrivée chevauche un lot précédent dans un bâtiment.")
 
@@ -91,33 +97,38 @@ def _apply_schedule(lot, payload, user):
 def _sync_allocation(cycle, lot):
     # Keep existing SQL reports and dated lookups compatible during rollout.
     cycle.nom_cycle = lot.nom_lot
+    cycle.effectif_initial = lot.effectif_initial
     for field in ("souche", "date_debut", "age_depart_semaines", "duree_semaines", "date_fin_prevue", "date_fin_reelle", "statut", "notes"):
         setattr(cycle, field, getattr(lot, field))
     cycle.id_utilisateur_modification = lot.id_utilisateur_modification
 
 
 @router.get("")
-def list_lots(db: Session = Depends(get_db), current_user: Utilisateur = Depends(get_current_active_user)):
-    lots = db.query(LotProduction).options(
-        selectinload(LotProduction.allocations).selectinload(CycleProduction.batiment),
-    ).order_by(LotProduction.date_debut.desc(), LotProduction.id_lot.desc()).all()
+def list_lots(
+    id_batiment: int | None = None,
+    statut: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    query = db.query(LotProduction).join(
+        CycleProduction, CycleProduction.id_lot == LotProduction.id_lot,
+    ).options(
+        selectinload(LotProduction.cycle).selectinload(CycleProduction.batiment),
+    )
+    if id_batiment is not None:
+        query = query.filter(CycleProduction.id_batiment == id_batiment)
+    if statut:
+        query = query.filter(LotProduction.statut == statut)
+    lots = query.order_by(LotProduction.date_debut.desc(), LotProduction.id_lot.desc()).all()
     return [lot_to_dict(db, lot) for lot in lots]
 
 
 @router.post("", status_code=201)
 def create_lot(payload: LotProductionCreate, db: Session = Depends(get_db),
                current_user: Utilisateur = Depends(get_current_active_user)):
-    # Serialize arrivals across the whole farm, even with disjoint building IDs.
-    # The transaction-scoped PostgreSQL lock also covers the first-ever arrival
-    # when there is no lot row to lock, and is released on commit or rollback.
-    if db.get_bind().dialect.name == "postgresql":
-        db.execute(text("SELECT pg_advisory_xact_lock(741026, 1)"))
+    # Lock the single building. A partial unique index is the final defense
+    # against duplicate active cycles if a concurrent writer bypasses this lock.
     _lock_buildings(db, [row.id_batiment for row in payload.repartitions], require_active=True)
-    if db.query(LotProduction).filter(LotProduction.statut != "termine").first():
-        raise HTTPException(
-            status_code=400,
-            detail="Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot.",
-        )
     _validate_start(db, payload)
     lot = LotProduction(statut="actif", id_utilisateur_creation=current_user.id_utilisateur if current_user else None)
     _apply_schedule(lot, payload, current_user)
@@ -138,7 +149,7 @@ def create_lot(payload: LotProductionCreate, db: Session = Depends(get_db),
 @router.get("/{id_lot}/egg-evolution")
 def get_lot_egg_evolution(id_lot: int, db: Session = Depends(get_db),
                          current_user: Utilisateur = Depends(get_current_active_user)):
-    lot = db.query(LotProduction).options(selectinload(LotProduction.allocations)).filter(
+    lot = db.query(LotProduction).options(selectinload(LotProduction.cycle)).filter(
         LotProduction.id_lot == id_lot,
     ).first()
     if not lot:
@@ -149,15 +160,14 @@ def get_lot_egg_evolution(id_lot: int, db: Session = Depends(get_db),
 @router.put("/{id_lot}")
 def update_lot(id_lot: int, payload: LotProductionCreate, db: Session = Depends(get_db),
                current_user: Utilisateur = Depends(get_current_active_user)):
-    requested_ids = {row.id_batiment for row in payload.repartitions}
-    lot = _lock_lot(db, id_lot, requested_ids)
+    lot = _lock_lot(db, id_lot)
     if lot.statut == "termine":
         raise HTTPException(status_code=400, detail="Ce lot est terminé.")
-    existing_ids = {row.id_batiment for row in lot.allocations}
-    if not existing_ids.issubset(requested_ids):
-        raise HTTPException(status_code=400, detail="Une affectation existante doit être conservée pour préserver son historique.")
-    new_ids = requested_ids - existing_ids
-    _lock_buildings(db, sorted(new_ids), require_active=True)
+    if {row.id_batiment for row in payload.repartitions} != {row.id_batiment for row in lot.allocations}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le bâtiment d'un lot démarré ne peut pas changer.",
+        )
     ids = [row.id_cycle for row in lot.allocations]
     _validate_start(db, payload, ids)
     if db.query(Production).filter(
@@ -169,16 +179,9 @@ def update_lot(id_lot: int, payload: LotProductionCreate, db: Session = Depends(
     for cycle in lot.allocations:
         validate_cycle_mortality(db, cycle, 0, limit=counts[cycle.id_batiment])
     _apply_schedule(lot, payload, current_user)
+    db.flush()
     for cycle in lot.allocations:
-        cycle.effectif_initial = counts[cycle.id_batiment]
         _sync_allocation(cycle, lot)
-    for building_id in sorted(new_ids):
-        cycle = CycleProduction(
-            id_batiment=building_id, effectif_initial=counts[building_id],
-            id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
-        )
-        _sync_allocation(cycle, lot)
-        lot.allocations.append(cycle)
     db.commit()
     db.refresh(lot)
     return lot_to_dict(db, lot)
@@ -202,9 +205,9 @@ def terminate_lot(id_lot: int, payload: CycleProductionTerminate, db: Session = 
     lot.date_fin_reelle = end
     if current_user:
         lot.id_utilisateur_modification = current_user.id_utilisateur
+    db.flush()
     for cycle in lot.allocations:
         _sync_allocation(cycle, lot)
     db.commit()
     db.refresh(lot)
     return lot_to_dict(db, lot)
-
