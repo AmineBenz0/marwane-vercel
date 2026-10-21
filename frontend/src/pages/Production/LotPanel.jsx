@@ -175,7 +175,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
-              {managementMode ? (managementView === 'overview' ? 'Gestion des lots' : selected?.nom_lot || 'Détail du lot') : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
+              {managementMode ? (managementView === 'overview' ? 'Gestion des lots' : displayLotName(selected) || 'Détail du lot') : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
             </Typography>
             {!managementMode && loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
               color={selected.statut === 'termine' ? 'default' : 'success'} />}
