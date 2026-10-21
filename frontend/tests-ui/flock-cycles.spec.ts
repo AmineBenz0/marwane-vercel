@@ -70,7 +70,7 @@ for (const width of [390, 1200]) {
     await page.setViewportSize({ width, height: 1000 });
     const state = await mockFlock(page);
     await page.goto('/production/batiment/7?date=2026-10-05');
-    await expect(page.getByRole('region', { name: 'Production du bâtiment' }).getByText('98', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Production du bâtiment' }).getByText('Lot A', { exact: true })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Progression hebdomadaire des volailles' })).toBeVisible();
     await page.getByRole('button', { name: 'Détails de la semaine 1', exact: true }).click();
     await expect(page.getByText('Formule utilisée', { exact: true })).toBeVisible();
