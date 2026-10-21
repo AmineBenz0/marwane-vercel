@@ -1,0 +1,30 @@
+name: Resolve release dependency patches
+on:
+  push:
+    branches: ["codex/production-release-sweep"]
+permissions:
+  contents: read
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: cp package-lock.json /tmp/release-lock-before.json
+      - run: npm audit fix --package-lock-only --ignore-scripts --no-fund
+        continue-on-error: true
+      - name: Return dependency metadata for review
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const before = JSON.parse(fs.readFileSync('/tmp/release-lock-before.json'));
+          const after = JSON.parse(fs.readFileSync('package-lock.json'));
+          const changed = Object.fromEntries(Object.entries(after.packages).filter(([path, value]) => JSON.stringify(value) !== JSON.stringify(before.packages[path])));
+          const removed = Object.keys(before.packages).filter(path => !after.packages[path]);
+          console.log('LOCK_REFRESH_JSON=' + JSON.stringify({ changed, removed }));
+          NODE
