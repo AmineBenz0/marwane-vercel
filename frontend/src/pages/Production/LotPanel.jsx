@@ -331,10 +331,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                   <DateField label="Date de mise en place" required fullWidth value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
                   <Box sx={{ minWidth: 0 }}>
                     <TextField label="Nom du lot" required fullWidth inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => { setAutomaticName(false); setValues((old) => ({ ...old, nom_lot: event.target.value })); }} />
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mt: 0.5, minHeight: 24, flexWrap: 'wrap' }}>
-                      <Typography variant="caption" color="text.secondary">{automaticName ? 'Mis à jour avec la date et la souche' : 'Nom personnalisé'}</Typography>
-                      {!automaticName && <Button size="small" onClick={restoreAutomaticName} sx={{ minWidth: 0, p: 0, textTransform: 'none' }}>Rétablir le nom automatique</Button>}
-                    </Stack>
+                    {!automaticName && <Button size="small" onClick={restoreAutomaticName} sx={{ minWidth: 0, p: 0, mt: 0.5, alignSelf: 'flex-end', textTransform: 'none' }}>Rétablir le nom automatique</Button>}
                   </Box>
                 </Box>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
