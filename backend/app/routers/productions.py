@@ -35,7 +35,7 @@ from app.utils.production_cycles import (
     find_cycle_for_date,
     validate_cycle_date,
     validate_cycle_mortality,
-    suggested_formula,
+    formula_for_cycle,
     FORMULA_RANGES,
     refresh_cycle_status,
 )
@@ -269,10 +269,8 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         if operational_only:
             quantities["normal"] = 0
         formula = prod_in.formule
-        if not updating and cycle and "formule" not in prod_in.model_fields_set:
-            schedule = cycle_schedule(cycle)
-            age = schedule.age_depart_semaines + (prod_in.date_production - schedule.date_debut).days // 7
-            formula = suggested_formula(age)
+        if cycle and "formule" not in prod_in.model_fields_set:
+            formula = formula_for_cycle(db, cycle, prod_in.date_production)
 
         by_type = {}
         for record in existing:
