@@ -71,6 +71,7 @@ def test_week_boundaries_and_egg_evolution_are_scoped_to_one_building(
     assert weeks[1]["quantites"]["blanc"] == 25
     assert weeks[1]["quantites"]["casse"] == 5
     assert weeks[1]["quantites"]["normal"] is None
+    assert weeks[0]["quantites"]["blanc"] is None
     assert all(value is None for value in weeks[2]["quantites"].values())
     assert weeks[3]["partielle"] is True
     assert weeks[3]["saisies_attendues"] == 4

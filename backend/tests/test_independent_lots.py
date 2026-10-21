@@ -3,7 +3,6 @@ from datetime import date, timedelta
 from threading import Barrier
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
@@ -406,3 +405,4 @@ def test_closing_a_flock_does_not_remove_its_remaining_egg_stock(client, db_sess
     assert before["totals"]["available_eggs"] == 80
     assert after["totals"]["available_eggs"] == 80
     assert after["batiments"][0]["available_eggs"] == 80
+

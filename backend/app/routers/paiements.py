@@ -13,7 +13,6 @@ from types import SimpleNamespace
 from app.database import get_db
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
-from app.models.lettre_credit import LettreDeCredit
 from app.models.user import Utilisateur
 from app.services.ledger import record_correction
 from app.services.financial import payment_status, validate_payment_date, validate_payment_idempotency
@@ -603,5 +602,6 @@ def create_paiements_batch(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 
