@@ -3,14 +3,18 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LotPanel from './LotPanel';
 
-const { getLots, createLot, updateLot, terminateLot, assignHistory } = vi.hoisted(() => ({
+const { getLots, createLot, updateLot, terminateLot, assignHistory, getProductions, getBuildingVaccineExpenses } = vi.hoisted(() => ({
   getLots: vi.fn(), createLot: vi.fn(), updateLot: vi.fn(), terminateLot: vi.fn(), assignHistory: vi.fn(),
+  getProductions: vi.fn(), getBuildingVaccineExpenses: vi.fn(),
 }));
 
 vi.mock('../../services/productionService', () => ({
   lotProductionService: { getLots, createLot, updateLot, terminateLot },
   cycleProductionService: { assignHistory },
+  productionService: { getProductions, getBuildingVaccineExpenses },
 }));
+
+vi.mock('./LotEggChart', () => ({ default: () => <div>Évolution des œufs</div> }));
 
 const buildings = [
   { id_batiment: 1, nom: 'A', est_actif: true },
@@ -41,6 +45,8 @@ describe('LotPanel independent building lots', () => {
     updateLot.mockResolvedValue(activeLot);
     terminateLot.mockResolvedValue({ ...activeLot, statut: 'termine' });
     assignHistory.mockResolvedValue({});
+    getProductions.mockResolvedValue([]);
+    getBuildingVaccineExpenses.mockResolvedValue([]);
   });
 
   it('allows a new lot for a free building while another building has an active lot', async () => {
@@ -110,6 +116,30 @@ describe('LotPanel independent building lots', () => {
     expect(screen.getByText(/Âge à l’arrivée/)).toBeVisible();
     fireEvent.click(screen.getAllByRole('button', { name: 'Tous les lots' })[0]);
     expect(screen.getByRole('tab', { name: /Terminés/ })).toHaveAttribute('aria-selected', 'true');
+  });
+  it('loads historical records and vaccine expenses for the selected lot cycle', async () => {
+    getLots.mockResolvedValue([activeLot, lotB, historicalLot]);
+    getProductions.mockResolvedValue([{
+      id_production: 10, id_cycle: 1, date_production: '2026-09-15',
+      type_oeuf: 'normal', nombre_oeufs: 80, mortalite: 2, consommation_aliment_kg: 12,
+    }]);
+    getBuildingVaccineExpenses.mockResolvedValue([{
+      id_charge: 4, id_cycle: 1, date_charge: '2026-09-16',
+      nom_vaccin: 'Vaccin A', quantite: 1, unite: 'flacon', montant: 25,
+    }]);
+    render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole('tab', { name: /Terminés/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le lot' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Historique de production' }));
+
+    expect(await screen.findByRole('region', { name: 'Historique de production' })).toBeVisible();
+    await waitFor(() => expect(getProductions).toHaveBeenCalledWith(expect.objectContaining({
+      id_cycle: 1, date_debut: '2026-09-01', date_fin: '2026-09-30',
+    })));
+    expect(await screen.findByText('80')).toBeVisible();
+    expect(await screen.findByText('Vaccin A')).toBeVisible();
+    expect(screen.getByText('Évolution des œufs')).toBeVisible();
   });
 
 });
