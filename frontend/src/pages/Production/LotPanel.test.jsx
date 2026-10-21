@@ -12,6 +12,13 @@ vi.mock('../../services/productionService', () => ({
   cycleProductionService: { assignHistory },
 }));
 
+vi.stubGlobal('ResizeObserver', class {
+  constructor(callback) { this.callback = callback; }
+  observe() { this.callback([{ contentRect: { width: 800, height: 330 } }]); }
+  unobserve() {}
+  disconnect() {}
+});
+
 const buildings = [
   { id_batiment: 1, nom: 'A', est_actif: true },
   { id_batiment: 2, nom: 'B', est_actif: true },
