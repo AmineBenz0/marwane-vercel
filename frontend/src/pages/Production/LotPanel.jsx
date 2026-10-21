@@ -171,7 +171,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           {!filteredLots.length && <Typography color="text.secondary">Aucun lot ne correspond à ces filtres.</Typography>}
         </Stack>
       </>}
-      {activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par bâtiment">
+      {!managementMode && activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par bâtiment">
         {activeLots.map((lot) => {
           const cycle = lot.repartitions?.[0];
           return <Chip key={lot.id_lot} clickable color={String(lot.id_lot) === String(selected?.id_lot) ? 'primary' : 'default'}

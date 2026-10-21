@@ -60,6 +60,7 @@ describe('LotPanel independent building lots', () => {
   it('shows and selects multiple simultaneous lots independently', async () => {
     getLots.mockResolvedValue([activeLot, lotB]);
     renderPanel();
+    expect(await screen.findByLabelText('Lots actifs par bâtiment')).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: 'B : Lot B' }));
     expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible();
     expect(screen.getByText('Effectif restant')).toBeVisible();
@@ -89,6 +90,7 @@ describe('LotPanel independent building lots', () => {
     getLots.mockResolvedValue([activeLot, lotB, historicalLot]);
     render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
     expect(await screen.findByRole('button', { name: /A \| Lot en cours/ })).toBeVisible();
+    expect(screen.queryByLabelText('Lots actifs par bâtiment')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Filtrer par bâtiment'), { target: { value: '2' } });
     expect(screen.getByRole('button', { name: /B \| Lot B/ })).toBeVisible();
     expect(screen.queryByRole('button', { name: /A \| Lot en cours/ })).not.toBeInTheDocument();
