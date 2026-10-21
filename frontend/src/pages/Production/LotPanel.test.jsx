@@ -60,7 +60,7 @@ describe('LotPanel independent building lots', () => {
   it('shows and selects multiple simultaneous lots independently', async () => {
     getLots.mockResolvedValue([activeLot, lotB]);
     renderPanel();
-    expect(await screen.findByLabelText('Lots actifs par bâtiment')).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'B : Lot B' })).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: 'B : Lot B' }));
     expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible();
     expect(screen.getByText('Effectif restant')).toBeVisible();
