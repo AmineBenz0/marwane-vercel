@@ -37,11 +37,11 @@ const paymentSchema = yup.object().shape({
 });
 
 const lineSchema = yup.object().shape({
-  id_produit: yup
-    .number()
-    .typeError('Le produit est requis')
-    .required('Le produit est requis')
-    .positive('Le produit est requis'),
+  id_produit: optionalNumber(),
+  id_production: optionalNumber(),
+  date_production: yup.string().nullable(),
+  source_ready: yup.boolean(),
+  source_available: optionalNumber(),
   id_batiment: optionalNumber(),
   quantite: yup
     .number()
@@ -107,7 +107,32 @@ export const transactionValidationSchema = yup.object().shape({
   }),
   lignes: yup
     .array()
-    .of(lineSchema)
+    .when('type_entite', {
+      is: 'client',
+      then: (schema) => schema.of(lineSchema.shape({
+        id_batiment: optionalNumber().required('Le bâtiment source est requis').positive(),
+        date_production: yup.string().required('La date de la saisie est requise'),
+        id_production: optionalNumber().required('Choisissez le type d’œufs dans la saisie').positive(),
+        source_ready: yup.boolean().oneOf([true], 'Chargez une saisie de production disponible'),
+      })),
+      otherwise: (schema) => schema.of(lineSchema.shape({
+        id_produit: optionalNumber().required('Le produit est requis').positive('Le produit est requis'),
+      })),
+    })
+    .test('production-stock', 'Stock de production insuffisant', function(lines) {
+      if (this.parent.type_entite !== 'client') return true;
+      for (let i = 0; i < (lines || []).length; i += 1) {
+        const line = lines[i];
+        if (line.date_production > this.parent.date_transaction) return this.createError({
+          path: `lignes.${i}.date_production`, message: 'La vente ne peut pas précéder la production',
+        });
+        const requested = lines.reduce((sum, other) => Number(other.id_production) === Number(line.id_production) ? sum + Number(other.quantite || 0) : sum, 0);
+        if (line.source_available != null && requested > line.source_available) return this.createError({
+          path: `lignes.${i}.quantite`, message: 'La quantité dépasse le stock disponible de cette saisie',
+        });
+      }
+      return true;
+    })
     .min(1, 'Au moins une ligne est requise')
     .required('Au moins une ligne est requise'),
 });

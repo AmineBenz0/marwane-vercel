@@ -1,4 +1,5 @@
 import DateField from '../../utils/DateField';
+import ProductionSourcePicker from './ProductionSourcePicker';
 /**
  * Composant TransactionForm.
  * 
@@ -81,7 +82,7 @@ const getRequiredFieldAnimation = (error, animateInvalidFields) => (
     : undefined
 );
 
-const getFieldLabel = (path, typeEntite = 'client') => {
+const getFieldLabel = (path) => {
   const line = path.match(/^lignes\.(\d+)/);
   const lineSuffix = line ? ` (ligne ${Number(line[1]) + 1})` : '';
   const field = path.split('.').at(-1);
@@ -91,7 +92,11 @@ const getFieldLabel = (path, typeEntite = 'client') => {
     id_client: 'Client',
     id_fournisseur: 'Fournisseur',
     type_entite: 'Type de transaction',
-    id_produit: typeEntite === 'client' ? 'Produit vendu' : 'Produit acheté',
+    id_produit: 'Produit acheté',
+    id_production: 'Type d’œufs de la saisie',
+    id_batiment: 'Bâtiment source',
+    date_production: 'Date de la saisie',
+    source_ready: 'Saisie de production',
     quantite: 'Quantité',
     prix_unitaire: 'Prix unitaire',
     date: 'Date du paiement',
@@ -141,6 +146,7 @@ const mapApiLocationToFormPath = (location) => {
     quantite: 'quantite',
     prix_unitaire: 'prix_unitaire',
     id_batiment: 'id_batiment',
+    id_production: 'id_production',
   }[field];
   return lineField ? `lignes.${rowIndex}.${lineField}` : null;
 };
@@ -164,6 +170,9 @@ const createPaymentDefaults = (date = today()) => ({
 
 const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
   id_produit: '',
+  id_production: '',
+  date_production: '',
+  source_ready: false,
   id_batiment: prefillBatimentId || '',
   quantite: undefined,
   prix_unitaire: undefined,
@@ -394,6 +403,8 @@ function TransactionForm({
             lignes: [{
               ...createLineDefaults(initialValues.id_batiment || ''),
               id_produit: initialValues.id_produit || '',
+              id_production: initialValues.id_production || '',
+              date_production: initialValues.date_production || '',
               id_batiment: initialValues.id_batiment || '',
               quantite: initialValues.quantite || undefined,
               prix_unitaire: initialValues.prix_unitaire || undefined,
@@ -469,7 +480,9 @@ function TransactionForm({
           date_echeance: data.date_echeance || null,
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
-          id_produit: parseInt(data.lignes[0].id_produit),
+          ...(data.type_entite === 'client'
+            ? { id_production: Number(data.lignes[0].id_production) }
+            : { id_produit: Number(data.lignes[0].id_produit) }),
           id_batiment: data.type_entite === 'client' && data.lignes[0].id_batiment ? parseInt(data.lignes[0].id_batiment) : null,
           quantite: parseInt(data.lignes[0].quantite),
           prix_unitaire: parseFloat(data.lignes[0].prix_unitaire),
@@ -497,7 +510,9 @@ function TransactionForm({
           date_echeance: data.date_echeance || null,
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
-          id_produit: parseInt(ligne.id_produit),
+          ...(data.type_entite === 'client'
+            ? { id_production: Number(ligne.id_production) }
+            : { id_produit: Number(ligne.id_produit) }),
           id_batiment: data.type_entite === 'client' && ligne.id_batiment ? parseInt(ligne.id_batiment) : null,
           quantite: parseInt(ligne.quantite),
           prix_unitaire: parseFloat(ligne.prix_unitaire),
@@ -645,14 +660,7 @@ function TransactionForm({
     setValue('type_entite', newType, { shouldDirty: true });
     setValue('id_client', '', { shouldDirty: true });
     setValue('id_fournisseur', '', { shouldDirty: true });
-    if (newType !== 'client') {
-      const currentLignes = watch('lignes') || [];
-      setValue(
-        'lignes',
-        currentLignes.map((ligne) => ({ ...ligne, id_batiment: '' })),
-        { shouldDirty: true }
-      );
-    }
+    setValue('lignes', [createLineDefaults()], { shouldDirty: true });
 
     // Recharger les produits pour le type sélectionné
     setLoadingData(true);
@@ -729,7 +737,7 @@ function TransactionForm({
                 {isEditing ? 'Modifier la transaction' : 'Nouvelle transaction'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Choisissez le type, ajoutez les produits, puis validez.
+                Choisissez le partenaire et les lignes de vente ou d’achat, puis validez.
               </Typography>
             </Box>
             <IconButton onClick={handleClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
@@ -1045,7 +1053,7 @@ function TransactionForm({
                     <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
                     <Box>
                       <Typography variant="subtitle1" fontWeight={800}>Produits</Typography>
-                      <Typography variant="caption" color="text.secondary">Ajoutez les produits et leurs quantités.</Typography>
+                      <Typography variant="caption" color="text.secondary">Sélectionnez l’origine des œufs pour une vente ou les produits pour un achat.</Typography>
                     </Box>
                   </Box>
                   {!isEditing && (
@@ -1058,7 +1066,7 @@ function TransactionForm({
                       onClick={handleAddLine}
                       disabled={loading}
                     >
-                      Ajouter un produit
+                      {watchedTypeEntite === 'client' ? 'Ajouter une ligne de vente' : 'Ajouter un produit'}
                     </Button>
                   )}
                 </Box>
@@ -1075,8 +1083,7 @@ function TransactionForm({
                         const ligneTotal =
                           (parseFloat(ligne.quantite) || 0) *
                           (parseFloat(ligne.prix_unitaire) || 0);
-                  const selectedProduit = produits.find(p => Number(p.id_produit) === Number(ligne.id_produit));
-                  const shouldShowBatimentSource = watchedTypeEntite === 'client' && isEggProduct(selectedProduit);
+                  const shouldShowBatimentSource = watchedTypeEntite === 'client';
                   
                         return (
                     <Paper
@@ -1085,7 +1092,7 @@ function TransactionForm({
                       sx={{ p: { xs: 1.25, sm: 1.75 }, borderRadius: 2.5, bgcolor: 'background.paper' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, gap: 1 }}>
-                        <Typography variant="subtitle2" fontWeight={800}>Produit {index + 1}</Typography>
+                        <Typography variant="subtitle2" fontWeight={800}>{watchedTypeEntite === 'client' ? 'Vente' : 'Produit'} {index + 1}</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                           <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
                             <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total de la ligne : {ligneTotal.toFixed(2)} MAD</Typography>
@@ -1097,7 +1104,12 @@ function TransactionForm({
                           )}
                         </Box>
                       </Box>
+                      {shouldShowBatimentSource && <ProductionSourcePicker
+                        index={index} control={control} setValue={setValue} batiments={batiments}
+                        disabled={loading} transactionId={initialValues.id_transaction}
+                        saleDate={watch('date_transaction')} />}
                       <Grid container spacing={1.25}>
+                        {!shouldShowBatimentSource && <>
                         {/* Produit */}
                         <Grid item xs={12} md={4}>
                               <Controller
@@ -1144,6 +1156,7 @@ function TransactionForm({
                               />
                           </Grid>
 
+                          </>}
                           {/* Quantité */}
                           <Grid item xs={12} sm={6} md={4}>
                               <Controller
@@ -1210,37 +1223,7 @@ function TransactionForm({
                               />
                           </Grid>
 
-                          {shouldShowBatimentSource && (
-                            <Grid item xs={12}>
-                              <Controller
-                                name={`lignes.${index}.id_batiment`}
-                                control={control}
-                                render={({ field, fieldState: { error } }) => (
-                                  <TextField
-                                    {...field}
-                                    select
-                                    fullWidth
-                                    label="Batiment source pour le stock"
-                                    size="small"
-                                    value={field.value || ''}
-                                    error={!!error}
-                                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                                    helperText={error?.message || "Ce choix permet de retirer les oeufs vendus du bon batiment."}
-                                    disabled={loading}
-                                  >
-                                    <MenuItem value="">
-                                      <em>Choisir le batiment</em>
-                                    </MenuItem>
-                                    {batiments.map((batiment) => (
-                                      <MenuItem key={batiment.id_batiment} value={batiment.id_batiment}>
-                                        {batiment.nom}
-                                      </MenuItem>
-                                    ))}
-                                  </TextField>
-                                )}
-                              />
-                            </Grid>
-                          )}
+
 
                           <Grid item xs={12}>
                             <Divider />

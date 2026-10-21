@@ -1,0 +1,135 @@
+"""Trace egg sales to a daily production row without duplicating stock ledgers."""
+from collections import defaultdict
+
+from fastapi import HTTPException
+
+from app.models.batiment import Batiment
+from app.models.production import Production
+from app.models.produit import Produit
+from app.models.transaction import Transaction
+from app.utils.egg_product_sync import (
+    ensure_sellable_egg_product, parse_sellable_egg_product_name,
+)
+
+
+def source_balances(db, *, exclude_transaction_id=None, through_date=None):
+    """Reserve historical unlinked sales FIFO; never invent their provenance.
+
+    Legacy building sales consume that building's oldest remaining category.
+    Unassigned sales reserve remaining eggs globally. Linked sales take priority.
+    """
+    query = db.query(Production).filter(Production.est_actif.is_(True))
+    if through_date:
+        query = query.filter(Production.date_production <= through_date)
+    rows = query.order_by(Production.date_production, Production.id_production).all()
+    remaining = {p.id_production: int(p.nombre_oeufs) for p in rows}
+    by_category = defaultdict(list)
+    for p in rows:
+        by_category[(p.type_oeuf, p.calibre if p.type_oeuf == 'normal' else None)].append(p)
+    sales = db.query(Transaction, Produit.nom_produit).join(Produit).filter(
+        Transaction.est_actif.is_(True), Transaction.id_client.isnot(None),
+    )
+    if exclude_transaction_id:
+        sales = sales.filter(Transaction.id_transaction != exclude_transaction_id)
+    sales = sales.all()
+    for tx, _ in sales:
+        if tx.id_production in remaining:
+            remaining[tx.id_production] -= tx.quantite
+    # Building-specific reservations must precede global reservations.
+    legacy = sorted((item for item in sales if item[0].id_production is None),
+                    key=lambda item: (item[0].id_batiment is None, item[0].date_transaction, item[0].id_transaction))
+    for tx, name in legacy:
+        category = parse_sellable_egg_product_name(name)
+        if not category:
+            continue
+        quantity = tx.quantite
+        for p in by_category[category]:
+            if tx.id_batiment is not None and tx.id_batiment != p.id_batiment:
+                continue
+            used = min(quantity, max(0, remaining[p.id_production]))
+            remaining[p.id_production] -= used
+            quantity -= used
+            if not quantity:
+                break
+    return rows, remaining
+
+
+def resolve_sale_source(db, payload):
+    """Derive product, building and lot from the selected saisie on the server."""
+    if payload.id_production is None:
+        if payload.id_produit is None:
+            raise HTTPException(400, "Sélectionnez une production pour la vente ou un produit pour l'achat.")
+        # Lock before inserting a transaction: acquiring FOR UPDATE after an
+        # FK insert can deadlock against another request's FK key-share lock.
+        db.query(Produit).filter(Produit.id_produit == payload.id_produit).with_for_update().first()
+        return
+    source = db.get(Production, payload.id_production)
+    if not source:
+        raise HTTPException(404, "Saisie de production introuvable.")
+    db.query(Batiment).filter(Batiment.id_batiment == source.id_batiment).with_for_update().one()
+    db.refresh(source)
+    if not source.est_actif or source.type_oeuf in {'casse', 'perdu'} or source.nombre_oeufs <= 0:
+        raise HTTPException(400, "Cette production ne contient pas d'œufs vendables.")
+    if not payload.id_client or payload.id_fournisseur:
+        raise HTTPException(400, "La production source est réservée aux ventes clients.")
+    if payload.date_transaction < source.date_production:
+        raise HTTPException(400, "La vente ne peut pas précéder la date de production.")
+    product = ensure_sellable_egg_product(db, source.type_oeuf, source.calibre)
+    if not product:
+        raise HTTPException(400, "Calibre de production indisponible.")
+    db.query(Produit).filter(Produit.id_produit == product.id_produit).with_for_update().one()
+    for field, expected in [('id_batiment', source.id_batiment), ('id_produit', product.id_produit), ('id_cycle', source.id_cycle)]:
+        provided = getattr(payload, field)
+        if provided is not None and provided != expected:
+            raise HTTPException(400, "Le bâtiment, le lot ou le type ne correspond pas à la production choisie.")
+        setattr(payload, field, expected)
+
+
+def validate_sale_stock(db, transaction):
+    if transaction.id_production is None:
+        return
+    # Daily production corrections lock the same building first. The product
+    # lock also serializes sales across buildings when legacy sales are unassigned.
+    db.query(Batiment).filter(Batiment.id_batiment == transaction.id_batiment).with_for_update().one()
+    db.query(Produit).filter(Produit.id_produit == transaction.id_produit).with_for_update().one()
+    rows, balances = source_balances(db, exclude_transaction_id=transaction.id_transaction,
+                                    through_date=transaction.date_transaction)
+    source = next((p for p in rows if p.id_production == transaction.id_production), None)
+    if not source or source.type_oeuf in {'casse', 'perdu'}:
+        raise HTTPException(409, "La production sélectionnée n'est plus disponible.")
+    if transaction.quantite > balances[source.id_production]:
+        raise HTTPException(409, f"Stock insuffisant pour cette saisie : {max(0, balances[source.id_production])} œuf(s) disponible(s).")
+
+
+def protect_production_source(db, source, *, quantity=0, category=None, production_date=None, building_id=None):
+    """Do not remove or recategorize eggs already sold, including legacy reserves."""
+    if source.type_oeuf in {'casse', 'perdu'}:
+        return
+    product = ensure_sellable_egg_product(db, source.type_oeuf, source.calibre)
+    if product:
+        db.query(Produit).filter(Produit.id_produit == product.id_produit).with_for_update().one()
+    _, balances = source_balances(db)
+    reserved = int(source.nombre_oeufs) - balances.get(source.id_production, int(source.nombre_oeufs))
+    if reserved <= 0:
+        return
+    current_category = (source.type_oeuf, source.calibre)
+    if (quantity < reserved or (category is not None and category != current_category)
+            or (production_date is not None and production_date != source.date_production)
+            or (building_id is not None and building_id != source.id_batiment)):
+        raise HTTPException(409, "Des œufs de cette saisie sont déjà vendus. Annulez les ventes concernées avant de corriger leur origine ou de réduire la production.")
+
+
+def sale_sources(db, id_batiment, production_date, exclude_transaction_id=None):
+    # Exclusion is only for editing an existing sale from this building.
+    if exclude_transaction_id:
+        tx = db.get(Transaction, exclude_transaction_id)
+        if not tx or tx.id_batiment != id_batiment:
+            raise HTTPException(400, "Transaction incompatible avec ce bâtiment.")
+    rows, balances = source_balances(db, exclude_transaction_id=exclude_transaction_id)
+    return [{
+        'id_production': p.id_production, 'date_production': p.date_production,
+        'id_batiment': p.id_batiment, 'type_oeuf': p.type_oeuf, 'calibre': p.calibre,
+        'grammage': p.grammage, 'nombre_oeufs': p.nombre_oeufs,
+        'disponible': max(0, balances[p.id_production]) if p.type_oeuf not in {'casse', 'perdu'} else 0,
+        'vendable': p.type_oeuf not in {'casse', 'perdu'} and p.nombre_oeufs > 0,
+    } for p in rows if p.id_batiment == id_batiment and p.date_production == production_date]

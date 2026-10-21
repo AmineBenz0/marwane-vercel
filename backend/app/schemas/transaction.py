@@ -14,6 +14,7 @@ class TransactionBase(BaseModel):
     Schéma de base pour une transaction.
     Chaque transaction représente une ligne de vente/achat avec un seul produit.
     """
+    id_production: Optional[int] = Field(None, gt=0, description="Saisie de production source")
     date_transaction: date = Field(
         ...,
         description="Date de la transaction"
@@ -68,6 +69,7 @@ class TransactionCreate(TransactionBase):
     Schéma pour créer une nouvelle transaction.
     Le montant_total est calculé automatiquement si non fourni.
     """
+    id_produit: Optional[int] = Field(None, gt=0)
     montant_total: Optional[Decimal] = Field(
         None,
         gt=0,
@@ -133,6 +135,7 @@ class TransactionUpdate(BaseModel):
     Schéma pour mettre à jour une transaction.
     Tous les champs sont optionnels pour permettre des mises à jour partielles.
     """
+    id_production: Optional[int] = Field(None, gt=0)
     date_transaction: Optional[date] = Field(
         None,
         description="Date de la transaction"
@@ -248,6 +251,8 @@ class TransactionRead(TransactionBase):
     Schéma pour lire une transaction.
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
+    date_production: Optional[date] = None
+    nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")
     date_creation: datetime = Field(..., description="Date de création de la transaction")
     date_modification: datetime = Field(..., description="Date de dernière modification")
