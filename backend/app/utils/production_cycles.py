@@ -47,6 +47,40 @@ def suggested_formula(age_weeks: int) -> str:
                 if age_weeks >= first and (last is None or age_weeks <= last))
 
 
+def carried_formula(formula: Optional[str], source_age: int, target_age: int) -> str:
+    """Resume the schedule once it has met a saved exception, even across gaps."""
+    normal = suggested_formula(target_age)
+    bounds = next(((first, last) for first, last, label in FORMULA_RANGES
+                   if label == formula), None)
+    if not bounds or target_age < source_age:
+        return normal
+    first, last = bounds
+    if first <= target_age and (last is None or source_age <= last):
+        return normal
+    return formula
+
+
+def formula_for_cycle(db: Session, cycle: CycleProduction, target_date: date) -> str:
+    """Daily facts are the dated formula history; never borrow from another lot."""
+    schedule = cycle_schedule(cycle)
+    target_age = schedule.age_depart_semaines + max((target_date - schedule.date_debut).days, 0) // 7
+    previous = db.query(Production).filter(
+        Production.id_cycle == cycle.id_cycle,
+        Production.est_actif.is_(True),
+        Production.date_production >= schedule.date_debut,
+        Production.date_production <= target_date,
+    ).order_by(
+        Production.date_production.desc(),
+        # The shared formula is stored on just one of the day's egg-type rows.
+        Production.formule.isnot(None).desc(),
+        Production.id_production.asc(),
+    ).first()
+    if previous is None:
+        return suggested_formula(target_age)
+    source_age = schedule.age_depart_semaines + (previous.date_production - schedule.date_debut).days // 7
+    return carried_formula(previous.formule, source_age, target_age)
+
+
 def refresh_cycle_status(db: Session, cycle: Optional[CycleProduction], today: Optional[date] = None) -> Optional[CycleProduction]:
     # Only an explicit user action closes a flock, including legacy overdue lots.
     if cycle and cycle.statut == "a_cloturer":
@@ -179,7 +213,7 @@ def cycle_to_dict(db: Session, cycle: CycleProduction, today: Optional[date] = N
         "phase_code": phase_code,
         "phase_label": phase_label,
         "jours_restants": jours_restants,
-        "formule_suggeree": suggested_formula(age_semaines),
+        "formule_suggeree": formula_for_cycle(db, allocation, current_day),
         "date_creation": cycle.date_creation,
         "date_modification": cycle.date_modification,
         "id_utilisateur_creation": cycle.id_utilisateur_creation,
