@@ -27,8 +27,9 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
-  const [buildingFilter, setBuildingFilter] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [buildingFilter, setBuildingFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [managementView, setManagementView] = useState('overview');
 
   useEffect(() => {
     let cancelled = false;
@@ -41,21 +42,17 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   }, [refreshKey, revision]);
 
   const activeLots = lots.filter((lot) => lot.statut !== 'termine');
-  const defaultSelectedLot = lots.find((lot) => String(lot.id_lot) === selectedId)
-    || activeLots[0] || lots[0];
-  const defaultBuildingId = defaultSelectedLot?.repartitions?.[0]?.id_batiment;
-  const effectiveBuildingFilter = buildingFilter === null
-    ? (defaultBuildingId == null ? '' : String(defaultBuildingId))
-    : buildingFilter;
   const filteredLots = managementMode ? lots.filter((lot) => {
     const cycle = lot.repartitions?.[0];
-    const matchesBuilding = !effectiveBuildingFilter || String(cycle?.id_batiment) === effectiveBuildingFilter;
-    const matchesStatus = statusFilter === 'all'
-      || (statusFilter === 'active' ? lot.statut !== 'termine' : lot.statut === 'termine');
-    return matchesBuilding && matchesStatus;
+    const isFinished = lot.statut === 'termine';
+    const matchesStatus = statusFilter === 'finished' ? isFinished : !isFinished;
+    const matchesBuilding = statusFilter !== 'finished' || !buildingFilter
+      || String(cycle?.id_batiment) === buildingFilter;
+    return matchesStatus && matchesBuilding;
   }) : lots;
-  const selected = filteredLots.find((lot) => String(lot.id_lot) === selectedId)
-    || filteredLots.find((lot) => lot.statut !== 'termine') || filteredLots[0];
+  const selected = managementMode
+    ? lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0]
+    : lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0];
   const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
   const available = buildings.filter((building) => building.est_actif !== false
     && !occupied.has(Number(building.id_batiment)));
@@ -117,6 +114,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           : await lotProductionService.updateLot(selected.id_lot, data);
       }
       setSelectedId(String(result.id_lot));
+      if (managementMode) setManagementView('details');
       setDialog('');
       setValues({});
       setRevision((old) => old + 1);
@@ -131,12 +129,12 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
-              {loaded && selected ? selected.nom_lot : 'Lots de volailles'}
+              {managementMode ? (managementView === 'overview' ? 'Gestion des lots' : selected?.nom_lot || 'Détail du lot') : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
             </Typography>
-            {loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
+            {!managementMode && loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
               color={selected.statut === 'termine' ? 'default' : 'success'} />}
           </Stack>
-          {loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+          {!managementMode && loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
             {selectedCycle?.nom_batiment || 'Bâtiment'} | Arrivée le {formatShortDate(selected.date_debut)}
             {selected.souche ? ' | Souche : ' + selected.souche : ''}
             {selected.date_fin_prevue ? ' | Fin prévue le ' + formatShortDate(selected.date_fin_prevue) : ''}
@@ -144,51 +142,73 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           </Typography>}
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
-          {loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
-          {loaded && available.length > 0 && <Button variant="contained" onClick={() => open('create')} disabled={!!error}>Démarrer un lot</Button>}
+          {!managementMode && loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
+          {managementMode && loaded && managementView === 'details' && <Button size="small" onClick={() => { setManagementView('overview'); setStatusFilter(selected?.statut === 'termine' ? 'finished' : 'active'); }}>Tous les lots</Button>}
+          {loaded && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
         </Stack>
       </Stack>
-      {managementMode && loaded && <>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
-          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
-            value={effectiveBuildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
+      {managementMode && loaded && managementView === 'overview' && <>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={1} role="tablist" aria-label="État des lots">
+            <Button role="tab" aria-selected={statusFilter === 'active'} variant={statusFilter === 'active' ? 'contained' : 'outlined'}
+              onClick={() => { setStatusFilter('active'); setSelectedId(''); }}>En cours ({activeLots.length})</Button>
+            <Button role="tab" aria-selected={statusFilter === 'finished'} variant={statusFilter === 'finished' ? 'contained' : 'outlined'}
+              onClick={() => { setStatusFilter('finished'); setSelectedId(''); }}>Terminés ({lots.length - activeLots.length})</Button>
+          </Stack>
+          {statusFilter === 'finished' && <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
+            value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
             sx={{ minWidth: { xs: '100%', sm: 220 } }}>
             <option value="">Tous les bâtiments</option>
             {buildings.map((building) => <option key={building.id_batiment} value={building.id_batiment}>{building.nom}</option>)}
-          </TextField>
-          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par statut"
-            value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}
-            sx={{ minWidth: { xs: '100%', sm: 220 } }}>
-            <option value="all">Tous les statuts</option>
-            <option value="active">Actifs</option>
-            <option value="finished">Terminés</option>
-          </TextField>
+          </TextField>}
         </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}
-          aria-label="Lots filtrés">
+        {filteredLots.length ? <Box component="section" aria-label={statusFilter === 'active' ? 'Lots en cours' : 'Lots terminés'}
+          sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
           {filteredLots.map((lot) => {
             const cycle = lot.repartitions?.[0];
-            const label = `${cycle?.nom_batiment || 'Bâtiment'} | ${lot.nom_lot} | ${formatShortDate(lot.date_debut)}`;
-            return <Button key={lot.id_lot} size="small" variant={String(lot.id_lot) === String(selected?.id_lot) ? 'contained' : 'outlined'}
-              onClick={() => setSelectedId(String(lot.id_lot))} aria-pressed={String(lot.id_lot) === String(selected?.id_lot)}>
-              {label} · {lot.statut === 'termine' ? 'Terminé' : 'Actif'}
-            </Button>;
+            const finished = lot.statut === 'termine';
+            return <Box component="article" key={lot.id_lot} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="overline" color="text.secondary">{cycle?.nom_batiment || 'Bâtiment'}</Typography>
+                  <Typography variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.nom_lot}</Typography>
+                </Box>
+                <Chip size="small" label={finished ? 'Terminé' : 'En cours'} color={finished ? 'default' : 'success'} />
+              </Stack>
+              <Box sx={{ mt: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                <Fact label={finished ? 'Volailles à la fin' : 'Volailles présentes'} value={number(lot.effectif_actuel)} />
+                <Fact label={finished ? 'Âge à la fin' : 'Âge aujourd’hui'} value={lot.age_semaines == null ? '-' : lot.age_semaines + ' semaines'} />
+              </Box>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(lot.date_debut)}</Typography>
+                  {finished && lot.date_fin_reelle && <Typography variant="body2" color="text.secondary">Fin le {formatShortDate(lot.date_fin_reelle)}</Typography>}
+                </Box>
+                <Button size="small" onClick={() => { setSelectedId(String(lot.id_lot)); setManagementView('details'); }}>
+                  Voir le lot
+                </Button>
+              </Stack>
+            </Box>;
           })}
-          {!filteredLots.length && <Typography color="text.secondary">Aucun lot ne correspond à ces filtres.</Typography>}
-        </Stack>
+        </Box> : <Box sx={{ mt: 3, p: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+          <Typography fontWeight={700}>Aucun lot {statusFilter === 'active' ? 'en cours' : 'terminé'}{statusFilter === 'finished' && buildingFilter ? ' dans ce bâtiment' : ''}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {statusFilter === 'active' ? 'Démarrez un lot pour accueillir de nouvelles volailles.' : 'Les lots terminés apparaîtront ici.'}
+          </Typography>
+        </Box>}
       </>}
-      {!managementMode && activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par bâtiment">
-        {activeLots.map((lot) => {
-          const cycle = lot.repartitions?.[0];
-          return <Chip key={lot.id_lot} clickable color={String(lot.id_lot) === String(selected?.id_lot) ? 'primary' : 'default'}
-            label={`${cycle?.nom_batiment || 'Bâtiment'} : ${lot.nom_lot}`}
-            onClick={() => setSelectedId(String(lot.id_lot))} />;
-        })}
-      </Stack>}
       {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
-      {loaded && !selected && <Typography color="text.secondary" sx={{ mt: 2 }}>Démarrez un lot indépendant pour chaque bâtiment actif.</Typography>}
-      {loaded && selected && <>
+      {loaded && !selected && !managementMode && <Typography color="text.secondary" sx={{ mt: 2 }}>Démarrez un lot indépendant pour chaque bâtiment actif.</Typography>}
+      {loaded && selected && (!managementMode || managementView === 'details') && <>
+        {managementMode && <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+          <Typography variant="subtitle1" fontWeight={800}>{selectedCycle?.nom_batiment || 'Bâtiment'} · {selected.statut === 'termine' ? 'Lot terminé' : 'Lot en cours'}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Arrivée le {formatShortDate(selected.date_debut)}{selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}</Typography>
+          <Divider sx={{ my: 1.5 }} />
+          <Typography variant="body2">Souche : {selected.souche || 'Non renseignée'} · Âge à l’arrivée : {selected.age_depart_semaines ?? 0} semaines</Typography>
+          {selected.date_fin_prevue && <Typography variant="body2" sx={{ mt: 0.5 }}>Fin prévue : {formatShortDate(selected.date_fin_prevue)} (indicative)</Typography>}
+          {selected.notes && <Typography variant="body2" sx={{ mt: 0.5 }}>Notes : {selected.notes}</Typography>}
+        </Box>}
         {selected.statut === 'termine' && activeLots.length > 0 && <Button size="small" onClick={() => setSelectedId(String(activeLots[0].id_lot))} sx={{ mt: 1 }}>Revenir aux lots en cours</Button>}
         <Box sx={{ mt: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 } }}>
           <Fact label="Effectif restant" value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' entrants'} color="primary.main" />
@@ -197,7 +217,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           <Fact label="Formule d'aliment" value={selected.formule_suggeree || '-'} />
         </Box>
         <Divider sx={{ mt: 2.5, mb: 2 }} />
-        {selectedCycle && <Box component="section" aria-label="Bâtiment du lot" sx={{ mb: 2 }}>
+        {selectedCycle && !managementMode && <Box component="section" aria-label="Bâtiment du lot" sx={{ mb: 2 }}>
           <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1 }}>Bâtiment rattaché</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1}>
             <Typography fontWeight={600}>{selectedCycle.nom_batiment}</Typography>
@@ -207,7 +227,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                 setError('');
                 setHistoryCycle(selectedCycle);
                 setHistoryPeriod({ date_debut: selected.date_debut, date_fin: selected.date_fin_reelle || localToday() });
-              }}>Rattacher les saisies sans cycle</Button>
+              }}>Rattacher les saisies sans cycle</Button>}
             </Stack>
           </Stack>
         </Box>}
