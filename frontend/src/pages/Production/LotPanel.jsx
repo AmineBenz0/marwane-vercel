@@ -11,7 +11,8 @@ import LotEggChart from './LotEggChart';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
-const displayLotName = (lot) => lot.nom_lot?.replace(/\s+en cours$/i, '').trim() || lot.nom_lot;
+const displayLotName = (lot) => lot.statut === 'termine' ? lot.nom_lot
+  : lot.nom_lot?.replace(/\s+en cours$/i, '').trim() || lot.nom_lot;
 const message = (error) => {
   const detail = error.data?.detail || error.response?.data?.detail;
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
