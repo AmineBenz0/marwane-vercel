@@ -133,7 +133,7 @@ describe('LotPanel independent building lots', () => {
     render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole('tab', { name: /Terminés/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Voir le lot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Historique de production' }));
 
     expect(await screen.findByRole('region', { name: 'Historique de production' })).toBeVisible();
