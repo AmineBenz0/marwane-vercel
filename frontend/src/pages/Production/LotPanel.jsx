@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, MenuItem, Stack, TextField, Typography,
+  Divider, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
-import { cycleProductionService, lotProductionService } from '../../services/productionService';
+import { cycleProductionService, lotProductionService, productionService } from '../../services/productionService';
+import LotEggChart from './LotEggChart';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
@@ -27,8 +28,15 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
-  const [buildingFilter, setBuildingFilter] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [buildingFilter, setBuildingFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [managementView, setManagementView] = useState('overview');
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyVaccines, setHistoryVaccines] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -41,25 +49,58 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   }, [refreshKey, revision]);
 
   const activeLots = lots.filter((lot) => lot.statut !== 'termine');
-  const defaultSelectedLot = lots.find((lot) => String(lot.id_lot) === selectedId)
-    || activeLots[0] || lots[0];
-  const defaultBuildingId = defaultSelectedLot?.repartitions?.[0]?.id_batiment;
-  const effectiveBuildingFilter = buildingFilter === null
-    ? (defaultBuildingId == null ? '' : String(defaultBuildingId))
-    : buildingFilter;
   const filteredLots = managementMode ? lots.filter((lot) => {
     const cycle = lot.repartitions?.[0];
-    const matchesBuilding = !effectiveBuildingFilter || String(cycle?.id_batiment) === effectiveBuildingFilter;
-    const matchesStatus = statusFilter === 'all'
-      || (statusFilter === 'active' ? lot.statut !== 'termine' : lot.statut === 'termine');
-    return matchesBuilding && matchesStatus;
+    const isFinished = lot.statut === 'termine';
+    const matchesStatus = statusFilter === 'finished' ? isFinished : !isFinished;
+    const matchesBuilding = statusFilter !== 'finished' || !buildingFilter
+      || String(cycle?.id_batiment) === buildingFilter;
+    return matchesStatus && matchesBuilding;
   }) : lots;
-  const selected = filteredLots.find((lot) => String(lot.id_lot) === selectedId)
-    || filteredLots.find((lot) => lot.statut !== 'termine') || filteredLots[0];
+  const selected = managementMode
+    ? lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0]
+    : lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0];
+  const selectedCycle = selected?.repartitions?.[0];
+  const selectedLotId = selected?.id_lot;
+  const selectedStartDate = selected?.date_debut;
+  const selectedEndDate = selected?.date_fin_reelle;
+  const selectedCycleId = selectedCycle?.id_cycle;
+  const selectedBuildingId = selectedCycle?.id_batiment;
+  useEffect(() => {
+    if (!managementMode || managementView !== 'history' || !selectedLotId || !selectedCycleId || !selectedBuildingId) return undefined;
+    let cancelled = false;
+    const dateFrom = historyFrom || selectedStartDate;
+    const dateTo = historyTo || selectedEndDate || localToday();
+    setHistoryLoading(true);
+    setHistoryError('');
+    const loadRows = async () => {
+      const rows = [];
+      let page;
+      do {
+        page = await productionService.getProductions({
+          id_cycle: selectedCycleId, date_debut: dateFrom, date_fin: dateTo,
+          skip: rows.length, limit: 500,
+        });
+        rows.push(...page);
+      } while (page.length === 500);
+      return rows;
+    };
+    Promise.all([
+      loadRows(),
+      productionService.getBuildingVaccineExpenses(selectedBuildingId),
+    ]).then(([rows, charges]) => {
+      if (cancelled) return;
+      setHistoryRows(rows);
+      setHistoryVaccines((charges || []).filter((charge) => Number(charge.id_cycle) === Number(selectedCycleId)
+        && charge.date_charge >= dateFrom && charge.date_charge <= dateTo));
+    }).catch((err) => {
+      if (!cancelled) setHistoryError(message(err));
+    }).finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [managementMode, managementView, selectedLotId, selectedStartDate, selectedEndDate, selectedCycleId, selectedBuildingId, historyFrom, historyTo]);
   const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
   const available = buildings.filter((building) => building.est_actif !== false
     && !occupied.has(Number(building.id_batiment)));
-  const selectedCycle = selected?.repartitions?.[0];
 
   const open = (kind) => {
     if (kind === 'create' && (!loaded || !available.length)) return;
@@ -117,6 +158,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           : await lotProductionService.updateLot(selected.id_lot, data);
       }
       setSelectedId(String(result.id_lot));
+      if (managementMode) setManagementView('details');
       setDialog('');
       setValues({});
       setRevision((old) => old + 1);
@@ -131,12 +173,12 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
-              {loaded && selected ? selected.nom_lot : 'Lots de volailles'}
+              {managementMode ? (managementView === 'overview' ? 'Gestion des lots' : selected?.nom_lot || 'Détail du lot') : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
             </Typography>
-            {loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
+            {!managementMode && loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
               color={selected.statut === 'termine' ? 'default' : 'success'} />}
           </Stack>
-          {loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+          {!managementMode && loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
             {selectedCycle?.nom_batiment || 'Bâtiment'} | Arrivée le {formatShortDate(selected.date_debut)}
             {selected.souche ? ' | Souche : ' + selected.souche : ''}
             {selected.date_fin_prevue ? ' | Fin prévue le ' + formatShortDate(selected.date_fin_prevue) : ''}
@@ -144,38 +186,61 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           </Typography>}
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
-          {loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
-          {loaded && available.length > 0 && <Button variant="contained" onClick={() => open('create')} disabled={!!error}>Démarrer un lot</Button>}
+          {!managementMode && loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
+          {managementMode && loaded && managementView === 'details' && <Button size="small" onClick={() => { setManagementView('overview'); setStatusFilter(selected?.statut === 'termine' ? 'finished' : 'active'); }}>Tous les lots</Button>}
+          {managementMode && loaded && managementView === 'history' && <Button size="small" onClick={() => setManagementView('details')}>Résumé du lot</Button>}
+          {loaded && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
         </Stack>
       </Stack>
-      {managementMode && loaded && <>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
-          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
-            value={effectiveBuildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
+      {managementMode && loaded && managementView === 'overview' && <>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={1} role="tablist" aria-label="État des lots">
+            <Button role="tab" aria-selected={statusFilter === 'active'} variant={statusFilter === 'active' ? 'contained' : 'outlined'}
+              onClick={() => { setStatusFilter('active'); setSelectedId(''); }}>En cours ({activeLots.length})</Button>
+            <Button role="tab" aria-selected={statusFilter === 'finished'} variant={statusFilter === 'finished' ? 'contained' : 'outlined'}
+              onClick={() => { setStatusFilter('finished'); setSelectedId(''); }}>Terminés ({lots.length - activeLots.length})</Button>
+          </Stack>
+          {statusFilter === 'finished' && <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
+            value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
             sx={{ minWidth: { xs: '100%', sm: 220 } }}>
             <option value="">Tous les bâtiments</option>
             {buildings.map((building) => <option key={building.id_batiment} value={building.id_batiment}>{building.nom}</option>)}
-          </TextField>
-          <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par statut"
-            value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}
-            sx={{ minWidth: { xs: '100%', sm: 220 } }}>
-            <option value="all">Tous les statuts</option>
-            <option value="active">Actifs</option>
-            <option value="finished">Terminés</option>
-          </TextField>
+          </TextField>}
         </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}
-          aria-label="Lots filtrés">
+        {filteredLots.length ? <Box component="section" aria-label={statusFilter === 'active' ? 'Lots en cours' : 'Lots terminés'}
+          sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
           {filteredLots.map((lot) => {
             const cycle = lot.repartitions?.[0];
-            const label = `${cycle?.nom_batiment || 'Bâtiment'} | ${lot.nom_lot} | ${formatShortDate(lot.date_debut)}`;
-            return <Button key={lot.id_lot} size="small" variant={String(lot.id_lot) === String(selected?.id_lot) ? 'contained' : 'outlined'}
-              onClick={() => setSelectedId(String(lot.id_lot))} aria-pressed={String(lot.id_lot) === String(selected?.id_lot)}>
-              {label} · {lot.statut === 'termine' ? 'Terminé' : 'Actif'}
-            </Button>;
+            const finished = lot.statut === 'termine';
+            return <Box component="article" key={lot.id_lot} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="overline" color="text.secondary">{cycle?.nom_batiment || 'Bâtiment'}</Typography>
+                  <Typography variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.nom_lot}</Typography>
+                </Box>
+                <Chip size="small" label={finished ? 'Terminé' : 'En cours'} color={finished ? 'default' : 'success'} />
+              </Stack>
+              <Box sx={{ mt: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                <Fact label={finished ? 'Volailles à la fin' : 'Volailles présentes'} value={number(lot.effectif_actuel)} />
+                <Fact label={finished ? 'Âge à la fin' : 'Âge aujourd’hui'} value={lot.age_semaines == null ? '-' : lot.age_semaines + ' semaines'} />
+              </Box>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(lot.date_debut)}</Typography>
+                  {finished && lot.date_fin_reelle && <Typography variant="body2" color="text.secondary">Fin le {formatShortDate(lot.date_fin_reelle)}</Typography>}
+                </Box>
+                <Button size="small" onClick={() => { setSelectedId(String(lot.id_lot)); setManagementView('details'); }}>
+                  Voir le lot
+                </Button>
+              </Stack>
+            </Box>;
           })}
-          {!filteredLots.length && <Typography color="text.secondary">Aucun lot ne correspond à ces filtres.</Typography>}
-        </Stack>
+        </Box> : <Box sx={{ mt: 3, p: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+          <Typography fontWeight={700}>Aucun lot {statusFilter === 'active' ? 'en cours' : 'terminé'}{statusFilter === 'finished' && buildingFilter ? ' dans ce bâtiment' : ''}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {statusFilter === 'active' ? 'Démarrez un lot pour accueillir de nouvelles volailles.' : 'Les lots terminés apparaîtront ici.'}
+          </Typography>
+        </Box>}
       </>}
       {!managementMode && activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par bâtiment">
         {activeLots.map((lot) => {
@@ -187,17 +252,25 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       </Stack>}
       {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
-      {loaded && !selected && <Typography color="text.secondary" sx={{ mt: 2 }}>Démarrez un lot indépendant pour chaque bâtiment actif.</Typography>}
-      {loaded && selected && <>
-        {selected.statut === 'termine' && activeLots.length > 0 && <Button size="small" onClick={() => setSelectedId(String(activeLots[0].id_lot))} sx={{ mt: 1 }}>Revenir aux lots en cours</Button>}
+      {loaded && !selected && !managementMode && <Typography color="text.secondary" sx={{ mt: 2 }}>Démarrez un lot indépendant pour chaque bâtiment actif.</Typography>}
+      {loaded && selected && (!managementMode || ['details', 'history'].includes(managementView)) && <>
+        {managementMode && <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+          <Typography variant="subtitle1" fontWeight={800}>{selectedCycle?.nom_batiment || 'Bâtiment'} · {selected.statut === 'termine' ? 'Lot terminé' : 'Lot en cours'}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Arrivée le {formatShortDate(selected.date_debut)}{selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}</Typography>
+          <Divider sx={{ my: 1.5 }} />
+          <Typography variant="body2">Souche : {selected.souche || 'Non renseignée'} · Âge à l’arrivée : {selected.age_depart_semaines ?? 0} semaines</Typography>
+          {selected.date_fin_prevue && <Typography variant="body2" sx={{ mt: 0.5 }}>Fin prévue : {formatShortDate(selected.date_fin_prevue)} (indicative)</Typography>}
+          {selected.notes && <Typography variant="body2" sx={{ mt: 0.5 }}>Notes : {selected.notes}</Typography>}
+        </Box>}
+        {!managementMode && selected.statut === 'termine' && activeLots.length > 0 && <Button size="small" onClick={() => setSelectedId(String(activeLots[0].id_lot))} sx={{ mt: 1 }}>Revenir aux lots en cours</Button>}
         <Box sx={{ mt: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 } }}>
-          <Fact label="Effectif restant" value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' entrants'} color="primary.main" />
+          <Fact label={selected.statut === 'termine' ? 'Volailles à la fin' : 'Volailles présentes'} value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' à l’arrivée'} color="primary.main" />
           <Fact label="Mortalité cumulée" value={number(selected.mortalite_totale)} />
-          <Fact label="Age" value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
+          <Fact label={selected.statut === 'termine' ? 'Âge à la fin' : 'Âge aujourd’hui'} value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
           <Fact label="Formule d'aliment" value={selected.formule_suggeree || '-'} />
         </Box>
         <Divider sx={{ mt: 2.5, mb: 2 }} />
-        {selectedCycle && <Box component="section" aria-label="Bâtiment du lot" sx={{ mb: 2 }}>
+        {selectedCycle && !managementMode && <Box component="section" aria-label="Bâtiment du lot" sx={{ mb: 2 }}>
           <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1 }}>Bâtiment rattaché</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1}>
             <Typography fontWeight={600}>{selectedCycle.nom_batiment}</Typography>
@@ -211,11 +284,72 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             </Stack>
           </Stack>
         </Box>}
-        {selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        {managementMode && managementView === 'details' && <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+          <Button variant="outlined" startIcon={<History />} onClick={() => {
+            setHistoryFrom(selected.date_debut);
+            setHistoryTo(selected.date_fin_reelle || localToday());
+            setManagementView('history');
+          }}>Historique de production</Button>
+        </Stack>}
+        {managementMode && managementView === 'history' && <Box component="section" aria-label="Historique de production" sx={{ mt: 3 }}>
+          <Typography variant="h6" fontWeight={800}>Historique de production</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Saisies rattachées à {selectedCycle?.nom_batiment} et à ce lot uniquement.</Typography>
+          <LotEggChart key={selected.id_lot} lotId={selected.id_lot} refreshKey={revision} />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} sx={{ my: 2 }}>
+            <TextField type="date" size="small" label="Du" InputLabelProps={{ shrink: true }} value={historyFrom}
+              inputProps={{ min: selected.date_debut, max: historyTo || selected.date_fin_reelle || localToday() }}
+              onChange={(event) => setHistoryFrom(event.target.value)} />
+            <TextField type="date" size="small" label="Au" InputLabelProps={{ shrink: true }} value={historyTo}
+              inputProps={{ min: historyFrom || selected.date_debut, max: selected.date_fin_reelle || localToday() }}
+              onChange={(event) => setHistoryTo(event.target.value)} />
+            <Button variant="outlined" disabled={historyLoading || (!historyRows.length && !historyVaccines.length)} onClick={() => {
+              const rows = [
+                ['Catégorie', 'Date', 'Lot', 'Type / détail', 'Œufs', 'Mortalité', 'Aliment (kg)', 'Montant'],
+                ...historyRows.map((row) => ['Production', row.date_production, selected.nom_lot, row.type_oeuf, row.nombre_oeufs, row.mortalite ?? '', row.consommation_aliment_kg ?? '', '']),
+                ...historyVaccines.map((row) => ['Vaccin', row.date_charge, selected.nom_lot, row.nom_vaccin || row.libelle, '', '', '', row.montant]),
+              ];
+              const escape = (value) => {
+                const safe = String(value ?? '').replace(/^[=+@-]/, "'$&");
+                return '"' + safe.replace(/"/g, '""') + '"';
+              };
+              const csv = '\uFEFF' + rows.map((row) => row.map(escape).join(';')).join('\r\n');
+              const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+              const link = document.createElement('a');
+              link.href = url; link.download = 'historique-' + selected.id_lot + '.csv'; link.click();
+              URL.revokeObjectURL(url);
+            }}>Exporter l’historique</Button>
+          </Stack>
+          {historyError && <Alert severity="error" sx={{ mb: 2 }}>{historyError}</Alert>}
+          {historyLoading ? <Typography>Chargement de l’historique...</Typography> : <>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Saisies quotidiennes</Typography>
+            {historyRows.length ? <TableContainer sx={{ maxHeight: 420, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Table size="small" stickyHeader aria-label="Saisies de production historiques">
+                <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Type d’œuf</TableCell><TableCell align="right">Œufs</TableCell><TableCell align="right">Mortalité</TableCell><TableCell align="right">Aliment (kg)</TableCell></TableRow></TableHead>
+                <TableBody>{historyRows.map((row) => <TableRow key={row.id_production}>
+                  <TableCell>{formatShortDate(row.date_production)}</TableCell><TableCell>{row.type_oeuf}</TableCell>
+                  <TableCell align="right">{number(row.nombre_oeufs)}</TableCell>
+                  <TableCell align="right">{number(row.mortalite)}</TableCell>
+                  <TableCell align="right">{number(row.consommation_aliment_kg)}</TableCell>
+                </TableRow>)}</TableBody>
+              </Table>
+            </TableContainer> : <Typography color="text.secondary">Aucune saisie de production sur cette période.</Typography>}
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 2, mb: 1 }}>Dépenses de vaccins</Typography>
+            {historyVaccines.length ? <TableContainer sx={{ maxHeight: 300, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Table size="small" stickyHeader aria-label="Dépenses de vaccins historiques">
+                <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Vaccin</TableCell><TableCell align="right">Quantité</TableCell><TableCell align="right">Montant</TableCell></TableRow></TableHead>
+                <TableBody>{historyVaccines.map((row) => <TableRow key={row.id_charge}>
+                  <TableCell>{formatShortDate(row.date_charge)}</TableCell><TableCell>{row.nom_vaccin || row.libelle}</TableCell>
+                  <TableCell align="right">{number(row.quantite)} {row.unite || ''}</TableCell><TableCell align="right">{number(row.montant)}</TableCell>
+                </TableRow>)}</TableBody>
+              </Table>
+            </TableContainer> : <Typography color="text.secondary">Aucune dépense de vaccin rattachée à ce lot sur cette période.</Typography>}
+          </>}
+        </Box>}
+        {(!managementMode || managementView === 'details') && (selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
           <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}
             sx={{ color: 'error.main', borderColor: 'error.main', '&:hover': { color: 'error.dark', borderColor: 'error.dark', bgcolor: 'action.hover' } }}>Terminer ce lot</Button>
-        </Stack> : <Typography variant="body2" color="text.secondary">Ce lot est terminé pour son bâtiment.</Typography>}
+        </Stack> : <Typography variant="body2" color="text.secondary">Ce lot est terminé pour son bâtiment.</Typography>)}
       </>}
       <Dialog open={!!historyCycle} onClose={() => { if (!saving) { setHistoryCycle(null); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submitHistory}>

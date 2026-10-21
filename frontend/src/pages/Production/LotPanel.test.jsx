@@ -3,14 +3,18 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LotPanel from './LotPanel';
 
-const { getLots, createLot, updateLot, terminateLot, assignHistory } = vi.hoisted(() => ({
+const { getLots, createLot, updateLot, terminateLot, assignHistory, getProductions, getBuildingVaccineExpenses } = vi.hoisted(() => ({
   getLots: vi.fn(), createLot: vi.fn(), updateLot: vi.fn(), terminateLot: vi.fn(), assignHistory: vi.fn(),
+  getProductions: vi.fn(), getBuildingVaccineExpenses: vi.fn(),
 }));
 
 vi.mock('../../services/productionService', () => ({
   lotProductionService: { getLots, createLot, updateLot, terminateLot },
   cycleProductionService: { assignHistory },
+  productionService: { getProductions, getBuildingVaccineExpenses },
 }));
+
+vi.mock('./LotEggChart', () => ({ default: () => <div>Évolution des œufs</div> }));
 
 const buildings = [
   { id_batiment: 1, nom: 'A', est_actif: true },
@@ -41,6 +45,8 @@ describe('LotPanel independent building lots', () => {
     updateLot.mockResolvedValue(activeLot);
     terminateLot.mockResolvedValue({ ...activeLot, statut: 'termine' });
     assignHistory.mockResolvedValue({});
+    getProductions.mockResolvedValue([]);
+    getBuildingVaccineExpenses.mockResolvedValue([]);
   });
 
   it('allows a new lot for a free building while another building has an active lot', async () => {
@@ -60,10 +66,10 @@ describe('LotPanel independent building lots', () => {
   it('shows and selects multiple simultaneous lots independently', async () => {
     getLots.mockResolvedValue([activeLot, lotB]);
     renderPanel();
-    expect(await screen.findByLabelText('Lots actifs par bâtiment')).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'B : Lot B' })).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: 'B : Lot B' }));
     expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible();
-    expect(screen.getByText('Effectif restant')).toBeVisible();
+    expect(screen.getByText('Volailles présentes')).toBeVisible();
     expect(screen.getByRole('region', { name: 'Bâtiment du lot' })).toBeVisible();
   });
 
@@ -86,22 +92,54 @@ describe('LotPanel independent building lots', () => {
     await waitFor(() => expect(terminateLot).toHaveBeenCalledWith(1, { date_fin_reelle: expect.any(String) }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible());
   });
-  it('filters lot management by building and status', async () => {
+  it('shows all active lots by default and filters only finished lots by building', async () => {
     getLots.mockResolvedValue([activeLot, lotB, historicalLot]);
     render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
-    expect(await screen.findByRole('button', { name: /A \| Lot en cours/ })).toBeVisible();
-    expect(screen.getByLabelText('Filtrer par bâtiment')).toHaveValue('1');
-    expect(screen.queryByRole('button', { name: /B \| Lot B/ })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Lots actifs par bâtiment')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Filtrer par bâtiment'), { target: { value: '' } });
-    expect(screen.getByLabelText('Filtrer par bâtiment')).toHaveValue('');
-    expect(screen.getByRole('button', { name: /B \| Lot B/ })).toBeVisible();
-    fireEvent.change(screen.getByLabelText('Filtrer par bâtiment'), { target: { value: '2' } });
-    expect(screen.getByLabelText('Filtrer par bâtiment')).toHaveValue('2');
-    expect(screen.getByRole('button', { name: /B \| Lot B/ })).toBeVisible();
-    expect(screen.queryByRole('button', { name: /A \| Lot en cours/ })).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Filtrer par statut'), { target: { value: 'finished' } });
-    expect(screen.getByText('Aucun lot ne correspond à ces filtres.')).toBeVisible();
+
+    const activeTab = await screen.findByRole('tab', { name: /En cours/ });
+    expect(activeTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByLabelText('Filtrer par bâtiment')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Lots en cours' })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Voir le lot' })).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('tab', { name: /Terminés/ }));
+    const buildingFilter = screen.getByLabelText('Filtrer par bâtiment');
+    expect(buildingFilter).toHaveValue('');
+    expect(screen.getAllByRole('button', { name: 'Voir le lot' })).toHaveLength(1);
+
+    fireEvent.change(buildingFilter, { target: { value: '2' } });
+    expect(screen.getByText('Aucun lot terminé dans ce bâtiment')).toBeVisible();
+    fireEvent.change(buildingFilter, { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le lot' }));
+
+    expect(await screen.findByRole('heading', { name: 'Ancien lot' })).toBeVisible();
+    expect(screen.getByText(/Âge à l’arrivée/)).toBeVisible();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tous les lots' })[0]);
+    expect(screen.getByRole('tab', { name: /Terminés/ })).toHaveAttribute('aria-selected', 'true');
+  });
+  it('loads historical records and vaccine expenses for the selected lot cycle', async () => {
+    getLots.mockResolvedValue([activeLot, lotB, historicalLot]);
+    getProductions.mockResolvedValue([{
+      id_production: 10, id_cycle: 1, date_production: '2026-09-15',
+      type_oeuf: 'normal', nombre_oeufs: 80, mortalite: 2, consommation_aliment_kg: 12,
+    }]);
+    getBuildingVaccineExpenses.mockResolvedValue([{
+      id_charge: 4, id_cycle: 1, date_charge: '2026-09-16',
+      nom_vaccin: 'Vaccin A', quantite: 1, unite: 'flacon', montant: 25,
+    }]);
+    render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole('tab', { name: /Terminés/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le lot' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Historique de production' }));
+
+    expect(await screen.findByRole('region', { name: 'Historique de production' })).toBeVisible();
+    await waitFor(() => expect(getProductions).toHaveBeenCalledWith(expect.objectContaining({
+      id_cycle: 1, date_debut: '2026-09-01', date_fin: '2026-09-30',
+    })));
+    expect(await screen.findByText('80')).toBeVisible();
+    expect(await screen.findByText('Vaccin A')).toBeVisible();
+    expect(screen.getByText('Évolution des œufs')).toBeVisible();
   });
 
 });
