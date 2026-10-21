@@ -21,6 +21,7 @@ import { productionService, cycleProductionService } from '../../services/produc
 import useNotification from '../../hooks/useNotification';
 import compteBancaireService from '../../services/compteBancaireService';
 import VaccineExpenseFields from './VaccineExpenseFields';
+import { carriedFeedFormula } from '../../utils/feedFormula';
 
 const EGG_TYPES = [
   { value: 'normal', label: 'Oeufs normaux' },
@@ -61,7 +62,7 @@ function ProductionForm({
   const [cycleContext, setCycleContext] = useState(null);
   const [contextLoading, setContextLoading] = useState(false);
   const [contextError, setContextError] = useState('');
-  const manualFormula = useRef(false);
+  const manualFormula = useRef(null);
   const [formules, setFormules] = useState([]);
   const [calibreThresholds, setCalibreThresholds] = useState([]);
   const [loadingDaily, setLoadingDaily] = useState(!!initialData);
@@ -110,6 +111,10 @@ function ProductionForm({
       ? (cartons * 2) + 1
       : cartons + Math.ceil(cartons / 10));
   }, 0);
+
+  useEffect(() => {
+    manualFormula.current = null;
+  }, [open, initialData]);
 
   useEffect(() => {
     if (!open || !initialData) return undefined;
@@ -202,9 +207,12 @@ function ProductionForm({
   }, [open, watchedBatiment, watchedDate]);
 
   useEffect(() => {
-    if (initialData || manualFormula.current || contextLoading) return;
-    setValue('formule', cycleContext?.cycle?.formule_suggeree || '');
-  }, [cycleContext, contextLoading, initialData, setValue]);
+    if (!open || initialData || contextLoading) return;
+    const cycle = cycleContext?.cycle;
+    setValue('formule', cycle
+      ? carriedFeedFormula(manualFormula.current, cycle, formules, watchedDate, watchedBatiment)
+      : '');
+  }, [open, cycleContext, contextLoading, initialData, formules, watchedDate, watchedBatiment, setValue]);
 
   const missingCycle = !!cycleContext?.has_cycles && !cycleContext?.cycle;
   const deducedCalibre = (() => {
@@ -541,7 +549,16 @@ function ProductionForm({
                 select
                 label="Formule"
                 value={watch('formule') || ''}
-                onChange={(event) => { manualFormula.current = true; setValue('formule', event.target.value); }}
+                onChange={(event) => {
+                  manualFormula.current = {
+                    value: event.target.value,
+                    cycleId: cycleContext?.cycle?.id_cycle,
+                    buildingId: watchedBatiment,
+                    age: cycleContext?.cycle?.age_semaines,
+                    date: watchedDate,
+                  };
+                  setValue('formule', event.target.value);
+                }}
                 fullWidth
               >
                 <MenuItem value="">Non précisée</MenuItem>
