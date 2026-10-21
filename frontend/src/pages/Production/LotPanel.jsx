@@ -30,7 +30,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
-  const [buildingFilter, setBuildingFilter] = useState('');
+  const [buildingFilter, setBuildingFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
   const [managementView, setManagementView] = useState('overview');
   const [historyRows, setHistoryRows] = useState([]);
@@ -55,7 +55,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     const cycle = lot.repartitions?.[0];
     const isFinished = lot.statut === 'termine';
     const matchesStatus = statusFilter === 'finished' ? isFinished : !isFinished;
-    const matchesBuilding = statusFilter !== 'finished' || !buildingFilter
+    const matchesBuilding = statusFilter !== 'finished' || buildingFilter === 'all'
       || String(cycle?.id_batiment) === buildingFilter;
     return matchesStatus && matchesBuilding;
   }) : lots;
@@ -174,9 +174,9 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-start' }} spacing={1.5}>
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
-            <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
-              {managementMode ? (managementView === 'overview' ? 'Gestion des lots' : displayLotName(selected) || 'Détail du lot') : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
-            </Typography>
+            {!(managementMode && managementView === 'overview') && <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
+              {managementMode ? displayLotName(selected) || 'Détail du lot' : (loaded && selected ? selected.nom_lot : 'Lots de volailles')}
+            </Typography>}
             {!managementMode && loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
               color={selected.statut === 'termine' ? 'default' : 'success'} />}
           </Stack>
@@ -205,7 +205,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           {statusFilter === 'finished' && <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
             value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
             sx={{ minWidth: { xs: '100%', sm: 220 } }}>
-            <option value="">Tous les bâtiments</option>
+            <option value="all">Tous les bâtiments</option>
             {buildings.map((building) => <option key={building.id_batiment} value={building.id_batiment}>{building.nom}</option>)}
           </TextField>}
         </Stack>
