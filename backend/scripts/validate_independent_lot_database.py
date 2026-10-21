@@ -99,17 +99,33 @@ def main() -> None:
                     )
                 print("PASS: parent metadata update synchronized the cycle snapshot")
 
-                expect_database_rejection(
-                    session,
-                    "a cycle snapshot that disagrees with its parent",
-                    lambda: session.execute(
-                        text(
-                            "UPDATE cycles_production SET age_depart_semaines = 8 "
-                            "WHERE id_lot = :lot_id"
-                        ),
-                        {"lot_id": parent_a.id_lot},
+                # The BEFORE trigger repairs direct snapshot writes from the parent.
+                # Assert the stored invariant, rather than requiring a rejection.
+                session.execute(
+                    text(
+                        "UPDATE cycles_production SET age_depart_semaines = 8, "
+                        "effectif_initial = 999, nom_cycle = 'Tampered snapshot', "
+                        "statut = 'termine' WHERE id_lot = :lot_id"
                     ),
+                    {"lot_id": parent_a.id_lot},
                 )
+                mismatches = session.execute(
+                    text(
+                        "SELECT count(*) FROM cycles_production c "
+                        "JOIN lots_production l ON l.id_lot = c.id_lot "
+                        "WHERE c.id_lot = :lot_id AND "
+                        "ROW(c.nom_cycle, c.souche, c.date_debut, c.age_depart_semaines, "
+                        "c.effectif_initial, c.duree_semaines, c.date_fin_prevue, "
+                        "c.date_fin_reelle, c.statut, c.notes) IS DISTINCT FROM "
+                        "ROW(l.nom_lot, l.souche, l.date_debut, l.age_depart_semaines, "
+                        "l.effectif_initial, l.duree_semaines, l.date_fin_prevue, "
+                        "l.date_fin_reelle, l.statut, l.notes)"
+                    ),
+                    {"lot_id": parent_a.id_lot},
+                ).scalar_one()
+                if mismatches:
+                    raise AssertionError("Direct cycle write left a snapshot different from its parent")
+                print("PASS: direct cycle write retained all authoritative parent fields")
 
                 parent_b = make_lot("Lot DB validation B", start)
                 session.add(parent_b)
@@ -167,3 +183,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

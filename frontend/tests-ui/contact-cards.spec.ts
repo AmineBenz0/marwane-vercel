@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
+import { mockAuthenticatedSession } from './auth';
+
 const pageErrors = new WeakMap<Page, string[]>();
 
 test.beforeEach(async ({ page }) => {
@@ -32,14 +34,12 @@ async function mockContacts(page: Page, plural: 'clients' | 'fournisseurs') {
   const listRequests: URL[] = [];
   const profileRequests: string[] = [];
   const writes: { method: string; body: Record<string, unknown> }[] = [];
-  await page.addInitScript(() => {
-    const payload = btoa(JSON.stringify({ sub: '1', email: 'ui-test@example.com', role: 'admin' }));
-    localStorage.setItem('access_token', `test.${payload}.test`);
-  });
+  await mockAuthenticatedSession(page);
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace('/api/v1', '');
     const method = route.request().method();
+    if (path === '/auth/refresh') return route.fallback();
     let data: unknown = [];
     if (path === `/${plural}` && method === 'GET') {
       listRequests.push(url);
@@ -138,3 +138,4 @@ for (const plural of ['clients', 'fournisseurs'] as const) {
     expect(state.writes.at(-1)!.method).toBe('PUT');
   });
 }
+
