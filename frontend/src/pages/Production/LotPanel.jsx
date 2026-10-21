@@ -60,11 +60,17 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const selected = managementMode
     ? lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0]
     : lots.find((lot) => String(lot.id_lot) === selectedId) || activeLots[0] || lots[0];
+  const selectedCycle = selected?.repartitions?.[0];
+  const selectedLotId = selected?.id_lot;
+  const selectedStartDate = selected?.date_debut;
+  const selectedEndDate = selected?.date_fin_reelle;
+  const selectedCycleId = selectedCycle?.id_cycle;
+  const selectedBuildingId = selectedCycle?.id_batiment;
   useEffect(() => {
-    if (!managementMode || managementView !== 'history' || !selected || !selectedCycle) return undefined;
+    if (!managementMode || managementView !== 'history' || !selectedLotId || !selectedCycleId || !selectedBuildingId) return undefined;
     let cancelled = false;
-    const dateFrom = historyFrom || selected.date_debut;
-    const dateTo = historyTo || selected.date_fin_reelle || localToday();
+    const dateFrom = historyFrom || selectedStartDate;
+    const dateTo = historyTo || selectedEndDate || localToday();
     setHistoryLoading(true);
     setHistoryError('');
     const loadRows = async () => {
@@ -72,7 +78,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       let page;
       do {
         page = await productionService.getProductions({
-          id_cycle: selectedCycle.id_cycle, date_debut: dateFrom, date_fin: dateTo,
+          id_cycle: selectedCycleId, date_debut: dateFrom, date_fin: dateTo,
           skip: rows.length, limit: 500,
         });
         rows.push(...page);
@@ -81,21 +87,20 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     };
     Promise.all([
       loadRows(),
-      productionService.getBuildingVaccineExpenses(selectedCycle.id_batiment),
+      productionService.getBuildingVaccineExpenses(selectedBuildingId),
     ]).then(([rows, charges]) => {
       if (cancelled) return;
       setHistoryRows(rows);
-      setHistoryVaccines((charges || []).filter((charge) => Number(charge.id_cycle) === Number(selectedCycle.id_cycle)
+      setHistoryVaccines((charges || []).filter((charge) => Number(charge.id_cycle) === Number(selectedCycleId)
         && charge.date_charge >= dateFrom && charge.date_charge <= dateTo));
     }).catch((err) => {
       if (!cancelled) setHistoryError(message(err));
     }).finally(() => { if (!cancelled) setHistoryLoading(false); });
     return () => { cancelled = true; };
-  }, [managementMode, managementView, selected?.id_lot, selected?.repartitions?.[0]?.id_cycle, historyFrom, historyTo]);
-    const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
+  }, [managementMode, managementView, selectedLotId, selectedStartDate, selectedEndDate, selectedCycleId, selectedBuildingId, historyFrom, historyTo]);
+  const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
   const available = buildings.filter((building) => building.est_actif !== false
     && !occupied.has(Number(building.id_batiment)));
-  const selectedCycle = selected?.repartitions?.[0];
 
   const open = (kind) => {
     if (kind === 'create' && (!loaded || !available.length)) return;
