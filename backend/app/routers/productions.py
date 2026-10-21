@@ -54,7 +54,7 @@ FORMULES_ALIMENT = [
 # Placeholder business thresholds. Tweak these ranges once the client confirms
 # the exact gram weights.
 CALIBRE_THRESHOLDS = [
-    {"value": "demarrage", "label": "Démarrage", "min_grammage": None, "max_grammage": 50},
+    {"value": "demarrage", "label": "D�marrage", "min_grammage": None, "max_grammage": 50},
     {"value": "moyen", "label": "Moyen", "min_grammage": 50, "max_grammage": 60},
     {"value": "gros", "label": "Gros", "min_grammage": 60, "max_grammage": None},
 ]
@@ -156,7 +156,7 @@ def get_productions(
 
     final_results = []
     for prod, nom_batiment, nom_cycle in results:
-        # On crée une copie pour ne pas modifier l'objet SQLAlchemy original dans la session
+        # On cr�e une copie pour ne pas modifier l'objet SQLAlchemy original dans la session
         p_data = {c.name: getattr(prod, c.name) for c in prod.__table__.columns}
         p_data["nom_batiment"] = nom_batiment
         p_data["nom_cycle"] = nom_cycle
@@ -256,12 +256,12 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             if not cycle and db.query(CycleProduction.id_cycle).filter(
                 CycleProduction.id_batiment == prod_in.id_batiment,
             ).first():
-                raise HTTPException(status_code=400, detail="Aucun cycle pour cette date. Démarrez un cycle depuis le bâtiment.")
+                raise HTTPException(status_code=400, detail="Aucun lot n'est affect� � ce b�timent pour cette date. V�rifiez la date et la r�partition dans Gestion des lots.")
             cycle_id = cycle.id_cycle if cycle else None
         if cycle:
             validate_cycle_date(cycle, prod_in.date_production)
             if prod_in.date_production > date.today():
-                raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
+                raise HTTPException(status_code=400, detail="La saisie ne peut pas �tre dans le futur.")
             validate_cycle_mortality(db, cycle, prod_in.mortalite or 0,
                                     [record.id_production for record in existing])
         operational_only = not any(quantities.values())
@@ -402,7 +402,7 @@ def create_production(
     """
     Enregistre une nouvelle production et calcule automatiquement les cartons.
     """
-    # Vérifier l'existence du bâtiment
+    # V�rifier l'existence du b�timent
     batiment = db.query(Batiment).filter(Batiment.id_batiment == prod_in.id_batiment).with_for_update().first()
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
@@ -418,13 +418,13 @@ def create_production(
         if not cycle and db.query(CycleProduction.id_cycle).filter(
             CycleProduction.id_batiment == prod_in.id_batiment,
         ).first():
-            raise HTTPException(status_code=400, detail="Aucun cycle pour cette date.")
+            raise HTTPException(status_code=400, detail="Aucun lot n'est affect� � ce b�timent pour cette date. V�rifiez Gestion des lots.")
     if cycle:
         validate_cycle_date(cycle, prod_in.date_production)
         if prod_in.date_production > date.today():
-            raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
+            raise HTTPException(status_code=400, detail="La saisie ne peut pas �tre dans le futur.")
         validate_cycle_mortality(db, cycle, prod_in.mortalite or 0)
-    # Calculer le nombre de cartons selon les règles métier
+    # Calculer le nombre de cartons selon les r�gles m�tier
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
     calibre = _deduce_calibre(prod_in.type_oeuf, prod_in.grammage)
 
@@ -479,7 +479,7 @@ def create_production(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="La production et les pertes n'ont pas été enregistrées.",
+            detail="La production et les pertes n'ont pas �t� enregistr�es.",
         ) from exc
 
     return res
@@ -492,13 +492,13 @@ def get_daily_stats(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Récupère les statistiques de production agrégées par jour.
-    Utilise des agrégations SQL pour l'efficacité.
+    R�cup�re les statistiques de production agr�g�es par jour.
+    Utilise des agr�gations SQL pour l'efficacit�.
     """
     from datetime import date, timedelta
     date_debut = date.today() - timedelta(days=days)
 
-    # 1. Agrégation par jour + type
+    # 1. Agr�gation par jour + type
     par_type_rows = db.query(
         Production.date_production,
         Production.type_oeuf,
@@ -510,7 +510,7 @@ def get_daily_stats(
         Production.date_production, Production.type_oeuf
     ).all()
 
-    # 2. Agrégation par jour + bâtiment
+    # 2. Agr�gation par jour + b�timent
     par_batiment_rows = db.query(
         Production.date_production,
         Batiment.nom.label("nom_batiment"),
@@ -538,7 +538,7 @@ def get_daily_stats(
         Production.date_production.desc()
     ).limit(days).all()
 
-    # Regrouper en dicts indexés par date
+    # Regrouper en dicts index�s par date
     type_map = {}
     for row in par_type_rows:
         types_for_date = type_map.setdefault(row.date_production, {})
@@ -981,7 +981,7 @@ def get_production(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Récupère le détail d'une production.
+    R�cup�re le d�tail d'une production.
     """
     result = db.query(
         Production,
@@ -1015,7 +1015,7 @@ def update_production(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Met à jour une production existante et recalcule les cartons si besoin.
+    Met � jour une production existante et recalcule les cartons si besoin.
     """
     prod = db.query(Production).filter(
         Production.id_production == id,
@@ -1025,8 +1025,26 @@ def update_production(
         raise HTTPException(status_code=404, detail="Production introuvable")
 
     update_dict = prod_in.model_dump(exclude_unset=True)
+    original_batiment_id = prod.id_batiment
+    requested_batiment_id = update_dict.get("id_batiment", original_batiment_id)
+    locked_buildings = db.query(Batiment.id_batiment).filter(
+        Batiment.id_batiment.in_({original_batiment_id, requested_batiment_id}),
+    ).order_by(Batiment.id_batiment).with_for_update().all()
+    if len(locked_buildings) != len({original_batiment_id, requested_batiment_id}):
+        raise HTTPException(status_code=404, detail="Batiment introuvable")
+    prod = db.query(Production).filter(
+        Production.id_production == id,
+        Production.est_actif.is_(True),
+    ).populate_existing().with_for_update().first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Production introuvable")
+    if prod.id_batiment not in {original_batiment_id, requested_batiment_id}:
+        raise HTTPException(
+            status_code=409,
+            detail="Cette production a �t� d�plac�e par une autre requ�te. Actualisez puis r�essayez.",
+        )
     if daily_vaccine_expenses(db, prod.id_batiment, prod.date_production):
-        raise HTTPException(status_code=409, detail="Modifiez cette journée et ses dépenses depuis la saisie journalière.")
+        raise HTTPException(status_code=409, detail="Modifiez cette journ�e et ses d�penses depuis la saisie journali�re.")
     final_batiment_id = update_dict.get("id_batiment", prod.id_batiment)
     final_date = update_dict.get("date_production", prod.date_production)
     cycle = None
@@ -1057,7 +1075,7 @@ def update_production(
 
     prod.calibre = _deduce_calibre(prod.type_oeuf, prod.grammage)
 
-    # Recalculer les cartons si le nombre d'œufs ou le type a changé
+    # Recalculer les cartons si le nombre d'oufs ou le type a chang�
     if 'nombre_oeufs' in update_dict or 'type_oeuf' in update_dict:
         prod.nombre_cartons = Production.calculer_cartons(prod.nombre_oeufs, prod.type_oeuf)
 
@@ -1068,7 +1086,7 @@ def update_production(
     db.commit()
     db.refresh(prod)
 
-    # Retourner avec le nom du bâtiment
+    # Retourner avec le nom du b�timent
     batiment = db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).first()
     res = {c.name: getattr(prod, c.name) for c in prod.__table__.columns}
     res["nom_batiment"] = batiment.nom if batiment else None
@@ -1088,9 +1106,9 @@ def delete_production(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Désactive une production sans supprimer son historique.
+    D�sactive une production sans supprimer son historique.
 
-    La ligne reste conservée pour audit et ne participe plus aux calculs de
+    La ligne reste conserv�e pour audit et ne participe plus aux calculs de
     stock actif. Une correction conserve l'utilisateur, la date et le motif.
     """
     prod = db.query(Production).filter(
@@ -1101,7 +1119,7 @@ def delete_production(
         raise HTTPException(status_code=404, detail="Production introuvable")
 
     if daily_vaccine_expenses(db, prod.id_batiment, prod.date_production):
-        raise HTTPException(status_code=409, detail="Annulez cette journée et ses dépenses depuis la saisie journalière.")
+        raise HTTPException(status_code=409, detail="Annulez cette journ�e et ses d�penses depuis la saisie journali�re.")
     prod.est_actif = False
     prod.date_annulation = datetime.now(timezone.utc)
     prod.motif_annulation = raison.strip()
@@ -1109,3 +1127,4 @@ def delete_production(
     prod.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     db.commit()
     return None
+
