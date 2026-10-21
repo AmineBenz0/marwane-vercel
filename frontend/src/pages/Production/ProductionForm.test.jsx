@@ -76,6 +76,43 @@ describe('ProductionForm', () => {
     })));
   });
 
+  it('carries a selection across dates, catches up, and resets unsaved changes on reopen', async () => {
+    const formulas = [
+      { value: '25-1% Sem vita', label: '25-1% Sem vita', age_min: 18, age_max: 25 },
+      { value: '26-35 Sem', label: '26-35 Sem', age_min: 26, age_max: 35 },
+      { value: '36-45 Sem', label: '36-45 Sem', age_min: 36, age_max: 45 },
+    ];
+    get.mockImplementation((path, params) => {
+      if (path === '/productions/formules') return Promise.resolve(formulas);
+      if (path.startsWith('/cycles-production/context/')) {
+        const age = params.params.date_saisie === '2026-09-02' ? 36 : 24;
+        return Promise.resolve({ has_cycles: true, cycle: {
+          id_cycle: 4, nom_cycle: 'Cycle A', age_semaines: age, effectif_actuel: 1000,
+          formule_suggeree: age === 36 ? '36-45 Sem' : '25-1% Sem vita',
+        } });
+      }
+      return Promise.resolve([]);
+    });
+    const props = { onClose: vi.fn(), onSuccess: vi.fn(),
+      batiments: [{ id_batiment: 7, nom: 'Batiment 7' }], preselectedBatimentId: 7,
+      preselectedDate: '2026-09-01' };
+    const view = render(<ProductionForm open {...props} />);
+    const selector = () => screen.getByRole('combobox', { name: 'Formule' });
+    await waitFor(() => expect(selector()).toHaveTextContent('25-1% Sem vita'));
+    fireEvent.mouseDown(selector());
+    fireEvent.click(await screen.findByRole('option', { name: '26-35 Sem' }));
+    expect(selector()).toHaveTextContent('26-35 Sem');
+    fireEvent.change(screen.getByLabelText(/Date de production/), { target: { value: '02/09/26' } });
+    await waitFor(() => expect(selector()).toHaveTextContent('36-45 Sem'));
+    fireEvent.mouseDown(selector());
+    fireEvent.click(await screen.findByRole('option', { name: '26-35 Sem' }));
+    view.rerender(<ProductionForm open={false} {...props} />);
+    view.rerender(<ProductionForm open {...props} />);
+    await waitFor(() => expect(selector()).toHaveTextContent('36-45 Sem'));
+    expect(post).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it('does not allow negative mortality in daily production', async () => {
     render(
       <ProductionForm
