@@ -215,10 +215,9 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             return <Box component="article" key={lot.id_lot} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="overline" color="text.secondary">{cycle?.nom_batiment || 'Bâtiment'}</Typography>
                   <Typography variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.nom_lot}</Typography>
                 </Box>
-                <Chip size="small" label={finished ? 'Terminé' : 'En cours'} color={finished ? 'default' : 'success'} />
+                {finished && <Chip size="small" label="Terminé" />}
               </Stack>
               <Box sx={{ mt: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
                 <Fact label={finished ? 'Volailles à la fin' : 'Volailles présentes'} value={number(lot.effectif_actuel)} />
@@ -226,7 +225,9 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
               </Box>
               <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
                 <Box>
-                  <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(lot.date_debut)}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {cycle?.nom_batiment || 'Bâtiment'} · Arrivée le {formatShortDate(lot.date_debut)}
+                  </Typography>
                   {finished && lot.date_fin_reelle && <Typography variant="body2" color="text.secondary">Fin le {formatShortDate(lot.date_fin_reelle)}</Typography>}
                 </Box>
                 <Button size="small" onClick={() => { setSelectedId(String(lot.id_lot)); setManagementView('details'); }}>
