@@ -100,17 +100,20 @@ describe('LotPanel independent building lots', () => {
     expect(activeTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByLabelText('Filtrer par bâtiment')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Lots en cours' })).toBeVisible();
-    expect(screen.getAllByRole('button', { name: 'Voir le lot' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /Ouvrir le lot/ })).toHaveLength(2);
+    const activeCard = screen.getByRole('button', { name: 'Ouvrir le lot Lot' });
+    expect(within(activeCard).queryByText('Lot en cours')).not.toBeInTheDocument();
+    expect(within(activeCard).queryByText('Voir le lot')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Terminés/ }));
     const buildingFilter = screen.getByLabelText('Filtrer par bâtiment');
     expect(buildingFilter).toHaveValue('');
-    expect(screen.getAllByRole('button', { name: 'Voir le lot' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' })).toBeVisible();
 
     fireEvent.change(buildingFilter, { target: { value: '2' } });
     expect(screen.getByText('Aucun lot terminé dans ce bâtiment')).toBeVisible();
     fireEvent.change(buildingFilter, { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Voir le lot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
 
     expect(await screen.findByRole('heading', { name: 'Ancien lot' })).toBeVisible();
     expect(screen.getByText(/Âge à l’arrivée/)).toBeVisible();
