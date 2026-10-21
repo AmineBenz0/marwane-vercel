@@ -7,9 +7,9 @@ from datetime import date, timedelta
 from fastapi import status
 
 from app.models.batiment import Batiment
-from app.models.cycle_production import CycleProduction
 from app.models.produit import Produit
 from app.utils.egg_product_sync import build_sellable_egg_product_name
+from tests.lot_test_helpers import add_lot_cycle
 
 
 def create_test_batiment(db_session) -> Batiment:
@@ -21,18 +21,9 @@ def create_test_batiment(db_session) -> Batiment:
     db_session.add(batiment)
     db_session.commit()
     db_session.refresh(batiment)
-    cycle = CycleProduction(
-        id_batiment=batiment.id_batiment,
-        nom_cycle=f"Lot {batiment.nom}",
-        date_debut=date.today() - timedelta(days=1),
-        age_depart_semaines=40,
-        effectif_initial=1000,
-        duree_semaines=80,
-        date_fin_prevue=date.today() + timedelta(weeks=80),
-        statut="actif",
-    )
-    db_session.add(cycle)
-    db_session.commit()
+    add_lot_cycle(db_session, batiment, name=f"Lot {batiment.nom}",
+                  date_debut=date.today() - timedelta(days=1), age_depart_semaines=40,
+                  effectif_initial=1000, duree_semaines=80)
     return batiment
 
 

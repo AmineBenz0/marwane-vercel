@@ -141,7 +141,10 @@ function ProductionForm({
         formule: rows.find((row) => row.formule)?.formule || '',
         depenses_vaccins: (daily.depenses_vaccins || []).map((line) => ({
           id_charge: line.id_charge, id_vaccin: line.id_vaccin, nom_vaccin: line.nom_vaccin,
-          unite: line.unite, quantite: line.quantite, prix_unitaire: line.prix_unitaire, id_compte: line.id_compte || '',
+          unite: line.unite,
+          // Decimal snapshots such as "2.000" represent whole vaccine units.
+          quantite: Number.isInteger(Number(line.quantite)) ? String(Number(line.quantite)) : line.quantite,
+          prix_unitaire: line.prix_unitaire, id_compte: line.id_compte || '',
         })),
       });
       setVersions(daily.versions || {});

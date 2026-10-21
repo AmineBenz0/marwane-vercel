@@ -39,7 +39,7 @@ describe('ProductionForm', () => {
     fireEvent.change(screen.getByLabelText("Oeufs blancs"), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText('Oeufs casses'), { target: { value: '4' } });
     fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1950' } });
-    expect(screen.getByText(/Total collecté \(hors cassés et perdus\) : 160 œufs/)).toBeVisible();
+    expect(screen.getByText('Oeufs collectes').parentElement).toHaveTextContent('160 oeufs');
     expect(screen.getByText('10', { exact: true })).toBeVisible();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -121,7 +121,7 @@ describe('ProductionForm', () => {
       fireEvent.change(screen.getByLabelText(label), { target: { value: '-5' } });
       expect(await screen.findByText('Minimum 0')).toBeVisible();
       const total = label === 'Oeufs normaux' ? 10 : label === 'Oeufs blancs' ? 120 : 130;
-      expect(screen.getByText(`Total collecté (hors cassés et perdus) : ${total} œufs`)).toBeVisible();
+      expect(screen.getByText('Oeufs collectes').parentElement).toHaveTextContent(`${total} oeufs`);
       fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
       await waitFor(() => expect(screen.getByText('Minimum 0')).toBeVisible());
       expect(post).not.toHaveBeenCalled();
