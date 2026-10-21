@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, Stack, TextField, Typography,
+  Divider, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
-import { lotProductionService } from '../../services/productionService';
+import { cycleProductionService, lotProductionService } from '../../services/productionService';
 import { localToday } from './useProductionView';
 import LotEggChart from './LotEggChart';
 
-const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
+const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
 const message = (error) => {
   const detail = error.data?.detail || error.response?.data?.detail;
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
@@ -25,9 +25,9 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
   const [revision, setRevision] = useState(0);
   const [dialog, setDialog] = useState('');
   const [values, setValues] = useState({});
-  const [counts, setCounts] = useState({});
   const [saving, setSaving] = useState(false);
-  const [allocationErrorBuildingId, setAllocationErrorBuildingId] = useState('');
+  const [historyCycle, setHistoryCycle] = useState(null);
+  const [historyPeriod, setHistoryPeriod] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -38,63 +38,66 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
     }).catch((err) => { if (!cancelled) setError(message(err)); });
     return () => { cancelled = true; };
   }, [refreshKey, revision]);
-  const activeLot = lots.find((lot) => lot.statut !== 'termine');
+
+  const activeLots = lots.filter((lot) => lot.statut !== 'termine');
   const selected = lots.find((lot) => String(lot.id_lot) === selectedId)
-    || activeLot || lots[0];
-  const occupied = new Set(lots.filter((lot) => lot.statut !== 'termine')
-    .flatMap((lot) => (lot.repartitions || []).map((row) => Number(row.id_batiment))));
-  const available = buildings.filter((building) => building.est_actif !== false && !occupied.has(Number(building.id_batiment)));
-  const distributionBuildings = dialog === 'edit'
-    ? (selected?.repartitions || []).map((row) => ({ id_batiment: row.id_batiment, nom: row.nom_batiment }))
-    : available;
-  const assigned = distributionBuildings.reduce((sum, building) => sum + Number(counts[building.id_batiment] || 0), 0);
-  const allocationLimit = (buildingId) => Math.max(0, Number(values.effectif_initial || 0)
-    - distributionBuildings.filter((building) => building.id_batiment !== buildingId)
-      .reduce((sum, building) => sum + Number(counts[building.id_batiment] || 0), 0));
-  const allocationError = (building) => {
-    const count = Number(counts[building.id_batiment] || 0);
-    return !Number.isInteger(count) || count < (dialog === 'edit' ? 1 : 0) || count > allocationLimit(building.id_batiment);
-  };
-  const balanced = Number(values.effectif_initial) > 0 && assigned === Number(values.effectif_initial)
-    && !allocationErrorBuildingId
-    && distributionBuildings.every((building) => !allocationError(building));
+    || activeLots[0] || lots[0];
+  const occupied = new Set(activeLots.map((lot) => Number(lot.repartitions?.[0]?.id_batiment)));
+  const available = buildings.filter((building) => building.est_actif !== false
+    && !occupied.has(Number(building.id_batiment)));
+  const selectedCycle = selected?.repartitions?.[0];
 
   const open = (kind) => {
-    if (kind === 'create' && (!loaded || activeLot || !available.length)) return;
+    if (kind === 'create' && (!loaded || !available.length)) return;
     setError('');
-    setAllocationErrorBuildingId('');
     setValues(kind === 'create' ? {
       nom_lot: 'Lot du ' + formatShortDate(localToday()), date_debut: localToday(),
-      effectif_initial: '', age_depart_semaines: 0, souche: '', notes: '',
-    } : kind === 'edit' ? { ...selected } : { date_fin_reelle: localToday() });
-    setCounts(kind === 'edit'
-      ? Object.fromEntries(selected.repartitions.map((row) => [row.id_batiment, row.effectif_initial ?? '']))
-      : {});
+      id_batiment: available[0]?.id_batiment || '', effectif_initial: '',
+      age_depart_semaines: 0, souche: '', notes: '', duree_semaines: 100, date_fin_prevue: '',
+    } : kind === 'edit' ? {
+      ...selected, id_batiment: selectedCycle?.id_batiment,
+      effectif_initial: selected?.effectif_initial ?? '',
+    } : { date_fin_reelle: localToday() });
     setDialog(kind);
   };
-  const field = (name, value) => setValues((old) => ({ ...old, [name]: value }));
+  const field = (name, value) => setValues((old) => ({
+    ...old,
+    [name]: value,
+    ...(dialog === 'edit' && ['date_debut', 'duree_semaines'].includes(name) ? { date_fin_prevue: '' } : {}),
+  }));
+
+  const submitHistory = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await cycleProductionService.assignHistory(historyCycle.id_cycle, historyPeriod);
+      setHistoryCycle(null);
+      setRevision((old) => old + 1);
+      onChange?.();
+    } catch (err) { setError(message(err)); }
+    finally { setSaving(false); }
+  };
+
   const submit = async (event) => {
     event.preventDefault();
-    if (dialog === 'create' && activeLot) {
-      setError('Un lot est déjà actif. Terminez-le avant de démarrer un nouveau lot.');
-      return;
-    }
-    if (dialog !== 'end' && !balanced) return;
     setSaving(true);
     setError('');
     try {
       let result;
       if (dialog === 'end') {
-        result = await lotProductionService.terminateLot(selected.id_lot, { date_fin_reelle: values.date_fin_reelle });
+        result = await lotProductionService.terminateLot(selected.id_lot, {
+          date_fin_reelle: values.date_fin_reelle,
+        });
       } else {
+        const count = Number(values.effectif_initial);
         const data = {
           nom_lot: values.nom_lot.trim(), date_debut: values.date_debut,
-          age_depart_semaines: Number(values.age_depart_semaines), effectif_initial: Number(values.effectif_initial),
+          age_depart_semaines: Number(values.age_depart_semaines), effectif_initial: count,
           souche: values.souche || null, notes: values.notes || null,
-          duree_semaines: values.duree_semaines || 100,
-          repartitions: distributionBuildings.map((building) => ({
-            id_batiment: building.id_batiment, effectif_initial: Number(counts[building.id_batiment] || 0),
-          })).filter((row) => row.effectif_initial > 0),
+          duree_semaines: Number(values.duree_semaines || 100),
+          date_fin_prevue: values.date_fin_prevue || null,
+          repartitions: [{ id_batiment: Number(values.id_batiment), effectif_initial: count }],
         };
         result = dialog === 'create' ? await lotProductionService.createLot(data)
           : await lotProductionService.updateLot(selected.id_lot, data);
@@ -102,7 +105,7 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
       setSelectedId(String(result.id_lot));
       setDialog('');
       setRevision((old) => old + 1);
-      onChange();
+      onChange?.();
     } catch (err) { setError(message(err)); }
     finally { setSaving(false); }
   };
@@ -115,39 +118,78 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
             <Typography component="h2" variant="h6" fontWeight={800} sx={{ overflowWrap: 'anywhere' }}>
               {loaded && selected ? selected.nom_lot : 'Lots de volailles'}
             </Typography>
-            {loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Terminé' : 'Actif'}
+            {loaded && selected && <Chip size="small" variant="outlined" label={selected.statut === 'termine' ? 'Termin�' : 'Actif'}
               color={selected.statut === 'termine' ? 'default' : 'success'} />}
           </Stack>
           {loaded && selected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
-            Arrivée le {formatShortDate(selected.date_debut)}
-            {selected.souche ? ' · Souche : ' + selected.souche : ''}
-            {selected.date_fin_reelle ? ' · Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}
+            {selectedCycle?.nom_batiment || 'B�timent'} | Arriv�e le {formatShortDate(selected.date_debut)}
+            {selected.souche ? ' | Souche : ' + selected.souche : ''}
+            {selected.date_fin_prevue ? ' | Fin pr�vue le ' + formatShortDate(selected.date_fin_prevue) : ''}
+            {selected.date_fin_reelle ? ' | Fin le ' + formatShortDate(selected.date_fin_reelle) : ''}
           </Typography>}
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
           {loaded && lots.length > 0 && <Button size="small" startIcon={<History />} onClick={() => setHistoryOpen(true)}>Historique</Button>}
-          {loaded && !activeLot && <Button variant="contained" onClick={() => open('create')} disabled={!!error || !available.length}>Démarrer un lot</Button>}
+          {loaded && available.length > 0 && <Button variant="contained" onClick={() => open('create')} disabled={!!error}>D�marrer un lot</Button>}
         </Stack>
       </Stack>
-      {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
+      {activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par batiment">
+        {activeLots.map((lot) => {
+          const cycle = lot.repartitions?.[0];
+          return <Chip key={lot.id_lot} clickable color={String(lot.id_lot) === String(selected?.id_lot) ? 'primary' : 'default'}
+            label={`${cycle?.nom_batiment || 'B�timent'} : ${lot.nom_lot}`}
+            onClick={() => setSelectedId(String(lot.id_lot))} />;
+        })}
+      </Stack>}
+      {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Reessayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
-      {loaded && !selected && <Typography color="text.secondary" sx={{ mt: 2 }}>Enregistrez l’arrivée et répartissez les poussins entre les bâtiments.</Typography>}
+      {loaded && !selected && <Typography color="text.secondary" sx={{ mt: 2 }}>D�marrez un lot ind�pendant pour chaque b�timent actif.</Typography>}
       {loaded && selected && <>
-        {selected.statut === 'termine' && activeLot && <Button size="small" onClick={() => setSelectedId(String(activeLot.id_lot))} sx={{ mt: 1 }}>Revenir au lot en cours</Button>}
+        {selected.statut === 'termine' && activeLots.length > 0 && <Button size="small" onClick={() => setSelectedId(String(activeLots[0].id_lot))} sx={{ mt: 1 }}>Revenir aux lots en cours</Button>}
         <Box sx={{ mt: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 } }}>
           <Fact label="Effectif restant" value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' entrants'} color="primary.main" />
-          <Fact label="Mortalité cumulée" value={number(selected.mortalite_totale)} />
-          <Fact label="Âge" value={selected.age_semaines == null ? '—' : selected.age_semaines + ' semaines'} />
-          <Fact label="Formule d’aliment" value={selected.formule_suggeree || '—'} />
+          <Fact label="Mortalit� cumul�e" value={number(selected.mortalite_totale)} />
+          <Fact label="Age" value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
+          <Fact label="Formule d'aliment" value={selected.formule_suggeree || '-'} />
         </Box>
+        <LotEggChart key={selected.id_lot} lotId={selected.id_lot} refreshKey={revision + Number(refreshKey || 0)} />
         <Divider sx={{ mt: 2.5, mb: 2 }} />
+        {selectedCycle && <Box component="section" aria-label="B�timent du lot" sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1 }}>B�timent rattach�</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1}>
+            <Typography fontWeight={600}>{selectedCycle.nom_batiment}</Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} spacing={1}>
+              <Typography variant="body2" color="text.secondary">{number(selectedCycle.effectif_initial)} entrants | {number(selectedCycle.effectif_actuel)} restants</Typography>
+              <Button size="small" onClick={() => {
+                setError('');
+                setHistoryCycle(selectedCycle);
+                setHistoryPeriod({ date_debut: selected.date_debut, date_fin: selected.date_fin_reelle || localToday() });
+              }}>Rattacher les saisies sans cycle</Button>
+            </Stack>
+          </Stack>
+        </Box>}
         {selected.statut !== 'termine' ? <Stack direction="row" justifyContent="flex-end" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<EditOutlined />} onClick={() => open('edit')}>Modifier le lot</Button>
-          <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}
-            sx={{ color: 'error.main', borderColor: 'error.main', '&:hover': { color: 'error.dark', borderColor: 'error.dark', bgcolor: 'action.hover' } }}>Terminer le lot</Button>
-        </Stack> : <Typography variant="body2" color="text.secondary">Progression arrêtée à la date de fin pour tous les bâtiments.</Typography>}
-        <LotEggChart key={selected.id_lot} lotId={selected.id_lot} refreshKey={`${refreshKey}-${revision}`} />
+          <Button variant="outlined" color="error" startIcon={<StopCircleOutlined />} onClick={() => open('end')}>Terminer ce lot</Button>
+        </Stack> : <Typography variant="body2" color="text.secondary">Ce lot est termin� pour son b�timent.</Typography>}
       </>}
+      <Dialog open={!!historyCycle} onClose={() => { if (!saving) { setHistoryCycle(null); setError(''); } }} maxWidth="sm" fullWidth>
+        <Box component="form" onSubmit={submitHistory}>
+          <DialogTitle>Rattacher les saisies a {historyCycle?.nom_batiment}</DialogTitle>
+          <DialogContent>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Seules les saisies sans cycle de ce batiment seront rattachees. Leurs valeurs restent conservees.</Typography>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <DateField label="Debut de la periode" required value={historyPeriod.date_debut || ''} onChange={(event) => setHistoryPeriod((old) => ({ ...old, date_debut: event.target.value }))} />
+              <DateField label="Fin de la periode" required value={historyPeriod.date_fin || ''} onChange={(event) => setHistoryPeriod((old) => ({ ...old, date_fin: event.target.value }))} />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button color="inherit" disabled={saving} onClick={() => { setHistoryCycle(null); setError(''); }}>Annuler</Button>
+            <Button type="submit" variant="contained" disabled={saving}>{saving ? 'Enregistrement...' : 'Rattacher'}</Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Historique des lots</DialogTitle>
         <DialogContent>
@@ -155,10 +197,10 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
             {lots.map((lot) => <Button key={lot.id_lot} color="inherit" onClick={() => { setSelectedId(String(lot.id_lot)); setHistoryOpen(false); }}
               sx={{ justifyContent: 'space-between', gap: 2, textAlign: 'left', p: 1.5 }}>
               <Box sx={{ minWidth: 0 }}>
-                <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.nom_lot}</Typography>
-                <Typography variant="body2" color="text.secondary">Arrivée le {formatShortDate(lot.date_debut)}</Typography>
+                <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.repartitions?.[0]?.nom_batiment || 'Batiment'} | {lot.nom_lot}</Typography>
+                <Typography variant="body2" color="text.secondary">Arrivee le {formatShortDate(lot.date_debut)}</Typography>
               </Box>
-              <Chip size="small" variant="outlined" label={lot.statut === 'termine' ? 'Terminé' : 'Actif'} color={lot.statut === 'termine' ? 'default' : 'success'} />
+              <Chip size="small" variant="outlined" label={lot.statut === 'termine' ? 'Termine' : 'Actif'} color={lot.statut === 'termine' ? 'default' : 'success'} />
             </Button>)}
           </Stack>
         </DialogContent>
@@ -166,41 +208,24 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
       </Dialog>
       <Dialog open={!!dialog} onClose={() => { if (!saving) { setDialog(''); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submit}>
-          <DialogTitle>{dialog === 'create' ? 'Démarrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
+          <DialogTitle>{dialog === 'create' ? 'Demarrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
           <DialogContent>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Stack spacing={2} sx={{ pt: 1 }}>
               {dialog === 'end' ? <>
-                <Typography>Cette action termine le lot dans tous ses bâtiments et conserve leur historique.</Typography>
+                <Typography>Cette action termine uniquement ce lot et son b�timent. Les autres lots restent actifs.</Typography>
                 <DateField label="Date de fin" required value={values.date_fin_reelle || ''} onChange={(event) => field('date_fin_reelle', event.target.value)} />
               </> : <>
                 <TextField label="Nom du lot" required inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => field('nom_lot', event.target.value)} />
-                <DateField label="Date d’arrivée" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
-                <TextField label="Nombre total de poussins entrants" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => { setAllocationErrorBuildingId(''); field('effectif_initial', event.target.value); }} />
-                <TextField label="Âge à l’arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="Le même âge et la même formule suggérée pour tous les bâtiments." />
-                <Typography fontWeight={800}>Répartition par bâtiment</Typography>
-                {distributionBuildings.map((building) => {
-                  const limit = allocationLimit(building.id_batiment);
-                  const overLimit = Number(counts[building.id_batiment] || 0) > limit;
-                  const attemptedOvershoot = allocationErrorBuildingId === String(building.id_batiment);
-                  return <TextField key={building.id_batiment} label={'Poussins · ' + building.nom} type="number"
-                    inputProps={{ min: dialog === 'edit' ? 1 : 0, max: limit, step: 1 }}
-                    value={counts[building.id_batiment] ?? ''}
-                    error={allocationError(building) || attemptedOvershoot}
-                    helperText={overLimit || attemptedOvershoot ? 'La quantité dépasse le nombre total de poussins entrants.' : undefined}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      const nextCount = nextValue === '' ? 0 : Number(nextValue);
-                      if (Number.isFinite(nextCount) && nextCount > limit) {
-                        setAllocationErrorBuildingId(String(building.id_batiment));
-                        return;
-                      }
-                      setAllocationErrorBuildingId('');
-                      setCounts((old) => ({ ...old, [building.id_batiment]: nextValue }));
-                    }} />;
-                })}
-                <Typography role="status" color={balanced ? 'success.main' : 'text.secondary'}>{number(assigned)} / {number(values.effectif_initial || 0)} poussins répartis{assigned !== Number(values.effectif_initial || 0) ? ' · écart : ' + number(Number(values.effectif_initial || 0) - assigned) : ''}</Typography>
-                {dialog === 'create' && occupied.size > 0 && <Typography variant="caption" color="text.secondary">Les bâtiments ayant déjà un lot actif sont indisponibles pour cette arrivée.</Typography>}
+                <TextField select label="B�timent" required value={values.id_batiment ?? ''} disabled={dialog === 'edit'} onChange={(event) => field('id_batiment', event.target.value)}>
+                  {(dialog === 'edit' ? buildings.filter((row) => Number(row.id_batiment) === Number(values.id_batiment)) : available)
+                    .map((building) => <MenuItem key={building.id_batiment} value={building.id_batiment}>{building.nom}</MenuItem>)}
+                </TextField>
+                <DateField label="Date d'arriv�e" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
+                <TextField label="Effectif initial dans ce b�timent" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
+                <TextField label="Age � l'arriv�e (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="L'�ge est propre � ce lot." />
+                <TextField label="Dur�e pr�vue (semaines)" required type="number" inputProps={{ min: 1, step: 1 }} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)} />
+                <DateField label="Date de fin pr�vue (facultatif)" value={values.date_fin_prevue || ''} onChange={(event) => field('date_fin_prevue', event.target.value)} helperText="Cette date est indicative. La cl�ture reste une action manuelle." />
                 <TextField label="Souche (facultatif)" inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
                 <TextField label="Notes (facultatif)" multiline minRows={2} value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
               </>}
@@ -208,7 +233,9 @@ export default function LotPanel({ buildings, refreshKey, onChange }) {
           </DialogContent>
           <DialogActions>
             <Button color="inherit" disabled={saving} onClick={() => { setDialog(''); setError(''); }}>Annuler</Button>
-            <Button type="submit" variant="contained" color={dialog === 'end' ? 'error' : 'primary'} disabled={saving || (dialog !== 'end' && !balanced)}>{saving ? 'Enregistrement...' : dialog === 'end' ? 'Terminer le lot' : 'Enregistrer'}</Button>
+            <Button type="submit" variant="contained" color={dialog === 'end' ? 'error' : 'primary'} disabled={saving || (dialog === 'create' && !available.length) || (dialog !== 'end' && (!values.id_batiment || Number(values.effectif_initial) <= 0))}>
+              {saving ? 'Enregistrement...' : dialog === 'end' ? 'Terminer le lot' : 'Enregistrer'}
+            </Button>
           </DialogActions>
         </Box>
       </Dialog>
