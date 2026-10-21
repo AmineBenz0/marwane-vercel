@@ -90,8 +90,14 @@ describe('LotPanel independent building lots', () => {
     getLots.mockResolvedValue([activeLot, lotB, historicalLot]);
     render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
     expect(await screen.findByRole('button', { name: /A \| Lot en cours/ })).toBeVisible();
+    expect(screen.getByLabelText('Filtrer par bâtiment')).toHaveValue('1');
+    expect(screen.queryByRole('button', { name: /B \| Lot B/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Lots actifs par bâtiment')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filtrer par bâtiment'), { target: { value: '' } });
+    expect(screen.getByLabelText('Filtrer par bâtiment')).toHaveValue('');
+    expect(screen.getByRole('button', { name: /B \| Lot B/ })).toBeVisible();
     fireEvent.change(screen.getByLabelText('Filtrer par bâtiment'), { target: { value: '2' } });
+    expect(screen.getByLabelText('Filtrer par bâtiment')).toHaveValue('2');
     expect(screen.getByRole('button', { name: /B \| Lot B/ })).toBeVisible();
     expect(screen.queryByRole('button', { name: /A \| Lot en cours/ })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Filtrer par statut'), { target: { value: 'finished' } });

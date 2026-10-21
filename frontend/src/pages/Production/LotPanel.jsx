@@ -27,7 +27,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
-  const [buildingFilter, setBuildingFilter] = useState('');
+  const [buildingFilter, setBuildingFilter] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
@@ -41,9 +41,15 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   }, [refreshKey, revision]);
 
   const activeLots = lots.filter((lot) => lot.statut !== 'termine');
+  const defaultSelectedLot = lots.find((lot) => String(lot.id_lot) === selectedId)
+    || activeLots[0] || lots[0];
+  const defaultBuildingId = defaultSelectedLot?.repartitions?.[0]?.id_batiment;
+  const effectiveBuildingFilter = buildingFilter === null
+    ? (defaultBuildingId == null ? '' : String(defaultBuildingId))
+    : buildingFilter;
   const filteredLots = managementMode ? lots.filter((lot) => {
     const cycle = lot.repartitions?.[0];
-    const matchesBuilding = !buildingFilter || String(cycle?.id_batiment) === buildingFilter;
+    const matchesBuilding = !effectiveBuildingFilter || String(cycle?.id_batiment) === effectiveBuildingFilter;
     const matchesStatus = statusFilter === 'all'
       || (statusFilter === 'active' ? lot.statut !== 'termine' : lot.statut === 'termine');
     return matchesBuilding && matchesStatus;
@@ -145,7 +151,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       {managementMode && loaded && <>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
           <TextField select SelectProps={{ native: true }} size="small" label="Filtrer par bâtiment"
-            value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
+            value={effectiveBuildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}
             sx={{ minWidth: { xs: '100%', sm: 220 } }}>
             <option value="">Tous les bâtiments</option>
             {buildings.map((building) => <option key={building.id_batiment} value={building.id_batiment}>{building.nom}</option>)}
