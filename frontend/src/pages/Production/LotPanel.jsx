@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Box, Button, ButtonBase, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
@@ -11,6 +11,7 @@ import LotEggChart from './LotEggChart';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
+const displayLotName = (lot) => lot.nom_lot?.replace(/\s+en cours$/i, '').trim() || lot.nom_lot;
 const message = (error) => {
   const detail = error.data?.detail || error.response?.data?.detail;
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
@@ -212,10 +213,13 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           {filteredLots.map((lot) => {
             const cycle = lot.repartitions?.[0];
             const finished = lot.statut === 'termine';
-            return <Box component="article" key={lot.id_lot} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+            const lotName = displayLotName(lot);
+            return <ButtonBase component="article" key={lot.id_lot} aria-label={`Ouvrir le lot ${lotName}`}
+              onClick={() => { setSelectedId(String(lot.id_lot)); setManagementView('details'); }}
+              sx={{ display: 'block', width: '100%', textAlign: 'left', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, color: 'text.primary', transition: 'border-color 120ms ease, background-color 120ms ease', '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' }, '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}>
               <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lot.nom_lot}</Typography>
+                  <Typography variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{lotName}</Typography>
                 </Box>
                 {finished && <Chip size="small" label="Terminé" />}
               </Stack>
@@ -223,18 +227,15 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                 <Fact label={finished ? 'Volailles à la fin' : 'Volailles présentes'} value={number(lot.effectif_actuel)} />
                 <Fact label={finished ? 'Âge à la fin' : 'Âge aujourd’hui'} value={lot.age_semaines == null ? '-' : lot.age_semaines + ' semaines'} />
               </Box>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.5 }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     {cycle?.nom_batiment || 'Bâtiment'} · Arrivée le {formatShortDate(lot.date_debut)}
                   </Typography>
                   {finished && lot.date_fin_reelle && <Typography variant="body2" color="text.secondary">Fin le {formatShortDate(lot.date_fin_reelle)}</Typography>}
                 </Box>
-                <Button size="small" onClick={() => { setSelectedId(String(lot.id_lot)); setManagementView('details'); }}>
-                  Voir le lot
-                </Button>
               </Stack>
-            </Box>;
+            </ButtonBase>;
           })}
         </Box> : <Box sx={{ mt: 3, p: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
           <Typography fontWeight={700}>Aucun lot {statusFilter === 'active' ? 'en cours' : 'terminé'}{statusFilter === 'finished' && buildingFilter ? ' dans ce bâtiment' : ''}</Typography>
