@@ -21,7 +21,6 @@ from app.schemas.cycle_production import (
 )
 from app.utils.dependencies import get_current_active_user
 from app.utils.production_cycles import (
-    ACTIVE_CYCLE_STATUSES,
     cycle_to_dict,
     find_active_cycle,
     find_cycle_for_date,
@@ -41,21 +40,6 @@ def _ensure_batiment(db: Session, id_batiment: int) -> Batiment:
             detail=f"Batiment avec l'ID {id_batiment} introuvable",
         )
     return batiment
-
-
-def _ensure_no_active_cycle(db: Session, id_batiment: int, exclude_cycle_id: Optional[int] = None) -> None:
-    query = db.query(CycleProduction).filter(
-        CycleProduction.id_batiment == id_batiment,
-        CycleProduction.statut.in_(ACTIVE_CYCLE_STATUSES),
-    )
-    if exclude_cycle_id:
-        query = query.filter(CycleProduction.id_cycle != exclude_cycle_id)
-
-    if query.first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ce batiment a deja un lot actif. Terminez-le avant d'en commencer un nouveau.",
-        )
 
 
 @router.get("", response_model=List[CycleProductionRead])
@@ -146,7 +130,7 @@ def assign_cycle_history(
     validate_cycle_date(cycle, payload.date_debut)
     validate_cycle_date(cycle, payload.date_fin)
     if payload.date_fin > date.today():
-        raise HTTPException(status_code=400, detail="La période ne peut pas être dans le futur.")
+        raise HTTPException(status_code=400, detail="La p�riode ne peut pas �tre dans le futur.")
     records = db.query(Production).filter(
         Production.id_batiment == cycle.id_batiment,
         Production.id_cycle.is_(None),
@@ -187,7 +171,7 @@ def update_cycle(
     if not cycle:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot introuvable")
     if cycle.lot is None:
-        raise HTTPException(status_code=409, detail="Le cycle doit être rattaché à un lot avant modification.")
+        raise HTTPException(status_code=409, detail="Le cycle doit �tre rattach� � un lot avant modification.")
 
     data = {
         "nom_lot": cycle.lot.nom_lot,
@@ -212,7 +196,7 @@ def update_cycle(
     if any(data[key] is None for key in (
         "nom_lot", "date_debut", "age_depart_semaines", "effectif_initial", "duree_semaines",
     )):
-        raise HTTPException(status_code=400, detail="Les champs obligatoires ne peuvent pas être vides.")
+        raise HTTPException(status_code=400, detail="Les champs obligatoires ne peuvent pas �tre vides.")
     return update_lot(cycle.id_lot, LotProductionCreate(**data), db, current_user)["repartitions"][0]
 
 @router.post("/{id_cycle}/terminer", response_model=CycleProductionRead)
@@ -226,5 +210,6 @@ def terminate_cycle(
     if not cycle:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot introuvable")
     if cycle.lot is None:
-        raise HTTPException(status_code=409, detail="Le cycle doit être rattaché à un lot avant clôture.")
+        raise HTTPException(status_code=409, detail="Le cycle doit �tre rattach� � un lot avant cl�ture.")
     return terminate_lot(cycle.id_lot, payload, db, current_user)["repartitions"][0]
+
