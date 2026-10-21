@@ -197,6 +197,14 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           </Typography>
         </Box>}
       </>}
+      {!managementMode && activeLots.length > 1 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} aria-label="Lots actifs par bâtiment">
+        {activeLots.map((lot) => {
+          const cycle = lot.repartitions?.[0];
+          return <Chip key={lot.id_lot} clickable color={String(lot.id_lot) === String(selected?.id_lot) ? 'primary' : 'default'}
+            label={`${cycle?.nom_batiment || 'Bâtiment'} : ${lot.nom_lot}`}
+            onClick={() => setSelectedId(String(lot.id_lot))} />;
+        })}
+      </Stack>}
       {error && !dialog && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
       {!loaded && !error && <Typography sx={{ mt: 2 }}>Chargement des lots...</Typography>}
       {loaded && !selected && !managementMode && <Typography color="text.secondary" sx={{ mt: 2 }}>Démarrez un lot indépendant pour chaque bâtiment actif.</Typography>}
