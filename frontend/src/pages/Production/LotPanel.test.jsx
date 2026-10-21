@@ -14,7 +14,10 @@ vi.mock('../../services/productionService', () => ({
   productionService: { getProductions, getBuildingVaccineExpenses },
 }));
 
-vi.mock('./LotEggChart', () => ({ default: () => <div>Évolution des œufs</div> }));
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }) => <div>{children}</div>, LineChart: ({ children }) => <div>{children}</div>,
+  CartesianGrid: () => null, Line: () => null, XAxis: () => null, YAxis: () => null, Tooltip: () => null,
+}));
 
 const buildings = [
   { id_batiment: 1, nom: 'A', est_actif: true },
@@ -107,7 +110,7 @@ describe('LotPanel independent building lots', () => {
     expect(within(activeCard).queryByText('Voir le lot')).not.toBeInTheDocument();
     fireEvent.click(activeCard);
     expect(await screen.findByRole('heading', { name: 'Lot' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Tous les lots' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retour aux lots' }));
     expect(screen.getByRole('tab', { name: /En cours/ })).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.click(screen.getByRole('tab', { name: /Terminés/ }));
@@ -121,8 +124,8 @@ describe('LotPanel independent building lots', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
 
     expect(await screen.findByRole('heading', { name: 'Ancien lot' })).toBeVisible();
-    expect(screen.getByText(/Âge à l’arrivée/)).toBeVisible();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Tous les lots' })[0]);
+    expect(screen.getByText('Pertes depuis l’arrivée')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retour aux lots' }));
     expect(screen.getByRole('tab', { name: /Terminés/ })).toHaveAttribute('aria-selected', 'true');
   });
   it('loads historical records and vaccine expenses for the selected lot cycle', async () => {
@@ -139,15 +142,16 @@ describe('LotPanel independent building lots', () => {
 
     fireEvent.click(await screen.findByRole('tab', { name: /Terminés/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Historique de production' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Production' }));
 
-    expect(await screen.findByRole('region', { name: 'Historique de production' })).toBeVisible();
+    expect(await screen.findByRole('table', { name: 'Saisies quotidiennes du lot' })).toBeVisible();
     await waitFor(() => expect(getProductions).toHaveBeenCalledWith(expect.objectContaining({
       id_cycle: 1, date_debut: '2026-09-01', date_fin: '2026-09-30',
     })));
-    expect(await screen.findByText('80')).toBeVisible();
+    expect(within(screen.getByRole('table', { name: 'Saisies quotidiennes du lot' })).getByText('80')).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Vaccins et dépenses' }));
     expect(await screen.findByText('Vaccin A')).toBeVisible();
-    expect(screen.getByText('Évolution des œufs')).toBeVisible();
   });
 
 });
+

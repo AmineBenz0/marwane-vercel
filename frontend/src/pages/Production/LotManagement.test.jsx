@@ -2,10 +2,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LotPanel from './LotPanel';
-import { cycleProductionService, lotProductionService } from '../../services/productionService';
+import { cycleProductionService, lotProductionService, productionService } from '../../services/productionService';
 
 vi.mock('../../services/productionService', () => ({
   cycleProductionService: { assignHistory: vi.fn() },
+  productionService: { getProductions: vi.fn(), getBuildingVaccineExpenses: vi.fn() },
   lotProductionService: { getLots: vi.fn(), updateLot: vi.fn() },
 }));
 
@@ -19,6 +20,8 @@ const buildings = [{ id_batiment: 1, nom: 'A' }, { id_batiment: 2, nom: 'B' }];
 describe('Independent lot management', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    productionService.getProductions.mockResolvedValue([]);
+    productionService.getBuildingVaccineExpenses.mockResolvedValue([]);
     lotProductionService.getLots.mockResolvedValue([lot]);
     cycleProductionService.assignHistory.mockResolvedValue({});
     lotProductionService.updateLot.mockResolvedValue(lot);
@@ -26,6 +29,7 @@ describe('Independent lot management', () => {
 
   it('edits the selected flock while keeping its building fixed', async () => {
     render(<MemoryRouter><LotPanel buildings={buildings} managementMode /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir le lot Lot A' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Modifier le lot' }));
     expect(screen.getByRole('combobox', { name: 'Bâtiment' })).toHaveAttribute('aria-disabled', 'true');
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif initial dans ce bâtiment' }), {
@@ -42,16 +46,18 @@ describe('Independent lot management', () => {
     })));
   });
 
-  it('keeps lifecycle controls in management and leaves the chart to production', async () => {
+  it('opens the lot overview with stable tabs and lifecycle controls', async () => {
     render(<MemoryRouter><LotPanel buildings={buildings} managementMode /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir le lot Lot A' }));
     expect(await screen.findByRole('heading', { name: 'Lot A' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Modifier le lot' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Terminer ce lot' })).toBeVisible();
-    expect(screen.queryByRole('region', { name: 'Évolution des œufs par semaine' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Terminer le lot' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Vue d’ensemble' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: 'Démarrer un lot' })).not.toBeInTheDocument();
   });
 
   it('attaches only the selected building cycle to earlier unassigned entries', async () => {
-    render(<MemoryRouter><LotPanel buildings={buildings} managementMode /></MemoryRouter>);
+    render(<MemoryRouter><LotPanel buildings={buildings} /></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'Rattacher les saisies sans cycle' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('A');
     fireEvent.click(screen.getByRole('button', { name: 'Rattacher' }));
@@ -60,3 +66,4 @@ describe('Independent lot management', () => {
     })));
   });
 });
+

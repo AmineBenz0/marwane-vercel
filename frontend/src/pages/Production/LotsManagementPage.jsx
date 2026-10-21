@@ -7,6 +7,7 @@ export default function LotsManagementPage() {
   const [buildings, setBuildings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [view, setView] = useState('overview');
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -24,10 +25,11 @@ export default function LotsManagementPage() {
   }, [revision]);
 
   return <Box sx={{ pb: 4, minWidth: 0 }}>
-    <Typography component="h1" variant="h3" fontWeight={800} sx={{ mb: 1 }}>Gestion des lots</Typography>
-    <Typography color="text.secondary" sx={{ mb: 3 }}>Gérez les lots indépendants par bâtiment. Chaque lot conserve son propre cycle et sa propre clôture.</Typography>
+    {view === 'overview' && <><Typography component="h1" variant="h3" fontWeight={800} sx={{ mb: 1 }}>Gestion des lots</Typography>
+    <Typography color="text.secondary" sx={{ mb: 3 }}>Retrouvez les lots en cours et terminés de chaque bâtiment.</Typography></>}
     {loading ? <CircularProgress aria-label="Chargement des bâtiments" />
       : error ? <Alert severity="error" action={<Button onClick={() => setRevision((value) => value + 1)}>Réessayer</Button>}>{error}</Alert>
-        : <LotPanel buildings={buildings} managementMode />}
+        : <LotPanel buildings={buildings} managementMode onViewChange={setView} />}
   </Box>;
 }
+
