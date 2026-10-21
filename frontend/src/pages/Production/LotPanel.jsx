@@ -209,11 +209,11 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           {selected.date_fin_prevue && <Typography variant="body2" sx={{ mt: 0.5 }}>Fin prévue : {formatShortDate(selected.date_fin_prevue)} (indicative)</Typography>}
           {selected.notes && <Typography variant="body2" sx={{ mt: 0.5 }}>Notes : {selected.notes}</Typography>}
         </Box>}
-        {selected.statut === 'termine' && activeLots.length > 0 && <Button size="small" onClick={() => setSelectedId(String(activeLots[0].id_lot))} sx={{ mt: 1 }}>Revenir aux lots en cours</Button>}
+        {!managementMode && selected.statut === 'termine' && activeLots.length > 0 && <Button size="small" onClick={() => setSelectedId(String(activeLots[0].id_lot))} sx={{ mt: 1 }}>Revenir aux lots en cours</Button>}
         <Box sx={{ mt: 2.5, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 2, md: 3 } }}>
-          <Fact label="Effectif restant" value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' entrants'} color="primary.main" />
+          <Fact label={selected.statut === 'termine' ? 'Volailles à la fin' : 'Volailles présentes'} value={number(selected.effectif_actuel)} detail={'sur ' + number(selected.effectif_initial) + ' à l’arrivée'} color="primary.main" />
           <Fact label="Mortalité cumulée" value={number(selected.mortalite_totale)} />
-          <Fact label="Age" value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
+          <Fact label={selected.statut === 'termine' ? 'Âge à la fin' : 'Âge aujourd’hui'} value={selected.age_semaines == null ? '-' : selected.age_semaines + ' semaines'} />
           <Fact label="Formule d'aliment" value={selected.formule_suggeree || '-'} />
         </Box>
         <Divider sx={{ mt: 2.5, mb: 2 }} />
@@ -227,7 +227,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                 setError('');
                 setHistoryCycle(selectedCycle);
                 setHistoryPeriod({ date_debut: selected.date_debut, date_fin: selected.date_fin_reelle || localToday() });
-              }}>Rattacher les saisies sans cycle</Button>}
+              }}>Rattacher les saisies sans cycle</Button>
             </Stack>
           </Stack>
         </Box>}
