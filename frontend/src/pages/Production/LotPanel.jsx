@@ -11,6 +11,20 @@ import LotDetails from './LotDetails';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
+const makeLotName = (buildingName, date, strain) => {
+  const building = String(buildingName || '').trim().replace(/^(?:bâtiment|batiment|bat)\s*/i, '').trim();
+  const parts = [`Bat ${building}`];
+  if (date) parts.push(formatShortDate(date));
+  if (strain?.trim()) parts.push(strain.trim());
+  return parts.join(' - ');
+};
+const estimateLotEndDate = (startDate, durationWeeks = 100) => {
+  if (!startDate) return '';
+  const endDate = new Date(`${startDate}T12:00:00`);
+  if (Number.isNaN(endDate.getTime())) return '';
+  endDate.setDate(endDate.getDate() + (durationWeeks * 7) - 1);
+  return formatShortDate(endDate);
+};
 const displayLotName = (lot) => lot.statut === 'termine' ? lot.nom_lot
   : lot.nom_lot?.replace(/\s+en cours$/i, '').trim() || lot.nom_lot;
 const message = (error) => {
@@ -27,6 +41,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [revision, setRevision] = useState(0);
   const [dialog, setDialog] = useState('');
   const [values, setValues] = useState({});
+  const [automaticName, setAutomaticName] = useState(true);
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
@@ -67,9 +82,11 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const open = (kind) => {
     if (kind === 'create' && (!loaded || !available.length)) return;
     setError('');
+    const defaultBuilding = available[0];
+    setAutomaticName(kind === 'create');
     setValues(kind === 'create' ? {
-      nom_lot: 'Lot du ' + formatShortDate(localToday()), date_debut: localToday(),
-      id_batiment: available[0]?.id_batiment || '', effectif_initial: '',
+      nom_lot: makeLotName(defaultBuilding?.nom, localToday(), ''), date_debut: localToday(),
+      id_batiment: defaultBuilding?.id_batiment || '', effectif_initial: '',
       age_depart_semaines: 0, souche: '', notes: '', duree_semaines: 100, date_fin_prevue: '',
     } : kind === 'edit' ? {
       ...selected, id_batiment: selectedCycle?.id_batiment,
@@ -77,11 +94,25 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     } : { date_fin_reelle: localToday() });
     setDialog(kind);
   };
-  const field = (name, value) => setValues((old) => ({
-    ...old,
-    [name]: value,
-    ...(dialog === 'edit' && ['date_debut', 'duree_semaines'].includes(name) ? { date_fin_prevue: '' } : {}),
-  }));
+  const generatedName = (source) => {
+    const building = buildings.find((row) => Number(row.id_batiment) === Number(source.id_batiment));
+    return makeLotName(building?.nom, source.date_debut, source.souche);
+  };
+  const field = (name, value) => setValues((old) => {
+    const next = {
+      ...old,
+      [name]: value,
+      ...(dialog === 'edit' && ['date_debut', 'duree_semaines'].includes(name) ? { date_fin_prevue: '' } : {}),
+    };
+    if (dialog === 'create' && automaticName && ['date_debut', 'id_batiment', 'souche'].includes(name)) {
+      next.nom_lot = generatedName(next);
+    }
+    return next;
+  });
+  const restoreAutomaticName = () => {
+    setAutomaticName(true);
+    setValues((old) => ({ ...old, nom_lot: generatedName(old) }));
+  };
 
   const submitHistory = async (event) => {
     event.preventDefault();
@@ -110,7 +141,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         const count = Number(values.effectif_initial);
         const data = {
           nom_lot: values.nom_lot.trim(), date_debut: values.date_debut,
-          age_depart_semaines: Number(values.age_depart_semaines), effectif_initial: count,
+          age_depart_semaines: Number(values.age_depart_semaines ?? 0), effectif_initial: count,
           souche: values.souche || null, notes: values.notes || null,
           duree_semaines: Number(values.duree_semaines || 100),
           date_fin_prevue: values.date_fin_prevue || null,
@@ -292,14 +323,40 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
               {dialog === 'end' ? <>
                 <Typography>Ce lot passera dans les lots terminés. Ses saisies et son historique resteront consultables.</Typography>
                 <DateField label="Date de fin" required inputProps={{ min: selected?.date_debut, max: localToday() }} value={values.date_fin_reelle || ''} onChange={(event) => field('date_fin_reelle', event.target.value)} />
+              </> : dialog === 'create' ? <>
+                <TextField select label="Bâtiment" required fullWidth value={values.id_batiment ?? ''} onChange={(event) => field('id_batiment', event.target.value)}>
+                  {available.map((building) => <MenuItem key={building.id_batiment} value={building.id_batiment}>{building.nom}</MenuItem>)}
+                </TextField>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <DateField label="Date de mise en place" required fullWidth value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
+                  <Box sx={{ minWidth: 0 }}>
+                    <TextField label="Nom du lot" required fullWidth inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => { setAutomaticName(false); setValues((old) => ({ ...old, nom_lot: event.target.value })); }} />
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mt: 0.5, minHeight: 24, flexWrap: 'wrap' }}>
+                      <Typography variant="caption" color="text.secondary">{automaticName ? 'Mis à jour avec la date et la souche' : 'Nom personnalisé'}</Typography>
+                      {!automaticName && <Button size="small" onClick={restoreAutomaticName} sx={{ minWidth: 0, p: 0, textTransform: 'none' }}>Rétablir le nom automatique</Button>}
+                    </Stack>
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <TextField label="Effectif de départ" required fullWidth type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
+                  <TextField label="Souche (facultatif)" fullWidth inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
+                </Box>
+                <TextField label="Notes (facultatif)" multiline minRows={2} fullWidth value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
+                <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                    <Typography variant="body2" color="text.secondary">Fin estimée</Typography>
+                    <Typography variant="body2" fontWeight={700}>{estimateLotEndDate(values.date_debut) || 'À calculer'}</Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">Calculée sur une durée standard de 100 semaines. La clôture reste manuelle.</Typography>
+                </Box>
               </> : <>
                 <TextField label="Nom du lot" required inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => field('nom_lot', event.target.value)} />
-                <TextField select label="Bâtiment" required value={values.id_batiment ?? ''} disabled={dialog === 'edit'} onChange={(event) => field('id_batiment', event.target.value)}>
-                  {(dialog === 'edit' ? buildings.filter((row) => Number(row.id_batiment) === Number(values.id_batiment)) : available)
+                <TextField select label="Bâtiment" required value={values.id_batiment ?? ''} disabled onChange={(event) => field('id_batiment', event.target.value)}>
+                  {buildings.filter((row) => Number(row.id_batiment) === Number(values.id_batiment))
                     .map((building) => <MenuItem key={building.id_batiment} value={building.id_batiment}>{building.nom}</MenuItem>)}
                 </TextField>
-                <DateField label="Date d'arrivée" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
-                <TextField label="Effectif initial dans ce bâtiment" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
+                <DateField label="Date de mise en place" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
+                <TextField label="Effectif de départ" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
                 <TextField label="Âge à l'arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="L'âge est propre à ce lot." />
                 <TextField label="Durée prévue (semaines)" required type="number" inputProps={{ min: 1, step: 1 }} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)} />
                 <DateField label="Date de fin prévue (facultatif)" value={values.date_fin_prevue || ''} onChange={(event) => field('date_fin_prevue', event.target.value)} helperText="Cette date est indicative. La clôture reste une action manuelle." />
