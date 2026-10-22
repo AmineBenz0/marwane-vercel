@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Drawer,
   List,
@@ -69,6 +70,7 @@ const NAV_SECTIONS = [
     label: 'Travail terrain',
     items: [
       { text: 'Production & stock', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/production' },
+      { text: 'Gestion des lots', icon: <InventoryIcon sx={{ fontSize: 20 }} />, path: '/production/lots' },
       { text: 'Par bâtiment', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/batiment' },
     ],
   },
@@ -260,7 +262,7 @@ function AppLayout({ children }) {
   const [batiments, setBatiments] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isRecovering, isRecoveryAttempting, retrySessionRecovery } = useAuthStore();
 
   const effectiveWidth = isMobile ? 0 : (collapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH);
 
@@ -585,6 +587,23 @@ function AppLayout({ children }) {
           <AlertCenter />
         </Box>
         <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, pt: { xs: 8, md: 3 }, maxWidth: '100%' }}>
+          {isRecovering && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <ButtonBase
+                  onClick={retrySessionRecovery}
+                  disabled={isRecoveryAttempting}
+                  sx={{ fontWeight: 700, px: 1, whiteSpace: 'nowrap' }}
+                >
+                  {isRecoveryAttempting ? 'Nouvel essai…' : 'Réessayer'}
+                </ButtonBase>
+              }
+            >
+              Connexion temporairement indisponible. Votre session est conservée.
+            </Alert>
+          )}
           {children}
         </Box>
       </Box>

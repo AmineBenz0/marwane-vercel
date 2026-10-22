@@ -4,6 +4,7 @@ Gère la connexion et la session de base de données.
 """
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 from app.config import settings
 
 # Création du moteur SQLAlchemy
@@ -17,28 +18,39 @@ if not database_url:
 
 engine_options = {"echo": settings.DEBUG}
 
-# Vercel peut conserver une instance de fonction entre deux invocations.
-# Pour PostgreSQL, recycle les connexions inactives et limite le nombre de
-# connexions ouvertes par instance. Les tests SQLite n'acceptent pas ces
-# options de pool, d'où la condition explicite.
-if not database_url.startswith("sqlite"):
-    engine_options.update(
-        {
-            "pool_pre_ping": True,
-            "pool_recycle": 300,
-        }
-    )
+# Les fonctions serverless utilisent le transaction pooler Supabase (port 6543).
+# Chaque invocation ouvre puis ferme sa connexion SQLAlchemy ; Supavisor gère
+# le pool partagé et évite qu'un pool local reste bloqué entre invocations.
+is_sqlite = database_url.startswith("sqlite")
+is_supabase_transaction_pooler = (
+    ".pooler.supabase.com" in database_url.lower()
+    and ":6543/" in database_url
+)
+is_serverless = settings.ENVIRONMENT.lower() in {"production", "preview"}
 
-    if settings.ENVIRONMENT.lower() in {"production", "preview"}:
+if not is_sqlite:
+    if is_serverless and is_supabase_transaction_pooler:
+        engine_options["poolclass"] = NullPool
+    else:
+        # Connexions persistantes ou fournisseurs sans pooler externe :
+        # garder un pool local borné, jamais un pool illimité.
         engine_options.update(
             {
-                "pool_size": 1,
-                "max_overflow": 0,
-                "pool_timeout": 10,
+                "pool_pre_ping": True,
+                "pool_recycle": 300,
             }
         )
-        if "sslmode=" not in database_url.lower():
-            engine_options["connect_args"] = {"sslmode": "require"}
+        if is_serverless:
+            engine_options.update(
+                {
+                    "pool_size": 1,
+                    "max_overflow": 0,
+                    "pool_timeout": 10,
+                }
+            )
+
+    if "sslmode=" not in database_url.lower() and not is_sqlite:
+        engine_options["connect_args"] = {"sslmode": "require"}
 
 engine = create_engine(database_url, **engine_options)
 

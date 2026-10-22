@@ -108,6 +108,9 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     stale_cancel = cancel(1)
     assert stale_cancel.status_code == 409, stale_cancel.text
 
+    stale_cancel = cancel(1)
+    assert stale_cancel.status_code == 409, stale_cancel.text
+
     second_cancel = cancel(2)
     assert second_cancel.status_code == 200, second_cancel.text
     assert second_cancel.json()["statut"] == "active"

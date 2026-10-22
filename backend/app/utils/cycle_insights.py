@@ -32,7 +32,7 @@ def cycle_insights(db, cycle):
             day["formulas"].add(record.formule)
 
     weeks = []
-    flock = cycle.effectif_initial
+    flock = schedule.effectif_initial
     cursor = schedule.date_debut
     while cursor <= end:
         week_end = min(cursor + timedelta(days=6), end)

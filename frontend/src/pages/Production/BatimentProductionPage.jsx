@@ -140,7 +140,7 @@ function BatimentProductionPage() {
     setEditingProduction(production);
     setPreselectedEggType(production.type_oeuf || 'normal');
     setFormTitle('Modifier la saisie');
-    setFormDescription('Mettez à jour les quantités par type et le grammage global de cette journée.');
+    setFormDescription('Mettez à jour les quantités par type et le poids du plateau de cette journée.');
     setOpenForm(true);
   };
 
@@ -197,8 +197,7 @@ function BatimentProductionPage() {
         actions={<Button variant="contained" disabled={!dailyReady || !batiment} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
           onClick={() => hasProduction ? handleEdit(latestTodayEntry) : handleAddProduction()}>
           {hasProduction ? 'Modifier la saisie' : 'Saisir la journée'}
-        </Button>}
-        onChange={() => { loadData(); reloadStock(); }} />
+        </Button>} />
       <Card variant="outlined" component="section" aria-label="Journée sélectionnée" aria-busy={!dailyReady} sx={{ borderRadius: 3, minWidth: 0 }}>
         <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
           <DailySectionHeader title="Journée sélectionnée" selectedDate={selectedDate} onDateChange={setSelectedDate}

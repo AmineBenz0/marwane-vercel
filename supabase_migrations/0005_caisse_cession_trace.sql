@@ -16,9 +16,7 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS ix_caisse_id_cession ON caisse (id_cession);
 
--- Older schemas used either name for the Caisse origin check.
 ALTER TABLE caisse DROP CONSTRAINT IF EXISTS check_caisse_mutual_exclusion;
-ALTER TABLE caisse DROP CONSTRAINT IF EXISTS check_caisse_origine;
 ALTER TABLE caisse ADD CONSTRAINT check_caisse_mutual_exclusion CHECK (
     (id_charge IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_cession IS NULL)
     OR (id_cession IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_charge IS NULL)

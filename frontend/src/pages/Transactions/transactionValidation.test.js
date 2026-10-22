@@ -9,7 +9,11 @@ const validTransaction = (overrides = {}) => ({
   id_fournisseur: '',
   lignes: [{
     id_produit: '7',
-    id_batiment: '',
+    id_batiment: '1',
+    id_production: '31',
+    date_production: '2026-10-03',
+    source_ready: true,
+    source_available: 100,
     quantite: '2',
     prix_unitaire: '15.5',
     ajouter_paiement: false,
@@ -24,6 +28,30 @@ const validTransaction = (overrides = {}) => ({
 });
 
 describe('transactionValidationSchema', () => {
+  it('requires a production source for client sales', async () => {
+    const data = validTransaction();
+    data.lignes[0].id_production = '';
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('Choisissez le type');
+  });
+
+  it('rejects quantities exceeding a source across multiple lines', async () => {
+    const data = validTransaction();
+    data.lignes[0].quantite = 60;
+    data.lignes.push({ ...data.lignes[0], quantite: 50 });
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('stock disponible');
+  });
+
+  it('rejects production after the sale date', async () => {
+    const data = validTransaction();
+    data.lignes[0].date_production = '2026-10-05';
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('précéder');
+  });
+
+  it('blocks submission while source details cannot be loaded', async () => {
+    const data = validTransaction();
+    data.lignes[0].source_ready = false;
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('Chargez une saisie');
+  });
   it.each([
     ['client', { id_client: '12', id_fournisseur: '' }, 12, null],
     ['fournisseur', { id_client: '', id_fournisseur: '34' }, null, 34],

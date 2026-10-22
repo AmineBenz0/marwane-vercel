@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.exc import InterfaceError, OperationalError, TimeoutError as SQLAlchemyTimeoutError
 from app.config import settings
 from app.config.logging_config import setup_logging
 from app.routers import (
@@ -39,8 +39,12 @@ def _request_id(request: Request) -> str:
 async def database_error_handler(request: Request, exc: Exception):
     """Convertit les pannes DB en réponse stable et non sensible."""
     request_id = _request_id(request)
-    logging.getLogger(__name__).exception(
-        "Database unavailable",
+    logging.getLogger(__name__).error(
+        "Database unavailable: %s (request_id=%s endpoint=%s method=%s)",
+        exc,
+        request_id,
+        request.url.path,
+        request.method,
         exc_info=(type(exc), exc, exc.__traceback__),
         extra={
             "endpoint": request.url.path,
@@ -65,6 +69,7 @@ async def database_error_handler(request: Request, exc: Exception):
 
 app.add_exception_handler(OperationalError, database_error_handler)
 app.add_exception_handler(InterfaceError, database_error_handler)
+app.add_exception_handler(SQLAlchemyTimeoutError, database_error_handler)
 
 # Personnaliser le gestionnaire d'erreur pour retourner le format FastAPI standard
 @app.exception_handler(RateLimitExceeded)

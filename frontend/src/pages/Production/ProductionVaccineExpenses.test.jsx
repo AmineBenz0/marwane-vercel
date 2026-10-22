@@ -49,7 +49,7 @@ describe('Daily vaccine expenses', () => {
     await selectVaccine();
     fireEvent.click(screen.getByRole('button', { name: 'Modifier le prix' }));
     fireEvent.change(screen.getByLabelText('Prix unitaire (DH)'), { target: { value: '52' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Enregistrer aussi comme tarif pour les prochaines saisies' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Mémoriser ce tarif' }));
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
@@ -66,7 +66,7 @@ describe('Daily vaccine expenses', () => {
     const quantity = screen.getByLabelText('Quantité');
     for (const value of ['1.5', '0']) {
       fireEvent.change(quantity, { target: { value } });
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
       expect(await screen.findByText('La quantité doit être un entier positif')).toBeVisible();
     }
     expect(post).not.toHaveBeenCalled();
@@ -83,11 +83,12 @@ describe('Daily vaccine expenses', () => {
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Tarifs des vaccins' })).getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/vaccins/3/prix', { prix_defaut: '52' }));
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tarifs des vaccins' })).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter un vaccin' }));
     await selectVaccine();
-    expect(screen.getByText(/45/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/45/)).not.toBeInTheDocument();
     expect(screen.getByText(/1 unité ×/)).toBeVisible();
-    expect(screen.getByText(/52/)).toBeVisible();
+    expect(screen.getByText(/1 unité ×/)).toHaveTextContent('52,00');
   });
 
   it('restores the saved price and expense version instead of the new catalogue price', async () => {
@@ -104,7 +105,7 @@ describe('Daily vaccine expenses', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mettre a jour' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       charge_versions: { 9: 'expense-version' },
-      depenses_vaccins: [{ id_charge: 9, id_vaccin: 3, quantite: '2.000', prix_unitaire: '50.25', id_compte: null }],
+      depenses_vaccins: [{ id_charge: 9, id_vaccin: 3, quantite: '2', prix_unitaire: '50.25', id_compte: null }],
     })));
   });
 
@@ -116,7 +117,7 @@ describe('Daily vaccine expenses', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter un vaccin' }));
     await selectVaccine();
-    expect(screen.getByText('Ce premier prix sera aussi enregistré comme tarif pour les prochaines saisies.')).toBeVisible();
+    expect(screen.getByText('Tarif mémorisé pour les prochaines saisies.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText('Indiquez le prix')).toBeVisible();
     expect(post).not.toHaveBeenCalled();

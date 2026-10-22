@@ -45,7 +45,7 @@ def get_client_ip(request: Request) -> str:
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 @conditional_rate_limit("5/minute")  # Activé par le feature flag de production.
-async def login(
+def login(
     login_data: LoginRequest,
     request: Request,
     db: Session = Depends(get_db)
@@ -142,7 +142,7 @@ async def login(
 
 
 @router.post("/refresh", response_model=RefreshTokenResponse, status_code=status.HTTP_200_OK)
-async def refresh_token(
+def refresh_token(
     refresh_data: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ):

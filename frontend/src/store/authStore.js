@@ -10,7 +10,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { post } from '../services/api';
+import { post, refreshSession } from '../services/api';
 
 const AUTH_STORAGE_KEY = 'auth-storage';
 
@@ -132,6 +132,8 @@ const useAuthStore = create(
       refreshToken: null,
       isAuthenticated: false,
       isInitialized: false, // Indique si la réhydratation est terminée
+      isRecovering: false,
+      isRecoveryAttempting: false,
 
       /**
        * Connecte un utilisateur avec son email et mot de passe.
@@ -207,48 +209,39 @@ const useAuthStore = create(
        * @throws {Error} Si le rafraîchissement échoue
        */
       refreshAccessToken: async () => {
-        const { refreshToken: currentRefreshToken } = get();
-
-        if (!currentRefreshToken) {
-          throw new Error('Aucun refresh token disponible');
-        }
-
         try {
-          // Appeler l'endpoint de rafraîchissement
-          const response = await post('/auth/refresh', {
-            refresh_token: currentRefreshToken,
-          });
-
-          // Extraire le nouveau token d'accès
-          const { access_token } = response;
-
-          // Extraire les informations utilisateur depuis le nouveau token
-          const user = extractUserFromToken(access_token);
-
-          if (!user || !user.id || !user.email) {
-            throw new Error('Impossible d\'extraire les informations utilisateur du nouveau token');
+          const accessToken = await refreshSession();
+          const user = extractUserFromToken(accessToken);
+          if (!user?.id || !user?.email) {
+            throw new Error('Impossible d’extraire les informations utilisateur du token rafraîchi');
           }
-
-          // Mettre à jour le store avec le nouveau token et les informations utilisateur
+          const refreshToken = localStorage.getItem('refresh_token') || get().refreshToken;
           set({
             user,
-            accessToken: access_token,
+            accessToken,
+            refreshToken,
             isAuthenticated: true,
+            isRecovering: false,
+            isRecoveryAttempting: false,
           });
-
-          // Mettre à jour le localStorage
-          localStorage.setItem('access_token', access_token);
-          syncAuthStorage({
-            accessToken: access_token,
-            refreshToken: currentRefreshToken,
-          });
-
-          return access_token;
+          syncAuthStorage({ accessToken, refreshToken });
+          return accessToken;
         } catch (error) {
-          // En cas d'erreur (token expiré, invalide, etc.), déconnecter l'utilisateur
-          console.error('Erreur lors du rafraîchissement du token:', error);
-          get().logout();
+          if (error?.status === 401) {
+            get().logout();
+          } else {
+            set({ isRecovering: true, isRecoveryAttempting: false });
+          }
           throw error;
+        }
+      },
+
+      retrySessionRecovery: async () => {
+        set({ isRecoveryAttempting: true });
+        try {
+          await get().refreshAccessToken();
+        } catch {
+          // Keep the saved session and the recovery screen available.
         }
       },
 
@@ -268,69 +261,57 @@ const useAuthStore = create(
        * Cette fonction est appelée automatiquement au chargement de l'application.
        */
       initialize: async () => {
-        // Démarrer en mode non-initialisé pour afficher un loader côté UI
-        set({ isInitialized: false });
+        set({ isInitialized: false, isRecovering: false });
         const persistedAuthState = readPersistedAuthState();
         const accessToken = localStorage.getItem('access_token') || persistedAuthState?.accessToken || null;
         const refreshToken = localStorage.getItem('refresh_token') || persistedAuthState?.refreshToken || null;
 
+        if (!refreshToken) {
+          set({
+            user: null,
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+            isRecovering: false,
+            isInitialized: true,
+          });
+          clearAuthStorage();
+          return;
+        }
+
         try {
-          // Si un refresh token existe, tenter un rafraîchissement silencieux
-          if (refreshToken) {
-            const response = await post('/auth/refresh', {
-              refresh_token: refreshToken,
-            });
-            const { access_token, refresh_token } = response;
-            const user = extractUserFromToken(access_token);
-            if (!user || !user.id || !user.email) {
-              throw new Error('Impossible d\'extraire les informations utilisateur du token rafraîchi');
-            }
-            // Mettre à jour les tokens et l'état
-            set({
-              user,
-              accessToken: access_token,
-              refreshToken: refresh_token || refreshToken,
-              isAuthenticated: true,
-              isInitialized: true,
-            });
-            localStorage.setItem('access_token', access_token);
-            if (refresh_token) {
-              localStorage.setItem('refresh_token', refresh_token);
-            }
-            syncAuthStorage({
-              accessToken: access_token,
-              refreshToken: refresh_token || refreshToken,
-            });
+          const newAccessToken = await refreshSession();
+          const user = extractUserFromToken(newAccessToken);
+          if (!user?.id || !user?.email) {
+            throw new Error('Impossible d’extraire les informations utilisateur du token rafraîchi');
+          }
+          const latestRefreshToken = localStorage.getItem('refresh_token') || refreshToken;
+          set({
+            user,
+            accessToken: newAccessToken,
+            refreshToken: latestRefreshToken,
+            isAuthenticated: true,
+            isRecovering: false,
+            isInitialized: true,
+          });
+          syncAuthStorage({ accessToken: newAccessToken, refreshToken: latestRefreshToken });
+        } catch (error) {
+          if (error?.status === 401) {
+            get().logout();
+            set({ isInitialized: true });
             return;
           }
 
-          // Pas de refresh token : si un access token existe, tenter de le décoder
-          if (accessToken) {
-            const user = extractUserFromToken(accessToken);
-            if (user && user.id && user.email) {
-              set({
-                user,
-                accessToken,
-                isAuthenticated: true,
-                isInitialized: true,
-              });
-              return;
-            }
-          }
-        } catch (error) {
-          // Echec du refresh : on nettoie et on demande une reconnexion
-          console.error('Initialisation auth: échec du rafraîchissement silencieux', error);
+          // Une panne temporaire ne supprime pas les identifiants enregistrés.
+          set({
+            user: null,
+            accessToken,
+            refreshToken,
+            isAuthenticated: false,
+            isRecovering: true,
+            isInitialized: true,
+          });
         }
-
-        // Par défaut, pas authentifié
-        set({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-          isInitialized: true,
-        });
-        clearAuthStorage();
       },
     }),
     {
@@ -356,6 +337,29 @@ const useAuthStore = create(
     }
   )
 );
+
+
+// Keep Zustand in sync when API requests refresh or invalidate a session.
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:session-refreshed', (event) => {
+    const { accessToken, refreshToken } = event.detail || {};
+    const user = extractUserFromToken(accessToken);
+    if (user?.id && user?.email) {
+      useAuthStore.setState({
+        user,
+        accessToken,
+        refreshToken,
+        isAuthenticated: true,
+        isRecovering: false,
+        isRecoveryAttempting: false,
+      });
+    }
+  });
+  window.addEventListener('auth:session-expired', () => useAuthStore.getState().logout());
+  window.addEventListener('auth:recovery-needed', () => {
+    useAuthStore.setState({ isRecovering: true, isRecoveryAttempting: false });
+  });
+}
 
 // Initialiser le store au chargement si les tokens existent dans localStorage
 // mais ne sont pas encore dans le store (cas de première utilisation)

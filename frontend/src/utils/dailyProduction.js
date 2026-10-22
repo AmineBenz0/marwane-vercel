@@ -4,7 +4,6 @@ export const EGG_TYPE_LABELS = {
   casse: 'Cassés',
   blanc: 'Blancs',
   perdu: 'Perdus',
-  double_jaune_demarrage: 'Doubles jaunes démarrage',
 };
 
 /** Combine stored type rows into one card per building and date. */

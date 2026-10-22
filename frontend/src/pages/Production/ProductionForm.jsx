@@ -21,13 +21,14 @@ import { productionService, cycleProductionService } from '../../services/produc
 import useNotification from '../../hooks/useNotification';
 import compteBancaireService from '../../services/compteBancaireService';
 import VaccineExpenseFields from './VaccineExpenseFields';
+import { carriedFeedFormula } from '../../utils/feedFormula';
 
 const EGG_TYPES = [
-  { value: 'normal', label: 'Œufs normaux' },
+  { value: 'normal', label: 'Oeufs normaux' },
   { value: 'double_jaune', label: 'Double jaune' },
-  { value: 'blanc', label: 'Œufs blancs' },
-  { value: 'casse', label: 'Œufs cassés' },
-  { value: 'perdu', label: 'Œuf perdu' },
+  { value: 'blanc', label: 'Oeufs blancs' },
+  { value: 'casse', label: 'Oeufs casses' },
+  { value: 'perdu', label: 'Oeuf perdu' },
 ];
 
 const quantityError = (value) => {
@@ -61,7 +62,7 @@ function ProductionForm({
   const [cycleContext, setCycleContext] = useState(null);
   const [contextLoading, setContextLoading] = useState(false);
   const [contextError, setContextError] = useState('');
-  const manualFormula = useRef(false);
+  const manualFormula = useRef(null);
   const [formules, setFormules] = useState([]);
   const [calibreThresholds, setCalibreThresholds] = useState([]);
   const [loadingDaily, setLoadingDaily] = useState(!!initialData);
@@ -106,10 +107,14 @@ function ProductionForm({
     const count = previewCount(quantities[type.value]);
     if (count <= 0 || ['casse', 'perdu'].includes(type.value)) return sum;
     const cartons = Math.ceil(count / 30);
-    return sum + (type.value === 'double_jaune'
+    return sum + (type.value.startsWith('double_jaune')
       ? (cartons * 2) + 1
       : cartons + Math.ceil(cartons / 10));
   }, 0);
+
+  useEffect(() => {
+    manualFormula.current = null;
+  }, [open, initialData]);
 
   useEffect(() => {
     if (!open || !initialData) return undefined;
@@ -141,7 +146,10 @@ function ProductionForm({
         formule: rows.find((row) => row.formule)?.formule || '',
         depenses_vaccins: (daily.depenses_vaccins || []).map((line) => ({
           id_charge: line.id_charge, id_vaccin: line.id_vaccin, nom_vaccin: line.nom_vaccin,
-          unite: line.unite, quantite: line.quantite, prix_unitaire: line.prix_unitaire, id_compte: line.id_compte || '',
+          unite: line.unite,
+          // Decimal snapshots such as "2.000" represent whole vaccine units.
+          quantite: Number.isInteger(Number(line.quantite)) ? String(Number(line.quantite)) : line.quantite,
+          prix_unitaire: line.prix_unitaire, id_compte: line.id_compte || '',
         })),
       });
       setVersions(daily.versions || {});
@@ -199,9 +207,12 @@ function ProductionForm({
   }, [open, watchedBatiment, watchedDate]);
 
   useEffect(() => {
-    if (initialData || manualFormula.current || contextLoading) return;
-    setValue('formule', cycleContext?.cycle?.formule_suggeree || '');
-  }, [cycleContext, contextLoading, initialData, setValue]);
+    if (!open || initialData || contextLoading) return;
+    const cycle = cycleContext?.cycle;
+    setValue('formule', cycle
+      ? carriedFeedFormula(manualFormula.current, cycle, formules, watchedDate, watchedBatiment)
+      : '');
+  }, [open, cycleContext, contextLoading, initialData, formules, watchedDate, watchedBatiment, setValue]);
 
   const missingCycle = !!cycleContext?.has_cycles && !cycleContext?.cycle;
   const deducedCalibre = (() => {
@@ -314,11 +325,12 @@ function ProductionForm({
           {loadingDaily && <Typography sx={{ mb: 2 }}>Chargement de la saisie...</Typography>}
           {contextLoading && <Typography sx={{ mb: 2 }}>Chargement du cycle...</Typography>}
           {contextError && <Alert severity="error" sx={{ mb: 2 }}>{contextError}</Alert>}
-          {missingCycle && <Alert severity="warning" sx={{ mb: 2 }}>Aucun cycle pour cette date. Démarrez un cycle depuis la page du bâtiment.</Alert>}
-          {cycleContext?.cycle && <Box sx={{ p: 1.5, mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-            <Typography fontWeight={800}>{cycleContext.cycle.nom_cycle}</Typography>
+          {missingCycle && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" href="/production/lots">Gestion des lots</Button>}>
+            Aucun lot affecté à cette date.
+          </Alert>}
+          {cycleContext?.cycle && <Box sx={{ mb: 2 }}>
             <Typography variant="body2" color="text.secondary">
-              {cycleContext.cycle.age_semaines} semaines · {Number(cycleContext.cycle.effectif_actuel || 0).toLocaleString('fr-FR')} volailles restantes à cette date
+              <strong>{cycleContext.cycle.nom_cycle}</strong> · {cycleContext.cycle.age_semaines} sem. · {Number(cycleContext.cycle.effectif_actuel || 0).toLocaleString('fr-FR')} sujets
             </Typography>
           </Box>}
           <Grid container spacing={3} alignItems="flex-start">
@@ -392,9 +404,6 @@ function ProductionForm({
 
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight={900}>Nombre d'œufs par type</Typography>
-              <Typography variant="caption" color="text.secondary">
-                Laissez vide ou indiquez 0 pour les types absents. Les œufs cassés et perdus sont exclus du total collecté.
-              </Typography>
             </Grid>
             {EGG_TYPES.map((type, index) => {
               const isLastField = index === EGG_TYPES.length - 1;
@@ -419,8 +428,7 @@ function ProductionForm({
                     label={type.label}
                     type="number"
                     inputProps={{ min: 0, step: 1 }}
-                    InputLabelProps={{ shrink: !!initialData }}
-                    fullWidth
+                        fullWidth
                     disabled={loadingDaily || !!loadError}
                     error={!!quantityError(quantities[type.value])}
                     helperText={quantityError(quantities[type.value])}
@@ -428,11 +436,6 @@ function ProductionForm({
                 </Grid>
               );
             })}
-            <Grid item xs={12}>
-              <Typography fontWeight={900}>
-                Total collecté (hors cassés et perdus) : {totalEggs.toLocaleString('fr-FR')} œufs
-              </Typography>
-            </Grid>
             <Grid item xs={12}>
               <Grid container spacing={2.5} alignItems="center">
                 <Grid item xs={12} sm={6}>
@@ -490,10 +493,7 @@ function ProductionForm({
                     Calibre déduit
                   </Typography>
                   <Typography variant="h6" fontWeight={900}>
-                    {deducedCalibre?.label || 'Saisir le poids du plateau'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Calibre des œufs normaux déduit du poids moyen calculé.
+                    {deducedCalibre?.label || '—'}
                   </Typography>
                 </Box>
               </Grid>
@@ -509,7 +509,7 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('mortalite', {
-                  min: { value: 0, message: 'Doit être positif' },
+                  min: { value: 0, message: 'Doit etre positif' },
                 })}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -525,7 +525,6 @@ function ProductionForm({
                 label="Mortalité"
                 type="number"
                 inputProps={{ min: 0, step: 1 }}
-                InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.mortalite}
                 helperText={errors.mortalite?.message}
@@ -534,12 +533,11 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('consommation_aliment_kg', {
-                  min: { value: 0, message: 'Doit être positif' },
+                  min: { value: 0, message: 'Doit etre positif' },
                 })}
                 label="Aliment consommé (kg)"
                 type="number"
                 inputProps={{ step: '0.01' }}
-                InputLabelProps={{ shrink: !!initialData }}
                 fullWidth
                 error={!!errors.consommation_aliment_kg}
                 helperText={errors.consommation_aliment_kg?.message}
@@ -551,7 +549,16 @@ function ProductionForm({
                 select
                 label="Formule"
                 value={watch('formule') || ''}
-                onChange={(event) => { manualFormula.current = true; setValue('formule', event.target.value); }}
+                onChange={(event) => {
+                  manualFormula.current = {
+                    value: event.target.value,
+                    cycleId: cycleContext?.cycle?.id_cycle,
+                    buildingId: watchedBatiment,
+                    age: cycleContext?.cycle?.age_semaines,
+                    date: watchedDate,
+                  };
+                  setValue('formule', event.target.value);
+                }}
                 fullWidth
               >
                 <MenuItem value="">Non précisée</MenuItem>
@@ -573,7 +580,7 @@ function ProductionForm({
           <Grid item xs={12} md={4}>
             <Box
               component="aside"
-              aria-label="Récapitulatif de la journée"
+              aria-label="Recapitulatif de la journee"
               sx={{
                 p: 2.5,
                 borderRadius: 3,
@@ -585,25 +592,25 @@ function ProductionForm({
               }}
             >
               <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2 }}>
-                Récapitulatif de la journée
+                Recapitulatif de la journee
               </Typography>
               <Box sx={{ display: 'grid', gap: 1.5 }}>
                 {[
-                  ['Œufs collectés', `${totalEggs.toLocaleString('fr-FR')} œufs`],
-                  ['Cassés et perdus', `${lostEggs.toLocaleString('fr-FR')} œufs`],
+                  ['Oeufs collectes', `${totalEggs.toLocaleString('fr-FR')} oeufs`],
+                  ['Casses et perdus', `${lostEggs.toLocaleString('fr-FR')} oeufs`],
                   ['Poids moyen', averageEggWeight === null
                     ? '-'
                     : `${averageEggWeight.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} g`],
                   ['Calibre', deducedCalibre?.label || '-'],
-                  ['Cartons calculés', `${cartonPreview}`],
-                  ['Mortalité', watchedMortality !== '' && watchedMortality != null
+                  ['Cartons calcules', `${cartonPreview}`],
+                  ['Mortalite', watchedMortality !== '' && watchedMortality != null
                     ? `${Number(watchedMortality).toLocaleString('fr-FR')} sujets`
                     : '-'],
-                  ['Aliment consommé', watchedFeed !== '' && watchedFeed != null
+                  ['Aliment consomme', watchedFeed !== '' && watchedFeed != null
                     ? `${Number(watchedFeed).toLocaleString('fr-FR')} kg`
                     : '-'],
                   ['Formule', formules.find((item) => item.value === watchedFormula)?.label || 'Non precisee'],
-                  ['Dépenses vaccins', `${vaccineTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`],
+                  ['Depenses vaccins', `${vaccineTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`],
                 ].map(([label, value], index, items) => (
                   <Box
                     key={label}
@@ -622,9 +629,6 @@ function ProductionForm({
                   </Box>
                 ))}
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-                Le récapitulatif se met à jour pendant la saisie.
-              </Typography>
             </Box>
           </Grid>
           </Grid>
@@ -637,7 +641,7 @@ function ProductionForm({
             disabled={isSubmitting || loadingDaily || !!loadError || contextLoading || !!contextError || missingCycle}
             sx={{ px: 4, borderRadius: 2 }}
           >
-            {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre à jour' : 'Enregistrer')}
+            {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre a jour' : 'Enregistrer')}
           </Button>
         </DialogActions>
       </form>

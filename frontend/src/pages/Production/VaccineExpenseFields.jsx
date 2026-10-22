@@ -23,7 +23,8 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
     <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} spacing={0.75}>
       <Box>
         <Typography variant="subtitle2" fontWeight={900}>Dépenses – Vaccins</Typography>
-
+        <Typography variant="caption" color="text.secondary">
+        </Typography>
       </Box>
       <Stack direction="row" spacing={0.5} justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
         <Button size="small" disabled={disabled || loading || !!loadError || !vaccins.length} onClick={() => setManagerOpen(true)}>

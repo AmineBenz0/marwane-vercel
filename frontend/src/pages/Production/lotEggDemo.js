@@ -1,6 +1,6 @@
-const TYPES = ['normal', 'blanc', 'double_jaune', 'double_jaune_demarrage', 'casse'];
+const TYPES = ['normal', 'blanc', 'double_jaune', 'casse'];
 const counts = (normal = 0, blanc = 0, double = 0, earlyDouble = 0, broken = 0) =>
-  Object.fromEntries(TYPES.map((key, index) => [key, [normal, blanc, double, earlyDouble, broken][index]]));
+  Object.fromEntries(TYPES.map((key, index) => [key, [normal, blanc, double + earlyDouble, broken][index]]));
 const dateAt = (start, days) => new Date(Date.parse(`${start}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
 export const LOT_EGG_DEMO_SCENARIOS = [
@@ -20,8 +20,8 @@ export function createLotEggDemo(scenario = 'mixed') {
     const zero = scenario === 'zero' || (scenario === 'mixed' && week === 8);
     const partial = scenario === 'single' || (scenario === 'mixed' && week === length);
     const days = partial ? 4 : 7;
-    const expected = days * 3;
-    const entered = missing ? 0 : scenario === 'mixed' && week === 10 ? 9 : expected;
+    const expected = days;
+    const entered = missing ? 0 : scenario === 'mixed' && week === 10 ? 3 : expected;
     const normal = scenario === 'mixed' && week === 15 ? 240000 : Math.round(60000 + index * 1900 + Math.sin(index / 2) * 7000);
     const factor = partial ? 4 / 7 : entered / expected;
     return {

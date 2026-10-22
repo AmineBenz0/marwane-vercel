@@ -29,7 +29,8 @@ def test_cycle_prevents_duplicate_active_lot(client, db_session, auth_headers):
     assert response.status_code == status.HTTP_201_CREATED
 
     duplicate = client.post("/api/v1/cycles-production", json={**payload, "nom_cycle": "Lot B"}, headers=auth_headers)
-    assert duplicate.status_code == status.HTTP_400_BAD_REQUEST
+    assert duplicate.status_code == status.HTTP_409_CONFLICT
+    assert "lot actif" in duplicate.json()["detail"]
 
 
 def test_explicit_cycle_assignment_and_performance_updates(client, db_session, auth_headers):

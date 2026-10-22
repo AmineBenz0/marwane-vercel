@@ -567,10 +567,15 @@ function TransactionDetail() {
           </Typography>
           <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           <Grid container spacing={{ xs: 1.5, sm: 2 }}>
+            {transaction.id_production && <Grid item xs={12}>
+              <Alert severity="info">
+                Origine : {transaction.nom_batiment_source} · Saisie du {formatShortDate(transaction.date_production)}
+              </Alert>
+            </Grid>}
             <Grid item xs={12} sm={6}>
               <Box>
                 <Typography variant="caption" color="text.secondary">
-                  Produit
+                  {transaction.id_production ? 'Type d’œufs' : 'Produit'}
                 </Typography>
                 <Typography variant="body1" fontWeight="medium">
                   {getProduitName()}

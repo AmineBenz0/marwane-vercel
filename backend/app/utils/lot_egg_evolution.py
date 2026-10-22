@@ -27,11 +27,11 @@ def lot_egg_evolution(db, lot):
     totals = dict.fromkeys(EGG_TYPES, 0)
     for row in rows:
         number = (row.date_production - lot.date_debut).days // 7 + 1
-        week = grouped.setdefault(number, {"counts": dict.fromkeys(EGG_TYPES, 0), "entries": set()})
+        week = grouped.setdefault(number, {"counts": dict.fromkeys(EGG_TYPES), "entries": set()})
         week["entries"].add((row.date_production, row.id_batiment))
         kind = "casse" if row.type_oeuf == "perdu" else row.type_oeuf
         if kind in totals:
-            week["counts"][kind] += int(row.quantity or 0)
+            week["counts"][kind] = (week["counts"][kind] or 0) + int(row.quantity or 0)
             totals[kind] += int(row.quantity or 0)
 
     weeks = []

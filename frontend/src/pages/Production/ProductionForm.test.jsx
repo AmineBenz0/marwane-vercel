@@ -38,8 +38,8 @@ describe('ProductionForm', () => {
     fireEvent.change(screen.getByLabelText("Double jaune"), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText("Oeufs blancs"), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText('Oeufs casses'), { target: { value: '4' } });
-    fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '63' } });
-    expect(screen.getByText(/Total collecté \(hors cassés\) : 160 œufs/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1950' } });
+    expect(screen.getByText('Oeufs collectes').parentElement).toHaveTextContent('160 oeufs');
     expect(screen.getByText('10', { exact: true })).toBeVisible();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -47,7 +47,7 @@ describe('ProductionForm', () => {
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       date_production: '2026-09-01',
       id_batiment: 7,
-      quantites: { normal: 120, double_jaune: 30, blanc: 10, casse: 4 },
+      quantites: { normal: 120, double_jaune: 30, blanc: 10, casse: 4, perdu: 0 },
       grammage: 63,
     })));
 
@@ -72,8 +72,45 @@ describe('ProductionForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       formule: '25-1% Sem vita', consommation_aliment_kg: 10, grammage: 0,
-      quantites: { normal: 0, double_jaune: 0, blanc: 0, casse: 0 },
+      quantites: { normal: 0, double_jaune: 0, blanc: 0, casse: 0, perdu: 0 },
     })));
+  });
+
+  it('carries a selection across dates, catches up, and resets unsaved changes on reopen', async () => {
+    const formulas = [
+      { value: '25-1% Sem vita', label: '25-1% Sem vita', age_min: 18, age_max: 25 },
+      { value: '26-35 Sem', label: '26-35 Sem', age_min: 26, age_max: 35 },
+      { value: '36-45 Sem', label: '36-45 Sem', age_min: 36, age_max: 45 },
+    ];
+    get.mockImplementation((path, params) => {
+      if (path === '/productions/formules') return Promise.resolve(formulas);
+      if (path.startsWith('/cycles-production/context/')) {
+        const age = params.params.date_saisie === '2026-09-02' ? 36 : 24;
+        return Promise.resolve({ has_cycles: true, cycle: {
+          id_cycle: 4, nom_cycle: 'Cycle A', age_semaines: age, effectif_actuel: 1000,
+          formule_suggeree: age === 36 ? '36-45 Sem' : '25-1% Sem vita',
+        } });
+      }
+      return Promise.resolve([]);
+    });
+    const props = { onClose: vi.fn(), onSuccess: vi.fn(),
+      batiments: [{ id_batiment: 7, nom: 'Batiment 7' }], preselectedBatimentId: 7,
+      preselectedDate: '2026-09-01' };
+    const view = render(<ProductionForm open {...props} />);
+    const selector = () => screen.getByRole('combobox', { name: 'Formule' });
+    await waitFor(() => expect(selector()).toHaveTextContent('25-1% Sem vita'));
+    fireEvent.mouseDown(selector());
+    fireEvent.click(await screen.findByRole('option', { name: '26-35 Sem' }));
+    expect(selector()).toHaveTextContent('26-35 Sem');
+    fireEvent.change(screen.getByLabelText(/Date de production/), { target: { value: '02/09/26' } });
+    await waitFor(() => expect(selector()).toHaveTextContent('36-45 Sem'));
+    fireEvent.mouseDown(selector());
+    fireEvent.click(await screen.findByRole('option', { name: '26-35 Sem' }));
+    view.rerender(<ProductionForm open={false} {...props} />);
+    view.rerender(<ProductionForm open {...props} />);
+    await waitFor(() => expect(selector()).toHaveTextContent('36-45 Sem'));
+    expect(post).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
   });
 
   it('does not allow negative mortality in daily production', async () => {
@@ -99,7 +136,7 @@ describe('ProductionForm', () => {
   it('rejects an empty collection and fractional counts', async () => {
     render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
-    fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '55' } });
+    fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1710' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText("Indiquez au moins un nombre d'œufs.")).toBeVisible();
@@ -117,11 +154,11 @@ describe('ProductionForm', () => {
         batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
       fireEvent.change(screen.getByLabelText('Oeufs normaux'), { target: { value: '120' } });
       fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '10' } });
-      fireEvent.change(screen.getByLabelText('Grammage moyen global (g)'), { target: { value: '55' } });
+      fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1710' } });
       fireEvent.change(screen.getByLabelText(label), { target: { value: '-5' } });
       expect(await screen.findByText('Minimum 0')).toBeVisible();
       const total = label === 'Oeufs normaux' ? 10 : label === 'Oeufs blancs' ? 120 : 130;
-      expect(screen.getByText(`Total collecté (hors cassés) : ${total} œufs`)).toBeVisible();
+      expect(screen.getByText('Oeufs collectes').parentElement).toHaveTextContent(`${total} oeufs`);
       fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
       await waitFor(() => expect(screen.getByText('Minimum 0')).toBeVisible());
       expect(post).not.toHaveBeenCalled();
@@ -144,14 +181,14 @@ describe('ProductionForm', () => {
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} />);
     await waitFor(() => expect(screen.getByLabelText('Oeufs normaux')).toHaveValue(120));
     expect(screen.getByLabelText('Oeufs blancs')).toHaveValue(20);
-    expect(screen.getByLabelText('Oeufs casses')).toHaveValue(10);
-    expect(screen.queryByLabelText(/perdus/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Grammage moyen global (g)')).toHaveValue(63);
+    expect(screen.getByLabelText('Oeufs casses')).toHaveValue(7);
+    expect(screen.getByLabelText('Oeuf perdu')).toHaveValue(3);
+    expect(screen.getByLabelText('Poids du plateau (g)')).toHaveValue(1950);
     fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Mettre a jour' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       date_production: '2026-09-01', id_batiment: 7, grammage: 63,
-      quantites: { normal: 120, blanc: 25, double_jaune: 0, casse: 10 },
+      quantites: { normal: 120, blanc: 25, double_jaune: 0, casse: 7, perdu: 3 },
       mortalite: 2, consommation_aliment_kg: 12, versions: { 1: 'v1', 2: 'v2', 3: 'v3', 4: 'v4' },
     })));
   });

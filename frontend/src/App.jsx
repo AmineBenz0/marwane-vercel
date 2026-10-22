@@ -41,6 +41,7 @@ const LettresCreditList = lazy(() => import('./pages/LettresCredit/LettresCredit
 const LettreCreditDetail = lazy(() => import('./pages/LettresCredit/LettreCreditDetail'));
 const ProductionDashboard = lazy(() => import('./pages/Production/ProductionDashboard'));
 const BatimentProductionPage = lazy(() => import('./pages/Production/BatimentProductionPage'));
+const LotsManagementPage = lazy(() => import('./pages/Production/LotsManagementPage'));
 const ChargesList = lazy(() => import('./pages/Charges/ChargesList'));
 const CompteBancaireList = lazy(() => import('./pages/ComptesBancaires/CompteBancaireList'));
 const CalendarView = lazy(() => import('./pages/Calendar/CalendarView'));
@@ -217,6 +218,14 @@ function App() {
               <AppLayout>
                 <ProductionDashboard />
               </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/production/lots"
+          element={
+            <ProtectedRoute>
+              <AppLayout><LotsManagementPage /></AppLayout>
             </ProtectedRoute>
           }
         />

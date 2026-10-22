@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.production import Production
 from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
+from app.services.egg_sales import protect_production_source
 from app.models.transaction import Transaction
 from app.models.produit import Produit
 from app.schemas.production import (
@@ -31,10 +32,11 @@ from app.utils.date_formatting import DISPLAY_DATE_FORMAT
 from app.utils.egg_product_sync import ensure_sellable_egg_product, parse_sellable_egg_product_name
 from app.utils.production_cycles import (
     cycle_to_dict,
+    cycle_schedule,
     find_cycle_for_date,
     validate_cycle_date,
     validate_cycle_mortality,
-    suggested_formula,
+    formula_for_cycle,
     FORMULA_RANGES,
     refresh_cycle_status,
 )
@@ -256,7 +258,7 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             if not cycle and db.query(CycleProduction.id_cycle).filter(
                 CycleProduction.id_batiment == prod_in.id_batiment,
             ).first():
-                raise HTTPException(status_code=400, detail="Aucun cycle pour cette date. Démarrez un cycle depuis le bâtiment.")
+                raise HTTPException(status_code=400, detail="Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez la date et la répartition dans Gestion des lots.")
             cycle_id = cycle.id_cycle if cycle else None
         if cycle:
             validate_cycle_date(cycle, prod_in.date_production)
@@ -268,9 +270,8 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         if operational_only:
             quantities["normal"] = 0
         formula = prod_in.formule
-        if not updating and cycle and "formule" not in prod_in.model_fields_set:
-            age = cycle.age_depart_semaines + (prod_in.date_production - cycle.date_debut).days // 7
-            formula = suggested_formula(age)
+        if cycle and "formule" not in prod_in.model_fields_set:
+            formula = formula_for_cycle(db, cycle, prod_in.date_production)
 
         by_type = {}
         for record in existing:
@@ -284,6 +285,9 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             keep_type = bool(quantity) or (operational_only and egg_type == "normal")
             retained = candidates[0] if keep_type and candidates else None
             for record in candidates:
+                protect_production_source(db, record,
+                    quantity=quantity if record is retained else 0,
+                    category=(egg_type, _deduce_calibre(egg_type, prod_in.grammage)) if record is retained else None)
                 if record is not retained:
                     record.est_actif = False
                     record.date_annulation = datetime.now(timezone.utc)
@@ -374,6 +378,8 @@ def delete_daily_production(
         charges = daily_vaccine_expenses(db, prod_in.id_batiment, prod_in.date_production)
         if versions != prod_in.versions or expense_versions(charges) != prod_in.charge_versions:
             raise HTTPException(status_code=409, detail="La saisie a change. Actualisez la page.")
+        for record in records:
+            protect_production_source(db, record)
         for charge in charges:
             cancel_charge(db, charge, "Annulation de la saisie quotidienne", current_user)
         user_id = current_user.id_utilisateur if current_user else None
@@ -418,7 +424,7 @@ def create_production(
         if not cycle and db.query(CycleProduction.id_cycle).filter(
             CycleProduction.id_batiment == prod_in.id_batiment,
         ).first():
-            raise HTTPException(status_code=400, detail="Aucun cycle pour cette date.")
+            raise HTTPException(status_code=400, detail="Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez Gestion des lots.")
     if cycle:
         validate_cycle_date(cycle, prod_in.date_production)
         if prod_in.date_production > date.today():
@@ -840,9 +846,13 @@ def get_cycle_performance(
         raise HTTPException(status_code=404, detail="Lot introuvable")
 
     refresh_cycle_status(db, cycle)
+    schedule = cycle_schedule(cycle)
+    performance_end = min(schedule.date_fin_reelle or date.today(), date.today())
     productions = db.query(Production).filter(
         Production.id_cycle == id_cycle,
         Production.est_actif.is_(True),
+        Production.date_production >= schedule.date_debut,
+        Production.date_production <= performance_end,
     ).order_by(Production.date_production.asc(), Production.id_production.asc()).all()
 
     daily = {}
@@ -871,7 +881,7 @@ def get_cycle_performance(
             day["oeufs"] += int(prod.nombre_oeufs or 0)
 
     rows = []
-    effectif_running = cycle.effectif_initial
+    effectif_running = schedule.effectif_initial
     cumulative_week_eggs = 0
     current_week_key = None
     week_summary = None
@@ -918,7 +928,7 @@ def get_cycle_performance(
                 "calibres": set(),
                 "effectif_debut": effectif_running,
                 "effectif_fin": effectif_running,
-                "age_semaines": cycle.age_depart_semaines + max((day_date - cycle.date_debut).days, 0) // 7,
+                "age_semaines": schedule.age_depart_semaines + max((day_date - schedule.date_debut).days, 0) // 7,
             }
             rows.append({
                 "id": f"week-{week_key}",
@@ -933,7 +943,7 @@ def get_cycle_performance(
         total_out = day["mort"]
         effectif_fin = max(effectif_debut - total_out, 0) if effectif_debut is not None else None
         cumulative_week_eggs += day["oeufs"]
-        age_semaines = cycle.age_depart_semaines + max((day_date - cycle.date_debut).days, 0) // 7
+        age_semaines = schedule.age_depart_semaines + max((day_date - schedule.date_debut).days, 0) // 7
 
         rows.append({
             "id": f"day-{day_date.isoformat()}",
@@ -1023,8 +1033,29 @@ def update_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
+    db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).with_for_update().one()
+    db.refresh(prod)
+
 
     update_dict = prod_in.model_dump(exclude_unset=True)
+    original_batiment_id = prod.id_batiment
+    requested_batiment_id = update_dict.get("id_batiment", original_batiment_id)
+    locked_buildings = db.query(Batiment.id_batiment).filter(
+        Batiment.id_batiment.in_({original_batiment_id, requested_batiment_id}),
+    ).order_by(Batiment.id_batiment).with_for_update().all()
+    if len(locked_buildings) != len({original_batiment_id, requested_batiment_id}):
+        raise HTTPException(status_code=404, detail="Batiment introuvable")
+    prod = db.query(Production).filter(
+        Production.id_production == id,
+        Production.est_actif.is_(True),
+    ).populate_existing().with_for_update().first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Production introuvable")
+    if prod.id_batiment not in {original_batiment_id, requested_batiment_id}:
+        raise HTTPException(
+            status_code=409,
+            detail="Cette production a été déplacée par une autre requête. Actualisez puis réessayez.",
+        )
     if daily_vaccine_expenses(db, prod.id_batiment, prod.date_production):
         raise HTTPException(status_code=409, detail="Modifiez cette journée et ses dépenses depuis la saisie journalière.")
     final_batiment_id = update_dict.get("id_batiment", prod.id_batiment)
@@ -1052,12 +1083,17 @@ def update_production(
 
     if cycle:
         validate_cycle_mortality(db, cycle, update_dict.get("mortalite", prod.mortalite) or 0, [prod.id_production])
+    protect_production_source(db, prod,
+        quantity=update_dict.get("nombre_oeufs", prod.nombre_oeufs),
+        category=(update_dict.get("type_oeuf", prod.type_oeuf),
+                  _deduce_calibre(update_dict.get("type_oeuf", prod.type_oeuf), update_dict.get("grammage", prod.grammage))),
+        production_date=final_date, building_id=final_batiment_id)
     for key, value in update_dict.items():
         setattr(prod, key, value)
 
     prod.calibre = _deduce_calibre(prod.type_oeuf, prod.grammage)
 
-    # Recalculer les cartons si le nombre d'œufs ou le type a changé
+    # Recalculer les cartons si le nombre d'oufs ou le type a changé
     if 'nombre_oeufs' in update_dict or 'type_oeuf' in update_dict:
         prod.nombre_cartons = Production.calculer_cartons(prod.nombre_oeufs, prod.type_oeuf)
 
@@ -1099,9 +1135,13 @@ def delete_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
+    db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).with_for_update().one()
+    db.refresh(prod)
+
 
     if daily_vaccine_expenses(db, prod.id_batiment, prod.date_production):
         raise HTTPException(status_code=409, detail="Annulez cette journée et ses dépenses depuis la saisie journalière.")
+    protect_production_source(db, prod)
     prod.est_actif = False
     prod.date_annulation = datetime.now(timezone.utc)
     prod.motif_annulation = raison.strip()

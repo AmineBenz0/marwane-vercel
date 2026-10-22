@@ -45,8 +45,8 @@ describe('Building production views', () => {
     expect(screen.queryByText('Oeufs casses')).not.toBeInTheDocument();
     expect(screen.queryByText('99,00 kg')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Cycle des volailles' })).getByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
-    expect(screen.queryByRole('link', { name: 'Gérer les lots' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Production du bâtiment' })).getByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Gestion des lots' })).toBeVisible();
     expect(within(screen.getByRole('region', { name: 'Journée sélectionnée' })).queryByRole('button', { name: 'Saisir la journée' })).not.toBeInTheDocument();
   });
   it('accepts legacy links and preserves the daily date without applying it to stock', async () => {
@@ -74,7 +74,7 @@ describe('Building production views', () => {
     expect(screen.getAllByText('Normaux : 100')).toHaveLength(2);
     expect(screen.getAllByText('Doubles jaunes : 20')).toHaveLength(2);
     expect(within(screen.getByRole('table', { name: 'Saisies quotidiennes' })).getByText('5', { selector: 'td' })).toBeVisible();
-    expect(within(screen.getByRole('region', { name: 'Cycle des volailles' })).getByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
+    expect(within(screen.getByRole('region', { name: 'Production du bâtiment' })).getByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Modifier la journée du 05/10/26' })).toBeVisible();
     expect(screen.queryByText('999 œufs collectés')).not.toBeInTheDocument();
   });

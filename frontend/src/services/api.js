@@ -233,62 +233,86 @@ const shouldShowNotification = (status) => {
   return status !== 401;
 };
 
-// ----- Gestion du rafraîchissement de token (single-flight) -----
-let isRefreshing = false;
-let pendingRequests = [];
+// ----- Rafraîchissement partagé entre l'initialisation et les requêtes API -----
+let refreshPromise = null;
 
-/**
- * Ajoute une requête en attente qui sera relancée après refresh.
- * @param {(token: string|null, error?: any) => void} cb 
- */
-const addPendingRequest = (cb) => {
-  pendingRequests.push(cb);
+const notifyAuth = (name, detail = {}) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+  }
 };
 
 /**
- * Notifie toutes les requêtes en attente que le token est rafraîchi.
- * @param {string} newToken 
- */
-const resolvePendingRequests = (newToken) => {
-  pendingRequests.forEach((cb) => cb(newToken));
-  pendingRequests = [];
-};
-
-/**
- * Notifie toutes les requêtes en attente que le refresh a échoué.
- * @param {any} error 
- */
-const rejectPendingRequests = (error) => {
-  pendingRequests.forEach((cb) => cb(null, error));
-  pendingRequests = [];
-};
-
-/**
- * Client axios sans intercepteurs pour appeler /auth/refresh sans boucle.
+ * Client sans intercepteurs pour éviter une boucle sur /auth/refresh.
  */
 const refreshClient = axios.create({
-  baseURL: baseURL,
+  baseURL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
 
-/**
- * Tente de rafraîchir le token d'accès en utilisant le refresh token.
- * @returns {Promise<string>} Le nouveau access_token
- */
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 const performTokenRefresh = async () => {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
-    throw new Error('Aucun refresh token disponible');
+    const error = new Error('Aucun refresh token disponible');
+    error.status = 401;
+    throw error;
   }
-  const resp = await refreshClient.post('/auth/refresh', { refresh_token: refreshToken });
-  const { access_token, refresh_token } = resp.data || {};
-  if (!access_token) {
-    throw new Error('Réponse de refresh invalide');
+
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const resp = await refreshClient.post('/auth/refresh', { refresh_token: refreshToken });
+      const { access_token, refresh_token } = resp.data || {};
+      if (!access_token) {
+        throw new Error('Réponse de rafraîchissement invalide');
+      }
+      setTokens(access_token, refresh_token);
+      notifyAuth('auth:session-refreshed', {
+        accessToken: access_token,
+        refreshToken: refresh_token || refreshToken,
+      });
+      return access_token;
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      if (status === 401) {
+        clearTokens();
+        notifyAuth('auth:session-expired');
+        throw { status, message: 'Session expirée. Veuillez vous reconnecter.', originalError: error };
+      }
+
+      const transient = !status || status >= 500 || status === 408;
+      if (!transient || attempt === 2) break;
+      await wait(attempt === 0 ? 350 : 900);
+    }
   }
-  // Mettre à jour les tokens en localStorage
-  setTokens(access_token, refresh_token);
-  return access_token;
+
+  const status = lastError?.response?.status || null;
+  const recoveryError = {
+    status,
+    message: 'Connexion temporairement indisponible. Votre session est conservée ; réessayez dans quelques instants.',
+    data: lastError?.response?.data || null,
+    requestId: lastError?.response?.headers?.['x-request-id'],
+    originalError: lastError,
+  };
+  notifyAuth('auth:recovery-needed');
+  throw recoveryError;
+};
+
+/**
+ * Point d'entrée unique de rafraîchissement.
+ * Les appels simultanés partagent la même requête et les mêmes retries.
+ */
+export const refreshSession = () => {
+  if (!refreshPromise) {
+    refreshPromise = performTokenRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 };
 
 /**
@@ -325,7 +349,7 @@ api.interceptors.response.use(
     // Si la requête réussit, retourner la réponse telle quelle
     return response;
   },
-  (error) => {
+  async (error) => {
     // Récupérer l'instance du store de notifications
     const notificationStore = useNotificationStore.getState();
     
@@ -347,55 +371,36 @@ api.interceptors.response.use(
         originalError: error,
       };
       
-      // Si l'erreur est 401 (Unauthorized), tenter un refresh une seule fois
+      // Une réponse 401 sur une requête protégée attend le refresh partagé.
       if (status === 401) {
-        // Ne jamais tenter de refresh sur les endpoints d'auth eux-mêmes
-        const isAuthEndpoint = typeof originalRequest.url === 'string' &&
-          (originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/refresh'));
-
-        // Empêcher boucle infinie: si déjà retentée, on sort
-        if (originalRequest._retry || isAuthEndpoint) {
-          redirectToLogin();
+        const urlPath = typeof originalRequest.url === 'string' ? originalRequest.url : '';
+        const isLoginRequest = urlPath.includes('/auth/login');
+        if (isLoginRequest) {
           return Promise.reject(formattedError);
         }
 
+        if (originalRequest._retry) {
+          redirectToLogin();
+          return Promise.reject(formattedError);
+        }
         originalRequest._retry = true;
 
-        // Si pas de refresh token -> redirection immédiate
         if (!getRefreshToken()) {
           redirectToLogin();
           return Promise.reject(formattedError);
         }
 
-        // Mettre la requête en attente jusqu'au refresh
-        return new Promise((resolve, reject) => {
-          addPendingRequest((newToken, refreshErr) => {
-            if (refreshErr || !newToken) {
-              reject(formattedError);
-              return;
-            }
-            // Mettre à jour le header et relancer la requête originale
-            originalRequest.headers = originalRequest.headers || {};
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            resolve(api(originalRequest));
-          });
-
-          // Déclencher le refresh si pas déjà en cours
-          if (!isRefreshing) {
-            isRefreshing = true;
-            performTokenRefresh()
-              .then((newAccessToken) => {
-                isRefreshing = false;
-                resolvePendingRequests(newAccessToken);
-              })
-              .catch((refreshErr) => {
-                isRefreshing = false;
-                rejectPendingRequests(refreshErr);
-                redirectToLogin();
-              });
+        try {
+          const newToken = await refreshSession();
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        } catch (refreshError) {
+          if (refreshError?.status === 401) {
+            redirectToLogin();
           }
-        });
-
+          return Promise.reject(refreshError);
+        }
       } else if (shouldShowNotification(status) && !config?.silent) {
         // Interactive inputs such as global search render their own error state.
         notificationStore.error(errorMessage);
