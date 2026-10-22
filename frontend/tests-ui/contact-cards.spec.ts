@@ -127,7 +127,7 @@ for (const plural of ['clients', 'fournisseurs'] as const) {
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('textbox').fill('Nouveau contact');
     if (plural === 'fournisseurs') {
-      await dialog.getByLabel('Mode de règlement préféré').selectOption('caisse');
+      await dialog.getByLabel('Source de règlement préférée').selectOption('caisse');
     }
     await dialog.getByRole('button', { name: `Créer le ${state.singular}`, exact: true }).click();
     await expect(grid.getByRole('link')).toHaveCount(7);

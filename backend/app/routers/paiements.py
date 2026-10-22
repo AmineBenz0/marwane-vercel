@@ -22,6 +22,7 @@ from app.services.financial_ledger import (
     void_payment,
 )
 from app.services.payment_validation import validate_lc_payment as _validate_lc_payment
+from app.services.payment_validation import resolve_payment_funding
 from app.utils.business_date import business_date
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
@@ -217,6 +218,7 @@ def create_paiement(
         )
 
     validate_payment_date(transaction, paiement_data.date_paiement)
+    funding = resolve_payment_funding(db, paiement_data, transaction)
     
     # Note: Les paiements dépassant le montant restant sont autorisés (avances, surpaiements)
     
@@ -245,7 +247,7 @@ def create_paiement(
         date_encaissement_prevue=paiement_data.date_encaissement_prevue,
         statut_cheque=paiement_data.statut_cheque.lower() if paiement_data.statut_cheque else None,
         reference_virement=paiement_data.reference_virement,
-        id_compte=paiement_data.id_compte,
+        **funding,
         id_lc=paiement_data.id_lc if paiement_data.type_paiement == 'lc' else None,
         notes=paiement_data.notes,
         cle_idempotence=paiement_data.cle_idempotence,
@@ -325,7 +327,7 @@ def update_paiement(
     if "type_paiement" in update_data and update_data["type_paiement"]:
         update_data["type_paiement"] = update_data["type_paiement"].lower()
 
-    immutable_fields = {"date_paiement", "montant", "type_paiement", "id_lc", "id_compte"}
+    immutable_fields = {"date_paiement", "montant", "type_paiement", "id_lc", "id_compte", "source_reglement"}
     changed_immutable = [
         field for field in immutable_fields
         if field in update_data and update_data[field] != getattr(paiement, field)
@@ -559,6 +561,7 @@ def create_paiements_batch(
                 raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
 
             validate_payment_date(transaction, p_data.date_paiement)
+            funding = resolve_payment_funding(db, p_data, transaction)
                 
             _validate_lc_payment(db, p_data, transaction, current_user)
             
@@ -574,7 +577,8 @@ def create_paiements_batch(
                 
             # Créer le paiement
             nouveau_paiement = Paiement(
-                **p_data.model_dump(),
+                **p_data.model_dump(exclude={"source_reglement", "id_compte"}),
+                **funding,
                 statut=statut_initial,
                 id_utilisateur_creation=current_user.id_utilisateur if current_user else None
             )

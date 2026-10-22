@@ -91,6 +91,12 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
 
   return (
     <Box>
+      {isEditing && defaultValues.source_reglement && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Source débitée : {defaultValues.source_reglement === 'banque'
+            ? `compte bancaire #${defaultValues.id_compte}` : 'caisse'}.
+        </Alert>
+      )}
       {isEditing && (
         <Alert severity="info" sx={{ mb: 2 }}>
           La date, le montant, le type de paiement et la LC sont fixes. Pour les corriger, annulez ce paiement puis créez-en un nouveau.

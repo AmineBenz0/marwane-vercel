@@ -470,14 +470,14 @@ function FournisseurProfile() {
     },
     {
       name: 'mode_reglement_prefere',
-      label: 'Mode de règlement préféré',
+      label: 'Source de règlement préférée',
       type: 'select',
       required: true,
       options: [
-        { value: 'caisse', label: 'Caisse (espèces)' },
-        { value: 'banque', label: 'Compte bancaire (virement)' },
+        { value: 'caisse', label: 'Caisse' },
+        { value: 'banque', label: 'Compte bancaire' },
       ],
-      helperText: 'Ce choix préremplit le type de paiement dans les nouvelles transactions.',
+      helperText: 'Les paiements débitent cette source, quel que soit le type de paiement choisi.',
     },
   ];
 
