@@ -7,7 +7,7 @@ import DateField from '../../utils/DateField';
  * boutons distincts, messages d'erreur proches des champs.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
@@ -36,10 +36,11 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 
 // ─── Field label component ───────────────────────────────────────────────────
-function FieldLabel({ children, required }) {
+function FieldLabel({ children, required, id }) {
   return (
     <Typography
       component="label"
+      id={id}
       variant="body2"
       sx={{
         display: 'block',
@@ -71,6 +72,7 @@ function ModalForm({
   errorMessage = null,
 }) {
   const theme = useTheme();
+  const formId = useId();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const {
@@ -162,9 +164,10 @@ function ModalForm({
             case 'select':
               return (
                 <Box sx={{ mb: 2 }}>
-                  <FieldLabel required={required}>{label}</FieldLabel>
+                  <FieldLabel id={`${formId}-${name}-label`} required={required}>{label}</FieldLabel>
                   <FormControl fullWidth error={!!errors[name]} disabled={disabled || loading}>
                     <Select
+                      labelId={`${formId}-${name}-label`}
                       value={value ?? ''}
                       onChange={onChange}
                       onBlur={onBlur}

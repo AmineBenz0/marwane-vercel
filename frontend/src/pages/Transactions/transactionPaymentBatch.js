@@ -14,6 +14,7 @@ export const buildTransactionPaymentBatch = (data) => ({
         banque: payment.banque || null,
         reference_virement: payment.reference || null,
         id_compte: payment.id_compte ? parseInt(payment.id_compte, 10) : null,
+        source_reglement: payment.source_reglement || null,
         id_lc: payment.id_lc || null,
         notes: payment.notes || null,
       }))

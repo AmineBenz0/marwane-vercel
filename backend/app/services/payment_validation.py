@@ -7,10 +7,43 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.lettre_credit import LettreDeCredit
+from app.models.fournisseur import Fournisseur
+from app.models.compte_bancaire import CompteBancaire
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
 from app.utils.business_date import business_date
+
+
+def resolve_payment_funding(db: Session, payment_data, transaction: Transaction) -> dict:
+    """Capture supplier funding independently of the method; preserve client routing."""
+    account_id = payment_data.id_compte
+    requested_source = payment_data.source_reglement
+    if transaction.id_fournisseur is None:
+        if requested_source is not None:
+            raise HTTPException(status_code=400, detail="La source de règlement est réservée aux fournisseurs")
+        if account_id is not None and payment_data.type_paiement != "virement":
+            raise HTTPException(status_code=400, detail="Le compte bancaire client est réservé aux virements")
+        source = None
+    else:
+        supplier = db.query(Fournisseur).filter(
+            Fournisseur.id_fournisseur == transaction.id_fournisseur
+        ).first()
+        preference = supplier.mode_reglement_prefere if supplier else None
+        if preference and requested_source and requested_source != preference:
+            raise HTTPException(status_code=409, detail="La source de règlement du fournisseur a changé. Rechargez le formulaire.")
+        source = preference or requested_source or (
+            "banque" if payment_data.type_paiement == "virement" and account_id else "caisse"
+        )
+        if source == "banque" and not account_id:
+            raise HTTPException(status_code=400, detail="Sélectionnez le compte bancaire à débiter pour ce fournisseur")
+        if source == "caisse" and account_id is not None:
+            raise HTTPException(status_code=400, detail="Ce fournisseur est réglé depuis la caisse, sans compte bancaire")
+    if account_id is not None and not db.query(CompteBancaire).filter(
+        CompteBancaire.id_compte == account_id
+    ).first():
+        raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
+    return {"source_reglement": source, "id_compte": account_id}
 
 
 def validate_lc_payment(

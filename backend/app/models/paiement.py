@@ -48,6 +48,9 @@ class Paiement(Base):
     id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=False, index=True)
     id_lc = Column(Integer, ForeignKey("lettres_credit.id_lc"), nullable=True, index=True)
     id_compte = Column(Integer, ForeignKey("comptes_bancaires.id_compte"), nullable=True, index=True)
+    # Snapshot of the supplier's funding source when this payment was created.
+    # NULL preserves the routing of historical payments and client payments.
+    source_reglement = Column(String(10), nullable=True)
     
     # Informations de base du paiement
     date_paiement = Column(Date, nullable=False, index=True)
@@ -82,8 +85,14 @@ class Paiement(Base):
     __table_args__ = (
         CheckConstraint('montant > 0', name='check_paiement_montant_positif'),
         CheckConstraint(
-            "id_compte IS NULL OR type_paiement = 'virement'",
-            name='check_paiement_compte_virement',
+            "CASE WHEN source_reglement IS NULL THEN (id_compte IS NULL OR type_paiement = 'virement') "
+            "WHEN source_reglement = 'caisse' THEN id_compte IS NULL "
+            "WHEN source_reglement = 'banque' THEN id_compte IS NOT NULL ELSE FALSE END",
+            name='check_paiement_source_compte',
+        ),
+        CheckConstraint(
+            "source_reglement IS NULL OR source_reglement IN ('caisse', 'banque')",
+            name='check_paiement_source_reglement',
         ),
         CheckConstraint(
             "type_paiement IN ('cash', 'cheque', 'virement', 'carte', 'compensation', 'lc', 'autre')",

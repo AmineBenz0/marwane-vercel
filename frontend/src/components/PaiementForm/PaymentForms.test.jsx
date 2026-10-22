@@ -4,16 +4,24 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import MultiPaiementForm from './MultiPaiementForm';
 import PaiementForm from './PaiementForm';
 
+vi.mock('../../services/api', () => ({
+  get: vi.fn(async () => [
+    { id_compte: 1, nom_banque: 'Bank A', numero_compte: '001' },
+    { id_compte: 2, nom_banque: 'Bank B', numero_compte: '002' },
+  ]),
+}));
+
 afterEach(cleanup);
 const payment = { date_paiement: '2026-10-13', montant: 40, type_paiement: 'cash' };
 const lc = { id_lc: 7, numero_reference: 'LC-7', montant: '100.00' };
 
-function BatchForm({ onSubmit, payments = [payment], lcs = [lc] }) {
+function BatchForm({ onSubmit, payments = [payment], lcs = [lc], supplierSource = null }) {
   const form = useForm({ defaultValues: { paiements: payments } });
   const rows = useFieldArray({ control: form.control, name: 'paiements' });
   return (
     <form noValidate onSubmit={form.handleSubmit(onSubmit)}>
       <MultiPaiementForm
+        supplierSource={supplierSource}
         transaction={{ montant_restant: 100, date_transaction: '2026-10-11' }}
         {...rows}
         register={form.register}
@@ -43,6 +51,36 @@ function EditForm({ existing = payment, onSubmit = vi.fn() }) {
 }
 
 describe('Unpaid transaction payment forms', () => {
+  it('keeps bank funding and the chosen account when the supplier payment method changes to cash', async () => {
+    const submit = vi.fn();
+    render(<BatchForm onSubmit={submit} supplierSource="banque" payments={[{ ...payment, type_paiement: 'virement' }]} />);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Compte bancaire à débiter' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bank B · 002' }));
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByRole('option', { name: /Espèces/ }));
+    expect(screen.getByRole('combobox', { name: 'Compte bancaire à débiter' })).toHaveTextContent('Bank B');
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({ type_paiement: 'cash', source_reglement: 'banque', id_compte: 2 });
+  });
+
+  it('requires an account for a bank-funded supplier cash payment', async () => {
+    const submit = vi.fn();
+    render(<BatchForm onSubmit={submit} supplierSource="banque" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
+    expect(await screen.findByText('Sélectionnez le compte bancaire à débiter')).toBeVisible();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('keeps caisse funding independent of a supplier virement method', async () => {
+    const submit = vi.fn();
+    render(<BatchForm onSubmit={submit} supplierSource="caisse" payments={[{ ...payment, type_paiement: 'virement' }]} />);
+    expect(screen.queryByRole('combobox', { name: 'Compte bancaire à débiter' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({ type_paiement: 'virement', source_reglement: 'caisse' });
+  });
+
   it('submits a partial cash payment with its initialized date and amount', async () => {
     const submit = vi.fn();
     render(<BatchForm onSubmit={submit} />);

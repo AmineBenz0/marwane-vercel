@@ -32,6 +32,10 @@ def validate_payment_idempotency(existing, requested) -> None:
         and Decimal(str(existing.montant)) == Decimal(str(requested.montant))
         and existing.type_paiement == requested.type_paiement.lower()
         and existing.id_lc == requested.id_lc
+        and (existing.source_reglement is None or (
+            existing.id_compte == requested.id_compte
+            and (requested.source_reglement is None or existing.source_reglement == requested.source_reglement)
+        ))
     )
     if not same_identity:
         raise HTTPException(

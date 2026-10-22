@@ -174,6 +174,8 @@ const createPaymentDefaults = (date = today(), type = 'cash') => ({
   banque: '',
   reference: '',
   id_lc: '',
+  source_reglement: null,
+  id_compte: '',
   notes: '',
 });
 
@@ -337,6 +339,9 @@ function TransactionForm({
   const watchedTypeEntite = watch('type_entite');
   const watchedFournisseurId = watch('id_fournisseur');
   const isEditingTransaction = Boolean(initialValues?.id_transaction);
+  const supplierSource = watchedTypeEntite === 'fournisseur'
+    ? fournisseurs.find((item) => String(item.id_fournisseur) === String(watchedFournisseurId))?.mode_reglement_prefere || null
+    : null;
 
   // Apply the supplier's saved preference to each payment on new transactions.
   useEffect(() => {
@@ -350,16 +355,31 @@ function TransactionForm({
         setValue(`lignes.${lineIndex}.paiements.${paymentIndex}.type`, paymentType, {
           shouldDirty: true,
         });
-        if (paymentType === 'virement' && comptesBancaires.length === 1) {
-          setValue(
-            `lignes.${lineIndex}.paiements.${paymentIndex}.id_compte`,
-            comptesBancaires[0].id_compte,
-            { shouldDirty: true }
-          );
+      });
+    });
+  }, [watchedFournisseurId, watchedTypeEntite, fournisseurs, isEditingTransaction, setValue, watch]);
+
+  // Funding follows the supplier, not the method selected for a payment.
+  useEffect(() => {
+    if (isEditingTransaction && watchedTypeEntite !== 'fournisseur') return;
+    (watchedLignes || []).forEach((line, lineIndex) => {
+      (line.paiements || []).forEach((payment, paymentIndex) => {
+        if (payment.id_paiement) return;
+        const path = `lignes.${lineIndex}.paiements.${paymentIndex}`;
+        if (isEditingTransaction && !payment.source_reglement && supplierSource) {
+          setValue(`${path}.type`, supplierSource === 'banque' ? 'virement' : 'cash');
+        }
+        if ((payment.source_reglement || null) !== supplierSource) {
+          setValue(`${path}.source_reglement`, supplierSource);
+        }
+        const bankFunded = supplierSource === 'banque' || (!supplierSource && payment.type === 'virement');
+        if (!bankFunded && payment.id_compte) setValue(`${path}.id_compte`, '');
+        if (supplierSource === 'banque' && !payment.id_compte && comptesBancaires.length === 1) {
+          setValue(`${path}.id_compte`, comptesBancaires[0].id_compte);
         }
       });
     });
-  }, [watchedFournisseurId, watchedTypeEntite, fournisseurs, comptesBancaires, isEditingTransaction, setValue, watch]);
+  }, [watchedLignes, supplierSource, comptesBancaires, isEditingTransaction, watchedTypeEntite, setValue]);
 
 
   /**
@@ -454,6 +474,7 @@ function TransactionForm({
                 banque: p.banque || '',
                 reference: p.reference_virement || '',
                 id_compte: p.id_compte || '',
+                source_reglement: p.source_reglement || null,
                 id_lc: p.id_lc || '',
                 notes: p.notes || '',
                 id_paiement: p.id_paiement,
@@ -537,6 +558,7 @@ function TransactionForm({
           banque: p.banque || null,
           reference_virement: p.reference || null,
           id_compte: p.id_compte ? parseInt(p.id_compte, 10) : null,
+          source_reglement: p.source_reglement || null,
           id_lc: p.id_lc || null,
           notes: p.notes || null,
         })) : [];
@@ -1383,6 +1405,12 @@ function TransactionForm({
                                 
                                 {ligne.paiements?.map((paiement, pIndex) => (
                                   <Box key={pIndex} sx={{ mb: 2, pb: 2, borderBottom: pIndex < ligne.paiements.length - 1 ? '1px dashed #ccc' : 'none' }}>
+                                    {paiement.source_reglement && (
+                                      <Alert severity="info" sx={{ mb: 2 }}>
+                                        Source débitée : {paiement.source_reglement === 'banque' ? 'compte bancaire' : 'caisse'}.
+                                        Le type de paiement peut être choisi indépendamment.
+                                      </Alert>
+                                    )}
                                     {ligne.paiements.length > 1 && (
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                       <Typography variant="caption" fontWeight="bold">Paiement #{pIndex + 1}</Typography>
@@ -1437,7 +1465,7 @@ function TransactionForm({
                                               size="small"
                                               onChange={(event) => {
                                                 field.onChange(event);
-                                                if (event.target.value !== 'virement') {
+                                                if (event.target.value !== 'virement' && paiement.source_reglement !== 'banque') {
                                                   setValue(`lignes.${index}.paiements.${pIndex}.id_compte`, '');
                                                 }
                                               }}
@@ -1517,7 +1545,7 @@ function TransactionForm({
                                         </>
                                       )}
 
-                                      {paiement.type === 'virement' && (
+                                      {(paiement.source_reglement === 'banque' || (!paiement.source_reglement && paiement.type === 'virement')) && (
                                         <>
                                           <Grid item xs={12} sm={6}>
                                             <Controller
@@ -1528,11 +1556,11 @@ function TransactionForm({
                                                   {...field}
                                                   select
                                                   fullWidth
-                                                  required={!isEditingTransaction}
+                                                  required={!isEditingTransaction || (watchedTypeEntite === 'fournisseur' && !paiement.id_paiement)}
                                                   label="Compte bancaire"
                                                   error={!!error}
                                                   helperText={error?.message || (comptesBancaires.length ? '' : 'Aucun compte bancaire configuré')}
-                                                  disabled={loading || isEditingTransaction || comptesBancaires.length === 0}
+                                                  disabled={loading || (isEditingTransaction && (watchedTypeEntite !== 'fournisseur' || Boolean(paiement.id_paiement))) || comptesBancaires.length === 0}
                                                   size="small"
                                                   value={field.value || ''}
                                                   onChange={(event) => field.onChange(event.target.value)}
@@ -1547,6 +1575,10 @@ function TransactionForm({
                                               )}
                                             />
                                           </Grid>
+                                        </>
+                                      )}
+                                      {paiement.type === 'virement' && (
+                                        <>
                                           <Grid item xs={12} sm={6}>
                                             <Controller
                                               name={`lignes.${index}.paiements.${pIndex}.reference`}
