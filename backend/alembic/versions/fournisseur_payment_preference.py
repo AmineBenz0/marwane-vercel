@@ -6,7 +6,7 @@ from alembic import op
 
 
 revision = "fournisseur_payment_preference"
-down_revision = "independent_lots_per_building"
+down_revision = "egg_sale_production_source"
 branch_labels = None
 depends_on = None
 
