@@ -78,7 +78,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
           <Typography variant="body2" sx={{ my: 1 }}>Choisissez le type d’œufs à vendre dans cette saisie.</Typography>
           <TableContainer>
             <Table size="small" aria-label="Œufs de la saisie sélectionnée">
-              <TableHead><TableRow>{['Type', 'Calibre', 'Poids moyen', 'Produits', 'Disponibles', ''].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+              <TableHead><TableRow>{['Type', 'Calibre', 'Poids moyen', 'Œufs produits', 'Disponibles', ''].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
               <TableBody>{sources.map((source) => {
                 const reservedInForm = (lines || []).reduce((sum, other, otherIndex) => (
                   otherIndex !== index && Number(other.id_production) === source.id_production ? sum + Number(other.quantite || 0) : sum
