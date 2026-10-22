@@ -238,7 +238,7 @@ def test_client_letter_of_credit_cannot_pay_supplier_transaction(client, auth_he
     ).json()
     supplier_row = client.post(
         "/api/v1/fournisseurs",
-        json={"nom_fournisseur": "Fournisseur LC bénéficiaire"},
+        json={"nom_fournisseur": "Fournisseur LC bénéficiaire", "mode_reglement_prefere": "caisse"},
         headers=auth_headers,
     ).json()
     product = create_product(client, "Service LC fournisseur", "service", False, True)
@@ -433,7 +433,7 @@ def test_payment_and_inventory_dates_respect_source_dates(client, db_session, au
 
     supplier = client.post(
         "/api/v1/fournisseurs",
-        json={"nom_fournisseur": "Fournisseur Dates Intégrité"},
+        json={"nom_fournisseur": "Fournisseur Dates Intégrité", "mode_reglement_prefere": "caisse"},
         headers=auth_headers,
     ).json()
     raw = create_product(client, "Matière Dates Intégrité", "matiere_premiere", False, True)
@@ -620,7 +620,7 @@ def test_payment_alert_job_marks_the_same_execution_failed(db_session, monkeypat
 
 
 def test_bom_transformation_updates_stock_and_is_idempotent(client, auth_headers):
-    supplier = client.post("/api/v1/fournisseurs", json={"nom_fournisseur": "Fournisseur Stock"}, headers=auth_headers).json()
+    supplier = client.post("/api/v1/fournisseurs", json={"nom_fournisseur": "Fournisseur Stock", "mode_reglement_prefere": "caisse"}, headers=auth_headers).json()
     raw = create_product(client, "Matière Stock", "matiere_premiere", False, True)
     finished = create_product(client, "Produit Transformé", "produit_fini", True, False)
     purchase = client.post("/api/v1/transactions", json={

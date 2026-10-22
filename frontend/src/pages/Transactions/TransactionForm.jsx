@@ -157,10 +157,19 @@ const localizeValidationMessage = (message) => {
   return message || 'Champ invalide.';
 };
 
-const createPaymentDefaults = (date = today()) => ({
+const getFournisseurPaymentType = (fournisseurs, idFournisseur) => {
+  const fournisseur = fournisseurs.find(
+    (item) => String(item.id_fournisseur) === String(idFournisseur)
+  );
+  if (fournisseur?.mode_reglement_prefere === 'caisse') return 'cash';
+  if (fournisseur?.mode_reglement_prefere === 'banque') return 'virement';
+  return null;
+};
+
+const createPaymentDefaults = (date = today(), type = 'cash') => ({
   date,
   montant: '',
-  type: 'cash',
+  type,
   numero_cheque: '',
   banque: '',
   reference: '',
@@ -168,7 +177,7 @@ const createPaymentDefaults = (date = today()) => ({
   notes: '',
 });
 
-const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
+const createLineDefaults = (prefillBatimentId = '', date = today(), paymentType = 'cash') => ({
   id_produit: '',
   id_production: '',
   date_production: '',
@@ -177,7 +186,7 @@ const createLineDefaults = (prefillBatimentId = '', date = today()) => ({
   quantite: undefined,
   prix_unitaire: undefined,
   ajouter_paiement: false,
-  paiements: [createPaymentDefaults(date)],
+  paiements: [createPaymentDefaults(date, paymentType)],
 });
 
 /**
@@ -284,6 +293,7 @@ function TransactionForm({
   // État pour les données de référence
   const [clients, setClients] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
+  const [comptesBancaires, setComptesBancaires] = useState([]);
   const [produits, setProduits] = useState([]);
   const [batiments, setBatiments] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -325,6 +335,31 @@ function TransactionForm({
   // Observer les valeurs du formulaire pour calculer le total
   const watchedLignes = watch('lignes');
   const watchedTypeEntite = watch('type_entite');
+  const watchedFournisseurId = watch('id_fournisseur');
+  const isEditingTransaction = Boolean(initialValues?.id_transaction);
+
+  // Apply the supplier's saved preference to each payment on new transactions.
+  useEffect(() => {
+    if (isEditingTransaction || watchedTypeEntite !== 'fournisseur' || !watchedFournisseurId) return;
+    const paymentType = getFournisseurPaymentType(fournisseurs, watchedFournisseurId);
+    if (!paymentType) return;
+
+    const currentLines = watch('lignes') || [];
+    currentLines.forEach((line, lineIndex) => {
+      (line.paiements || []).forEach((_, paymentIndex) => {
+        setValue(`lignes.${lineIndex}.paiements.${paymentIndex}.type`, paymentType, {
+          shouldDirty: true,
+        });
+        if (paymentType === 'virement' && comptesBancaires.length === 1) {
+          setValue(
+            `lignes.${lineIndex}.paiements.${paymentIndex}.id_compte`,
+            comptesBancaires[0].id_compte,
+            { shouldDirty: true }
+          );
+        }
+      });
+    });
+  }, [watchedFournisseurId, watchedTypeEntite, fournisseurs, comptesBancaires, isEditingTransaction, setValue, watch]);
 
 
   /**
@@ -333,17 +368,19 @@ function TransactionForm({
   const fetchReferenceData = async (typeEntite = 'client') => {
     setLoadingData(true);
     try {
-      const [clientsData, fournisseursData, produitsData, batimentsData] = await Promise.all([
+      const [clientsData, fournisseursData, produitsData, batimentsData, comptesData] = await Promise.all([
         get('/clients', { params: { est_actif: true, limit: 1000 } }),
         get('/fournisseurs', { params: { est_actif: true, limit: 1000 } }),
         getProduitsParType(typeEntite, { est_actif: true, limit: 1000 }),
         get('/batiments'),
+        get('/comptes-bancaires'),
       ]);
 
       setClients(clientsData || []);
       setFournisseurs(fournisseursData || []);
       setProduits(produitsData || []);
       setBatiments(batimentsData || []);
+      setComptesBancaires(comptesData || []);
     } catch (err) {
       console.error('Erreur lors du chargement des données de référence:', err);
     } finally {
@@ -416,6 +453,7 @@ function TransactionForm({
                 numero_cheque: p.numero_cheque || '',
                 banque: p.banque || '',
                 reference: p.reference_virement || '',
+                id_compte: p.id_compte || '',
                 id_lc: p.id_lc || '',
                 notes: p.notes || '',
                 id_paiement: p.id_paiement,
@@ -498,6 +536,7 @@ function TransactionForm({
           numero_cheque: p.numero_cheque || null,
           banque: p.banque || null,
           reference_virement: p.reference || null,
+          id_compte: p.id_compte ? parseInt(p.id_compte, 10) : null,
           id_lc: p.id_lc || null,
           notes: p.notes || null,
         })) : [];
@@ -633,9 +672,13 @@ function TransactionForm({
    */
   const handleAddLine = () => {
     const currentLignes = watch('lignes') || [];
+    const paymentType = watchedTypeEntite === 'fournisseur'
+      ? getFournisseurPaymentType(fournisseurs, watchedFournisseurId) || 'cash'
+      : 'cash';
     setValue('lignes', [...currentLignes, createLineDefaults(
       prefillBatimentId,
-      watch('date_transaction') || today()
+      watch('date_transaction') || today(),
+      paymentType
     )], {
       shouldDirty: true,
     });
@@ -1249,7 +1292,12 @@ function TransactionForm({
                                       const existingPaiements = watch(`lignes.${index}.paiements`);
                                       if (!existingPaiements || existingPaiements.length === 0) {
                                         setValue(`lignes.${index}.paiements`, [
-                                          createPaymentDefaults(watch('date_transaction') || today()),
+                                          createPaymentDefaults(
+                                            watch('date_transaction') || today(),
+                                            watchedTypeEntite === 'fournisseur'
+                                              ? getFournisseurPaymentType(fournisseurs, watchedFournisseurId) || 'cash'
+                                              : 'cash'
+                                          ),
                                         ]);
                                         setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
                                       } else {
@@ -1318,16 +1366,15 @@ function TransactionForm({
                                     startIcon={<AddIcon />} 
                                     onClick={() => {
                                       const currentPaiements = watch(`lignes.${index}.paiements`) || [];
-                                      setValue(`lignes.${index}.paiements`, [...currentPaiements, {
-                                        date: watch('date_transaction') || new Date().toISOString().split('T')[0],
-                                        montant: '',
-                                        type: 'cash',
-                                        numero_cheque: '',
-                                        banque: '',
-                                        reference: '',
-                                        id_lc: '',
-                                        notes: '',
-                                      }]);
+                                      setValue(`lignes.${index}.paiements`, [
+                                        ...currentPaiements,
+                                        createPaymentDefaults(
+                                          watch('date_transaction') || today(),
+                                          watchedTypeEntite === 'fournisseur'
+                                            ? getFournisseurPaymentType(fournisseurs, watchedFournisseurId) || 'cash'
+                                            : 'cash'
+                                        ),
+                                      ]);
                                     }}
                                   >
                                     Ajouter un paiement
@@ -1388,6 +1435,12 @@ function TransactionForm({
                                               helperText={error?.message}
                                               disabled={loading}
                                               size="small"
+                                              onChange={(event) => {
+                                                field.onChange(event);
+                                                if (event.target.value !== 'virement') {
+                                                  setValue(`lignes.${index}.paiements.${pIndex}.id_compte`, '');
+                                                }
+                                              }}
                                             >
                                               <MenuItem value="cash">
                                                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
@@ -1465,15 +1518,45 @@ function TransactionForm({
                                       )}
 
                                       {paiement.type === 'virement' && (
-                                        <Grid item xs={12}>
-                                          <Controller
-                                            name={`lignes.${index}.paiements.${pIndex}.reference`}
-                                            control={control}
-                                            render={({ field }) => (
-                                              <TextField {...field} fullWidth label="Référence" disabled={loading} size="small" />
-                                            )}
-                                          />
-                                        </Grid>
+                                        <>
+                                          <Grid item xs={12} sm={6}>
+                                            <Controller
+                                              name={`lignes.${index}.paiements.${pIndex}.id_compte`}
+                                              control={control}
+                                              render={({ field, fieldState: { error } }) => (
+                                                <TextField
+                                                  {...field}
+                                                  select
+                                                  fullWidth
+                                                  required={!isEditingTransaction}
+                                                  label="Compte bancaire"
+                                                  error={!!error}
+                                                  helperText={error?.message || (comptesBancaires.length ? '' : 'Aucun compte bancaire configuré')}
+                                                  disabled={loading || isEditingTransaction || comptesBancaires.length === 0}
+                                                  size="small"
+                                                  value={field.value || ''}
+                                                  onChange={(event) => field.onChange(event.target.value)}
+                                                >
+                                                  <MenuItem value=""><em>Sélectionner un compte</em></MenuItem>
+                                                  {comptesBancaires.map((compte) => (
+                                                    <MenuItem key={compte.id_compte} value={compte.id_compte}>
+                                                      {compte.nom_banque} · {compte.numero_compte}
+                                                    </MenuItem>
+                                                  ))}
+                                                </TextField>
+                                              )}
+                                            />
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Controller
+                                              name={`lignes.${index}.paiements.${pIndex}.reference`}
+                                              control={control}
+                                              render={({ field }) => (
+                                                <TextField {...field} fullWidth label="Référence" disabled={loading} size="small" />
+                                              )}
+                                            />
+                                          </Grid>
+                                        </>
                                       )}
 
                                       {paiement.type === 'lc' && (

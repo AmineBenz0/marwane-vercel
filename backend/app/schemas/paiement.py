@@ -30,6 +30,7 @@ class PaiementBase(BaseModel):
     
     # Informations pour les virements
     reference_virement: Optional[str] = Field(None, max_length=100, description="Référence du virement")
+    id_compte: Optional[int] = Field(None, description="Compte bancaire utilisé pour le paiement")
     
     # Informations pour les Lettres de Crédit
     id_lc: Optional[int] = Field(None, description="ID de la Lettre de Crédit associée")
@@ -82,6 +83,8 @@ class PaiementCreate(PaiementBase):
         """Valide que si le type est 'lc', id_lc est fourni."""
         if self.type_paiement == 'lc' and self.id_lc is None:
             raise ValueError("L'identifiant de la Lettre de Crédit (id_lc) est requis pour ce type de paiement.")
+        if self.id_compte is not None and self.type_paiement != 'virement':
+            raise ValueError("Le compte bancaire ne peut être renseigné que pour un virement.")
         return self
 
 
@@ -91,6 +94,7 @@ class PaiementUpdate(BaseModel):
     Tous les champs sont optionnels pour permettre des mises à jour partielles.
     """
     date_paiement: Optional[date] = Field(None, description="Date du paiement")
+    id_compte: Optional[int] = Field(None, description="Compte bancaire utilisé pour le paiement")
     montant: Optional[Decimal] = Field(None, gt=0, description="Montant du paiement")
     type_paiement: Optional[str] = Field(None, description="Type de paiement")
     numero_cheque: Optional[str] = Field(None, max_length=50, description="Numéro du chèque")

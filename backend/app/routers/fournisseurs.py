@@ -480,6 +480,7 @@ def create_fournisseur(
     # Créer le nouveau fournisseur
     new_fournisseur = Fournisseur(
         nom_fournisseur=fournisseur_data.nom_fournisseur.strip(),
+        mode_reglement_prefere=fournisseur_data.mode_reglement_prefere,
         est_actif=fournisseur_data.est_actif,
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None
     )

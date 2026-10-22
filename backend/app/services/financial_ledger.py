@@ -269,6 +269,10 @@ def sync_payment_cash_movement(
         Caisse.id_paiement == payment.id_paiement,
         Caisse.statut == "active",
     ).first()
+    existing_bank = db.query(MouvementBancaire).filter(
+        MouvementBancaire.id_paiement == payment.id_paiement,
+        MouvementBancaire.statut == "active",
+    ).first()
 
     if not should_create:
         if existing:
@@ -280,10 +284,68 @@ def sync_payment_cash_movement(
                 create_reversal_record=True,
             )
             create_cash_snapshot(db, existing.id_mouvement)
+        if existing_bank:
+            void_bank_movement(
+                db,
+                existing_bank,
+                raison=reason,
+                current_user=current_user,
+            )
         return None
 
     movement_type = "ENTREE" if transaction.id_client is not None else "SORTIE"
     expected_date = _source_datetime(payment.date_paiement)
+
+    # Supplier bank transfers belong to the selected bank account. Keep the
+    # active payment linked to exactly one ledger movement.
+    if payment.type_paiement == "virement" and payment.id_compte is not None:
+        if existing:
+            void_cash_movement(
+                db,
+                existing,
+                raison=reason,
+                current_user=current_user,
+                create_reversal_record=True,
+            )
+            create_cash_snapshot(db, existing.id_mouvement)
+        if existing_bank and (
+            existing_bank.id_compte == payment.id_compte
+            and _money(existing_bank.montant) == _money(payment.montant)
+            and existing_bank.type_mouvement == movement_type
+            and _same_datetime(existing_bank.date_mouvement, expected_date)
+        ):
+            return None
+        if existing_bank:
+            void_bank_movement(
+                db,
+                existing_bank,
+                raison=reason,
+                current_user=current_user,
+                create_reversal_record=False,
+            )
+        record_bank_movement(
+            db,
+            id_compte=payment.id_compte,
+            montant=_money(payment.montant),
+            type_mouvement=movement_type,
+            source="virement",
+            reference=payment.reference_virement,
+            notes=reason,
+            id_paiement=payment.id_paiement,
+            current_user=current_user,
+            date_mouvement=expected_date,
+        )
+        return None
+
+    if existing_bank:
+        void_bank_movement(
+            db,
+            existing_bank,
+            raison=reason,
+            current_user=current_user,
+            create_reversal_record=True,
+        )
+
     if existing and (
         _money(existing.montant) == _money(payment.montant)
         and existing.type_mouvement == movement_type

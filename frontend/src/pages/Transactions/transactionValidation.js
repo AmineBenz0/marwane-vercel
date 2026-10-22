@@ -32,6 +32,10 @@ const paymentSchema = yup.object().shape({
     is: 'lc',
     then: (schema) => schema.required('Veuillez sélectionner une LC').positive(),
   }),
+  id_compte: optionalNumber().when(['type', 'id_paiement'], {
+    is: (type, idPaiement) => type === 'virement' && !idPaiement,
+    then: (schema) => schema.required('Veuillez sélectionner un compte bancaire').positive(),
+  }),
   notes: yup.string().nullable(),
   id_paiement: optionalNumber(),
 });

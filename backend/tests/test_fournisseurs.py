@@ -171,12 +171,14 @@ class TestFournisseursEndpoints:
             "/api/v1/fournisseurs",
             json={
                 "nom_fournisseur": "Nouveau Fournisseur",
+                "mode_reglement_prefere": "caisse",
                 "est_actif": True
             }
         )
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
         assert data["nom_fournisseur"] == "Nouveau Fournisseur"
+        assert data["mode_reglement_prefere"] == "caisse"
         assert data["est_actif"] is True
         assert "id_fournisseur" in data
         assert "date_creation" in data
@@ -187,6 +189,7 @@ class TestFournisseursEndpoints:
         ).first()
         assert fournisseur_db is not None
         assert fournisseur_db.nom_fournisseur == "Nouveau Fournisseur"
+        assert fournisseur_db.mode_reglement_prefere == "caisse"
         # Quand auth est désactivée, id_utilisateur_creation peut être None
         # assert fournisseur_db.id_utilisateur_creation == test_user.id_utilisateur
     
@@ -206,6 +209,7 @@ class TestFournisseursEndpoints:
             "/api/v1/fournisseurs",
             json={
                 "nom_fournisseur": "Fournisseur Unique",
+                "mode_reglement_prefere": "caisse",
                 "est_actif": True
             }
         )
@@ -228,6 +232,7 @@ class TestFournisseursEndpoints:
             "/api/v1/fournisseurs",
             json={
                 "nom_fournisseur": "   ",
+                "mode_reglement_prefere": "caisse",
                 "est_actif": True
             }
         )
@@ -388,6 +393,7 @@ class TestFournisseursEndpoints:
             "/api/v1/fournisseurs",
             json={
                 "nom_fournisseur": "Fournisseur avec Traçabilité",
+                "mode_reglement_prefere": "caisse",
                 "est_actif": True
             }
         )

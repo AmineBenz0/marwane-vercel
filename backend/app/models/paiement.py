@@ -47,6 +47,7 @@ class Paiement(Base):
     id_paiement = Column(Integer, primary_key=True, index=True)
     id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=False, index=True)
     id_lc = Column(Integer, ForeignKey("lettres_credit.id_lc"), nullable=True, index=True)
+    id_compte = Column(Integer, ForeignKey("comptes_bancaires.id_compte"), nullable=True, index=True)
     
     # Informations de base du paiement
     date_paiement = Column(Date, nullable=False, index=True)
@@ -81,6 +82,10 @@ class Paiement(Base):
     __table_args__ = (
         CheckConstraint('montant > 0', name='check_paiement_montant_positif'),
         CheckConstraint(
+            "id_compte IS NULL OR type_paiement = 'virement'",
+            name='check_paiement_compte_virement',
+        ),
+        CheckConstraint(
             "type_paiement IN ('cash', 'cheque', 'virement', 'carte', 'compensation', 'lc', 'autre')",
             name='check_type_paiement_valide'
         ),
@@ -97,6 +102,7 @@ class Paiement(Base):
     # Relations
     transaction = relationship("Transaction", back_populates="paiements")
     lettre_credit = relationship("LettreDeCredit", back_populates="paiements")
+    compte_bancaire = relationship("CompteBancaire")
     utilisateur_creation = relationship(
         "Utilisateur", 
         foreign_keys=[id_utilisateur_creation],

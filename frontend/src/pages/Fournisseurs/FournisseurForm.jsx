@@ -8,6 +8,10 @@ export const fournisseurValidationSchema = yup.object().shape({
     .min(1, 'Le nom doit contenir au moins 1 caractère')
     .max(255, 'Le nom ne peut pas dépasser 255 caractères')
     .trim(),
+  mode_reglement_prefere: yup
+    .string()
+    .oneOf(['caisse', 'banque'], 'Choisissez un mode de règlement')
+    .required('Le mode de règlement préféré est requis'),
 });
 
 export const fournisseurFields = [
@@ -18,6 +22,17 @@ export const fournisseurFields = [
     placeholder: 'Ex. Coop Agadir',
     required: true,
     helperText: "Utilisez le nom que l'équipe reconnaît au quotidien.",
+  },
+  {
+    name: 'mode_reglement_prefere',
+    label: 'Mode de règlement préféré',
+    type: 'select',
+    required: true,
+    options: [
+      { value: 'caisse', label: 'Caisse (espèces)' },
+      { value: 'banque', label: 'Compte bancaire (virement)' },
+    ],
+    helperText: 'Ce choix préremplit le type de paiement dans les nouvelles transactions.',
   },
 ];
 
@@ -32,6 +47,7 @@ function FournisseurForm({
 }) {
   const defaultInitialValues = {
     nom_fournisseur: editingFournisseur?.nom_fournisseur || '',
+    mode_reglement_prefere: editingFournisseur?.mode_reglement_prefere || '',
   };
 
   const formInitialValues = initialValues || defaultInitialValues;
