@@ -98,8 +98,8 @@ for (const width of [390, 1200]) {
       await page.getByRole('button', { name: 'Démarrer un lot', exact: true }).click();
       const dialog = page.getByRole('dialog');
       await dialog.getByLabel(/^Nom du lot/).fill(name);
-      await dialog.getByLabel(/^Date d'arrivée/).fill('01/10/26');
-      await dialog.getByLabel(/^Effectif initial dans ce bâtiment/).fill(count);
+      await dialog.getByLabel(/^Date de mise en place/).fill('01/10/26');
+      await dialog.getByLabel(/^Effectif de départ/).fill(count);
       await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
       await expect(dialog).toHaveCount(0);
       await expect(page.getByRole('heading', { level: 1, name, exact: true })).toBeVisible();
@@ -107,13 +107,14 @@ for (const width of [390, 1200]) {
       await page.getByRole('button', { name: 'Retour aux lots', exact: true }).click();
     }
     expect(state.writes[0].body.repartitions).toEqual([{ id_batiment: 7, effectif_initial: 100 }]);
+    expect(state.writes[0].body.date_debut).toBe('2026-10-01');
     expect(state.writes[1].body.repartitions).toEqual([{ id_batiment: 8, effectif_initial: 200 }]);
     await expect(page.getByRole('button', { name: 'Démarrer un lot', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Ouvrir le lot Lot A', exact: true }).click();
     await page.getByRole('button', { name: 'Modifier le lot', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('combobox', { name: /^Bâtiment/ })).toHaveAttribute('aria-disabled', 'true');
-    await dialog.getByLabel(/^Effectif initial dans ce bâtiment/).fill('90');
+    await dialog.getByLabel(/^Effectif de départ/).fill('90');
     await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
     await expect(dialog).toHaveCount(0);
     expect(state.lots().find(lot => lot.id_lot === 2).effectif_initial).toBe(200);
@@ -138,7 +139,7 @@ test('new arrivals reject nonpositive flock sizes and use the free building', as
   await page.getByRole('button', { name: 'Démarrer un lot', exact: true }).click();
   const dialog = page.getByRole('dialog');
   for (const value of ['0', '-1']) {
-    await dialog.getByLabel(/^Effectif initial dans ce bâtiment/).fill(value);
+    await dialog.getByLabel(/^Effectif de départ/).fill(value);
     await expect(dialog.getByRole('button', { name: 'Enregistrer', exact: true })).toBeDisabled();
   }
   expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
