@@ -181,6 +181,7 @@ class ProductionPerformanceRow(BaseModel):
     g_poule: Optional[Decimal | str] = None
     g_oeuf: Optional[Decimal | str] = None
     calibre: Optional[str] = None
+    poids_oeuf: Optional[Decimal | str] = None
     effectif_debut: Optional[int] = None
     effectif_fin: Optional[int] = None
     age_semaines: Optional[int] = None

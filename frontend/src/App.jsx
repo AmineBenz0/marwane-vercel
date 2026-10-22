@@ -40,6 +40,7 @@ const Caisse = lazy(() => import('./pages/Caisse'));
 const LettresCreditList = lazy(() => import('./pages/LettresCredit/LettresCreditList'));
 const LettreCreditDetail = lazy(() => import('./pages/LettresCredit/LettreCreditDetail'));
 const ProductionDashboard = lazy(() => import('./pages/Production/ProductionDashboard'));
+const GlobalOverviewPage = lazy(() => import('./pages/Production/GlobalOverviewPage'));
 const BatimentProductionPage = lazy(() => import('./pages/Production/BatimentProductionPage'));
 const LotsManagementPage = lazy(() => import('./pages/Production/LotsManagementPage'));
 const ChargesList = lazy(() => import('./pages/Charges/ChargesList'));
@@ -198,6 +199,14 @@ function App() {
               <AppLayout>
                 <Caisse />
               </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/production/suivi-global"
+          element={
+            <ProtectedRoute>
+              <AppLayout><GlobalOverviewPage /></AppLayout>
             </ProtectedRoute>
           }
         />
