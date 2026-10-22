@@ -361,10 +361,14 @@ function TransactionForm({
 
   // Funding follows the supplier, not the method selected for a payment.
   useEffect(() => {
-    if (isEditingTransaction) return;
+    if (isEditingTransaction && watchedTypeEntite !== 'fournisseur') return;
     (watchedLignes || []).forEach((line, lineIndex) => {
       (line.paiements || []).forEach((payment, paymentIndex) => {
+        if (payment.id_paiement) return;
         const path = `lignes.${lineIndex}.paiements.${paymentIndex}`;
+        if (isEditingTransaction && !payment.source_reglement && supplierSource) {
+          setValue(`${path}.type`, supplierSource === 'banque' ? 'virement' : 'cash');
+        }
         if ((payment.source_reglement || null) !== supplierSource) {
           setValue(`${path}.source_reglement`, supplierSource);
         }
@@ -375,7 +379,7 @@ function TransactionForm({
         }
       });
     });
-  }, [watchedLignes, supplierSource, comptesBancaires, isEditingTransaction, setValue]);
+  }, [watchedLignes, supplierSource, comptesBancaires, isEditingTransaction, watchedTypeEntite, setValue]);
 
 
   /**
@@ -1552,11 +1556,11 @@ function TransactionForm({
                                                   {...field}
                                                   select
                                                   fullWidth
-                                                  required={!isEditingTransaction}
+                                                  required={!isEditingTransaction || (watchedTypeEntite === 'fournisseur' && !paiement.id_paiement)}
                                                   label="Compte bancaire"
                                                   error={!!error}
                                                   helperText={error?.message || (comptesBancaires.length ? '' : 'Aucun compte bancaire configuré')}
-                                                  disabled={loading || isEditingTransaction || comptesBancaires.length === 0}
+                                                  disabled={loading || (isEditingTransaction && (watchedTypeEntite !== 'fournisseur' || Boolean(paiement.id_paiement))) || comptesBancaires.length === 0}
                                                   size="small"
                                                   value={field.value || ''}
                                                   onChange={(event) => field.onChange(event.target.value)}
