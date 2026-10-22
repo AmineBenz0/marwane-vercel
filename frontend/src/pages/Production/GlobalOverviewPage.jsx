@@ -4,8 +4,6 @@ import {
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Typography,
 } from '@mui/material';
-import DownloadIcon from '@mui/icons-material/Download';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import { get } from '../../services/api';
 import { cycleProductionService, productionService } from '../../services/productionService';
 
@@ -277,8 +275,8 @@ function GlobalOverviewPage() {
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>Registre quotidien et synth�se hebdomadaire des lots.</Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => setRefresh((value) => value + 1)}>Actualiser</Button>
-          <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleExport} disabled={!displayRows.length}>Exporter CSV</Button>
+          <Button variant="outlined" onClick={() => setRefresh((value) => value + 1)}>Actualiser</Button>
+          <Button variant="contained" onClick={handleExport} disabled={!displayRows.length}>Exporter CSV</Button>
         </Stack>
       </Stack>
       <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
