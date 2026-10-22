@@ -906,6 +906,7 @@ def get_cycle_performance(
             "effectif_debut": summary["effectif_debut"],
             "effectif_fin": summary["effectif_fin"],
             "age_semaines": summary["age_semaines"],
+            "poids_oeuf": _safe_decimal(summary["grammage_total"] / summary["grammage_count"], "1") if summary["grammage_count"] else "-",
         })
 
     for day_date in sorted(daily.keys()):
@@ -929,6 +930,8 @@ def get_cycle_performance(
                 "effectif_debut": effectif_running,
                 "effectif_fin": effectif_running,
                 "age_semaines": schedule.age_depart_semaines + max((day_date - schedule.date_debut).days, 0) // 7,
+                "grammage_total": Decimal("0"),
+                "grammage_count": 0,
             }
             rows.append({
                 "id": f"week-{week_key}",
@@ -962,6 +965,7 @@ def get_cycle_performance(
             "effectif_debut": effectif_debut,
             "effectif_fin": effectif_fin,
             "age_semaines": age_semaines,
+            "poids_oeuf": _safe_decimal(day["grammage_total"] / day["grammage_count"], "1") if day["grammage_count"] else "-",
         })
 
         if week_summary:
@@ -969,6 +973,8 @@ def get_cycle_performance(
             week_summary["mort"] += day["mort"]
             week_summary["oeufs"] += day["oeufs"]
             week_summary["aliment_kg"] += day["aliment_kg"]
+            week_summary["grammage_total"] += day["grammage_total"]
+            week_summary["grammage_count"] += day["grammage_count"]
             week_summary["formules"].update(day["formules"])
             week_summary["calibres"].update(day["calibres"])
             week_summary["effectif_fin"] = effectif_fin

@@ -39,6 +39,7 @@ import {
   Logout as LogoutIcon,
   CreditCard as CreditCardIcon,
   Factory as FactoryIcon,
+  TableChart as TableChartIcon,
   MoneyOff as MoneyOffIcon,
   TrendingUp as TrendingUpIcon,
   CalendarMonth as CalendarMonthIcon,
@@ -70,6 +71,7 @@ const NAV_SECTIONS = [
     label: 'Travail terrain',
     items: [
       { text: 'Production & stock', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/production' },
+      { text: 'Suivi global', icon: <TableChartIcon sx={{ fontSize: 20 }} />, path: '/production/suivi-global' },
       { text: 'Gestion des lots', icon: <InventoryIcon sx={{ fontSize: 20 }} />, path: '/production/lots' },
       { text: 'Par bâtiment', icon: <FactoryIcon sx={{ fontSize: 20 }} />, path: '/production/batiment' },
     ],
