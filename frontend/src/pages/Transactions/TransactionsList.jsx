@@ -261,10 +261,10 @@ function TransactionsList() {
   const fetchReferenceData = async () => {
     try {
       const [clientsData, fournisseursData, produitsData, batimentsData] = await Promise.all([
-        get('/clients', { params: { limit: 1000, est_actif: true } }),
-        get('/fournisseurs', { params: { limit: 1000, est_actif: true } }),
-        get('/produits', { params: { limit: 1000, est_actif: true } }),
-        get('/batiments'),
+        get('/clients', { referenceData: true, params: { limit: 1000, est_actif: true } }),
+        get('/fournisseurs', { referenceData: true, params: { limit: 1000, est_actif: true } }),
+        get('/produits', { referenceData: true, params: { limit: 1000, est_actif: true } }),
+        get('/batiments', { referenceData: true }),
       ]);
       setClients(clientsData || []);
       setFournisseurs(fournisseursData || []);

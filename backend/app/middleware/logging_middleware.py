@@ -3,6 +3,7 @@ Middleware FastAPI pour le logging structuré de toutes les requêtes.
 Enregistre automatiquement toutes les requêtes avec leurs métadonnées.
 """
 import time
+import os
 from uuid import uuid4
 from typing import Callable
 from fastapi import Request, Response
@@ -11,6 +12,7 @@ from starlette.types import ASGIApp
 
 from app.config.logging_config import get_logger
 from app.config import settings
+from app.utils.request_timing import RequestTiming, request_timing
 
 logger = get_logger(__name__)
 
@@ -60,7 +62,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             return response
         
         # Démarrer le chronomètre
-        start_time = time.time()
+        start_time = time.perf_counter()
+        timing = RequestTiming()
+        timing_token = request_timing.set(timing)
         
         # Extraire les informations de base
         method = request.method
@@ -128,7 +132,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         
         finally:
             # Calculer la durée
-            duration_ms = round((time.time() - start_time) * 1000, 2)
+            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            region = os.environ.get("VERCEL_REGION", "local")
+            timing_fields = {
+                "db_acquire_ms": round(timing.db_acquire_ms, 2),
+                "sql_ms": round(timing.sql_ms, 2),
+                "sql_count": timing.sql_count,
+                "region": region,
+            }
+            request_timing.reset(timing_token)
             
             # Préparer les métadonnées pour le log
             log_extra = {
@@ -139,22 +151,34 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 "duration_ms": duration_ms,
                 "ip_address": client_ip,
                 "request_id": request_id,
+                **timing_fields,
             }
+
+            message = (
+                f"{method} {endpoint} - {status_code} - {duration_ms}ms "
+                f"db_acquire={timing_fields['db_acquire_ms']}ms "
+                f"sql={timing_fields['sql_ms']}ms queries={timing.sql_count} region={region}"
+            )
             
             # Logger selon le niveau
             if error_occurred:
                 logger.error(
-                    f"{method} {endpoint} - {status_code} - {duration_ms}ms",
+                    message,
                     extra=log_extra
                 )
             else:
                 logger.info(
-                    f"{method} {endpoint} - {status_code} - {duration_ms}ms",
+                    message,
                     extra=log_extra
                 )
         
         if response is not None:
             response.headers.setdefault("X-Request-ID", request_id)
+            response.headers["Server-Timing"] = (
+                f"app;dur={duration_ms}, "
+                f"db_acquire;dur={timing.db_acquire_ms:.2f}, sql;dur={timing.sql_ms:.2f}"
+            )
+            response.headers["X-App-Region"] = region
 
         return response
     

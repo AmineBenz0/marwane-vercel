@@ -5,7 +5,9 @@ Gère la connexion et la session de base de données.
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import NullPool
+from time import perf_counter
 from app.config import settings
+from app.utils.request_timing import instrument_engine, request_timing
 
 # Création du moteur SQLAlchemy
 # SQLAlchemy 1.4+ nécessite le préfixe postgresql:// au lieu de postgres://
@@ -53,6 +55,7 @@ if not is_sqlite:
         engine_options["connect_args"] = {"sslmode": "require"}
 
 engine = create_engine(database_url, **engine_options)
+instrument_engine(engine)
 
 # Session locale
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -71,6 +74,14 @@ def get_db():
     """
     db = SessionLocal()
     try:
+        timing = request_timing.get()
+        if timing is not None:
+            # Measure checkout/connection setup independently of route queries.
+            started = perf_counter()
+            try:
+                db.connection()
+            finally:
+                timing.db_acquire_ms += (perf_counter() - started) * 1000
         yield db
     except Exception:
         db.rollback()
