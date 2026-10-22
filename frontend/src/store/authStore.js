@@ -10,7 +10,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { post, refreshSession } from '../services/api';
+import { post, refreshSession, clearReferenceCache } from '../services/api';
 
 const AUTH_STORAGE_KEY = 'auth-storage';
 
@@ -48,6 +48,7 @@ const syncAuthStorage = (updates = {}) => {
 };
 
 const clearAuthStorage = () => {
+  clearReferenceCache();
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
 

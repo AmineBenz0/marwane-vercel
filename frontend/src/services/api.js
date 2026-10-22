@@ -12,6 +12,20 @@
 
 import axios from 'axios';
 import useNotificationStore from '../store/notificationStore';
+import { createReferenceCache } from './referenceCache';
+
+const referenceCache = createReferenceCache();
+const referencePaths = new Set(['/clients', '/fournisseurs', '/produits', '/batiments']);
+const referenceRevisionKey = 'reference-data-revision';
+export const clearReferenceCache = () => referenceCache.clear();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === null || [referenceRevisionKey, 'auth-storage', 'access_token'].includes(event.key)) {
+      clearReferenceCache();
+    }
+  });
+}
 
 // Configuration de l'URL de base de l'API
 // Si VITE_API_URL est vide ou non défini, utiliser un chemin relatif
@@ -75,6 +89,7 @@ const getRefreshToken = () => {
  * Supprime les tokens du localStorage.
  */
 const clearTokens = () => {
+  clearReferenceCache();
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   try {
@@ -97,6 +112,7 @@ const clearTokens = () => {
  * Met à jour les tokens dans le localStorage.
  */
 const setTokens = (accessToken, refreshToken) => {
+  clearReferenceCache();
   if (accessToken) {
     localStorage.setItem('access_token', accessToken);
   }
@@ -346,6 +362,16 @@ api.interceptors.request.use(
  */
 api.interceptors.response.use(
   (response) => {
+    // Invalidate on every successful write, including writes made through the
+    // exported axios instance. Other tabs invalidate via the storage event.
+    if (!['get', 'head', 'options'].includes(response.config.method || 'get')) {
+      clearReferenceCache();
+      try {
+        localStorage.setItem(referenceRevisionKey, createRequestId());
+      } catch {
+        // Storage may be unavailable; this tab's cache is already cleared.
+      }
+    }
     // Si la requête réussit, retourner la réponse telle quelle
     return response;
   },
@@ -468,8 +494,15 @@ api.interceptors.response.use(
  * const filtered = await api.get('/clients', { params: { search: 'test' } });
  */
 export const get = async (url, config = {}) => {
-  const response = await api.get(url, config);
-  return response.data;
+  const { referenceData = false, ...requestConfig } = config;
+  const load = async () => (await api.get(url, requestConfig)).data;
+  // Opt-in only: balance-bearing contact pages and all operational reads
+  // remain fresh. Caller-owned cancellation/custom headers bypass sharing.
+  if (!referenceData || !referencePaths.has(url) || config.signal || config.headers
+      || config.paramsSerializer || config.responseType || config.baseURL) return load();
+  const params = Object.fromEntries(Object.entries(config.params || {}).sort(([a], [b]) => a.localeCompare(b)));
+  const key = api.getUri({ url, params });
+  return referenceCache.get(key, getAccessToken(), load);
 };
 
 /**
