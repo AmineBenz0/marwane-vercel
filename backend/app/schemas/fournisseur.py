@@ -244,4 +244,3 @@ class FournisseurScore(BaseModel):
     
     # Recommandations
     recommandation: Optional[str] = Field(None, description="Recommandation basée sur le score")
-
