@@ -126,9 +126,19 @@ for (const plural of ['clients', 'fournisseurs'] as const) {
     await page.getByRole('button', { name: `Créer un ${state.singular}`, exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('textbox').fill('Nouveau contact');
+    if (plural === 'fournisseurs') {
+      await dialog.getByLabel('Mode de règlement préféré').selectOption('caisse');
+    }
     await dialog.getByRole('button', { name: `Créer le ${state.singular}`, exact: true }).click();
     await expect(grid.getByRole('link')).toHaveCount(7);
-    expect(state.writes[0]).toEqual({ method: 'POST', body: { [`nom_${state.singular}`]: 'Nouveau contact', est_actif: true } });
+    expect(state.writes[0]).toEqual({
+      method: 'POST',
+      body: {
+        [`nom_${state.singular}`]: 'Nouveau contact',
+        ...(plural === 'fournisseurs' ? { mode_reglement_prefere: 'caisse' } : {}),
+        est_actif: true,
+      },
+    });
     await grid.getByRole('link', { name: 'Voir le profil de Nouveau contact', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/${plural}/7/profile$`));
     await page.getByRole('button', { name: 'Éditer', exact: true }).click();

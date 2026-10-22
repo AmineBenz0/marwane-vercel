@@ -245,6 +245,7 @@ def create_paiement(
         date_encaissement_prevue=paiement_data.date_encaissement_prevue,
         statut_cheque=paiement_data.statut_cheque.lower() if paiement_data.statut_cheque else None,
         reference_virement=paiement_data.reference_virement,
+        id_compte=paiement_data.id_compte,
         id_lc=paiement_data.id_lc if paiement_data.type_paiement == 'lc' else None,
         notes=paiement_data.notes,
         cle_idempotence=paiement_data.cle_idempotence,
@@ -324,7 +325,7 @@ def update_paiement(
     if "type_paiement" in update_data and update_data["type_paiement"]:
         update_data["type_paiement"] = update_data["type_paiement"].lower()
 
-    immutable_fields = {"date_paiement", "montant", "type_paiement", "id_lc"}
+    immutable_fields = {"date_paiement", "montant", "type_paiement", "id_lc", "id_compte"}
     changed_immutable = [
         field for field in immutable_fields
         if field in update_data and update_data[field] != getattr(paiement, field)

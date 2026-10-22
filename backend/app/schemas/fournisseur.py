@@ -3,7 +3,7 @@ Schémas Pydantic pour la validation des données fournisseurs.
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List, TYPE_CHECKING
+from typing import Literal, Optional, List, TYPE_CHECKING
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -21,6 +21,10 @@ class FournisseurBase(BaseModel):
         min_length=1,
         max_length=255,
         description="Nom du fournisseur"
+    )
+    mode_reglement_prefere: Optional[Literal['caisse', 'banque']] = Field(
+        None,
+        description="Source préférée pour les futurs paiements fournisseur",
     )
     est_actif: bool = Field(
         True,
@@ -52,6 +56,10 @@ class FournisseurUpdate(BaseModel):
         min_length=1,
         max_length=255,
         description="Nom du fournisseur"
+    )
+    mode_reglement_prefere: Optional[Literal['caisse', 'banque']] = Field(
+        None,
+        description="Source préférée pour les futurs paiements fournisseur",
     )
     est_actif: Optional[bool] = Field(
         None,

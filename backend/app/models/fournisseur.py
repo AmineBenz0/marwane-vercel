@@ -24,6 +24,8 @@ class Fournisseur(Base):
     
     id_fournisseur = Column(Integer, primary_key=True, index=True)
     nom_fournisseur = Column(String(255), nullable=False)
+    # Preferred source for future supplier payments; NULL keeps legacy records unset.
+    mode_reglement_prefere = Column(String(10), nullable=True)
     est_actif = Column(Boolean, default=True, nullable=False)
     date_creation = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     date_modification = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
