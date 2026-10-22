@@ -1172,7 +1172,7 @@ function TransactionForm({
                                     value={field.value ?? ''}
                                     error={!!error}
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                                    helperText={error?.message || (shouldShowBatimentSource ? "Pour garder le stock juste, entrez le nombre d'oeufs." : '')}
+                                    helperText={error?.message}
                                     size="small"
                                     disabled={loading}
                                     onChange={(e) => {
