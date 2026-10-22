@@ -137,7 +137,7 @@ function GlobalOverviewPage() {
     let cumulativeSpend = 0;
     let activeWeek = null;
     let weekRunning = 0;
-    const cooked = productionRows.map((row, index) => {
+    const cooked = productionRows.map((row) => {
       const key = weekStart(row.dateIso);
       if (activeWeek !== key) {
         activeWeek = key;
