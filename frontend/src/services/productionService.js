@@ -119,7 +119,7 @@ export const batimentService = {
   /**
    * Récupère la liste des bâtiments.
    */
-  getBatiments: () => get('/batiments'),
+  getBatiments: () => get('/batiments', { referenceData: true }),
 
   /**
    * Crée un bâtiment.

@@ -43,6 +43,10 @@ class JSONFormatter(logging.Formatter):
             "duration_ms",
             "ip_address",
             "request_id",
+            "db_acquire_ms",
+            "sql_ms",
+            "sql_count",
+            "region",
         ]
         for field in extra_fields:
             value = getattr(record, field, None)

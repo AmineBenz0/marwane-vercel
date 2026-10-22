@@ -4,7 +4,7 @@ Gère les endpoints CRUD pour les transactions.
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -488,7 +488,13 @@ def get_transactions(
     Returns:
         Liste des transactions (TransactionRead)
     """
-    query = db.query(Transaction)
+    # Response properties read these relations. Batch payments and join the
+    # scalar sources to avoid a SELECT per transaction during serialization.
+    query = db.query(Transaction).options(
+        selectinload(Transaction.paiements).joinedload(Paiement.lettre_credit),
+        joinedload(Transaction.production),
+        joinedload(Transaction.batiment),
+    )
     
     # Filtre par date
     if date_debut:
