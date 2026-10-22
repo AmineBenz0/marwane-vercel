@@ -36,11 +36,6 @@ class FournisseurCreate(FournisseurBase):
     """
     Schéma pour créer un nouveau fournisseur.
     """
-    mode_reglement_prefere: Literal['caisse', 'banque'] = Field(
-        ...,
-        description="Source préférée pour les futurs paiements fournisseur",
-    )
-
     @field_validator('nom_fournisseur')
     @classmethod
     def validate_nom_fournisseur(cls, v: str) -> str:
@@ -249,3 +244,4 @@ class FournisseurScore(BaseModel):
     
     # Recommandations
     recommandation: Optional[str] = Field(None, description="Recommandation basée sur le score")
+
