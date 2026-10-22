@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from app.database import get_db
+from app.models.production import Production
 from app.models.transaction import Transaction
 from app.models.paiement import Paiement
 from app.models.client import Client
@@ -37,8 +38,20 @@ from app.services.financial_ledger import void_payment, sync_payment_cash_moveme
 from app.services.financial import validate_payment_date, validate_payment_idempotency
 from app.services.payment_validation import validate_lc_payment
 from app.services.ledger import record_correction
+from app.services.egg_sales import resolve_sale_source, sale_sources
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
+
+
+@router.get("/production-sources")
+def get_production_sources(
+    id_batiment: int,
+    date_production: date,
+    exclude_transaction_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    return sale_sources(db, id_batiment, date_production, exclude_transaction_id)
 
 
 def _validate_source_batiment(
@@ -148,6 +161,7 @@ def create_transactions_batch(
         produit_ids = set()
         
         for tx_data in transactions_data:
+            resolve_sale_source(db, tx_data)
             if tx_data.id_client is not None:
                 client_ids.add(tx_data.id_client)
             if tx_data.id_fournisseur is not None:
@@ -215,7 +229,7 @@ def create_transactions_batch(
                 id_cycle=tx_data.id_cycle,
                 id_batiment=tx_data.id_batiment,
                 id_client=tx_data.id_client,
-                date_transaction=tx_data.date_transaction,
+                date_transaction=(db.get(Production, tx_data.id_production).date_production if tx_data.id_production else tx_data.date_transaction),
                 produit=produit,
                 db=db,
             )
@@ -229,6 +243,7 @@ def create_transactions_batch(
             new_transaction = Transaction(
                 date_transaction=tx_data.date_transaction,
                 id_produit=tx_data.id_produit,
+                id_production=tx_data.id_production,
                 quantite=tx_data.quantite,
                 prix_unitaire=tx_data.prix_unitaire,
                 montant_total=montant_total,
@@ -277,6 +292,7 @@ def _create_transaction_for_atomic_batch(
     current_user: Utilisateur,
 ) -> Transaction:
     """Create one transaction and its stock movement without committing."""
+    resolve_sale_source(db, tx_data)
     if tx_data.id_client is not None and not db.query(Client).filter(
         Client.id_client == tx_data.id_client
     ).first():
@@ -313,7 +329,7 @@ def _create_transaction_for_atomic_batch(
         id_cycle=tx_data.id_cycle,
         id_batiment=tx_data.id_batiment,
         id_client=tx_data.id_client,
-        date_transaction=tx_data.date_transaction,
+        date_transaction=(db.get(Production, tx_data.id_production).date_production if tx_data.id_production else tx_data.date_transaction),
         produit=produit,
         db=db,
     )
@@ -324,6 +340,7 @@ def _create_transaction_for_atomic_batch(
     transaction = Transaction(
         date_transaction=tx_data.date_transaction,
         id_produit=tx_data.id_produit,
+        id_production=tx_data.id_production,
         quantite=tx_data.quantite,
         prix_unitaire=tx_data.prix_unitaire,
         montant_total=montant_total,
@@ -630,95 +647,14 @@ def create_transaction(
     Raises:
         HTTPException 400: Si le client, le fournisseur ou le produit n'existe pas
     """
-    # Vérifier que le client existe si fourni
-    if transaction_data.id_client is not None:
-        client = db.query(Client).filter(Client.id_client == transaction_data.id_client).first()
-        if not client:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Client avec l'ID {transaction_data.id_client} introuvable"
-            )
-    
-    # Vérifier que le fournisseur existe si fourni
-    if transaction_data.id_fournisseur is not None:
-        fournisseur = db.query(Fournisseur).filter(
-            Fournisseur.id_fournisseur == transaction_data.id_fournisseur
-        ).first()
-        if not fournisseur:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Fournisseur avec l'ID {transaction_data.id_fournisseur} introuvable"
-            )
-    
-    # Vérifier que le produit existe
-    produit = db.query(Produit).filter(Produit.id_produit == transaction_data.id_produit).first()
-    if not produit:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Produit avec l'ID {transaction_data.id_produit} introuvable"
-        )
-    
-    # Valider que le produit correspond au type de transaction
-    if transaction_data.id_client is not None and produit.usage != 'vendu':
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions clients"
-        )
-    
-    if transaction_data.id_fournisseur is not None and produit.usage != 'achete':
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le produit '{produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs"
-        )
-    
-    _validate_source_batiment(
-        id_batiment=transaction_data.id_batiment,
-        id_client=transaction_data.id_client,
-        produit=produit,
-        db=db,
-    )
-    id_cycle = _resolve_transaction_cycle(
-        id_cycle=transaction_data.id_cycle,
-        id_batiment=transaction_data.id_batiment,
-        id_client=transaction_data.id_client,
-        date_transaction=transaction_data.date_transaction,
-        produit=produit,
-        db=db,
-    )
-
-    # Calculer le montant_total si non fourni
-    montant_total = transaction_data.montant_total
-    if montant_total is None:
-        montant_total = Decimal(str(transaction_data.quantite)) * transaction_data.prix_unitaire
-    
-    # Créer la transaction
-    new_transaction = Transaction(
-        date_transaction=transaction_data.date_transaction,
-        id_produit=transaction_data.id_produit,
-        quantite=transaction_data.quantite,
-        prix_unitaire=transaction_data.prix_unitaire,
-        montant_total=montant_total,
-        est_actif=transaction_data.est_actif,
-        id_client=transaction_data.id_client,
-        id_fournisseur=transaction_data.id_fournisseur,
-        id_batiment=transaction_data.id_batiment,
-        id_cycle=id_cycle,
-        date_echeance=transaction_data.date_echeance,
-        id_utilisateur_creation=current_user.id_utilisateur if current_user else None
-    )
-    
-    db.add(new_transaction)
-    db.flush()  # Pour obtenir l'ID de la transaction
-    if new_transaction.est_actif:
-        record_transaction_movement(db, new_transaction, current_user)
-    
-    # Création du mouvement de caisse supprimée ici. 
-    # Les mouvements sont désormais créés lors de l'enregistrement des paiements.
-    
-    db.commit()
-    db.refresh(new_transaction)
-    
-    return new_transaction
+    try:
+        transaction = _create_transaction_for_atomic_batch(transaction_data, db, current_user)
+        db.commit()
+        db.refresh(transaction)
+        return transaction
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.put("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
@@ -766,6 +702,9 @@ def update_transaction(
 
     financial_identity_fields = {
         "date_transaction",
+        "id_production",
+        "id_batiment",
+        "id_cycle",
         "id_produit",
         "quantite",
         "prix_unitaire",
@@ -806,8 +745,22 @@ def update_transaction(
             detail="La date de transaction ne peut pas être postérieure à un paiement existant",
         )
 
+    if transaction.id_production is not None or update_data.get("id_production") is not None:
+        if "id_production" in update_data and update_data["id_production"] is None:
+            raise HTTPException(400, "Une vente liée à une saisie doit conserver son origine.")
+        final = TransactionCreate(**{
+            field: update_data.get(field, getattr(transaction, field))
+            for field in TransactionCreate.model_fields
+        })
+        if final.id_production != transaction.id_production:
+            for field in ("id_produit", "id_cycle", "id_batiment"):
+                setattr(final, field, update_data.get(field))
+        resolve_sale_source(db, final)
+        for field in ("id_production", "id_produit", "id_batiment", "id_cycle"):
+            update_data[field] = getattr(final, field)
+
     inventory_changed = any(field in update_data for field in {
-        "date_transaction", "id_produit", "quantite", "prix_unitaire", "id_client", "id_fournisseur", "est_actif"
+        "id_production", "id_batiment", "id_cycle", "date_transaction", "id_produit", "quantite", "prix_unitaire", "id_client", "id_fournisseur", "est_actif"
     })
     if inventory_changed:
         reverse_source_movements(
@@ -852,9 +805,7 @@ def update_transaction(
     # transaction.
     # Mettre à jour les champs fournis
     final_produit = (
-        db.query(Produit).filter(Produit.id_produit == transaction_data.id_produit).first()
-        if transaction_data.id_produit is not None
-        else transaction.produit
+        db.query(Produit).filter(Produit.id_produit == update_data.get("id_produit", transaction.id_produit)).first()
     )
     final_id_batiment = update_data.get("id_batiment", transaction.id_batiment)
     final_id_cycle = update_data.get("id_cycle", transaction.id_cycle)
@@ -878,7 +829,7 @@ def update_transaction(
         id_cycle=final_id_cycle,
         id_batiment=final_id_batiment,
         id_client=final_id_client,
-        date_transaction=final_date_transaction,
+        date_transaction=(db.get(Production, update_data.get("id_production", transaction.id_production)).date_production if update_data.get("id_production", transaction.id_production) else final_date_transaction),
         produit=final_produit,
         db=db,
     )

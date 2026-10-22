@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.production import Production
 from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
+from app.services.egg_sales import protect_production_source
 from app.models.transaction import Transaction
 from app.models.produit import Produit
 from app.schemas.production import (
@@ -284,6 +285,9 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
             keep_type = bool(quantity) or (operational_only and egg_type == "normal")
             retained = candidates[0] if keep_type and candidates else None
             for record in candidates:
+                protect_production_source(db, record,
+                    quantity=quantity if record is retained else 0,
+                    category=(egg_type, _deduce_calibre(egg_type, prod_in.grammage)) if record is retained else None)
                 if record is not retained:
                     record.est_actif = False
                     record.date_annulation = datetime.now(timezone.utc)
@@ -374,6 +378,8 @@ def delete_daily_production(
         charges = daily_vaccine_expenses(db, prod_in.id_batiment, prod_in.date_production)
         if versions != prod_in.versions or expense_versions(charges) != prod_in.charge_versions:
             raise HTTPException(status_code=409, detail="La saisie a change. Actualisez la page.")
+        for record in records:
+            protect_production_source(db, record)
         for charge in charges:
             cancel_charge(db, charge, "Annulation de la saisie quotidienne", current_user)
         user_id = current_user.id_utilisateur if current_user else None
@@ -1027,6 +1033,9 @@ def update_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
+    db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).with_for_update().one()
+    db.refresh(prod)
+
 
     update_dict = prod_in.model_dump(exclude_unset=True)
     original_batiment_id = prod.id_batiment
@@ -1074,6 +1083,11 @@ def update_production(
 
     if cycle:
         validate_cycle_mortality(db, cycle, update_dict.get("mortalite", prod.mortalite) or 0, [prod.id_production])
+    protect_production_source(db, prod,
+        quantity=update_dict.get("nombre_oeufs", prod.nombre_oeufs),
+        category=(update_dict.get("type_oeuf", prod.type_oeuf),
+                  _deduce_calibre(update_dict.get("type_oeuf", prod.type_oeuf), update_dict.get("grammage", prod.grammage))),
+        production_date=final_date, building_id=final_batiment_id)
     for key, value in update_dict.items():
         setattr(prod, key, value)
 
@@ -1121,9 +1135,13 @@ def delete_production(
     ).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Production introuvable")
+    db.query(Batiment).filter(Batiment.id_batiment == prod.id_batiment).with_for_update().one()
+    db.refresh(prod)
+
 
     if daily_vaccine_expenses(db, prod.id_batiment, prod.date_production):
         raise HTTPException(status_code=409, detail="Annulez cette journée et ses dépenses depuis la saisie journalière.")
+    protect_production_source(db, prod)
     prod.est_actif = False
     prod.date_annulation = datetime.now(timezone.utc)
     prod.motif_annulation = raison.strip()
