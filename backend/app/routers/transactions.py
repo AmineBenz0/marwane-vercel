@@ -37,6 +37,7 @@ from app.services.inventory import record_transaction_movement, reverse_source_m
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
 from app.services.financial import validate_payment_date, validate_payment_idempotency
 from app.services.payment_validation import validate_lc_payment
+from app.services.payment_validation import resolve_payment_funding
 from app.services.ledger import record_correction
 from app.services.egg_sales import resolve_sale_source, sale_sources
 
@@ -395,6 +396,7 @@ def create_transactions_with_payments_batch(
                         continue
 
                 validate_payment_date(transaction, payment_data.date_paiement)
+                funding = resolve_payment_funding(db, payment_data, transaction)
                 validate_lc_payment(db, payment_data, transaction, current_user)
 
                 payment_status = "valide"
@@ -405,7 +407,8 @@ def create_transactions_with_payments_batch(
                         else "en_attente"
                     )
                 payment = Paiement(
-                    **payment_data.model_dump(),
+                    **payment_data.model_dump(exclude={"source_reglement", "id_compte"}),
+                    **funding,
                     statut=payment_status,
                     id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
                 )

@@ -51,6 +51,9 @@ const SOURCE_OPTIONS = [
 ];
 
 const SOURCE_LABELS = {
+  cash: 'Espèces',
+  carte: 'Carte bancaire',
+  compensation: 'Compensation',
   virement: 'Virement',
   cheque: 'Chèque',
   lc: 'Lettre de crédit',

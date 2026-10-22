@@ -296,9 +296,15 @@ def sync_payment_cash_movement(
     movement_type = "ENTREE" if transaction.id_client is not None else "SORTIE"
     expected_date = _source_datetime(payment.date_paiement)
 
-    # Supplier bank transfers belong to the selected bank account. Keep the
-    # active payment linked to exactly one ledger movement.
-    if payment.type_paiement == "virement" and payment.id_compte is not None:
+    # New supplier payments use their saved funding source, independently of
+    # the method. Client/historical payments retain their previous routing.
+    bank_funded = (
+        transaction.id_fournisseur is not None and payment.source_reglement == "banque"
+    ) or (
+        payment.source_reglement is None
+        and payment.type_paiement == "virement" and payment.id_compte is not None
+    )
+    if bank_funded:
         if existing:
             void_cash_movement(
                 db,
@@ -328,8 +334,8 @@ def sync_payment_cash_movement(
             id_compte=payment.id_compte,
             montant=_money(payment.montant),
             type_mouvement=movement_type,
-            source="virement",
-            reference=payment.reference_virement,
+            source=payment.type_paiement,
+            reference=payment.reference_virement or payment.numero_cheque,
             notes=reason,
             id_paiement=payment.id_paiement,
             current_user=current_user,

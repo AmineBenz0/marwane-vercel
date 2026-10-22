@@ -126,7 +126,7 @@ function TransactionDetail() {
       const [produitsData, clientsData, fournisseursData] = await Promise.all([
         get('/produits', { params: { limit: 1000, est_actif: true } }),
         get('/clients', { params: { limit: 1000, est_actif: true } }),
-        get('/fournisseurs', { params: { limit: 1000, est_actif: true } }),
+        get('/fournisseurs', { params: { limit: 1000 } }),
       ]);
       setProduits(produitsData || []);
       setClients(clientsData || []);
@@ -918,6 +918,7 @@ function TransactionDetail() {
                 />
               ) : (
                 <MultiPaiementForm
+                  supplierSource={fournisseurs.find((item) => item.id_fournisseur === transaction?.id_fournisseur)?.mode_reglement_prefere || null}
                   transaction={{ ...transaction, ...statutPaiement }}
                   fields={fields}
                   append={append}

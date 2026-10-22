@@ -27,6 +27,7 @@ import {
 import { formatMontant } from '../../utils/formatNumber';
 import { format } from 'date-fns';
 import PropTypes from 'prop-types';
+import { get } from '../../services/api';
 
 const TYPES_PAIEMENT = [
   { value: 'cash', label: '💵 Espèces' },
@@ -41,9 +42,38 @@ const TYPES_PAIEMENT = [
 /**
  * MultiPaiementForm - Formulaire pour saisir plusieurs paiements d'un coup.
  */
-function MultiPaiementForm({ transaction, fields, append, remove, register, errors, watch, setValue, availableLcs, loadingLcs }) {
+function MultiPaiementForm({ transaction, fields, append, remove, register, errors, watch, setValue, availableLcs, loadingLcs, supplierSource = null }) {
   const watchedFields = watch('paiements');
   const [expandedRows, setExpandedRows] = useState({});
+  const [accounts, setAccounts] = useState([]);
+  const [accountError, setAccountError] = useState('');
+
+  useEffect(() => {
+    if (supplierSource !== 'banque') return;
+    let active = true;
+    setAccountError('');
+    get('/comptes-bancaires').then((data) => {
+      if (active) setAccounts(data || []);
+    }).catch(() => {
+      if (active) setAccountError('Impossible de charger les comptes bancaires. Réessayez avant de régler ce fournisseur.');
+    });
+    return () => { active = false; };
+  }, [supplierSource]);
+
+  useEffect(() => {
+    if (!supplierSource) return;
+    (watchedFields || []).forEach((payment, index) => {
+      if (payment.source_reglement !== supplierSource) {
+        setValue(`paiements.${index}.source_reglement`, supplierSource);
+      }
+      if (supplierSource === 'banque' && !payment.id_compte && accounts.length === 1) {
+        setValue(`paiements.${index}.id_compte`, accounts[0].id_compte);
+      }
+      if (supplierSource === 'caisse' && payment.id_compte) {
+        setValue(`paiements.${index}.id_compte`, null);
+      }
+    });
+  }, [watchedFields, supplierSource, accounts, setValue]);
 
   const toggleExpand = (index) => {
     setExpandedRows(prev => ({
@@ -62,11 +92,11 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
       append({
         date_paiement: format(new Date(), 'yyyy-MM-dd'),
         montant: montantRestant > 0 ? montantRestant : 0,
-        type_paiement: 'cash',
+        type_paiement: supplierSource === 'banque' ? 'virement' : 'cash',
         statut_cheque: 'a_encaisser'
       });
     }
-  }, [fields.length, append, montantRestant]);
+  }, [fields.length, append, montantRestant, supplierSource]);
 
   // Gérer le changement de LC
   const handleLcChange = (index, lcId) => {
@@ -80,6 +110,13 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
 
   return (
     <Box>
+      {supplierSource && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Source débitée : {supplierSource === 'banque' ? 'compte bancaire' : 'caisse'}.
+          Le type de paiement peut être choisi indépendamment.
+        </Alert>
+      )}
+      {accountError && <Alert severity="error" sx={{ mb: 2 }}>{accountError}</Alert>}
       <Alert severity={difference < 0 ? "warning" : "info"} sx={{ mb: 3 }}>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={4}>
@@ -160,6 +197,29 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                           <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
                         ))}
                       </TextField>
+                      {supplierSource === 'banque' && (
+                        <TextField
+                          {...register(`paiements.${index}.id_compte`, {
+                            validate: (value) => Number(value) > 0 || 'Sélectionnez le compte bancaire à débiter',
+                          })}
+                          select
+                          label="Compte bancaire à débiter"
+                          value={watch(`paiements.${index}.id_compte`) || ''}
+                          onChange={(event) => setValue(`paiements.${index}.id_compte`, Number(event.target.value), { shouldDirty: true, shouldValidate: true })}
+                          size="small"
+                          fullWidth
+                          required
+                          sx={{ mt: 1 }}
+                          error={!!errors?.paiements?.[index]?.id_compte}
+                          helperText={errors?.paiements?.[index]?.id_compte?.message || (accounts.length ? '' : 'Aucun compte bancaire configuré')}
+                        >
+                          {accounts.map((account) => (
+                            <MenuItem key={account.id_compte} value={account.id_compte}>
+                              {account.nom_banque} · {account.numero_compte}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
                     </TableCell>
                     <TableCell>
                       <TextField
@@ -306,7 +366,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
             onClick={() => append({
               date_paiement: format(new Date(), 'yyyy-MM-dd'),
               montant: difference > 0 ? difference : 0,
-              type_paiement: 'cash',
+              type_paiement: supplierSource === 'banque' ? 'virement' : 'cash',
               statut_cheque: 'a_encaisser'
             })}
           >
@@ -327,9 +387,11 @@ const paymentErrorPropType = PropTypes.shape({
   type_paiement: PropTypes.object,
   montant: PropTypes.object,
   id_lc: PropTypes.object,
+  id_compte: PropTypes.object,
 });
 
 MultiPaiementForm.propTypes = {
+  supplierSource: PropTypes.oneOf(['caisse', 'banque']),
   transaction: PropTypes.shape({
     montant_restant: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   }),

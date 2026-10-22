@@ -2,7 +2,7 @@
 Schémas Pydantic pour la validation des données de paiements.
 """
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional
+from typing import Literal, Optional
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -31,6 +31,9 @@ class PaiementBase(BaseModel):
     # Informations pour les virements
     reference_virement: Optional[str] = Field(None, max_length=100, description="Référence du virement")
     id_compte: Optional[int] = Field(None, description="Compte bancaire utilisé pour le paiement")
+    source_reglement: Optional[Literal['caisse', 'banque']] = Field(
+        None, description="Source débitée, enregistrée au moment du paiement fournisseur"
+    )
     
     # Informations pour les Lettres de Crédit
     id_lc: Optional[int] = Field(None, description="ID de la Lettre de Crédit associée")
@@ -83,8 +86,6 @@ class PaiementCreate(PaiementBase):
         """Valide que si le type est 'lc', id_lc est fourni."""
         if self.type_paiement == 'lc' and self.id_lc is None:
             raise ValueError("L'identifiant de la Lettre de Crédit (id_lc) est requis pour ce type de paiement.")
-        if self.id_compte is not None and self.type_paiement != 'virement':
-            raise ValueError("Le compte bancaire ne peut être renseigné que pour un virement.")
         return self
 
 
@@ -95,6 +96,7 @@ class PaiementUpdate(BaseModel):
     """
     date_paiement: Optional[date] = Field(None, description="Date du paiement")
     id_compte: Optional[int] = Field(None, description="Compte bancaire utilisé pour le paiement")
+    source_reglement: Optional[Literal['caisse', 'banque']] = None
     montant: Optional[Decimal] = Field(None, gt=0, description="Montant du paiement")
     type_paiement: Optional[str] = Field(None, description="Type de paiement")
     numero_cheque: Optional[str] = Field(None, max_length=50, description="Numéro du chèque")
