@@ -668,7 +668,7 @@ function GlobalOverviewPage() {
       )}
       <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
         <Typography variant="body2" fontWeight={700}>{demoMode ? (demoLot === 'active' ? 'Hisex · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 65 semaines' : 'Lohmann · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 66 semaines') : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines'}</Typography>
-        <Typography variant="body2" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{demoMode ? (demoBuilding === 'all' ? '14/14' : '7/7') : actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
+        <Typography variant="body2" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{demoMode ? (demoBuilding === 'all' ? '10/10' : '5/5') : actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
       </Paper>
       {demoMode && <Alert severity="warning" sx={{ mb: 2 }}>Aperçu avec des données fictives uniquement. Rien n'a été ajouté à la base de données.</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
