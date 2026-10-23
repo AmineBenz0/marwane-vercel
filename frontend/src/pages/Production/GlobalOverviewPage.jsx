@@ -162,6 +162,8 @@ function GlobalOverviewPage() {
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [showExample, setShowExample] = useState(false);
+  const [demoLot, setDemoLot] = useState('active');
+  const [demoBuilding, setDemoBuilding] = useState('all');
   const [expanded, setExpanded] = useState(false);
   const [detailId, setDetailId] = useState('');
 
@@ -445,12 +447,62 @@ function GlobalOverviewPage() {
     });
   }, [data, buildingId]);
 
-  const weeks = useMemo(() => [...new Set(dailyRows.map((row) => row._weekKey))].sort(), [dailyRows]);
+  const demoMode = showExample || (!loading && !data && !error);
+  const demoFactor = (demoLot === 'previous' ? 0.88 : 1) * (demoBuilding === 'all' ? 1 : 0.5);
+  const demoDays = useMemo(() => DEMO_ROWS.filter((row) => row.rowType === 'day').map((row) => ({
+    ...row,
+    id: row.id,
+    _weekKey: '2026-10-12',
+    _expectedBuildings: demoBuilding === 'all' ? 2 : 1,
+    _weekSales: { value: 12100 * demoFactor, quantity: 10000 * demoFactor },
+    _weekCharges: { total: 0 },
+    effectif_debut: (demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1),
+    effectif_fin: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
+    birds: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
+    oeufs: Math.round(row.oeufs * demoFactor),
+    mort: Math.round(row.mort * demoFactor),
+    aliment_kg: Math.round(row.aliment_kg * demoFactor),
+    _feedCost: Number(row.depensesSemaine || 0) * demoFactor,
+    _dailyTotal: Number(row.depensesSemaine || 0) * demoFactor,
+    depensesSemaine: Number(row.depensesSemaine || 0) * demoFactor,
+    totalDepenses: Number(row.totalDepenses || 0) * demoFactor,
+    _labor: Number(row._labor || 0) * demoFactor,
+    _salary: Number(row._salary || 0) * demoFactor,
+    _electricity: Number(row._electricity || 0) * demoFactor,
+  })), [demoBuilding, demoFactor, demoLot]);
+  const demoSummary = useMemo(() => {
+    const original = DEMO_ROWS.find((row) => row.rowType === 'summary');
+    if (!original) return null;
+    return {
+      ...original,
+      id: 'demo-summary',
+      _weekKey: '2026-10-12',
+      mort: Math.round(original.mort * demoFactor),
+      oeufs: Math.round(original.oeufs * demoFactor),
+      oeufs_cum: Math.round(original.oeufs_cum * demoFactor),
+      aliment_kg: Math.round(original.aliment_kg * demoFactor),
+      depensesSemaine: original.depensesSemaine * demoFactor,
+      totalDepenses: original.totalDepenses * demoFactor,
+      ventesSemaine: original.ventesSemaine * demoFactor,
+      _sales: original.ventesSemaine * demoFactor,
+      _sold: 10000 * demoFactor,
+      prixOeuf: original.prixOeuf,
+      birds: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
+      effectif_fin: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
+    };
+  }, [demoBuilding, demoFactor, demoLot]);
+
+  const sourceDays = demoMode ? demoDays : dailyRows;
+  const weeks = useMemo(() => [...new Set(sourceDays.map((row) => row._weekKey))].sort(), [sourceDays]);
   const effectivePeriod = period === 'latest' ? (weeks[weeks.length - 1] || 'all') : period;
-  const filteredDays = useMemo(() => effectivePeriod === 'all' ? dailyRows : dailyRows.filter((row) => row._weekKey === effectivePeriod), [dailyRows, effectivePeriod]);
+  const filteredDays = useMemo(() => effectivePeriod === 'all' ? sourceDays : sourceDays.filter((row) => row._weekKey === effectivePeriod), [sourceDays, effectivePeriod]);
   const periods = useMemo(() => [{ key: 'all', label: 'Toute la période' }, ...weeks.map((week) => ({ key: week, label: weekLabel(week) }))], [weeks]);
 
   const weekSummaries = useMemo(() => {
+    if (demoMode) {
+      if (!filteredDays.length || !demoSummary) return [];
+      return [{ ...demoSummary, date: 'Total semaine · ' + weekLabel('2026-10-12') }];
+    }
     const grouped = new Map();
     filteredDays.forEach((row) => {
       const list = grouped.get(row._weekKey) || [];
@@ -471,7 +523,7 @@ function GlobalOverviewPage() {
       row.date = 'Total semaine · ' + weekLabel(key);
       return row;
     });
-  }, [filteredDays]);
+  }, [demoMode, demoSummary, filteredDays]);
 
   const monthSummaries = useMemo(() => {
     const groups = new Map();
@@ -511,14 +563,13 @@ function GlobalOverviewPage() {
     return result;
   }, [filteredDays, groupBy, monthSummaries, weekSummaries]);
 
-  const demoMode = showExample || (!loading && !data && !error);
-  const displayRows = demoMode ? DEMO_ROWS : groupedRows;
-  const totalEggs = demoMode ? 5259 : filteredDays.reduce((total, row) => total + row.oeufs, 0);
+  const displayRows = groupedRows;
+  const totalEggs = filteredDays.reduce((total, row) => total + Number(row.oeufs || 0), 0);
   const totalBirdDays = filteredDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0);
   const layingRate = totalBirdDays ? totalEggs / totalBirdDays * 100 : null;
-  const totalCost = demoMode ? 6110 : Number(periodSummary?.cost || 0);
+  const totalCost = demoMode ? filteredDays.reduce((total, row) => total + Number(row._dailyTotal || 0), 0) : Number(periodSummary?.cost || 0);
   const salesByWeek = new Map(filteredDays.map((row) => [row._weekKey, row._weekSales || { value: 0 }]));
-  const totalSales = demoMode ? 12100 : [...salesByWeek.values()].reduce((total, row) => total + Number(row.value || 0), 0);
+  const totalSales = [...salesByWeek.values()].reduce((total, row) => total + Number(row.value || 0), 0);
   const actualBuildingDays = new Set(data?.rows.filter((row) => {
     const allowed = buildingId === 'all' || Number(row.id_batiment) === Number(buildingId);
     const day = parseRowDate(row);
@@ -532,11 +583,11 @@ function GlobalOverviewPage() {
   const coverageEnd = selectedWeekEnd > cycleEnd ? cycleEnd : selectedWeekEnd;
   const coverageDays = coverageStart && coverageEnd ? Math.max(0, Math.floor((new Date(coverageEnd + 'T12:00:00') - new Date(coverageStart + 'T12:00:00')) / 86400000) + 1) : 0;
   const selectedBuildings = selectedCycles.filter((cycle) => buildingId === 'all' || Number(cycle.id_batiment) === Number(buildingId));
-  const expectedBuildingDays = demoMode ? 14 : coverageDays * selectedBuildings.length;
+  const expectedBuildingDays = demoMode ? 5 * (demoBuilding === 'all' ? 2 : 1) : coverageDays * selectedBuildings.length;
   const statusName = (selectedLot?.cycle.statut || '').toLowerCase();
   const lotStatus = ['termine', 'terminé', 'cloture', 'clôturé'].includes(statusName) ? 'terminé' : 'en cours';
   const lotName = selectedLot?.cycle.nom_cycle || selectedLot?.cycle.souche || ('Lot #' + (selectedLot?.cycle.id_lot || selectedLot?.cycle.id_cycle));
-  const detail = dailyRows.find((row) => row.id === detailId);
+  const detail = (demoMode ? demoDays : dailyRows).find((row) => row.id === detailId);
 
   const columnGroups = useMemo(() => selectedColumns.reduce((groups, column) => {
     const last = groups[groups.length - 1];
@@ -568,44 +619,57 @@ function GlobalOverviewPage() {
         </Stack>
       </Stack>
       {demoMode ? (
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
-          <Typography variant="body2" fontWeight={700}>Lot exemple · 1 200 poules · semaine du 12 au 16/10/2026</Typography>
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.5 }}>
+          <FormControl size="small"><Typography variant="caption" color="text.secondary">Lot</Typography>
+            <Select value={demoLot} onChange={(event) => { setDemoLot(event.target.value); setPeriod('latest'); }} aria-label="Choisir un lot">
+              <MenuItem value="active">Lot Hisex · en cours</MenuItem><MenuItem value="previous">Lot Lohmann · terminé</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small"><Typography variant="caption" color="text.secondary">Bâtiment</Typography>
+            <Select value={demoBuilding} onChange={(event) => setDemoBuilding(event.target.value)} aria-label="Choisir un bâtiment">
+              <MenuItem value="all">Tous les bâtiments</MenuItem><MenuItem value="1">Bâtiment 1</MenuItem><MenuItem value="2">Bâtiment 2</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small"><Typography variant="caption" color="text.secondary">Période</Typography>
+            <Select value={effectivePeriod} onChange={(event) => setPeriod(event.target.value)} aria-label="Choisir une période">
+              {periods.map((item) => <MenuItem key={item.key} value={item.key}>{item.label}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <FormControl size="small"><Typography variant="caption" color="text.secondary">Regroupement</Typography>
+            <Select value={groupBy} onChange={(event) => setGroupBy(event.target.value)} aria-label="Regrouper les lignes">
+              <MenuItem value="day">Par jour</MenuItem><MenuItem value="week">Par semaine</MenuItem><MenuItem value="month">Par mois</MenuItem>
+            </Select>
+          </FormControl>
         </Paper>
       ) : (
         <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.5 }}>
-          <FormControl size="small">
-            <Typography variant="caption" color="text.secondary">Lot</Typography>
+          <FormControl size="small"><Typography variant="caption" color="text.secondary">Lot</Typography>
             <Select value={selectedLot?.key || ''} onChange={(event) => { setLotId(event.target.value); setBuildingId('all'); setPeriod('latest'); }} aria-label="Choisir un lot">
               {lots.map((lot) => <MenuItem key={lot.key} value={lot.key}>{lot.cycle.nom_cycle || lot.cycle.souche || ('Lot #' + lot.cycle.id_cycle)} · {lot.cycle.statut || 'en cours'}</MenuItem>)}
             </Select>
           </FormControl>
-          <FormControl size="small" disabled={!selectedCycles.length}>
-            <Typography variant="caption" color="text.secondary">Bâtiment</Typography>
+          <FormControl size="small" disabled={!selectedCycles.length}><Typography variant="caption" color="text.secondary">Bâtiment</Typography>
             <Select value={buildingId} onChange={(event) => setBuildingId(event.target.value)} aria-label="Choisir un bâtiment">
               <MenuItem value="all">Tous les bâtiments</MenuItem>
               {selectedCycles.map((cycle) => <MenuItem key={cycle.id_batiment} value={String(cycle.id_batiment)}>{cycle.nom_batiment || 'Bâtiment ' + cycle.id_batiment}</MenuItem>)}
             </Select>
           </FormControl>
-          <FormControl size="small">
-            <Typography variant="caption" color="text.secondary">Période</Typography>
+          <FormControl size="small"><Typography variant="caption" color="text.secondary">Période</Typography>
             <Select value={effectivePeriod} onChange={(event) => setPeriod(event.target.value)} aria-label="Choisir une période">
               {periods.map((item) => <MenuItem key={item.key} value={item.key}>{item.label}</MenuItem>)}
             </Select>
           </FormControl>
-          <FormControl size="small">
-            <Typography variant="caption" color="text.secondary">Regroupement</Typography>
+          <FormControl size="small"><Typography variant="caption" color="text.secondary">Regroupement</Typography>
             <Select value={groupBy} onChange={(event) => setGroupBy(event.target.value)} aria-label="Regrouper les lignes">
               <MenuItem value="day">Par jour</MenuItem><MenuItem value="week">Par semaine</MenuItem><MenuItem value="month">Par mois</MenuItem>
             </Select>
           </FormControl>
         </Paper>
       )}
-      {!demoMode && (
-        <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
-          <Typography variant="body2" fontWeight={700}>{lotName} · {buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId} · {selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—'} semaines</Typography>
-          <Typography variant="body2" color={actualBuildingDays < expectedBuildingDays ? 'warning.main' : 'success.main'}>{actualBuildingDays}/{expectedBuildingDays} journées bâtiment renseignées</Typography>
-        </Paper>
-      )}
+      <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+        <Typography variant="body2" fontWeight={700}>{demoMode ? (demoLot === 'active' ? 'Hisex · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 65 semaines' : 'Lohmann · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 66 semaines') : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines'}</Typography>
+        <Typography variant="body2" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{demoMode ? (demoBuilding === 'all' ? '14/14' : '7/7') : actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
+      </Paper>
       {demoMode && <Alert severity="warning" sx={{ mb: 2 }}>Aperçu avec des données fictives uniquement. Rien n'a été ajouté à la base de données.</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2 }}>
