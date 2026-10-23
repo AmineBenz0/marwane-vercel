@@ -160,7 +160,6 @@ function GlobalOverviewPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [refresh, setRefresh] = useState(0);
   const [showExample, setShowExample] = useState(false);
   const [demoLot, setDemoLot] = useState('active');
   const [demoBuilding, setDemoBuilding] = useState('all');
@@ -221,7 +220,7 @@ function GlobalOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [lotId, refresh]);
+  }, [lotId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -341,16 +340,11 @@ function GlobalOverviewPage() {
     let cumulativeEggs = 0;
     let cumulativeMort = 0;
     let cumulativeSpend = 0;
-    let activeWeek = '';
-    let weekRunning = 0;
+
     const initial = allowedCycles.reduce((total, cycle) => total + Number(cycle.effectif_initial || 0), 0);
     return [...groupedByDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([dateIso, dayRows]) => {
       const key = weekStart(dateIso);
-      if (activeWeek !== key) {
-        activeWeek = key;
-        weekRunning = 0;
-      }
-      const first = dayRows[0];
+
       const sum = (prop) => dayRows.reduce((total, row) => total + Number(row[prop] || 0), 0);
       const eggs = sum('oeufs');
       const deaths = sum('mort');
@@ -368,7 +362,6 @@ function GlobalOverviewPage() {
       const feedCost = feedPrice == null ? null : feed * feedPrice;
       const dailyCharges = charges.reduce((total, charge) => total + parseMoney(charge), 0);
       const dailyTotal = dailyCharges + (feedCost || 0);
-      weekRunning += dailyTotal;
       cumulativeSpend += dailyTotal;
       const otherLines = charges.filter((charge) => ['other', 'vaccine'].includes(charge._bucket));
       const typeCounts = entryTypes.get(dateIso) || { normal: 0, double: 0, white: 0, broken: 0, lost: 0 };
@@ -614,6 +607,8 @@ function GlobalOverviewPage() {
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>Registre de production et de coûts</Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Button variant="outlined" onClick={() => load()}>Actualiser</Button>
+          <Button variant="outlined" onClick={() => setShowExample((value) => !value)} disabled={!data && !showExample}>{demoMode ? 'Données exemple' : 'Voir un exemple'}</Button>
           <Button variant="outlined" onClick={() => setExpanded((value) => !value)}>{expanded ? 'Réduire' : 'Agrandir'}</Button>
           <Button variant="contained" onClick={handleExport} disabled={!displayRows.length}>Exporter CSV</Button>
         </Stack>
@@ -667,7 +662,7 @@ function GlobalOverviewPage() {
         </Paper>
       )}
       <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
-        <Typography variant="body2" fontWeight={700}>{demoMode ? (demoLot === 'active' ? 'Hisex · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 65 semaines' : 'Lohmann · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 66 semaines') : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines'}</Typography>
+        <Typography variant="body2" fontWeight={700}>{demoMode ? (demoLot === 'active' ? 'Hisex · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 65 semaines' : 'Lohmann · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 66 semaines') : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
         <Typography variant="body2" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{demoMode ? (demoBuilding === 'all' ? '10/10' : '5/5') : actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
       </Paper>
       {demoMode && <Alert severity="warning" sx={{ mb: 2 }}>Aperçu avec des données fictives uniquement. Rien n'a été ajouté à la base de données.</Alert>}
