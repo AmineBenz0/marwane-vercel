@@ -7,6 +7,19 @@ import {
 import { get } from '../../services/api';
 import { cycleProductionService, productionService } from '../../services/productionService';
 
+const LABEL_WIDTH = 160;
+const TEXT_WIDTH = 240;
+const stickyLabelSx = {
+  position: 'sticky', left: 0, width: LABEL_WIDTH, minWidth: LABEL_WIDTH,
+  maxWidth: LABEL_WIDTH, overflow: 'hidden', bgcolor: 'background.paper',
+};
+const wrappedTextSx = {
+  display: 'block', whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.4,
+};
+const renderColumnValue = (column, row) => ['formule', 'autres'].includes(column.key)
+  ? <Box component="span" sx={{ ...wrappedTextSx, width: TEXT_WIDTH }}>{column.value(row)}</Box>
+  : column.value(row);
+
 const fmt = (value, digits = 0) => value == null || value === '' || value === '-' ? '—' : Number(value).toLocaleString('fr-FR', { maximumFractionDigits: digits });
 const fmtDh = (value, digits = 2) => value == null || !Number.isFinite(Number(value)) ? '—' : fmt(value, digits) + ' DH';
 const isoDate = (value) => {
@@ -752,7 +765,7 @@ function GlobalOverviewPage() {
               <Table size="small" stickyHeader sx={{ minWidth: view === 'excel' ? 2650 : view === 'full' ? 3500 : 1200, '& td, & th': { borderRight: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' } }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell rowSpan={2} sx={{ position: 'sticky', left: 0, zIndex: 5, width: 160, minWidth: 160, maxWidth: 160, bgcolor: 'background.paper' }}>{groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois'}</TableCell>
+                    <TableCell rowSpan={2} sx={{ ...stickyLabelSx, zIndex: 5 }}>{groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois'}</TableCell>
                     {columnGroups.map((group, index) => {
                       const labels = { prod: 'Effectif & ponte', feed: 'Alimentation & poids', misc: 'Autres dépenses', fin: 'Dépenses & ventes' };
                       return <TableCell key={group.key + '-' + index} colSpan={group.count} align="center" sx={{ bgcolor: 'background.paper', fontWeight: 700 }}>{labels[group.key]}</TableCell>;
@@ -764,17 +777,19 @@ function GlobalOverviewPage() {
                   {displayRows.map((row) => {
                     const summary = row.rowType === 'summary';
                     return <TableRow key={row.id} hover sx={{ bgcolor: summary ? 'action.hover' : undefined, '& td': { fontWeight: summary ? 700 : 400 } }}>
-                      <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, width: 160, minWidth: 160, maxWidth: 160, bgcolor: summary ? 'background.default' : 'background.paper', fontWeight: 700 }}>
-                        {row.rowType === 'day' ? <Button size="small" onClick={() => setDetailId(row.id)} sx={{ minWidth: 0, p: 0, textTransform: 'none', fontWeight: 700 }}>{row.date}</Button> : row.date}
+                      <TableCell sx={{ ...stickyLabelSx, zIndex: 3, bgcolor: summary ? 'background.default' : 'background.paper', fontWeight: 700 }}>
+                        <Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>
+                          {row.rowType === 'day' ? <Button size="small" onClick={() => setDetailId(row.id)} sx={{ minWidth: 0, maxWidth: '100%', p: 0, textTransform: 'none', fontWeight: 700, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{row.date}</Button> : row.date}
+                        </Box>
                       </TableCell>
-                      {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{column.value(row)}</TableCell>)}
+                      {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, row)}</TableCell>)}
                     </TableRow>;
                   })}
                   {!displayRows.length && <TableRow><TableCell colSpan={selectedColumns.length + 1} align="center">Aucune donnée pour ces filtres.</TableCell></TableRow>}
                 </TableBody>
-                {!demoMode && periodSummary && <TableBody><TableRow sx={{ '& td': { fontWeight: 800, bgcolor: 'action.selected' } }}>
-                  <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, width: 160, minWidth: 160, maxWidth: 160, bgcolor: 'background.paper' }}>Total période</TableCell>
-                  {selectedColumns.map((column) => <TableCell key={column.key} align="right">{column.value(periodSummary)}</TableCell>)}
+                {!demoMode && periodSummary && <TableBody><TableRow sx={{ '& td': { fontWeight: 800, bgcolor: 'action.selected' }, '& td:first-of-type': { bgcolor: 'background.paper' } }}>
+                  <TableCell sx={{ ...stickyLabelSx, zIndex: 3 }}><Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>Total période</Box></TableCell>
+                  {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, periodSummary)}</TableCell>)}
                 </TableRow></TableBody>}
               </Table>
             </TableContainer>
