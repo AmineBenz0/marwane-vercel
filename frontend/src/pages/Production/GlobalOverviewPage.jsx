@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import { get } from '../../services/api';
 import { cycleProductionService, productionService } from '../../services/productionService';
+import { DEMO_LOTS, buildDemoDays } from './globalOverviewDemo';
 
 const LABEL_WIDTH = 160;
 const TEXT_WIDTH = 240;
@@ -73,15 +74,6 @@ const groupCycles = (cycles) => {
   });
   return [...grouped.values()].map((group) => ({ ...group, cycle: group.cycles[0] }));
 };
-
-const DEMO_ROWS = [
-  { id: 'demo-1', rowType: 'day', date: '12/10/2026', dateIso: '2026-10-12', mort: 2, mort_pct: '0.17%', oeufs: 1032, oeufs_cum: 1032, ponte_pct: '86.0%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '133.7', poidsOeuf: 62.5, autres: 'Désinfectant: 1 × 180 DH', autresQuantite: '1', autresPrix: '180', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 801, totalDepenses: 801, ventesSemaine: null, valeurPoulette: 0.67, prixOeuf: null },
-  { id: 'demo-2', rowType: 'day', date: '13/10/2026', dateIso: '2026-10-13', mort: 1, mort_pct: '0.08%', oeufs: 1040, oeufs_cum: 2072, ponte_pct: '86.8%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '132.7', poidsOeuf: 62.7, autres: 'Litière: 4 × 45 DH', autresQuantite: '4', autresPrix: '45', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 801, totalDepenses: 1602, ventesSemaine: null, valeurPoulette: 1.34, prixOeuf: null },
-  { id: 'demo-3', rowType: 'day', date: '14/10/2026', dateIso: '2026-10-14', mort: 0, mort_pct: '0.00%', oeufs: 1055, oeufs_cum: 3127, ponte_pct: '88.1%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '130.8', poidsOeuf: 62.8, autres: 'Vaccin: 2 × 95 DH', autresQuantite: '2', autresPrix: '95', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 811, totalDepenses: 2413, ventesSemaine: null, valeurPoulette: 2.02, prixOeuf: null },
-  { id: 'demo-4', rowType: 'day', date: '15/10/2026', dateIso: '2026-10-15', mort: 1, mort_pct: '0.08%', oeufs: 1062, oeufs_cum: 4189, ponte_pct: '88.6%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '130.0', poidsOeuf: 62.9, autres: 'Réparation: 1 × 350 DH', autresQuantite: '1', autresPrix: '350', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 971, totalDepenses: 3384, ventesSemaine: null, valeurPoulette: 2.83, prixOeuf: null },
-  { id: 'demo-5', rowType: 'day', date: '16/10/2026', dateIso: '2026-10-16', mort: 1, mort_pct: '0.08%', oeufs: 1070, oeufs_cum: 5259, ponte_pct: '89.3%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '129.0', poidsOeuf: 62.8, autres: 'Emballage: 1 × 75 DH', autresQuantite: '1', autresPrix: '75', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 696, totalDepenses: 4080, ventesSemaine: null, valeurPoulette: 3.43, prixOeuf: null },
-  { id: 'demo-week', rowType: 'summary', date: 'Total semaine', mort: 5, mort_pct: '0.42%', oeufs: 5259, oeufs_cum: 5259, ponte_pct: '87.7%', formule: '17-1% Sem vita', aliment_kg: 690, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '131.2', poidsOeuf: 62.7, autres: '975 DH', autresQuantite: '—', autresPrix: '—', _labor: 500, _salary: 1250, _electricity: 280, depensesSemaine: 6110, totalDepenses: 6110, ventesSemaine: 12100, valeurPoulette: 5.11, prixOeuf: 1.21 },
-];
 
 const toCsv = (rows, cols) => {
   const quote = (value) => '"' + String(value ?? '').replaceAll('"', '""') + '"';
@@ -160,6 +152,22 @@ function aggregateDays(dayRows, label, rowType = 'summary') {
     weeklyEggPrice: sold ? sales / sold : null,
     pulletValue: last.effectif_fin ? last.totalDepenses / last.effectif_fin : null,
     expected: dayRows.reduce((total, row) => total + Number(row._expectedBuildings || 0), 0),
+  };
+}
+
+function aggregateDemoDays(dayRows, label, rowType = 'summary') {
+  const row = aggregateDays(dayRows, label, rowType);
+  if (!row) return null;
+  const sum = (key) => dayRows.reduce((total, day) => total + Number(day[key] || 0), 0);
+  const cost = sum('_dailyTotal');
+  const sales = sum('_dailySales');
+  const sold = sum('_dailySold');
+  return {
+    ...row, id: 'demo-' + rowType + '-' + label,
+    cost, _dailyTotal: cost, depensesSemaine: cost, costPerEgg: row.oeufs ? cost / row.oeufs : null,
+    sales, _sales: sales, ventesSemaine: sales, sold, _sold: sold, margin: sales - cost,
+    prixOeuf: sold ? sales / sold : null, weeklyEggPrice: sold ? sales / sold : null,
+    fcr: row.eggMass ? row.aliment_kg / row.eggMass : null,
   };
 }
 
@@ -442,129 +450,16 @@ function GlobalOverviewPage() {
   }, [data, buildingId]);
 
   const demoMode = showExample || (!loading && !data && !error);
-  const demoFactor = (demoLot === 'previous' ? 0.88 : 1) * (demoBuilding === 'all' ? 1 : 0.5);
-  const demoDays = useMemo(() => {
-    const initialBirds = Math.round((demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1));
-    let cumulativeDeaths = 0;
-    let cumulativeEggs = 0;
-    return DEMO_ROWS.filter((row) => row.rowType === 'day').map((row) => {
-      const eggs = Math.round(row.oeufs * demoFactor);
-      const deaths = Math.round(row.mort * demoFactor);
-      const opening = Math.max(0, initialBirds - cumulativeDeaths);
-      cumulativeDeaths += deaths;
-      cumulativeEggs += eggs;
-      const remaining = Math.max(0, initialBirds - cumulativeDeaths);
-      const feed = Number(row.aliment_kg || 0) * demoFactor;
-      const weight = Number(row.poidsOeuf || 0);
-      const feedCost = feed * Number(row.prix_aliment || 0);
-      const dailyCost = Number(row.depensesSemaine || 0) * demoFactor;
-      const double = Math.round(eggs * 0.015);
-      const white = Math.round(eggs * 0.008);
-      const broken = Math.round(eggs * 0.01);
-      const lost = Math.round(eggs * 0.002);
-      return {
-        ...row,
-        id: row.id,
-        _weekKey: '2026-10-12',
-        _expectedBuildings: demoBuilding === 'all' ? 2 : 1,
-        _weekSales: { value: 12100 * demoFactor, quantity: 10000 * demoFactor },
-        _weekCharges: { total: 0 },
-        effectif_debut: opening,
-        effectif_fin: remaining,
-        birds: remaining,
-        mort: deaths,
-        mort_pct: opening ? (deaths / opening * 100).toFixed(2) : null,
-        oeufs: eggs,
-        oeufs_cum: cumulativeEggs,
-        ponte_pct: opening ? (eggs / opening * 100).toFixed(2) : null,
-        cumDead: cumulativeDeaths,
-        cumDeadRate: initialBirds ? cumulativeDeaths / initialBirds * 100 : null,
-        cumEggs: cumulativeEggs,
-        normal: Math.max(0, eggs - double - white - broken - lost),
-        double,
-        white,
-        broken,
-        lost,
-        aliment_kg: feed,
-        poidsOeuf: weight,
-        eggMass: eggs && weight ? eggs * weight / 1000 : null,
-        fcr: eggs && weight ? feed / (eggs * weight / 1000) : null,
-        _feedCost: feedCost,
-        feedcost: feedCost,
-        _dailyTotal: dailyCost,
-        cost: dailyCost,
-        costPerEgg: eggs ? dailyCost / eggs : null,
-        depensesSemaine: dailyCost,
-        totalDepenses: Number(row.totalDepenses || 0) * demoFactor,
-        _labor: Number(row._labor || 0) * demoFactor,
-        _salary: Number(row._salary || 0) * demoFactor,
-        _electricity: Number(row._electricity || 0) * demoFactor,
-        sold: null,
-        sales: null,
-        margin: null,
-        valeurPoulette: remaining ? Number(row.totalDepenses || 0) * demoFactor / remaining : null,
-        pulletValue: remaining ? Number(row.totalDepenses || 0) * demoFactor / remaining : null,
-      };
-    });
-  }, [demoBuilding, demoFactor, demoLot]);
-  const demoSummary = useMemo(() => {
-    const original = DEMO_ROWS.find((row) => row.rowType === 'summary');
-    if (!original) return null;
-    return {
-      ...original,
-      id: 'demo-summary',
-      _weekKey: '2026-10-12',
-      mort: demoDays.reduce((total, row) => total + Number(row.mort || 0), 0),
-      mort_pct: (demoBuilding === 'all' ? 1200 : 600) ? (demoDays.reduce((total, row) => total + Number(row.mort || 0), 0) / ((demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1)) * 100).toFixed(2) : null,
-      oeufs: demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0),
-      ponte_pct: demoDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0) ? (demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0) / demoDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0) * 100).toFixed(2) : null,
-      oeufs_cum: demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0),
-      aliment_kg: Math.round(original.aliment_kg * demoFactor),
-      depensesSemaine: original.depensesSemaine * demoFactor,
-      totalDepenses: original.totalDepenses * demoFactor,
-      ventesSemaine: original.ventesSemaine * demoFactor,
-      _sales: original.ventesSemaine * demoFactor,
-      _sold: 10000 * demoFactor,
-      sold: 10000 * demoFactor,
-      sales: original.ventesSemaine * demoFactor,
-      margin: (original.ventesSemaine - original.totalDepenses) * demoFactor,
-      cost: original.totalDepenses * demoFactor,
-      costPerEgg: original.oeufs ? original.totalDepenses / original.oeufs : null,
-      _feedCost: demoDays.reduce((total, row) => total + Number(row.feedcost || 0), 0),
-      feedcost: demoDays.reduce((total, row) => total + Number(row.feedcost || 0), 0),
-      _dailyTotal: original.totalDepenses * demoFactor,
-      _labor: original._labor * demoFactor,
-      _salary: original._salary * demoFactor,
-      _electricity: original._electricity * demoFactor,
-      normal: demoDays.reduce((total, row) => total + Number(row.normal || 0), 0),
-      double: demoDays.reduce((total, row) => total + Number(row.double || 0), 0),
-      white: demoDays.reduce((total, row) => total + Number(row.white || 0), 0),
-      broken: demoDays.reduce((total, row) => total + Number(row.broken || 0), 0),
-      lost: demoDays.reduce((total, row) => total + Number(row.lost || 0), 0),
-      cumDead: demoDays.reduce((total, row) => total + Number(row.mort || 0), 0),
-      cumDeadRate: (demoBuilding === 'all' ? 1200 : 600) ? demoDays.reduce((total, row) => total + Number(row.mort || 0), 0) / ((demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1)) * 100 : null,
-      cumEggs: demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0),
-      eggMass: demoDays.reduce((total, row) => total + Number(row.eggMass || 0), 0),
-      fcr: demoDays.reduce((total, row) => total + Number(row.aliment_kg || 0), 0) / demoDays.reduce((total, row) => total + Number(row.eggMass || 0), 0),
-      weeklyEggPrice: original.prixOeuf,
-      pulletValue: (original.totalDepenses * demoFactor) / ((demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1)),
-      prixOeuf: original.prixOeuf,
-      birds: Math.round((demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1)),
-      effectif_fin: Math.round((demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1)),
-    };
-  }, [demoBuilding, demoFactor, demoLot, demoDays]);
+  const demoProfile = DEMO_LOTS[demoLot] || DEMO_LOTS.active;
+  const demoDays = useMemo(() => buildDemoDays(demoLot, demoBuilding), [demoLot, demoBuilding]);
 
   const sourceDays = demoMode ? demoDays : dailyRows;
   const weeks = useMemo(() => [...new Set(sourceDays.map((row) => row._weekKey))].sort(), [sourceDays]);
-  const effectivePeriod = period === 'latest' ? (weeks[weeks.length - 1] || 'all') : period;
+  const effectivePeriod = period === 'latest' ? (demoMode ? 'all' : weeks[weeks.length - 1] || 'all') : period;
   const filteredDays = useMemo(() => effectivePeriod === 'all' ? sourceDays : sourceDays.filter((row) => row._weekKey === effectivePeriod), [sourceDays, effectivePeriod]);
   const periods = useMemo(() => [{ key: 'all', label: 'Toute la période' }, ...weeks.map((week) => ({ key: week, label: weekLabel(week) }))], [weeks]);
 
   const weekSummaries = useMemo(() => {
-    if (demoMode) {
-      if (!filteredDays.length || !demoSummary) return [];
-      return [{ ...demoSummary, date: 'Total semaine · ' + weekLabel('2026-10-12') }];
-    }
     const grouped = new Map();
     filteredDays.forEach((row) => {
       const list = grouped.get(row._weekKey) || [];
@@ -572,7 +467,7 @@ function GlobalOverviewPage() {
       grouped.set(row._weekKey, list);
     });
     return [...grouped.entries()].map(([key, days]) => {
-      const row = aggregateDays(days, 'Total semaine', 'summary');
+      const row = demoMode ? aggregateDemoDays(days, 'Total semaine', 'summary') : aggregateDays(days, 'Total semaine', 'summary');
       const sales = days[0]?._weekSales || { value: 0, quantity: 0 };
       row._weekKey = key;
       row.ventesSemaine = sales.value;
@@ -585,7 +480,7 @@ function GlobalOverviewPage() {
       row.date = 'Total semaine · ' + weekLabel(key);
       return row;
     });
-  }, [demoMode, demoSummary, filteredDays]);
+  }, [demoMode, filteredDays]);
 
   const monthSummaries = useMemo(() => {
     const groups = new Map();
@@ -595,10 +490,13 @@ function GlobalOverviewPage() {
       list.push(row);
       groups.set(month, list);
     });
-    return [...groups.entries()].map(([month, days]) => aggregateDays(days, 'Total mois · ' + new Date(month + '-15T12:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }), 'summary'));
-  }, [filteredDays]);
+    return [...groups.entries()].map(([month, days]) => {
+      const label = 'Total mois · ' + new Date(month + '-15T12:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return demoMode ? aggregateDemoDays(days, label, 'summary') : aggregateDays(days, label, 'summary');
+    });
+  }, [filteredDays, demoMode]);
 
-  const periodSummary = useMemo(() => aggregateDays(filteredDays, 'Total période', 'summary'), [filteredDays]);
+  const periodSummary = useMemo(() => demoMode ? aggregateDemoDays(filteredDays, 'Total période', 'summary') : aggregateDays(filteredDays, 'Total période', 'summary'), [filteredDays, demoMode]);
   const selectedColumns = useMemo(() => {
     const keys = {
       excel: ['mort', 'mort_pct', 'oeufs', 'oeufs_cum', 'ponte_pct', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'poidsOeuf', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'depensesSemaine', 'totalDepenses', 'ventesSemaine', 'valeurPoulette', 'prixOeuf'],
@@ -629,10 +527,10 @@ function GlobalOverviewPage() {
   const totalEggs = filteredDays.reduce((total, row) => total + Number(row.oeufs || 0), 0);
   const totalBirdDays = filteredDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0);
   const layingRate = totalBirdDays ? totalEggs / totalBirdDays * 100 : null;
-  const totalCost = demoMode ? Number(demoSummary?.cost || 0) : Number(periodSummary?.cost || 0);
+  const totalCost = Number(periodSummary?.cost || 0);
   const salesByWeek = new Map(filteredDays.map((row) => [row._weekKey, row._weekSales || { value: 0 }]));
   const totalSales = [...salesByWeek.values()].reduce((total, row) => total + Number(row.value || 0), 0);
-  const actualBuildingDays = new Set(data?.rows.filter((row) => {
+  const actualBuildingDays = demoMode ? filteredDays.reduce((total, row) => total + Number(row._actualBuildings || 0), 0) : new Set(data?.rows.filter((row) => {
     const allowed = buildingId === 'all' || Number(row.id_batiment) === Number(buildingId);
     const day = parseRowDate(row);
     const inPeriod = effectivePeriod === 'all' || weekStart(day) === effectivePeriod;
@@ -645,7 +543,7 @@ function GlobalOverviewPage() {
   const coverageEnd = selectedWeekEnd > cycleEnd ? cycleEnd : selectedWeekEnd;
   const coverageDays = coverageStart && coverageEnd ? Math.max(0, Math.floor((new Date(coverageEnd + 'T12:00:00') - new Date(coverageStart + 'T12:00:00')) / 86400000) + 1) : 0;
   const selectedBuildings = selectedCycles.filter((cycle) => buildingId === 'all' || Number(cycle.id_batiment) === Number(buildingId));
-  const expectedBuildingDays = demoMode ? 5 * (demoBuilding === 'all' ? 2 : 1) : coverageDays * selectedBuildings.length;
+  const expectedBuildingDays = demoMode ? filteredDays.reduce((total, row) => total + Number(row._expectedBuildings || 0), 0) : coverageDays * selectedBuildings.length;
   const statusName = (selectedLot?.cycle.statut || '').toLowerCase();
   const lotStatus = ['termine', 'terminé', 'cloture', 'clôturé'].includes(statusName) ? 'terminé' : 'en cours';
   const lotName = selectedLot?.cycle.nom_cycle || selectedLot?.cycle.souche || ('Lot #' + (selectedLot?.cycle.id_lot || selectedLot?.cycle.id_cycle));
@@ -731,14 +629,14 @@ function GlobalOverviewPage() {
         </Paper>
       )}
       <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
-        <Typography variant="body2" fontWeight={700}>{demoMode ? (demoLot === 'active' ? 'Hisex · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 65 semaines' : 'Lohmann · ' + (demoBuilding === 'all' ? '2 bâtiments' : 'Bâtiment ' + demoBuilding) + ' · 66 semaines') : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
-        <Typography variant="body2" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{demoMode ? (demoBuilding === 'all' ? '10/10' : '5/5') : actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
+        <Typography variant="body2" fontWeight={700}>{demoMode ? (demoProfile.name + ' · ' + (demoBuilding === 'all' ? demoProfile.buildings.length + ' bâtiments' : 'Bâtiment ' + demoBuilding) + ' · ' + (demoProfile.startAge + demoProfile.weeks - 1) + ' semaines · ' + demoProfile.status) : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
+        <Typography variant="body2" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
       </Paper>
-      {demoMode && <Alert severity="warning" sx={{ mb: 2 }}>Aperçu avec des données fictives uniquement. Rien n'a été ajouté à la base de données.</Alert>}
+      {demoMode && <Alert severity="warning" sx={{ mb: 2 }}>Aperçu fictif : deux lots de 49 et 70 semaines, avec production, dépenses et ventes.</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2 }}>
         {[
-          ['Œufs collectés', fmt(totalEggs), demoMode ? '5 jours sélectionnés' : filteredDays.length + ' jours sélectionnés'],
+          ['Œufs collectés', fmt(totalEggs), filteredDays.length + ' jours sélectionnés'],
           ['Taux de ponte', layingRate == null ? '—' : fmt(layingRate, 2) + ' %', 'Moyenne pondérée'],
           ['Coûts de la période', fmtDh(totalCost, 0), 'Aliment et charges affectées'],
           ['Ventes de la période', fmtDh(totalSales, 0), 'Montants facturés · MAD'],
@@ -787,7 +685,7 @@ function GlobalOverviewPage() {
                   })}
                   {!displayRows.length && <TableRow><TableCell colSpan={selectedColumns.length + 1} align="center">Aucune donnée pour ces filtres.</TableCell></TableRow>}
                 </TableBody>
-                {!demoMode && periodSummary && <TableBody><TableRow sx={{ '& td': { fontWeight: 800, bgcolor: 'action.selected' }, '& td:first-of-type': { bgcolor: 'background.paper' } }}>
+                {periodSummary && <TableBody><TableRow sx={{ '& td': { fontWeight: 800, bgcolor: 'action.selected' }, '& td:first-of-type': { bgcolor: 'background.paper' } }}>
                   <TableCell sx={{ ...stickyLabelSx, zIndex: 3 }}><Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>Total période</Box></TableCell>
                   {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, periodSummary)}</TableCell>)}
                 </TableRow></TableBody>}
@@ -795,7 +693,7 @@ function GlobalOverviewPage() {
             </TableContainer>
             {detail && <Paper variant="outlined" sx={{ mt: 1.5, p: 2 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                <Typography variant="h6">Détail · {detail.date} · {buildingId === 'all' ? 'tous les bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment}</Typography>
+                <Typography variant="h6">Détail · {detail.date} · {demoMode ? (demoBuilding === 'all' ? 'tous les bâtiments' : 'Bâtiment ' + demoBuilding) : buildingId === 'all' ? 'tous les bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment}</Typography>
                 <Button onClick={() => setDetailId('')}>Fermer</Button>
               </Stack>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
