@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Box, Button, Checkbox, CircularProgress, Divider, FormControl, FormControlLabel, MenuItem, Paper, Popover, Select,
+  Alert, Box, Button, Checkbox, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, MenuItem, Paper, Popover, Select,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Typography,
+  Tab, Tabs, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { get } from '../../services/api';
 import { cycleProductionService, productionService } from '../../services/productionService';
@@ -23,18 +23,35 @@ const COLUMN_PRESETS = {
 };
 const groupColor = (theme, key, token = 'fill') => COLUMN_GROUPS.find((group) => group.key === key)[token][theme.palette.mode === 'dark' ? 1 : 0];
 
-const LABEL_WIDTH = 160;
+const LABEL_WIDTH = 176;
 const TEXT_WIDTH = 240;
 const stickyLabelSx = {
-  position: 'sticky', left: 0, width: LABEL_WIDTH, minWidth: LABEL_WIDTH,
-  maxWidth: LABEL_WIDTH, overflow: 'hidden', bgcolor: 'background.paper',
+  position: 'sticky', left: 0,
+  width: 'var(--date-width)', minWidth: 'var(--date-width)', maxWidth: 'var(--date-width)',
+  overflow: 'hidden', bgcolor: 'background.paper',
 };
 const wrappedTextSx = {
   display: 'block', whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.4,
 };
-const renderColumnValue = (column, row) => ['formule', 'autres'].includes(column.key)
-  ? <Box component="span" sx={{ ...wrappedTextSx, width: TEXT_WIDTH }}>{column.value(row)}</Box>
-  : column.value(row);
+const renderColumnValue = (column, row, onExpand) => {
+  const value = column.value(row);
+  if (!['formule', 'autres'].includes(column.key)) return value;
+  const text = String(value ?? '—');
+  return <Box sx={{ width: TEXT_WIDTH, minHeight: 32 }}>
+    <Box component="span" sx={{ ...wrappedTextSx, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{text}</Box>
+    {text.length > 55 && <Button size="small" onClick={() => onExpand({ title: column.label, value: text, date: row.date })} aria-label={'Lire ' + column.label + ' · ' + row.date} sx={{ p: 0, minWidth: 0, minHeight: 20, fontSize: 12, lineHeight: 1.4 }}>Lire la suite</Button>}
+  </Box>;
+};
+const renderRowLabel = (row) => {
+  if (row.rowType === 'summary' && row._weekKey && row.date.startsWith('Total semaine')) return <Box sx={wrappedTextSx}>
+    <Box component="span" sx={{ display: 'block' }}>Total semaine</Box>
+    <Box component="span" sx={{ display: 'block', fontSize: 11, fontWeight: 500, mt: 0.25 }}>
+      {dateLabel(row._weekKey).slice(6) === dateLabel(weekEnd(row._weekKey)).slice(6) ? dateLabel(row._weekKey).slice(0, 5) + ' – ' + dateLabel(weekEnd(row._weekKey)).slice(0, 5) + ' · ' + dateLabel(row._weekKey).slice(6) : dateLabel(row._weekKey) + ' – ' + dateLabel(weekEnd(row._weekKey))}
+    </Box>
+  </Box>;
+  const [title, ...subtitle] = String(row.date).split(' · ');
+  return <Box sx={wrappedTextSx}>{title}{subtitle.length > 0 && <Box component="span" sx={{ display: 'block', fontSize: 11, fontWeight: 500 }}>{subtitle.join(' · ')}</Box>}</Box>;
+};
 
 const fmt = (value, digits = 0) => value == null || value === '' || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('fr-FR', { maximumFractionDigits: digits });
 const fmtDh = (value, digits = 2) => value == null || !Number.isFinite(Number(value)) ? '—' : fmt(value, digits) + ' DH';
@@ -188,12 +205,17 @@ function aggregateDemoDays(dayRows, label, rowType = 'summary') {
 }
 
 function GlobalOverviewPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [textDetail, setTextDetail] = useState(null);
   const [cycles, setCycles] = useState([]);
   const [lotId, setLotId] = useState('');
   const [buildingId, setBuildingId] = useState('all');
   const [period, setPeriod] = useState('latest');
   const [groupBy, setGroupBy] = useState('day');
-  const [view, setView] = useState('register');
+  const [view, setView] = useState(() => isMobile ? 'summary' : 'register');
   const [customColumns, setCustomColumns] = useState(null);
   const [columnAnchor, setColumnAnchor] = useState(null);
   const tableRef = useRef(null);
@@ -614,20 +636,35 @@ function GlobalOverviewPage() {
 
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} spacing={2} sx={{ mb: 2.5 }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={1.25} sx={{ mb: 1.5 }}>
         <Box>
           <Typography variant="h4" component="h1" fontWeight={800}>Suivi global</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>Registre de production et de coûts</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>Registre de production et de coûts</Typography>
         </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Button variant="outlined" onClick={() => load()}>Actualiser</Button>
-          <Button variant="outlined" onClick={() => setShowExample((value) => !value)} disabled={!data && !showExample}>{demoMode ? 'Données exemple' : 'Voir un exemple'}</Button>
-          <Button variant="outlined" onClick={() => setExpanded((value) => !value)}>{expanded ? 'Réduire' : 'Agrandir'}</Button>
-          <Button variant="contained" onClick={handleExport} disabled={!displayRows.length}>Exporter CSV</Button>
+        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+          <Button size="small" sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-expanded={actionsOpen} aria-controls="overview-actions" onClick={() => setActionsOpen((open) => !open)}>Options</Button>
+          <Box id="overview-actions" sx={{ display: { xs: actionsOpen ? 'block' : 'none', sm: 'block' }, order: { xs: 3, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
+            <Stack direction="row" gap={0.75} flexWrap="wrap">
+              <Button size="small" onClick={() => load()}>Actualiser</Button>
+              <Button size="small" onClick={() => setShowExample((value) => !value)} disabled={!data && !showExample}>{demoMode ? 'Données exemple' : 'Voir un exemple'}</Button>
+              <Button size="small" variant="outlined" onClick={() => setExpanded((value) => !value)}>{expanded ? 'Réduire' : 'Agrandir'}</Button>
+            </Stack>
+          </Box>
+          <Button size="small" variant="contained" onClick={handleExport} disabled={!displayRows.length} sx={{ ml: { xs: 'auto', sm: 0 } }}>Exporter CSV</Button>
         </Stack>
       </Stack>
+      <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ px: 1.5, py: 1 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" fontWeight={700} sx={wrappedTextSx}>{demoMode ? (demoProfile.name + ' · ' + (demoBuilding === 'all' ? demoProfile.buildings.length + ' bâtiments' : 'Bâtiment ' + demoBuilding) + ' · ' + (demoProfile.startAge + demoProfile.weeks - 1) + ' semaines · ' + demoProfile.status) : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
+            <Typography variant="caption" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
+            {isMobile && <Typography variant="caption" sx={{ display: 'block' }}>{periods.find((item) => item.key === effectivePeriod)?.label}</Typography>}
+          </Box>
+          <Button size="small" variant="outlined" sx={{ display: { xs: 'inline-flex', sm: 'none' }, flexShrink: 0 }} aria-expanded={filtersOpen} aria-controls="overview-filters" onClick={() => setFiltersOpen((open) => !open)}>{filtersOpen ? 'Masquer' : 'Filtres'}</Button>
+        </Stack>
+        <Collapse id="overview-filters" in={!isMobile || filtersOpen}>
       {demoMode ? (
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.5 }}>
+        <Box sx={{ px: 1.5, pb: 1.5, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.25, '& .MuiFormControl-root': { minWidth: 0 } }}>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Lot</Typography>
             <Select value={demoLot} onChange={(event) => { setDemoLot(event.target.value); setPeriod('latest'); }} inputProps={{ 'aria-label': 'Choisir un lot' }}>
               <MenuItem value="active">Lot Hisex · en cours</MenuItem><MenuItem value="previous">Lot Lohmann · terminé</MenuItem>
@@ -648,9 +685,9 @@ function GlobalOverviewPage() {
               <MenuItem value="day">Par jour</MenuItem><MenuItem value="week">Par semaine</MenuItem><MenuItem value="month">Par mois</MenuItem>
             </Select>
           </FormControl>
-        </Paper>
+        </Box>
       ) : (
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.5 }}>
+        <Box sx={{ px: 1.5, pb: 1.5, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.25, '& .MuiFormControl-root': { minWidth: 0 } }}>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Lot</Typography>
             <Select value={selectedLot?.key || ''} onChange={(event) => { setLotId(event.target.value); setBuildingId('all'); setPeriod('latest'); }} inputProps={{ 'aria-label': 'Choisir un lot' }}>
               {lots.map((lot) => <MenuItem key={lot.key} value={lot.key}>{lot.cycle.nom_cycle || lot.cycle.souche || ('Lot #' + lot.cycle.id_cycle)} · {lot.cycle.statut || 'en cours'}</MenuItem>)}
@@ -672,25 +709,23 @@ function GlobalOverviewPage() {
               <MenuItem value="day">Par jour</MenuItem><MenuItem value="week">Par semaine</MenuItem><MenuItem value="month">Par mois</MenuItem>
             </Select>
           </FormControl>
-        </Paper>
+        </Box>
       )}
-      <Paper variant="outlined" sx={{ px: 1.5, py: 1, mb: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
-        <Typography variant="body2" fontWeight={700}>{demoMode ? (demoProfile.name + ' · ' + (demoBuilding === 'all' ? demoProfile.buildings.length + ' bâtiments' : 'Bâtiment ' + demoBuilding) + ' · ' + (demoProfile.startAge + demoProfile.weeks - 1) + ' semaines · ' + demoProfile.status) : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
-        <Typography variant="body2" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
+        </Collapse>
+        {demoMode && <Box sx={{ px: 1.5, py: 0.75, bgcolor: theme.palette.mode === 'dark' ? '#463a23' : '#fffbeb', borderTop: '1px solid', borderColor: 'divider' }}><Typography variant="caption" color="text.primary">Données de démonstration · production, dépenses et ventes fictives</Typography></Box>}
       </Paper>
-      {demoMode && <Alert severity="warning" sx={{ mb: 2 }}>Aperçu fictif : deux lots de 49 et 70 semaines, avec production, dépenses et ventes.</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5, mb: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: 1, mb: 1.5 }}>
         {[
           ['Œufs collectés', fmt(totalEggs), filteredDays.length + ' jours sélectionnés'],
           ['Taux de ponte', layingRate == null ? '—' : fmt(layingRate, 2) + ' %', 'Moyenne pondérée'],
           ['Coûts de la période', fmtDh(totalCost, 0), 'Aliment et charges affectées'],
-          ['Ventes de la période', fmtDh(totalSales, 0), 'Montants facturés · MAD'],
+          ['Ventes de la période', fmtDh(totalSales, 0), 'Montants facturés · DH'],
         ].map(([label, value, caption]) => (
-          <Paper key={label} variant="outlined" sx={{ p: 1.75, minWidth: 0 }}>
-            <Typography variant="body2" color="text.secondary">{label}</Typography>
-            <Typography variant="h5" fontWeight={800} sx={{ my: 0.5 }}>{value}</Typography>
-            <Typography variant="caption" color="text.secondary">{caption}</Typography>
+          <Paper key={label} variant="outlined" sx={{ px: 1.5, py: 1.25, minWidth: 0 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>{label}</Typography>
+            <Typography variant="h5" fontWeight={800} sx={{ my: 0.25, fontSize: { xs: 18, sm: 20 }, fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>{caption}</Typography>
           </Paper>
         ))}
       </Box>
@@ -698,60 +733,64 @@ function GlobalOverviewPage() {
         : !data && !demoMode ? <Alert severity="info">Aucun lot de production enregistré.</Alert>
           : <>
             <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={1} sx={{ p: 1.25 }}>
-                <Stack direction="row" spacing={0.5} flexWrap="wrap" alignItems="center" aria-label="Vues du registre">
-                  {[['register', 'Registre'], ['summary', 'Synthèse'], ['production', 'Production'], ['costs', 'Coûts & ventes']].map(([key, label]) => (
-                    <Button key={key} size="small" aria-pressed={!customColumns && view === key} onClick={() => applyPreset(key)} sx={{ fontWeight: 700, bgcolor: !customColumns && view === key ? 'action.selected' : undefined }}>{label}</Button>
-                  ))}
-                  {customColumns && <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>Personnalisé</Typography>}
-                </Stack>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
-                  <Typography variant="caption" color="text.secondary">{selectedColumns.length} colonnes</Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" gap={0.5} sx={{ px: 1.25, pt: 0.5, pb: 1 }}>
+                <Tabs value={customColumns ? false : view} onChange={(_, key) => applyPreset(key)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile aria-label="Vues du registre" sx={{ minHeight: 40, minWidth: 0, flex: 1, '& .MuiTab-root': { minHeight: 40, px: 1.25, minWidth: 0 } }}>
+                  {[['register', 'Registre'], ['summary', 'Synthèse'], ['production', 'Production'], ['costs', 'Coûts & ventes']].map(([key, label]) => <Tab key={key} value={key} label={label} />)}
+                </Tabs>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} sx={{ flexShrink: 0 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>{customColumns ? 'Personnalisé · ' : ''}{selectedColumns.length} colonnes</Typography>
                   <Button variant="outlined" size="small" aria-haspopup="dialog" aria-expanded={Boolean(columnAnchor)} aria-controls={columnAnchor ? 'global-overview-columns' : undefined} onClick={(event) => setColumnAnchor(event.currentTarget)}>Colonnes</Button>
                 </Stack>
               </Stack>
-              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ px: 1.25, pb: 1.25 }} aria-label="Catégories de colonnes">
+              <Stack direction="row" alignItems="center" gap={0.75} sx={{ px: 1.5, pb: 1, display: { xs: 'none', sm: 'flex' }, overflowX: 'auto' }} aria-label="Catégories de colonnes">
+                <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>Aller à</Typography>
                 {COLUMN_GROUPS.map((group) => (
-                  <Button key={group.key} size="small" variant="outlined" disabled={!columnGroups.some((shown) => shown.key === group.key)} onClick={() => jumpToGroup(group.key)} sx={{ textTransform: 'none', fontSize: 11, borderColor: 'divider', color: 'text.primary', gap: 0.75 }}>
+                  <Button key={group.key} size="small" disabled={!columnGroups.some((shown) => shown.key === group.key)} onClick={() => jumpToGroup(group.key)} sx={{ textTransform: 'none', fontSize: 12, color: 'text.primary', gap: 0.75, flexShrink: 0, px: 0.75 }}>
                     <Box component="span" aria-hidden="true" sx={(theme) => ({ width: 7, height: 7, flexShrink: 0, borderRadius: '2px', bgcolor: groupColor(theme, group.key, 'edge') })} />{group.label}
                   </Button>
                 ))}
               </Stack>
-              <TableContainer ref={tableRef} tabIndex={0} role="region" aria-label="Registre de production" sx={{ maxHeight: expanded ? 'calc(100vh - 180px)' : '70vh', overflow: 'auto' }}>
-                <Table size="small" stickyHeader sx={{ minWidth: LABEL_WIDTH + 32 + selectedColumns.reduce((total, column) => total + (['formule', 'autres'].includes(column.key) ? TEXT_WIDTH + 32 : 144), 0), '& td, & th': { fontVariantNumeric: 'tabular-nums' } }}>
+              {isMobile && <FormControl size="small" sx={{ display: 'flex', mx: 1.5, mb: 1 }}>
+                <Select value="" displayEmpty inputProps={{ 'aria-label': 'Aller à une catégorie' }} onChange={(event) => jumpToGroup(event.target.value)} sx={{ fontSize: 12 }}>
+                  <MenuItem value="" disabled>Aller à une catégorie…</MenuItem>
+                  {columnGroups.map((group) => <MenuItem key={group.key} value={group.key}>{group.label}</MenuItem>)}
+                </Select>
+              </FormControl>}
+              <TableContainer ref={tableRef} tabIndex={0} role="region" aria-label="Registre de production" sx={{ '--date-width': { xs: '116px', sm: LABEL_WIDTH + 'px' }, maxHeight: expanded ? 'calc(100dvh - 180px)' : '70vh', overflow: 'auto' }}>
+                <Table size="small" stickyHeader sx={{ minWidth: LABEL_WIDTH + selectedColumns.reduce((total, column) => total + (['formule', 'autres'].includes(column.key) ? TEXT_WIDTH + 32 : 144), 0), '& td, & th': { fontVariantNumeric: 'tabular-nums' }, '& .MuiTableHead-root .MuiTableCell-root': { textTransform: 'none', letterSpacing: 0, color: 'text.primary', fontSize: 12, lineHeight: 1.35, px: 1.5, py: 0.75 }, '& .MuiTableBody-root .MuiTableCell-root': { px: 1.5, py: 1, fontSize: 13, lineHeight: 1.45 } }}>
                   <TableHead>
-                    <TableRow sx={{ height: 42 }}>
+                    <TableRow sx={{ height: 36 }}>
                       <TableCell rowSpan={2} sx={{ ...stickyLabelSx, zIndex: 5, borderRight: '1px solid', borderColor: 'divider' }}>{groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois'}</TableCell>
                       {columnGroups.map((group) => (
-                        <TableCell key={group.key} ref={(node) => { if (node) groupRefs.current[group.key] = node; else delete groupRefs.current[group.key]; }} colSpan={group.count} align="left" sx={(theme) => ({ top: 0, height: 42, py: 0.5, bgcolor: groupColor(theme, group.key), borderLeft: '3px solid ' + groupColor(theme, group.key, 'edge'), fontWeight: 700, fontSize: 12, lineHeight: 1.3, whiteSpace: 'normal' })}>{group.label}</TableCell>
+                        <TableCell key={group.key} ref={(node) => { if (node) groupRefs.current[group.key] = node; else delete groupRefs.current[group.key]; }} colSpan={group.count} align="left" sx={(theme) => ({ top: 0, height: 36, py: 0.5, '&&': { bgcolor: groupColor(theme, group.key) }, borderLeft: '3px solid ' + groupColor(theme, group.key, 'edge'), fontWeight: 700, fontSize: 12, lineHeight: 1.3, whiteSpace: 'normal' })}>{group.label}</TableCell>
                       ))}
                     </TableRow>
                     <TableRow>
-                      {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'} sx={(theme) => ({ ...cellStyle(column)(theme), top: 42, height: 76, bgcolor: groupColor(theme, column.group), fontWeight: 700, whiteSpace: 'normal' })}>
-                        <Box sx={{ width: ['formule', 'autres'].includes(column.key) ? TEXT_WIDTH : 112, maxWidth: '100%' }}>{column.label}<Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 11, mt: 0.25 }}>{column.unit || '\u00a0'}</Typography></Box>
+                      {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'} sx={(theme) => ({ ...cellStyle(column)(theme), top: 36, height: 68, '&&': { bgcolor: groupColor(theme, column.group) }, fontWeight: 700, whiteSpace: 'normal' })}>
+                        <Box sx={{ width: ['formule', 'autres'].includes(column.key) ? TEXT_WIDTH : 112, maxWidth: '100%', ml: ['formule', 'autres'].includes(column.key) ? 0 : 'auto' }}>{column.label}<Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 11, fontWeight: 400, mt: 0.25 }}>{column.unit || '\u00a0'}</Typography></Box>
                       </TableCell>)}
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {displayRows.map((row, index) => {
                       const summary = row.rowType === 'summary';
-                      return <TableRow key={row.id} sx={(theme) => ({
+                      return <TableRow key={row.id} sx={(theme) => ({ height: 48,
                         '& td': { fontWeight: summary ? 700 : 400, bgcolor: summary ? (theme.palette.mode === 'dark' ? '#273750' : '#edf2fc') : index % 2 ? 'background.default' : 'background.paper', borderTop: summary ? '1px solid ' + groupColor(theme, 'effectif', 'edge') : undefined, whiteSpace: 'nowrap' },
                         '&:hover td': { bgcolor: theme.palette.mode === 'dark' ? '#30415b' : '#e9eef7' },
                       })}>
                         <TableCell sx={{ ...stickyLabelSx, zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}>
-                          <Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>
-                            {row.rowType === 'day' ? <Button size="small" onClick={() => setDetailId(row.id)} sx={{ minWidth: 0, maxWidth: '100%', p: 0, textTransform: 'none', fontWeight: 700, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{row.date}</Button> : row.date}
+                          <Box component="span" sx={wrappedTextSx}>
+                            {row.rowType === 'day' ? <Button size="small" onClick={() => setDetailId(row.id)} sx={{ minWidth: 0, maxWidth: '100%', p: 0, textTransform: 'none', fontWeight: 700, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{row.date}</Button> : renderRowLabel(row)}
                           </Box>
                         </TableCell>
-                        {selectedColumns.map((column) => <TableCell key={column.key} sx={cellStyle(column)} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, row)}</TableCell>)}
+                        {selectedColumns.map((column) => <TableCell key={column.key} sx={cellStyle(column)} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, row, setTextDetail)}</TableCell>)}
                       </TableRow>;
                     })}
                     {!displayRows.length && <TableRow><TableCell colSpan={selectedColumns.length + 1} align="center">Aucune donnée pour ces filtres.</TableCell></TableRow>}
                   </TableBody>
                   {periodSummary && <TableBody><TableRow sx={(theme) => ({ '& td': { fontWeight: 800, bgcolor: theme.palette.mode === 'dark' ? '#2c3e5c' : '#e6edfb', borderTop: '2px solid ' + groupColor(theme, 'effectif', 'edge'), whiteSpace: 'nowrap' } })}>
-                    <TableCell sx={{ ...stickyLabelSx, zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}><Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>Total période</Box></TableCell>
-                    {selectedColumns.map((column) => <TableCell key={column.key} sx={cellStyle(column)} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, periodSummary)}</TableCell>)}
+                    <TableCell sx={{ ...stickyLabelSx, zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}><Box component="span" sx={wrappedTextSx}>Total période</Box></TableCell>
+                    {selectedColumns.map((column) => <TableCell key={column.key} sx={cellStyle(column)} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, periodSummary, setTextDetail)}</TableCell>)}
                   </TableRow></TableBody>}
                 </Table>
               </TableContainer>
@@ -799,12 +838,17 @@ function GlobalOverviewPage() {
                 ].map(([title, items]) => <Box key={title}>
                   <Typography variant="subtitle2" color="primary" sx={{ mb: 0.5 }}>{title}</Typography>
                   {items.map(([label, value]) => <Stack key={label} direction="row" justifyContent="space-between" gap={1} sx={{ py: 0.4, borderBottom: '1px solid', borderColor: 'divider' }}>
-                    <Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="body2" textAlign="right">{value ?? '—'}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>{label}</Typography><Typography variant="body2" textAlign="right">{value ?? '—'}</Typography>
                   </Stack>)}
                 </Box>)}
               </Box>
             </Paper>}
           </>}
+      <Dialog open={Boolean(textDetail)} onClose={() => setTextDetail(null)} fullWidth maxWidth="sm" aria-labelledby="overview-text-title">
+        <DialogTitle id="overview-text-title">{textDetail?.title}</DialogTitle>
+        <DialogContent><Typography variant="caption" sx={{ display: 'block', mb: 1 }}>{textDetail?.date}</Typography><Typography sx={wrappedTextSx}>{textDetail?.value}</Typography></DialogContent>
+        <DialogActions><Button onClick={() => setTextDetail(null)}>Fermer</Button></DialogActions>
+      </Dialog>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.25 }}>Les filtres mettent à jour les indicateurs et le tableau. Les ventes correspondent aux montants facturés.</Typography>
     </Box>
   );
