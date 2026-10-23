@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Box, Button, Checkbox, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, MenuItem, Paper, Popover, Select,
+  Alert, Box, Button, Checkbox, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, Menu, MenuItem, Paper, Popover, Select,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Tab, Tabs, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { get } from '../../services/api';
 import { cycleProductionService, productionService } from '../../services/productionService';
+import { exportOverview } from './globalOverviewExport';
 import { DEMO_LOTS, buildDemoDays } from './globalOverviewDemo';
 
 const COLUMN_GROUPS = [
@@ -105,11 +106,6 @@ const groupCycles = (cycles) => {
     grouped.get(key).cycles.push(cycle);
   });
   return [...grouped.values()].map((group) => ({ ...group, cycle: group.cycles[0] }));
-};
-
-const toCsv = (rows, cols) => {
-  const quote = (value) => '"' + String(value ?? '').replaceAll('"', '""') + '"';
-  return [cols.map((c) => quote(c.label + (c.unit ? ' (' + c.unit + ')' : ''))).join(';'), ...rows.map((row) => cols.map((c) => quote(c.value(row) ?? '')).join(';'))].join('\r\n');
 };
 
 function aggregateDays(dayRows, label, rowType = 'summary') {
@@ -226,7 +222,8 @@ function GlobalOverviewPage() {
   const [showExample, setShowExample] = useState(false);
   const [demoLot, setDemoLot] = useState('active');
   const [demoBuilding, setDemoBuilding] = useState('all');
-  const [expanded, setExpanded] = useState(false);
+  const [exportAnchor, setExportAnchor] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [detailId, setDetailId] = useState('');
 
   const lots = useMemo(() => groupCycles(cycles), [cycles]);
@@ -624,14 +621,19 @@ function GlobalOverviewPage() {
     borderLeft: column.groupStart ? '3px solid ' + groupColor(theme, column.group, 'edge') : undefined,
   });
 
-  const handleExport = () => {
-    const exportRows = groupedRows.length ? groupedRows : [];
-    const csv = toCsv(exportRows, [{ key: 'date', label: groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois', value: (row) => row.date }, ...selectedColumns]);
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = 'suivi-global.csv';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  const handleExport = async (format) => {
+    setExportAnchor(null);
+    setExporting(true);
+    try {
+      await exportOverview(format, [...groupedRows, ...(periodSummary ? [periodSummary] : [])],
+        [{ key: 'date', label: groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois', value: (row) => row.date }, ...selectedColumns],
+        { demo: demoMode, lot: demoMode ? demoProfile.name : (selectedLot?.cycle.nom_cycle || selectedLot?.cycle.souche || 'Lot'),
+          building: (demoMode ? demoBuilding : buildingId) === 'all' ? 'Tous les bâtiments' : 'Bâtiment ' + (demoMode ? demoBuilding : buildingId) });
+    } catch {
+      setError("Impossible de générer le fichier. Veuillez réessayer.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -645,12 +647,14 @@ function GlobalOverviewPage() {
           <Button size="small" sx={{ display: { xs: 'inline-flex', sm: 'none' } }} aria-expanded={actionsOpen} aria-controls="overview-actions" onClick={() => setActionsOpen((open) => !open)}>Options</Button>
           <Box id="overview-actions" sx={{ display: { xs: actionsOpen ? 'block' : 'none', sm: 'block' }, order: { xs: 3, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
             <Stack direction="row" gap={0.75} flexWrap="wrap">
-              <Button size="small" onClick={() => load()}>Actualiser</Button>
               <Button size="small" onClick={() => setShowExample((value) => !value)} disabled={!data && !showExample}>{demoMode ? 'Données exemple' : 'Voir un exemple'}</Button>
-              <Button size="small" variant="outlined" onClick={() => setExpanded((value) => !value)}>{expanded ? 'Réduire' : 'Agrandir'}</Button>
             </Stack>
           </Box>
-          <Button size="small" variant="contained" onClick={handleExport} disabled={!displayRows.length} sx={{ ml: { xs: 'auto', sm: 0 } }}>Exporter CSV</Button>
+          <Button size="small" variant="contained" onClick={(event) => setExportAnchor(event.currentTarget)} disabled={!displayRows.length || exporting || (loading && !demoMode)} aria-haspopup="menu" aria-expanded={Boolean(exportAnchor)} aria-controls={exportAnchor ? 'overview-export-menu' : undefined} sx={{ ml: { xs: 'auto', sm: 0 } }}>{exporting ? 'Export en cours…' : 'Exporter'}</Button>
+          <Menu id="overview-export-menu" anchorEl={exportAnchor} open={Boolean(exportAnchor)} onClose={() => setExportAnchor(null)}>
+            <MenuItem onClick={() => handleExport('excel')}>Excel (.xlsx)</MenuItem>
+            <MenuItem onClick={() => handleExport('pdf')}>PDF (.pdf)</MenuItem>
+          </Menu>
         </Stack>
       </Stack>
       <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
@@ -756,7 +760,7 @@ function GlobalOverviewPage() {
                   {columnGroups.map((group) => <MenuItem key={group.key} value={group.key}>{group.label}</MenuItem>)}
                 </Select>
               </FormControl>}
-              <TableContainer ref={tableRef} tabIndex={0} role="region" aria-label="Registre de production" sx={{ '--date-width': { xs: '116px', sm: LABEL_WIDTH + 'px' }, maxHeight: expanded ? 'calc(100dvh - 180px)' : '70vh', overflow: 'auto' }}>
+              <TableContainer ref={tableRef} tabIndex={0} role="region" aria-label="Registre de production" sx={{ '--date-width': { xs: '116px', sm: LABEL_WIDTH + 'px' }, maxHeight: '70vh', overflow: 'auto' }}>
                 <Table size="small" stickyHeader sx={{ minWidth: LABEL_WIDTH + selectedColumns.reduce((total, column) => total + (['formule', 'autres'].includes(column.key) ? TEXT_WIDTH + 32 : 144), 0), '& td, & th': { fontVariantNumeric: 'tabular-nums' }, '& .MuiTableHead-root .MuiTableCell-root': { textTransform: 'none', letterSpacing: 0, color: 'text.primary', fontSize: 12, lineHeight: 1.35, px: 1.5, py: 0.75 }, '& .MuiTableBody-root .MuiTableCell-root': { px: 1.5, py: 1, fontSize: 13, lineHeight: 1.45 } }}>
                   <TableHead>
                     <TableRow sx={{ height: 36 }}>
