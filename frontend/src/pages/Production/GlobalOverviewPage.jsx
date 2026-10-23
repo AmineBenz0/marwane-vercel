@@ -451,7 +451,7 @@ function GlobalOverviewPage() {
 
   const demoMode = showExample || (!loading && !data && !error);
   const demoProfile = DEMO_LOTS[demoLot] || DEMO_LOTS.active;
-  const demoDays = useMemo(() => buildDemoDays(demoLot, demoBuilding), [demoLot, demoBuilding]);
+  const demoDays = useMemo(() => demoMode ? buildDemoDays(demoLot, demoBuilding) : [], [demoMode, demoLot, demoBuilding]);
 
   const sourceDays = demoMode ? demoDays : dailyRows;
   const weeks = useMemo(() => [...new Set(sourceDays.map((row) => row._weekKey))].sort(), [sourceDays]);
