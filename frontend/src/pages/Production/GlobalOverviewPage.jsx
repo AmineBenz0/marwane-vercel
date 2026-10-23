@@ -317,7 +317,7 @@ function GlobalOverviewPage() {
             <Table size="small" stickyHeader sx={{ minWidth: 2650, '& td, & th': { borderRight: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' } }}>
               <TableHead>
                 <TableRow>
-                  <TableCell rowSpan={2} sx={{ position: 'sticky', left: 0, zIndex: 5, minWidth: 145, bgcolor: 'background.paper' }}>Date</TableCell>
+                  <TableCell rowSpan={2} sx={{ position: 'sticky', left: 0, zIndex: 5, width: 145, minWidth: 145, maxWidth: 145, boxSizing: 'border-box', bgcolor: 'background.paper' }}>Date</TableCell>
                   <TableCell colSpan={5} align="center">Effectif & ponte</TableCell>
                   <TableCell colSpan={6} align="center">Alimentation</TableCell>
                   <TableCell colSpan={3} align="center">Autres d�penses</TableCell>
@@ -329,7 +329,7 @@ function GlobalOverviewPage() {
                 {displayRows.map((row) => {
                   const summary = row.rowType === 'summary';
                   return <TableRow key={row.id} hover sx={{ bgcolor: summary ? 'action.hover' : undefined, '& td': { fontWeight: summary ? 700 : 400 } }}>
-                    <TableCell sx={{ position: 'sticky', left: 0, zIndex: 1, bgcolor: summary ? 'action.hover' : 'background.paper', fontWeight: 700 }}>{row.date}</TableCell>
+                    <TableCell sx={{ position: 'sticky', left: 0, zIndex: 3, width: 145, minWidth: 145, maxWidth: 145, boxSizing: 'border-box', bgcolor: summary ? 'background.default' : 'background.paper', fontWeight: 700 }}>{row.date}</TableCell>
                     {columns.map((column) => <TableCell key={column.key} align={['formule', 'autres', 'poidsOeuf'].includes(column.key) ? 'left' : 'right'}>
                       {summary ? column.value(row) : (['labor', 'salary', 'electricity', 'depensesSemaine', 'totalDepenses', 'ventesSemaine', 'prixOeuf'].includes(column.key) ? '-' : column.value(row))}
                     </TableCell>)}
