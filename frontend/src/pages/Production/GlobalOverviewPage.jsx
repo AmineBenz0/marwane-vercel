@@ -430,27 +430,70 @@ function GlobalOverviewPage() {
 
   const demoMode = showExample || (!loading && !data && !error);
   const demoFactor = (demoLot === 'previous' ? 0.88 : 1) * (demoBuilding === 'all' ? 1 : 0.5);
-  const demoDays = useMemo(() => DEMO_ROWS.filter((row) => row.rowType === 'day').map((row) => ({
-    ...row,
-    id: row.id,
-    _weekKey: '2026-10-12',
-    _expectedBuildings: demoBuilding === 'all' ? 2 : 1,
-    _weekSales: { value: 12100 * demoFactor, quantity: 10000 * demoFactor },
-    _weekCharges: { total: 0 },
-    effectif_debut: (demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1),
-    effectif_fin: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
-    birds: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
-    oeufs: Math.round(row.oeufs * demoFactor),
-    mort: Math.round(row.mort * demoFactor),
-    aliment_kg: Math.round(row.aliment_kg * demoFactor),
-    _feedCost: Number(row.depensesSemaine || 0) * demoFactor,
-    _dailyTotal: Number(row.depensesSemaine || 0) * demoFactor,
-    depensesSemaine: Number(row.depensesSemaine || 0) * demoFactor,
-    totalDepenses: Number(row.totalDepenses || 0) * demoFactor,
-    _labor: Number(row._labor || 0) * demoFactor,
-    _salary: Number(row._salary || 0) * demoFactor,
-    _electricity: Number(row._electricity || 0) * demoFactor,
-  })), [demoBuilding, demoFactor, demoLot]);
+  const demoDays = useMemo(() => {
+    const initialBirds = Math.round((demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1));
+    let cumulativeDeaths = 0;
+    let cumulativeEggs = 0;
+    return DEMO_ROWS.filter((row) => row.rowType === 'day').map((row) => {
+      const eggs = Math.round(row.oeufs * demoFactor);
+      const deaths = Math.round(row.mort * demoFactor);
+      const opening = Math.max(0, initialBirds - cumulativeDeaths);
+      cumulativeDeaths += deaths;
+      cumulativeEggs += eggs;
+      const remaining = Math.max(0, initialBirds - cumulativeDeaths);
+      const feed = Number(row.aliment_kg || 0) * demoFactor;
+      const weight = Number(row.poidsOeuf || 0);
+      const feedCost = feed * Number(row.prix_aliment || 0);
+      const dailyCost = Number(row.depensesSemaine || 0) * demoFactor;
+      const double = Math.round(eggs * 0.015);
+      const white = Math.round(eggs * 0.008);
+      const broken = Math.round(eggs * 0.01);
+      const lost = Math.round(eggs * 0.002);
+      return {
+        ...row,
+        id: row.id,
+        _weekKey: '2026-10-12',
+        _expectedBuildings: demoBuilding === 'all' ? 2 : 1,
+        _weekSales: { value: 12100 * demoFactor, quantity: 10000 * demoFactor },
+        _weekCharges: { total: 0 },
+        effectif_debut: opening,
+        effectif_fin: remaining,
+        birds: remaining,
+        mort: deaths,
+        mort_pct: opening ? (deaths / opening * 100).toFixed(2) : null,
+        oeufs: eggs,
+        oeufs_cum: cumulativeEggs,
+        ponte_pct: opening ? (eggs / opening * 100).toFixed(2) : null,
+        cumDead: cumulativeDeaths,
+        cumDeadRate: initialBirds ? cumulativeDeaths / initialBirds * 100 : null,
+        cumEggs: cumulativeEggs,
+        normal: Math.max(0, eggs - double - white - broken - lost),
+        double,
+        white,
+        broken,
+        lost,
+        aliment_kg: feed,
+        poidsOeuf: weight,
+        eggMass: eggs && weight ? eggs * weight / 1000 : null,
+        fcr: eggs && weight ? feed / (eggs * weight / 1000) : null,
+        _feedCost: feedCost,
+        feedcost: feedCost,
+        _dailyTotal: dailyCost,
+        cost: dailyCost,
+        costPerEgg: eggs ? dailyCost / eggs : null,
+        depensesSemaine: dailyCost,
+        totalDepenses: Number(row.totalDepenses || 0) * demoFactor,
+        _labor: Number(row._labor || 0) * demoFactor,
+        _salary: Number(row._salary || 0) * demoFactor,
+        _electricity: Number(row._electricity || 0) * demoFactor,
+        sold: null,
+        sales: null,
+        margin: null,
+        valeurPoulette: remaining ? Number(row.totalDepenses || 0) * demoFactor / remaining : null,
+        pulletValue: remaining ? Number(row.totalDepenses || 0) * demoFactor / remaining : null,
+      };
+    });
+  }, [demoBuilding, demoFactor, demoLot]);
   const demoSummary = useMemo(() => {
     const original = DEMO_ROWS.find((row) => row.rowType === 'summary');
     if (!original) return null;
@@ -458,20 +501,45 @@ function GlobalOverviewPage() {
       ...original,
       id: 'demo-summary',
       _weekKey: '2026-10-12',
-      mort: Math.round(original.mort * demoFactor),
-      oeufs: Math.round(original.oeufs * demoFactor),
-      oeufs_cum: Math.round(original.oeufs_cum * demoFactor),
+      mort: demoDays.reduce((total, row) => total + Number(row.mort || 0), 0),
+      mort_pct: (demoBuilding === 'all' ? 1200 : 600) ? (demoDays.reduce((total, row) => total + Number(row.mort || 0), 0) / ((demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1)) * 100).toFixed(2) : null,
+      oeufs: demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0),
+      ponte_pct: demoDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0) ? (demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0) / demoDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0) * 100).toFixed(2) : null,
+      oeufs_cum: demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0),
       aliment_kg: Math.round(original.aliment_kg * demoFactor),
       depensesSemaine: original.depensesSemaine * demoFactor,
       totalDepenses: original.totalDepenses * demoFactor,
       ventesSemaine: original.ventesSemaine * demoFactor,
       _sales: original.ventesSemaine * demoFactor,
       _sold: 10000 * demoFactor,
+      sold: 10000 * demoFactor,
+      sales: original.ventesSemaine * demoFactor,
+      margin: (original.ventesSemaine - original.totalDepenses) * demoFactor,
+      cost: original.totalDepenses * demoFactor,
+      costPerEgg: original.oeufs ? original.totalDepenses / original.oeufs : null,
+      _feedCost: demoDays.reduce((total, row) => total + Number(row.feedcost || 0), 0),
+      feedcost: demoDays.reduce((total, row) => total + Number(row.feedcost || 0), 0),
+      _dailyTotal: original.totalDepenses * demoFactor,
+      _labor: original._labor * demoFactor,
+      _salary: original._salary * demoFactor,
+      _electricity: original._electricity * demoFactor,
+      normal: demoDays.reduce((total, row) => total + Number(row.normal || 0), 0),
+      double: demoDays.reduce((total, row) => total + Number(row.double || 0), 0),
+      white: demoDays.reduce((total, row) => total + Number(row.white || 0), 0),
+      broken: demoDays.reduce((total, row) => total + Number(row.broken || 0), 0),
+      lost: demoDays.reduce((total, row) => total + Number(row.lost || 0), 0),
+      cumDead: demoDays.reduce((total, row) => total + Number(row.mort || 0), 0),
+      cumDeadRate: (demoBuilding === 'all' ? 1200 : 600) ? demoDays.reduce((total, row) => total + Number(row.mort || 0), 0) / ((demoBuilding === 'all' ? 1200 : 600) * (demoLot === 'previous' ? 0.88 : 1)) * 100 : null,
+      cumEggs: demoDays.reduce((total, row) => total + Number(row.oeufs || 0), 0),
+      eggMass: demoDays.reduce((total, row) => total + Number(row.eggMass || 0), 0),
+      fcr: demoDays.reduce((total, row) => total + Number(row.aliment_kg || 0), 0) / demoDays.reduce((total, row) => total + Number(row.eggMass || 0), 0),
+      weeklyEggPrice: original.prixOeuf,
+      pulletValue: (original.totalDepenses * demoFactor) / ((demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1)),
       prixOeuf: original.prixOeuf,
-      birds: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
-      effectif_fin: (demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1),
+      birds: Math.round((demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1)),
+      effectif_fin: Math.round((demoBuilding === 'all' ? 1195 : 598) * (demoLot === 'previous' ? 0.88 : 1)),
     };
-  }, [demoBuilding, demoFactor, demoLot]);
+  }, [demoBuilding, demoFactor, demoLot, demoDays]);
 
   const sourceDays = demoMode ? demoDays : dailyRows;
   const weeks = useMemo(() => [...new Set(sourceDays.map((row) => row._weekKey))].sort(), [sourceDays]);
@@ -548,7 +616,7 @@ function GlobalOverviewPage() {
   const totalEggs = filteredDays.reduce((total, row) => total + Number(row.oeufs || 0), 0);
   const totalBirdDays = filteredDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0);
   const layingRate = totalBirdDays ? totalEggs / totalBirdDays * 100 : null;
-  const totalCost = demoMode ? filteredDays.reduce((total, row) => total + Number(row._dailyTotal || 0), 0) : Number(periodSummary?.cost || 0);
+  const totalCost = demoMode ? Number(demoSummary?.cost || 0) : Number(periodSummary?.cost || 0);
   const salesByWeek = new Map(filteredDays.map((row) => [row._weekKey, row._weekSales || { value: 0 }]));
   const totalSales = [...salesByWeek.values()].reduce((total, row) => total + Number(row.value || 0), 0);
   const actualBuildingDays = new Set(data?.rows.filter((row) => {
