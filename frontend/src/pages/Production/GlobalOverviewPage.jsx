@@ -163,7 +163,7 @@ function aggregateDemoDays(dayRows, label, rowType = 'summary') {
   const sales = sum('_dailySales');
   const sold = sum('_dailySold');
   return {
-    ...row, id: 'demo-' + rowType + '-' + label,
+    ...row, id: 'demo-' + rowType + '-' + dayRows[0].dateIso + '-' + label,
     cost, _dailyTotal: cost, depensesSemaine: cost, costPerEgg: row.oeufs ? cost / row.oeufs : null,
     sales, _sales: sales, ventesSemaine: sales, sold, _sold: sold, margin: sales - cost,
     prixOeuf: sold ? sales / sold : null, weeklyEggPrice: sold ? sales / sold : null,
