@@ -861,6 +861,11 @@ def get_cycle_performance(
             "date": prod.date_production,
             "mort": 0,
             "oeufs": 0,
+            "normal": 0,
+            "double": 0,
+            "white": 0,
+            "broken": 0,
+            "lost": 0,
             "aliment_kg": Decimal("0"),
             "grammage_total": Decimal("0"),
             "grammage_count": 0,
@@ -877,6 +882,15 @@ def get_cycle_performance(
             day["formules"].add(prod.formule)
         if prod.calibre:
             day["calibres"].add(prod.calibre)
+        type_key = {
+            "normal": "normal",
+            "double_jaune": "double",
+            "blanc": "white",
+            "casse": "broken",
+            "perdu": "lost",
+        }.get(prod.type_oeuf)
+        if type_key:
+            day[type_key] += int(prod.nombre_oeufs or 0)
         if prod.type_oeuf not in {"casse", "perdu"}:
             day["oeufs"] += int(prod.nombre_oeufs or 0)
 
@@ -897,6 +911,11 @@ def get_cycle_performance(
             "mort_pct": _ratio_percent(summary["mort"], summary["effectif_debut"]) if summary["effectif_debut"] else "-",
             "oeufs": summary["oeufs"],
             "oeufs_cumul": summary["oeufs"],
+            "normal": summary["normal"],
+            "double": summary["double"],
+            "white": summary["white"],
+            "broken": summary["broken"],
+            "lost": summary["lost"],
             "ponte_pct": _ratio_percent(summary["oeufs"], summary["bird_days"]) if summary["bird_days"] else "-",
             "formule": ", ".join(sorted(summary["formules"])) or "-",
             "aliment_kg": _safe_decimal(summary["aliment_kg"]),
@@ -924,6 +943,11 @@ def get_cycle_performance(
                 "bird_days": 0,
                 "mort": 0,
                 "oeufs": 0,
+                "normal": 0,
+                "double": 0,
+                "white": 0,
+                "broken": 0,
+                "lost": 0,
                 "aliment_kg": Decimal("0"),
                 "formules": set(),
                 "calibres": set(),
@@ -956,6 +980,11 @@ def get_cycle_performance(
             "mort_pct": _ratio_percent(day["mort"], effectif_debut) if effectif_debut else "-",
             "oeufs": day["oeufs"],
             "oeufs_cumul": cumulative_week_eggs,
+            "normal": day["normal"],
+            "double": day["double"],
+            "white": day["white"],
+            "broken": day["broken"],
+            "lost": day["lost"],
             "ponte_pct": _ratio_percent(day["oeufs"], effectif_debut) if effectif_debut else "-",
             "formule": ", ".join(sorted(day["formules"])) or "-",
             "aliment_kg": _safe_decimal(day["aliment_kg"]),
@@ -972,6 +1001,8 @@ def get_cycle_performance(
             week_summary["bird_days"] += effectif_debut or 0
             week_summary["mort"] += day["mort"]
             week_summary["oeufs"] += day["oeufs"]
+            for key in ("normal", "double", "white", "broken", "lost"):
+                week_summary[key] += day[key]
             week_summary["aliment_kg"] += day["aliment_kg"]
             week_summary["grammage_total"] += day["grammage_total"]
             week_summary["grammage_count"] += day["grammage_count"]

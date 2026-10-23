@@ -188,14 +188,11 @@ function GlobalOverviewPage() {
       const cycleIds = selected.cycles.map((cycle) => Number(cycle.id_cycle));
       const startDate = isoDate(selected.cycle.date_debut);
       const endDate = isoDate(selected.cycle.date_fin_reelle) || new Date().toISOString().slice(0, 10);
-      const [performances, charges, transactions, products, entrySets] = await Promise.all([
+      const [performances, charges, transactions, products] = await Promise.all([
         Promise.all(selected.cycles.map((cycle) => productionService.getPerformance(cycle.id_cycle))),
         loadPages('/charges', { date_debut: startDate, date_fin: endDate }),
         loadPages('/transactions', { date_debut: startDate, date_fin: endDate, est_actif: true }),
         loadPages('/produits'),
-        Promise.all(selected.cycles.map((cycle) => loadPages('/productions', {
-          id_cycle: cycle.id_cycle, date_debut: startDate, date_fin: endDate,
-        }))),
       ]);
       const buildingIds = selected.cycles.map((cycle) => Number(cycle.id_batiment));
       const relevantCharges = (charges || []).filter((charge) => {
@@ -205,12 +202,10 @@ function GlobalOverviewPage() {
       const rows = performances.flatMap((performance, index) => (performance.rows || [])
         .filter((row) => row.rowType === 'day')
         .map((row) => ({ ...row, id_cycle: selected.cycles[index].id_cycle, id_batiment: selected.cycles[index].id_batiment, nom_batiment: selected.cycles[index].nom_batiment })));
-      const entries = entrySets.flat().map((entry) => ({ ...entry, dateIso: isoDate(entry.date_production) }));
       setData({
         cycle: performances[0]?.cycle || selected.cycle,
         cycles: selected.cycles,
         rows,
-        entries,
         charges: relevantCharges,
         transactions: transactions || [],
         products: products || [],
@@ -279,13 +274,6 @@ function GlobalOverviewPage() {
       const list = groupedByDate.get(dateIso) || [];
       list.push(row);
       groupedByDate.set(dateIso, list);
-    });
-    const entryTypes = new Map();
-    data.entries.filter((entry) => allowedCycleIds.includes(Number(entry.id_cycle))).forEach((entry) => {
-      const values = entryTypes.get(entry.dateIso) || { normal: 0, double: 0, white: 0, broken: 0, lost: 0 };
-      const key = ({ normal: 'normal', double_jaune: 'double', blanc: 'white', casse: 'broken', perdu: 'lost' })[entry.type_oeuf];
-      if (key) values[key] += Number(entry.nombre_oeufs || 0);
-      entryTypes.set(entry.dateIso, values);
     });
     const chargesByDate = new Map();
     const chargesByWeek = new Map();
@@ -364,7 +352,7 @@ function GlobalOverviewPage() {
       const dailyTotal = dailyCharges + (feedCost || 0);
       cumulativeSpend += dailyTotal;
       const otherLines = charges.filter((charge) => ['other', 'vaccine'].includes(charge._bucket));
-      const typeCounts = entryTypes.get(dateIso) || { normal: 0, double: 0, white: 0, broken: 0, lost: 0 };
+      const typeCounts = { normal: sum('normal'), double: sum('double'), white: sum('white'), broken: sum('broken'), lost: sum('lost') };
       const otherItems = otherLines.map((charge) => ({
         label: charge.libelle,
         quantity: Number(charge.quantite ?? 1),
