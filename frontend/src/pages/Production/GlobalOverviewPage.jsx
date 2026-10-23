@@ -1,12 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Box, Button, CircularProgress, FormControl, MenuItem, Paper, Select,
+  Alert, Box, Button, Checkbox, CircularProgress, Divider, FormControl, FormControlLabel, MenuItem, Paper, Popover, Select,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Typography,
 } from '@mui/material';
 import { get } from '../../services/api';
 import { cycleProductionService, productionService } from '../../services/productionService';
 import { DEMO_LOTS, buildDemoDays } from './globalOverviewDemo';
+
+const COLUMN_GROUPS = [
+  { key: 'effectif', label: 'Effectif & mortalité', fill: ['#eaf0fc', '#283958'], edge: ['#b8c8ec', '#536d9d'] },
+  { key: 'eggs', label: 'Œufs & ponte', fill: ['#e9f5ee', '#223e35'], edge: ['#b8d7c4', '#527d66'] },
+  { key: 'feed', label: 'Alimentation', fill: ['#fff3de', '#463a23'], edge: ['#e3cea2', '#937644'] },
+  { key: 'charge', label: 'Charges', fill: ['#f2edfb', '#392e4d'], edge: ['#cfbfe7', '#806598'] },
+  { key: 'sale', label: 'Ventes & rentabilité', fill: ['#e7f3f5', '#263e47'], edge: ['#b7d5dc', '#507c89'] },
+];
+const COLUMN_PRESETS = {
+  register: ['mort', 'mort_pct', 'oeufs', 'oeufs_cum', 'ponte_pct', 'poidsOeuf', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'cost', 'totalDepenses', 'valeurPoulette', 'sales', 'prixOeuf'],
+  summary: ['birds', 'mort', 'mort_pct', 'oeufs', 'ponte_pct', 'aliment_kg', 'cost', 'sales', 'margin'],
+  production: ['birds', 'mort', 'mort_pct', 'cumDead', 'cumDeadRate', 'normal', 'double', 'white', 'broken', 'lost', 'oeufs', 'oeufs_cum', 'cumEggs', 'ponte_pct', 'poidsOeuf', 'eggMass', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'fcr'],
+  costs: ['formule', 'aliment_kg', 'prix_aliment', 'feedcost', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'cost', 'totalDepenses', 'valeurPoulette', 'sold', 'sales', 'prixOeuf', 'costPerEgg', 'margin'],
+};
+const groupColor = (theme, key, token = 'fill') => COLUMN_GROUPS.find((group) => group.key === key)[token][theme.palette.mode === 'dark' ? 1 : 0];
 
 const LABEL_WIDTH = 160;
 const TEXT_WIDTH = 240;
@@ -21,7 +36,7 @@ const renderColumnValue = (column, row) => ['formule', 'autres'].includes(column
   ? <Box component="span" sx={{ ...wrappedTextSx, width: TEXT_WIDTH }}>{column.value(row)}</Box>
   : column.value(row);
 
-const fmt = (value, digits = 0) => value == null || value === '' || value === '-' ? '—' : Number(value).toLocaleString('fr-FR', { maximumFractionDigits: digits });
+const fmt = (value, digits = 0) => value == null || value === '' || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('fr-FR', { maximumFractionDigits: digits });
 const fmtDh = (value, digits = 2) => value == null || !Number.isFinite(Number(value)) ? '—' : fmt(value, digits) + ' DH';
 const isoDate = (value) => {
   if (!value) return '';
@@ -77,7 +92,7 @@ const groupCycles = (cycles) => {
 
 const toCsv = (rows, cols) => {
   const quote = (value) => '"' + String(value ?? '').replaceAll('"', '""') + '"';
-  return [cols.map((c) => quote(c.label)).join(';'), ...rows.map((row) => cols.map((c) => quote(c.value(row) ?? '')).join(';'))].join('\r\n');
+  return [cols.map((c) => quote(c.label + (c.unit ? ' (' + c.unit + ')' : ''))).join(';'), ...rows.map((row) => cols.map((c) => quote(c.value(row) ?? '')).join(';'))].join('\r\n');
 };
 
 function aggregateDays(dayRows, label, rowType = 'summary') {
@@ -109,6 +124,7 @@ function aggregateDays(dayRows, label, rowType = 'summary') {
     ...typeSummary,
     id: rowType + '-' + (last._weekKey || label),
     rowType,
+    _weekSpan: new Set(dayRows.map((row) => row._weekKey)).size,
     date: label,
     mort: deaths,
     mort_pct: birdDays ? (deaths / birdDays * 100).toFixed(2) : null,
@@ -177,7 +193,11 @@ function GlobalOverviewPage() {
   const [buildingId, setBuildingId] = useState('all');
   const [period, setPeriod] = useState('latest');
   const [groupBy, setGroupBy] = useState('day');
-  const [view, setView] = useState('excel');
+  const [view, setView] = useState('register');
+  const [customColumns, setCustomColumns] = useState(null);
+  const [columnAnchor, setColumnAnchor] = useState(null);
+  const tableRef = useRef(null);
+  const groupRefs = useRef({});
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -241,45 +261,43 @@ function GlobalOverviewPage() {
   useEffect(() => { load(); }, [load]);
 
   const columns = useMemo(() => [
-    { key: 'mort', label: 'Mort', group: 'prod', value: (r) => r.mort },
-    { key: 'mort_pct', label: '%Mort/j', group: 'prod', value: (r) => r.mort_pct == null ? '—' : r.mort_pct + ' %' },
-    { key: 'oeufs', label: 'Oeuf/j', group: 'prod', value: (r) => r.oeufs },
-    { key: 'oeufs_cum', label: 'Oeuf cum/j', group: 'prod', value: (r) => r.oeufs_cum },
-    { key: 'ponte_pct', label: '%ponte', group: 'prod', value: (r) => r.ponte_pct == null ? '—' : r.ponte_pct + ' %' },
+    { key: 'birds', label: 'Effectif restant', unit: 'poules', group: 'effectif', value: (r) => fmt(r.birds) },
+    { key: 'mort', label: 'Mortalité', unit: 'poules', group: 'effectif', value: (r) => fmt(r.mort) },
+    { key: 'mort_pct', label: 'Mortalité', unit: '% / jour', group: 'effectif', value: (r) => fmt(r.mort_pct, 2) },
+    { key: 'cumDead', label: 'Mortalité cumulée', unit: 'lot', group: 'effectif', value: (r) => fmt(r.cumDead) },
+    { key: 'cumDeadRate', label: 'Mortalité cumulée', unit: '% du lot', group: 'effectif', value: (r) => fmt(r.cumDeadRate, 2) },
+    { key: 'normal', label: 'Normaux', unit: 'œufs', group: 'eggs', value: (r) => fmt(r.normal) },
+    { key: 'double', label: 'Doubles jaunes', unit: 'œufs', group: 'eggs', value: (r) => fmt(r.double) },
+    { key: 'white', label: 'Blancs', unit: 'œufs', group: 'eggs', value: (r) => fmt(r.white) },
+    { key: 'broken', label: 'Cassés', unit: 'œufs', group: 'eggs', value: (r) => fmt(r.broken) },
+    { key: 'lost', label: 'Perdus', unit: 'œufs', group: 'eggs', value: (r) => fmt(r.lost) },
+    { key: 'oeufs', label: 'Œufs collectés', unit: 'œufs', group: 'eggs', value: (r) => fmt(r.oeufs) },
+    { key: 'oeufs_cum', label: 'Œufs cumulés', unit: 'semaine', group: 'eggs', value: (r) => r._weekSpan > 1 ? '—' : fmt(r.oeufs_cum) },
+    { key: 'cumEggs', label: 'Œufs cumulés', unit: 'lot', group: 'eggs', value: (r) => fmt(r.cumEggs) },
+    { key: 'ponte_pct', label: 'Taux de ponte', unit: '%', group: 'eggs', value: (r) => fmt(r.ponte_pct, 2) },
+    { key: 'poidsOeuf', label: 'Poids moyen', unit: 'g / œuf', group: 'eggs', value: (r) => fmt(r.poidsOeuf, 1) },
+    { key: 'eggMass', label: 'Masse des œufs', unit: 'kg', group: 'eggs', value: (r) => fmt(r.eggMass, 2) },
     { key: 'formule', label: 'Formule', group: 'feed', value: (r) => r.formule },
-    { key: 'aliment_kg', label: 'Quantité', group: 'feed', unit: 'kg', value: (r) => fmt(r.aliment_kg) },
-    { key: 'prix_aliment', label: 'Prix', group: 'feed', unit: 'DH/kg', value: (r) => fmt(r.prix_aliment, 2) },
-    { key: 'g_poule', label: 'g/poule', group: 'feed', value: (r) => fmt(r.g_poule, 1) },
-    { key: 'g_oeuf', label: 'g/oeuf', group: 'feed', value: (r) => fmt(r.g_oeuf, 1) },
-    { key: 'poidsOeuf', label: 'Poids oeuf', group: 'feed', unit: 'g', value: (r) => fmt(r.poidsOeuf, 1) },
-    { key: 'autres', label: 'Autres dépenses', group: 'misc', value: (r) => r.autres || '—' },
-    { key: 'autresQuantite', label: 'Quantité', group: 'misc', value: (r) => fmt(r.autresQuantite, 2) },
-    { key: 'autresPrix', label: 'Prix', group: 'misc', unit: 'DH/unité', value: (r) => fmt(r.autresPrix, 2) },
-    { key: 'labor', label: 'Main Oeuvre + CNSS', group: 'fin', value: (r) => fmtDh(r._labor) },
-    { key: 'salary', label: 'Salaires', group: 'fin', value: (r) => fmtDh(r._salary) },
-    { key: 'electricity', label: 'Electricité', group: 'fin', value: (r) => fmtDh(r._electricity) },
-    { key: 'depensesSemaine', label: 'Dépenses Semaine', group: 'fin', unit: 'DH', value: (r) => fmtDh(r.depensesSemaine, 0) },
-    { key: 'totalDepenses', label: 'Total Dépenses', group: 'fin', unit: 'DH', value: (r) => fmtDh(r.totalDepenses, 0) },
-    { key: 'ventesSemaine', label: 'Ventes Semaine', group: 'fin', unit: 'DH', value: (r) => r.ventesSemaine == null ? '—' : fmtDh(r.ventesSemaine, 0) },
-    { key: 'valeurPoulette', label: 'Valeur Poulette', group: 'fin', unit: 'DH/poulette', value: (r) => fmtDh(r.valeurPoulette) },
-    { key: 'prixOeuf', label: 'Prix vente moyen oeuf par semaine', group: 'fin', unit: 'DH/oeuf', value: (r) => fmt(r.prixOeuf, 3) },
-    { key: 'birds', label: 'Effectif fin', group: 'prod', value: (r) => fmt(r.birds) },
-    { key: 'cumDead', label: 'Mortalité cumulée', group: 'prod', value: (r) => fmt(r.cumDead) },
-    { key: 'cumDeadRate', label: 'Mortalité cumulée %', group: 'prod', value: (r) => r.cumDeadRate == null ? '—' : fmt(r.cumDeadRate, 2) + ' %' },
-    { key: 'normal', label: 'Normaux', group: 'prod', value: (r) => fmt(r.normal) },
-    { key: 'double', label: 'Doubles jaunes', group: 'prod', value: (r) => fmt(r.double) },
-    { key: 'white', label: 'Blancs', group: 'prod', value: (r) => fmt(r.white) },
-    { key: 'broken', label: 'Cassés', group: 'prod', value: (r) => fmt(r.broken) },
-    { key: 'lost', label: 'Perdus', group: 'prod', value: (r) => fmt(r.lost) },
-    { key: 'cumEggs', label: 'Œufs cumulés du lot', group: 'prod', value: (r) => fmt(r.cumEggs) },
-    { key: 'eggMass', label: 'Masse d’oeufs', group: 'feed', unit: 'kg', value: (r) => fmt(r.eggMass, 2) },
-    { key: 'fcr', label: 'Indice aliment / oeuf', group: 'feed', unit: 'kg/kg', value: (r) => fmt(r.fcr, 2) },
-    { key: 'feedcost', label: 'Coût aliment', group: 'fin', unit: 'DH', value: (r) => fmtDh(r._feedCost) },
-    { key: 'cost', label: 'Coûts de la période', group: 'fin', unit: 'DH', value: (r) => fmtDh(r.cost) },
-    { key: 'costPerEgg', label: 'Coût / oeuf produit', group: 'fin', unit: 'DH/oeuf', value: (r) => fmt(r.costPerEgg, 3) },
-    { key: 'sold', label: 'Oeufs vendus', group: 'fin', value: (r) => fmt(r.sold) },
-    { key: 'sales', label: 'Ventes de la période', group: 'fin', unit: 'DH', value: (r) => fmtDh(r.sales) },
-    { key: 'margin', label: 'Marge estimée', group: 'fin', unit: 'DH', value: (r) => fmtDh(r.margin) },
+    { key: 'aliment_kg', label: 'Quantité aliment', unit: 'kg', group: 'feed', value: (r) => fmt(r.aliment_kg, 1) },
+    { key: 'prix_aliment', label: 'Prix aliment', unit: 'DH / kg', group: 'feed', value: (r) => fmt(r.prix_aliment, 3) },
+    { key: 'g_poule', label: 'Consommation', unit: 'g / poule', group: 'feed', value: (r) => fmt(r.g_poule, 1) },
+    { key: 'g_oeuf', label: 'Consommation', unit: 'g / œuf', group: 'feed', value: (r) => fmt(r.g_oeuf, 1) },
+    { key: 'fcr', label: 'Indice alimentaire', unit: 'kg / kg d’œufs', group: 'feed', value: (r) => fmt(r.fcr, 3) },
+    { key: 'feedcost', label: 'Coût aliment', unit: 'DH', group: 'feed', value: (r) => fmt(r._feedCost, 2) },
+    { key: 'autres', label: 'Autres dépenses', group: 'charge', value: (r) => r.autres || '—' },
+    { key: 'autresQuantite', label: 'Quantité', unit: 'autres dépenses', group: 'charge', value: (r) => fmt(r.autresQuantite, 2) },
+    { key: 'autresPrix', label: 'Prix unitaire', unit: 'DH / unité', group: 'charge', value: (r) => fmt(r.autresPrix, 2) },
+    { key: 'labor', label: 'Main-d’œuvre + CNSS', unit: 'DH', group: 'charge', value: (r) => fmt(r._labor, 2) },
+    { key: 'salary', label: 'Salaires', unit: 'DH', group: 'charge', value: (r) => fmt(r._salary, 2) },
+    { key: 'electricity', label: 'Électricité', unit: 'DH', group: 'charge', value: (r) => fmt(r._electricity, 2) },
+    { key: 'cost', label: 'Dépenses', unit: 'DH', group: 'charge', value: (r) => fmt(r.cost, 2) },
+    { key: 'totalDepenses', label: 'Dépenses cumulées', unit: 'lot · DH', group: 'charge', value: (r) => fmt(r.totalDepenses, 2) },
+    { key: 'valeurPoulette', label: 'Valeur poulette', unit: 'DH / poulette', group: 'charge', value: (r) => fmt(r.valeurPoulette, 2) },
+    { key: 'sold', label: 'Œufs vendus', unit: 'œufs', group: 'sale', value: (r) => fmt(r.sold) },
+    { key: 'sales', label: 'Ventes facturées', unit: 'DH', group: 'sale', value: (r) => fmt(r.sales, 2) },
+    { key: 'prixOeuf', label: 'Prix moyen de vente', unit: 'DH / œuf', group: 'sale', value: (r) => fmt(r.prixOeuf, 3) },
+    { key: 'costPerEgg', label: 'Coût / œuf produit', unit: 'DH / œuf', group: 'sale', value: (r) => fmt(r.costPerEgg, 3) },
+    { key: 'margin', label: 'Marge estimée', unit: 'DH', group: 'sale', value: (r) => fmt(r.margin, 2) },
   ], []);
 
   const dailyRows = useMemo(() => {
@@ -498,15 +516,12 @@ function GlobalOverviewPage() {
 
   const periodSummary = useMemo(() => demoMode ? aggregateDemoDays(filteredDays, 'Total période', 'summary') : aggregateDays(filteredDays, 'Total période', 'summary'), [filteredDays, demoMode]);
   const selectedColumns = useMemo(() => {
-    const keys = {
-      excel: ['mort', 'mort_pct', 'oeufs', 'oeufs_cum', 'ponte_pct', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'poidsOeuf', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'depensesSemaine', 'totalDepenses', 'ventesSemaine', 'valeurPoulette', 'prixOeuf'],
-      summary: ['birds', 'mort', 'mort_pct', 'oeufs', 'ponte_pct', 'aliment_kg', 'cost', 'sales', 'margin'],
-      production: ['birds', 'mort', 'mort_pct', 'cumDead', 'cumDeadRate', 'normal', 'double', 'white', 'broken', 'lost', 'oeufs', 'oeufs_cum', 'cumEggs', 'ponte_pct', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'poidsOeuf', 'eggMass', 'fcr'],
-      costs: ['formule', 'aliment_kg', 'prix_aliment', 'feedcost', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'depensesSemaine', 'totalDepenses', 'ventesSemaine', 'valeurPoulette', 'prixOeuf', 'costPerEgg', 'margin'],
-      full: columns.map((column) => column.key),
-    };
-    return (keys[view] || keys.excel).map((key) => columns.find((column) => column.key === key)).filter(Boolean);
-  }, [columns, view]);
+    const keys = new Set(customColumns || COLUMN_PRESETS[view] || COLUMN_PRESETS.register);
+    return columns.filter((column) => keys.has(column.key)).map((column, index, chosen) => ({
+      ...column, groupStart: index === 0 || chosen[index - 1].group !== column.group,
+    }));
+  }, [columns, view, customColumns]);
+  const selectedKeys = useMemo(() => new Set(selectedColumns.map((column) => column.key)), [selectedColumns]);
 
   const groupedRows = useMemo(() => {
     if (groupBy === 'week') return weekSummaries;
@@ -549,12 +564,43 @@ function GlobalOverviewPage() {
   const lotName = selectedLot?.cycle.nom_cycle || selectedLot?.cycle.souche || ('Lot #' + (selectedLot?.cycle.id_lot || selectedLot?.cycle.id_cycle));
   const detail = (demoMode ? demoDays : dailyRows).find((row) => row.id === detailId);
 
-  const columnGroups = useMemo(() => selectedColumns.reduce((groups, column) => {
-    const last = groups[groups.length - 1];
-    if (last && last.key === column.group) last.count += 1;
-    else groups.push({ key: column.group, count: 1 });
-    return groups;
-  }, []), [selectedColumns]);
+  const columnGroups = useMemo(() => COLUMN_GROUPS.map((group) => ({
+    ...group, count: selectedColumns.filter((column) => column.group === group.key).length,
+  })).filter((group) => group.count), [selectedColumns]);
+
+  const applyPreset = (key) => {
+    setView(key);
+    setCustomColumns(null);
+    tableRef.current?.scrollTo({ left: 0 });
+  };
+  const toggleColumn = (key) => {
+    setCustomColumns((current) => {
+      const keys = new Set(current || COLUMN_PRESETS[view]);
+      if (keys.has(key)) { if (keys.size > 1) keys.delete(key); }
+      else keys.add(key);
+      return [...keys];
+    });
+  };
+  const toggleGroup = (key) => {
+    setCustomColumns((current) => {
+      const keys = new Set(current || COLUMN_PRESETS[view]);
+      const groupKeys = columns.filter((column) => column.group === key).map((column) => column.key);
+      const allSelected = groupKeys.every((columnKey) => keys.has(columnKey));
+      groupKeys.forEach((columnKey) => { if (allSelected) { if (keys.size > 1) keys.delete(columnKey); } else keys.add(columnKey); });
+      return [...keys];
+    });
+  };
+  const jumpToGroup = (key) => {
+    const container = tableRef.current;
+    const header = groupRefs.current[key];
+    if (!container || !header) return;
+    const frozenWidth = container.querySelector('thead th')?.getBoundingClientRect().width || LABEL_WIDTH + 32;
+    const left = container.scrollLeft + header.getBoundingClientRect().left - container.getBoundingClientRect().left - frozenWidth;
+    container.scrollTo({ left: Math.max(0, left), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+  const cellStyle = (column) => (theme) => ({
+    borderLeft: column.groupStart ? '3px solid ' + groupColor(theme, column.group, 'edge') : undefined,
+  });
 
   const handleExport = () => {
     const exportRows = groupedRows.length ? groupedRows : [];
@@ -563,7 +609,7 @@ function GlobalOverviewPage() {
     link.href = URL.createObjectURL(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }));
     link.download = 'suivi-global.csv';
     link.click();
-    URL.revokeObjectURL(link.href);
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
 
   return (
@@ -583,22 +629,22 @@ function GlobalOverviewPage() {
       {demoMode ? (
         <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.5 }}>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Lot</Typography>
-            <Select value={demoLot} onChange={(event) => { setDemoLot(event.target.value); setPeriod('latest'); }} aria-label="Choisir un lot">
+            <Select value={demoLot} onChange={(event) => { setDemoLot(event.target.value); setPeriod('latest'); }} inputProps={{ 'aria-label': 'Choisir un lot' }}>
               <MenuItem value="active">Lot Hisex · en cours</MenuItem><MenuItem value="previous">Lot Lohmann · terminé</MenuItem>
             </Select>
           </FormControl>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Bâtiment</Typography>
-            <Select value={demoBuilding} onChange={(event) => setDemoBuilding(event.target.value)} aria-label="Choisir un bâtiment">
+            <Select value={demoBuilding} onChange={(event) => setDemoBuilding(event.target.value)} inputProps={{ 'aria-label': 'Choisir un bâtiment' }}>
               <MenuItem value="all">Tous les bâtiments</MenuItem><MenuItem value="1">Bâtiment 1</MenuItem><MenuItem value="2">Bâtiment 2</MenuItem>
             </Select>
           </FormControl>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Période</Typography>
-            <Select value={effectivePeriod} onChange={(event) => setPeriod(event.target.value)} aria-label="Choisir une période">
+            <Select value={effectivePeriod} onChange={(event) => setPeriod(event.target.value)} inputProps={{ 'aria-label': 'Choisir une période' }}>
               {periods.map((item) => <MenuItem key={item.key} value={item.key}>{item.label}</MenuItem>)}
             </Select>
           </FormControl>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Regroupement</Typography>
-            <Select value={groupBy} onChange={(event) => setGroupBy(event.target.value)} aria-label="Regrouper les lignes">
+            <Select value={groupBy} onChange={(event) => setGroupBy(event.target.value)} inputProps={{ 'aria-label': 'Regrouper les lignes' }}>
               <MenuItem value="day">Par jour</MenuItem><MenuItem value="week">Par semaine</MenuItem><MenuItem value="month">Par mois</MenuItem>
             </Select>
           </FormControl>
@@ -606,23 +652,23 @@ function GlobalOverviewPage() {
       ) : (
         <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: '1.2fr 1fr 1.5fr 1fr' }, gap: 1.5 }}>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Lot</Typography>
-            <Select value={selectedLot?.key || ''} onChange={(event) => { setLotId(event.target.value); setBuildingId('all'); setPeriod('latest'); }} aria-label="Choisir un lot">
+            <Select value={selectedLot?.key || ''} onChange={(event) => { setLotId(event.target.value); setBuildingId('all'); setPeriod('latest'); }} inputProps={{ 'aria-label': 'Choisir un lot' }}>
               {lots.map((lot) => <MenuItem key={lot.key} value={lot.key}>{lot.cycle.nom_cycle || lot.cycle.souche || ('Lot #' + lot.cycle.id_cycle)} · {lot.cycle.statut || 'en cours'}</MenuItem>)}
             </Select>
           </FormControl>
           <FormControl size="small" disabled={!selectedCycles.length}><Typography variant="caption" color="text.secondary">Bâtiment</Typography>
-            <Select value={buildingId} onChange={(event) => setBuildingId(event.target.value)} aria-label="Choisir un bâtiment">
+            <Select value={buildingId} onChange={(event) => setBuildingId(event.target.value)} inputProps={{ 'aria-label': 'Choisir un bâtiment' }}>
               <MenuItem value="all">Tous les bâtiments</MenuItem>
               {selectedCycles.map((cycle) => <MenuItem key={cycle.id_batiment} value={String(cycle.id_batiment)}>{cycle.nom_batiment || 'Bâtiment ' + cycle.id_batiment}</MenuItem>)}
             </Select>
           </FormControl>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Période</Typography>
-            <Select value={effectivePeriod} onChange={(event) => setPeriod(event.target.value)} aria-label="Choisir une période">
+            <Select value={effectivePeriod} onChange={(event) => setPeriod(event.target.value)} inputProps={{ 'aria-label': 'Choisir une période' }}>
               {periods.map((item) => <MenuItem key={item.key} value={item.key}>{item.label}</MenuItem>)}
             </Select>
           </FormControl>
           <FormControl size="small"><Typography variant="caption" color="text.secondary">Regroupement</Typography>
-            <Select value={groupBy} onChange={(event) => setGroupBy(event.target.value)} aria-label="Regrouper les lignes">
+            <Select value={groupBy} onChange={(event) => setGroupBy(event.target.value)} inputProps={{ 'aria-label': 'Regrouper les lignes' }}>
               <MenuItem value="day">Par jour</MenuItem><MenuItem value="week">Par semaine</MenuItem><MenuItem value="month">Par mois</MenuItem>
             </Select>
           </FormControl>
@@ -651,46 +697,95 @@ function GlobalOverviewPage() {
       {loading && !demoMode ? <Box sx={{ p: 6, display: 'flex', justifyContent: 'center' }}><CircularProgress aria-label="Chargement du registre" /></Box>
         : !data && !demoMode ? <Alert severity="info">Aucun lot de production enregistré.</Alert>
           : <>
-            <Paper variant="outlined" sx={{ p: 1, mb: 1.5, display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                {[
-                  ['excel', 'Registre Excel'], ['summary', 'Synthèse'], ['production', 'Production'], ['costs', 'Coûts & ventes'], ['full', 'Vue complète'],
-                ].map(([key, label]) => <Button key={key} size="small" variant={view === key ? 'contained' : 'text'} onClick={() => setView(key)}>{label}</Button>)}
+            <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={1} sx={{ p: 1.25 }}>
+                <Stack direction="row" spacing={0.5} flexWrap="wrap" alignItems="center" aria-label="Vues du registre">
+                  {[['register', 'Registre'], ['summary', 'Synthèse'], ['production', 'Production'], ['costs', 'Coûts & ventes']].map(([key, label]) => (
+                    <Button key={key} size="small" aria-pressed={!customColumns && view === key} onClick={() => applyPreset(key)} sx={{ fontWeight: 700, bgcolor: !customColumns && view === key ? 'action.selected' : undefined }}>{label}</Button>
+                  ))}
+                  {customColumns && <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>Personnalisé</Typography>}
+                </Stack>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
+                  <Typography variant="caption" color="text.secondary">{selectedColumns.length} colonnes</Typography>
+                  <Button variant="outlined" size="small" aria-haspopup="dialog" aria-expanded={Boolean(columnAnchor)} aria-controls={columnAnchor ? 'global-overview-columns' : undefined} onClick={(event) => setColumnAnchor(event.currentTarget)}>Colonnes</Button>
+                </Stack>
               </Stack>
-              <Typography variant="caption" color="text.secondary">{groupedRows.length} lignes · {selectedColumns.length} colonnes · défilement horizontal</Typography>
-            </Paper>
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: expanded ? 'calc(100vh - 180px)' : '70vh', overflow: 'auto' }}>
-              <Table size="small" stickyHeader sx={{ minWidth: view === 'excel' ? 2650 : view === 'full' ? 3500 : 1200, '& td, & th': { borderRight: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' } }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell rowSpan={2} sx={{ ...stickyLabelSx, zIndex: 5 }}>{groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois'}</TableCell>
-                    {columnGroups.map((group, index) => {
-                      const labels = { prod: 'Effectif & ponte', feed: 'Alimentation & poids', misc: 'Autres dépenses', fin: 'Dépenses & ventes' };
-                      return <TableCell key={group.key + '-' + index} colSpan={group.count} align="center" sx={{ bgcolor: 'background.paper', fontWeight: 700 }}>{labels[group.key]}</TableCell>;
+              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ px: 1.25, pb: 1.25 }} aria-label="Catégories de colonnes">
+                {COLUMN_GROUPS.map((group) => (
+                  <Button key={group.key} size="small" variant="outlined" disabled={!columnGroups.some((shown) => shown.key === group.key)} onClick={() => jumpToGroup(group.key)} sx={{ textTransform: 'none', fontSize: 11, borderColor: 'divider', color: 'text.primary', gap: 0.75 }}>
+                    <Box component="span" aria-hidden="true" sx={(theme) => ({ width: 7, height: 7, flexShrink: 0, borderRadius: '2px', bgcolor: groupColor(theme, group.key, 'edge') })} />{group.label}
+                  </Button>
+                ))}
+              </Stack>
+              <TableContainer ref={tableRef} tabIndex={0} role="region" aria-label="Registre de production" sx={{ maxHeight: expanded ? 'calc(100vh - 180px)' : '70vh', overflow: 'auto' }}>
+                <Table size="small" stickyHeader sx={{ minWidth: LABEL_WIDTH + 32 + selectedColumns.reduce((total, column) => total + (['formule', 'autres'].includes(column.key) ? TEXT_WIDTH + 32 : 144), 0), '& td, & th': { fontVariantNumeric: 'tabular-nums' } }}>
+                  <TableHead>
+                    <TableRow sx={{ height: 42 }}>
+                      <TableCell rowSpan={2} sx={{ ...stickyLabelSx, zIndex: 5, borderRight: '1px solid', borderColor: 'divider' }}>{groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois'}</TableCell>
+                      {columnGroups.map((group) => (
+                        <TableCell key={group.key} ref={(node) => { if (node) groupRefs.current[group.key] = node; else delete groupRefs.current[group.key]; }} colSpan={group.count} align="left" sx={(theme) => ({ top: 0, height: 42, py: 0.5, bgcolor: groupColor(theme, group.key), borderLeft: '3px solid ' + groupColor(theme, group.key, 'edge'), fontWeight: 700, fontSize: 12, lineHeight: 1.3, whiteSpace: 'normal' })}>{group.label}</TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow>
+                      {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'} sx={(theme) => ({ ...cellStyle(column)(theme), top: 42, height: 76, bgcolor: groupColor(theme, column.group), fontWeight: 700, whiteSpace: 'normal' })}>
+                        <Box sx={{ width: ['formule', 'autres'].includes(column.key) ? TEXT_WIDTH : 112, maxWidth: '100%' }}>{column.label}<Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 11, mt: 0.25 }}>{column.unit || '\u00a0'}</Typography></Box>
+                      </TableCell>)}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {displayRows.map((row, index) => {
+                      const summary = row.rowType === 'summary';
+                      return <TableRow key={row.id} sx={(theme) => ({
+                        '& td': { fontWeight: summary ? 700 : 400, bgcolor: summary ? (theme.palette.mode === 'dark' ? '#273750' : '#edf2fc') : index % 2 ? 'background.default' : 'background.paper', borderTop: summary ? '1px solid ' + groupColor(theme, 'effectif', 'edge') : undefined, whiteSpace: 'nowrap' },
+                        '&:hover td': { bgcolor: theme.palette.mode === 'dark' ? '#30415b' : '#e9eef7' },
+                      })}>
+                        <TableCell sx={{ ...stickyLabelSx, zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}>
+                          <Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>
+                            {row.rowType === 'day' ? <Button size="small" onClick={() => setDetailId(row.id)} sx={{ minWidth: 0, maxWidth: '100%', p: 0, textTransform: 'none', fontWeight: 700, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{row.date}</Button> : row.date}
+                          </Box>
+                        </TableCell>
+                        {selectedColumns.map((column) => <TableCell key={column.key} sx={cellStyle(column)} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, row)}</TableCell>)}
+                      </TableRow>;
                     })}
-                  </TableRow>
-                  <TableRow>{selectedColumns.map((column) => <TableCell key={column.key} sx={{ top: 37, bgcolor: 'background.paper', fontWeight: 700 }}>{column.label}{column.unit && <Typography component="span" variant="caption" color="text.secondary"> · {column.unit}</Typography>}</TableCell>)}</TableRow>
-                </TableHead>
-                <TableBody>
-                  {displayRows.map((row) => {
-                    const summary = row.rowType === 'summary';
-                    return <TableRow key={row.id} hover sx={{ bgcolor: summary ? 'action.hover' : undefined, '& td': { fontWeight: summary ? 700 : 400 } }}>
-                      <TableCell sx={{ ...stickyLabelSx, zIndex: 3, bgcolor: summary ? 'background.default' : 'background.paper', fontWeight: 700 }}>
-                        <Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>
-                          {row.rowType === 'day' ? <Button size="small" onClick={() => setDetailId(row.id)} sx={{ minWidth: 0, maxWidth: '100%', p: 0, textTransform: 'none', fontWeight: 700, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{row.date}</Button> : row.date}
-                        </Box>
-                      </TableCell>
-                      {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, row)}</TableCell>)}
-                    </TableRow>;
-                  })}
-                  {!displayRows.length && <TableRow><TableCell colSpan={selectedColumns.length + 1} align="center">Aucune donnée pour ces filtres.</TableCell></TableRow>}
-                </TableBody>
-                {periodSummary && <TableBody><TableRow sx={{ '& td': { fontWeight: 800, bgcolor: 'action.selected' }, '& td:first-of-type': { bgcolor: 'background.paper' } }}>
-                  <TableCell sx={{ ...stickyLabelSx, zIndex: 3 }}><Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>Total période</Box></TableCell>
-                  {selectedColumns.map((column) => <TableCell key={column.key} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, periodSummary)}</TableCell>)}
-                </TableRow></TableBody>}
-              </Table>
-            </TableContainer>
+                    {!displayRows.length && <TableRow><TableCell colSpan={selectedColumns.length + 1} align="center">Aucune donnée pour ces filtres.</TableCell></TableRow>}
+                  </TableBody>
+                  {periodSummary && <TableBody><TableRow sx={(theme) => ({ '& td': { fontWeight: 800, bgcolor: theme.palette.mode === 'dark' ? '#2c3e5c' : '#e6edfb', borderTop: '2px solid ' + groupColor(theme, 'effectif', 'edge'), whiteSpace: 'nowrap' } })}>
+                    <TableCell sx={{ ...stickyLabelSx, zIndex: 3, borderRight: '1px solid', borderColor: 'divider' }}><Box component="span" sx={{ ...wrappedTextSx, width: LABEL_WIDTH }}>Total période</Box></TableCell>
+                    {selectedColumns.map((column) => <TableCell key={column.key} sx={cellStyle(column)} align={['formule', 'autres'].includes(column.key) ? 'left' : 'right'}>{renderColumnValue(column, periodSummary)}</TableCell>)}
+                  </TableRow></TableBody>}
+                </Table>
+              </TableContainer>
+              <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="caption" color="text.secondary">Date et en-têtes figés</Typography>
+                <Typography variant="caption" color="text.secondary">{filteredDays.length} journées · {groupedRows.length} lignes affichées</Typography>
+              </Stack>
+            </Paper>
+            <Popover id="global-overview-columns" open={Boolean(columnAnchor)} anchorEl={columnAnchor} onClose={() => setColumnAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }} PaperProps={{ role: 'dialog', 'aria-label': 'Choisir les colonnes', sx: { width: 390, maxWidth: 'calc(100vw - 32px)' } }}>
+              <Box sx={{ p: 2 }}>
+                <Typography variant="subtitle1" fontWeight={800}>Colonnes du registre</Typography>
+                <Typography variant="body2" color="text.secondary">Afficher uniquement les indicateurs utiles.</Typography>
+                <Stack direction="row" gap={1} sx={{ mt: 1 }} flexWrap="wrap">
+                  <Button size="small" onClick={() => setCustomColumns(columns.map((column) => column.key))}>Tout afficher</Button>
+                  <Button size="small" onClick={() => applyPreset('register')}>Rétablir Registre</Button>
+                </Stack>
+              </Box>
+              <Divider />
+              <Box sx={{ maxHeight: 350, overflow: 'auto', px: 2 }}>
+                {COLUMN_GROUPS.map((group) => {
+                  const options = columns.filter((column) => column.group === group.key);
+                  const count = options.filter((column) => selectedKeys.has(column.key)).length;
+                  return <Box key={group.key} sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <FormControlLabel sx={{ m: 0 }} control={<Checkbox size="small" checked={count === options.length} indeterminate={count > 0 && count < options.length} onChange={() => toggleGroup(group.key)} />} label={<Typography variant="body2" fontWeight={700}>{group.label}</Typography>} />
+                    {options.map((column) => <FormControlLabel key={column.key} sx={{ display: 'flex', ml: 2, mr: 0, alignItems: 'flex-start' }} control={<Checkbox size="small" sx={{ py: 0.75 }} checked={selectedKeys.has(column.key)} disabled={selectedColumns.length === 1 && selectedKeys.has(column.key)} onChange={() => toggleColumn(column.key)} />} label={<Typography variant="body2" sx={{ py: 0.75 }}>{column.label}{column.unit && ' · ' + column.unit}</Typography>} />)}
+                  </Box>;
+                })}
+              </Box>
+              <Divider />
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 1.5 }}>
+                <Typography variant="caption" color="text.secondary">{selectedColumns.length} / {columns.length} colonnes</Typography>
+                <Button size="small" variant="contained" onClick={() => setColumnAnchor(null)}>Terminer</Button>
+              </Stack>
+            </Popover>
             {detail && <Paper variant="outlined" sx={{ mt: 1.5, p: 2 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                 <Typography variant="h6">Détail · {detail.date} · {demoMode ? (demoBuilding === 'all' ? 'tous les bâtiments' : 'Bâtiment ' + demoBuilding) : buildingId === 'all' ? 'tous les bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment}</Typography>
