@@ -175,6 +175,11 @@ class ProductionPerformanceRow(BaseModel):
     mort_pct: Optional[Decimal | str] = None
     oeufs: Optional[int] = None
     oeufs_cumul: Optional[int] = None
+    normal: Optional[int] = None
+    double: Optional[int] = None
+    white: Optional[int] = None
+    broken: Optional[int] = None
+    lost: Optional[int] = None
     ponte_pct: Optional[Decimal | str] = None
     formule: Optional[str] = None
     aliment_kg: Optional[Decimal] = None
