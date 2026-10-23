@@ -43,6 +43,15 @@ const loadPages = async (path, params = {}) => {
 };
 const parseMoney = (charge) => Number(charge.montant || 0);
 const parseRowDate = (row) => dateFromDisplay(row.date);
+const DEMO_ROWS = [
+  { id: 'demo-1', rowType: 'day', date: '12/10/2026', mort: 2, mort_pct: '0.17%', oeufs: 1032, oeufs_cum: 1032, ponte_pct: '86.0%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '133.7', poidsOeuf: 62.5, autres: 'Desinfectant: 1 x 180 DH', autresQuantite: '1', autresPrix: '180', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 801, totalDepenses: 801, ventesSemaine: null, valeurPoulette: 0.67, prixOeuf: null },
+  { id: 'demo-2', rowType: 'day', date: '13/10/2026', mort: 1, mort_pct: '0.08%', oeufs: 1040, oeufs_cum: 2072, ponte_pct: '86.8%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '132.7', poidsOeuf: 62.7, autres: 'Litiere: 4 x 45 DH', autresQuantite: '4', autresPrix: '45', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 801, totalDepenses: 1602, ventesSemaine: null, valeurPoulette: 1.34, prixOeuf: null },
+  { id: 'demo-3', rowType: 'day', date: '14/10/2026', mort: 0, mort_pct: '0.00%', oeufs: 1055, oeufs_cum: 3127, ponte_pct: '88.1%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '130.8', poidsOeuf: 62.8, autres: 'Vaccin: 2 x 95 DH', autresQuantite: '2', autresPrix: '95', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 811, totalDepenses: 2413, ventesSemaine: null, valeurPoulette: 2.02, prixOeuf: null },
+  { id: 'demo-4', rowType: 'day', date: '15/10/2026', mort: 1, mort_pct: '0.08%', oeufs: 1062, oeufs_cum: 4189, ponte_pct: '88.6%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '130.0', poidsOeuf: 62.9, autres: 'Reparation abreuvoir: 1 x 350 DH', autresQuantite: '1', autresPrix: '350', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 971, totalDepenses: 3384, ventesSemaine: null, valeurPoulette: 2.83, prixOeuf: null },
+  { id: 'demo-5', rowType: 'day', date: '16/10/2026', mort: 1, mort_pct: '0.08%', oeufs: 1070, oeufs_cum: 5259, ponte_pct: '89.3%', formule: '17-1% Sem vita', aliment_kg: 138, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '129.0', poidsOeuf: 62.8, autres: 'Emballage: 1 x 75 DH', autresQuantite: '1', autresPrix: '75', _labor: 0, _salary: 0, _electricity: 0, depensesSemaine: 696, totalDepenses: 4080, ventesSemaine: null, valeurPoulette: 3.43, prixOeuf: null },
+  { id: 'demo-week', rowType: 'summary', date: 'Total semaine', mort: 5, mort_pct: '0.42%', oeufs: 5259, oeufs_cum: 5259, ponte_pct: '87.7%', formule: '17-1% Sem vita', aliment_kg: 690, prix_aliment: 4.5, g_poule: '115.0', g_oeuf: '131.2', poidsOeuf: 62.7, autres: '975.00 DH', autresQuantite: '-', autresPrix: '-', _labor: 500, _salary: 1250, _electricity: 280, depensesSemaine: 6110, totalDepenses: 6110, ventesSemaine: 12100, valeurPoulette: 5.11, prixOeuf: 1.21 },
+];
+
 const toCsv = (rows, cols) => {
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
   return [cols.map((c) => quote(c.label)).join(';'), ...rows.map((row) => cols.map((c) => quote(c.value(row) ?? '')).join(';'))].join('\r\n');
@@ -55,6 +64,7 @@ function GlobalOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [showExample, setShowExample] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -230,7 +240,8 @@ function GlobalOverviewPage() {
     }
     return result;
   }, [data]);
-  const displayRows = useMemo(() => rows, [rows]);
+  const previewMode = showExample || (!loading && !data && !error);
+  const displayRows = useMemo(() => previewMode ? DEMO_ROWS : rows, [previewMode, rows]);
   const columns = useMemo(() => [
     { key: 'mort', label: 'Mort', value: (r) => r.mort },
     { key: 'mort_pct', label: '%Mort/j', value: (r) => r.mort_pct },
@@ -276,24 +287,32 @@ function GlobalOverviewPage() {
         </Box>
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" onClick={() => setRefresh((value) => value + 1)}>Actualiser</Button>
+          <Button variant="outlined" onClick={() => setShowExample((value) => !value)} disabled={!data && previewMode}>{previewMode ? "Données fictives" : "Voir un exemple"}</Button>
           <Button variant="contained" onClick={handleExport} disabled={!displayRows.length}>Exporter CSV</Button>
         </Stack>
       </Stack>
-      <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-        <Typography variant="body2" fontWeight={700}>Lot</Typography>
-        <FormControl size="small" sx={{ minWidth: 240 }}>
-          <Select value={cycleId} displayEmpty onChange={(event) => setCycleId(event.target.value)} aria-label="Choisir un lot">
-            {cycles.map((cycle) => <MenuItem key={cycle.id_cycle} value={String(cycle.id_cycle)}>{cycle.nom_cycle || cycle.nom_lot || `Lot #${cycle.id_cycle}`}  |  {cycle.date_debut || ''}</MenuItem>)}
-          </Select>
-        </FormControl>
-        {selectedCycle && <Typography variant="body2" color="text.secondary">Effectif initial : {fmt(selectedCycle.effectif_initial)} poules</Typography>}
-      </Paper>
+      {previewMode ? (
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+          <Typography variant="body2" fontWeight={700}>Lot exemple · 1 200 poules · semaine du 12 au 16/10/2026</Typography>
+        </Paper>
+      ) : (
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Typography variant="body2" fontWeight={700}>Lot</Typography>
+          <FormControl size="small" sx={{ minWidth: 240 }}>
+            <Select value={cycleId} displayEmpty onChange={(event) => setCycleId(event.target.value)} aria-label="Choisir un lot">
+              {cycles.map((cycle) => <MenuItem key={cycle.id_cycle} value={String(cycle.id_cycle)}>{cycle.nom_cycle || cycle.nom_lot || `Lot #${cycle.id_cycle}`}  |  {cycle.date_debut || ''}</MenuItem>)}
+            </Select>
+          </FormControl>
+          {selectedCycle && <Typography variant="body2" color="text.secondary">Effectif initial : {fmt(selectedCycle.effectif_initial)} poules</Typography>}
+        </Paper>
+      )}
       <Alert severity="info" sx={{ mb: 2 }}>
         Les colonnes de charges et ventes utilisent les ecritures enregistrees. Le prix aliment reprend le prix moyen des achats dont le nom contient Aliment ou Feed; le calcul suppose que la quantite achetee est en kg. La valeur poulette est une estimation (depenses cumulees divisees par l effectif restant) a confirmer avec la formule exacte du fichier Excel.
       </Alert>
+      {previewMode && <Alert severity="warning" sx={{ mb: 2 }}>Aperçu avec des données fictives uniquement. Rien n'a été ajouté à la base de données.</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {loading ? <Box sx={{ p: 6, display: 'flex', justifyContent: 'center' }}><CircularProgress aria-label="Chargement du registre" /></Box>
-        : !data ? <Alert severity="info">Aucun lot de production enregistr�.</Alert>
+      {loading && !previewMode ? <Box sx={{ p: 6, display: 'flex', justifyContent: 'center' }}><CircularProgress aria-label="Chargement du registre" /></Box>
+        : !data && !previewMode ? <Alert severity="info">Aucun lot de production enregistr�.</Alert>
           : <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: '70vh', overflow: 'auto' }}>
             <Table size="small" stickyHeader sx={{ minWidth: 2650, '& td, & th': { borderRight: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' } }}>
               <TableHead>
