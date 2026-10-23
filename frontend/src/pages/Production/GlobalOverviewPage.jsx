@@ -82,7 +82,9 @@ function aggregateDays(dayRows, label, rowType = 'summary') {
   const deaths = sum('mort');
   const birdDays = sum('effectif_debut');
   const feed = sum('aliment_kg');
-  const cost = sum('_dailyTotal');
+  const chargesByWeek = new Map();
+  dayRows.forEach((row) => { if (!chargesByWeek.has(row._weekKey)) chargesByWeek.set(row._weekKey, Number(row._weekCharges?.total || 0)); });
+  const cost = sum('_feedCost') + [...chargesByWeek.values()].reduce((total, amount) => total + amount, 0);
   const salesWeeks = new Map();
   dayRows.forEach((row) => {
     if (!salesWeeks.has(row._weekKey)) salesWeeks.set(row._weekKey, row._weekSales || { value: 0, quantity: 0 });
@@ -404,6 +406,7 @@ function GlobalOverviewPage() {
         _electricity: charges.filter((charge) => charge._bucket === 'electricity').reduce((total, charge) => total + parseMoney(charge), 0),
         _feedCost: feedCost || 0,
         _dailyTotal: dailyTotal,
+        _weekCharges: weekCharges,
         _weekCost: weekCharges.total + [...groupedByDate.entries()].filter(([date]) => weekStart(date) === key).reduce((total, [, rows]) => {
           const d = isoDate(rows[0].date);
           const dayCharge = (chargesByDate.get(d) || []).reduce((sum, charge) => sum + parseMoney(charge), 0);
@@ -463,8 +466,7 @@ function GlobalOverviewPage() {
       row._sold = sales.quantity;
       row.prixOeuf = sales.quantity ? sales.value / sales.quantity : null;
       row.weeklyEggPrice = row.prixOeuf;
-      row.depensesSemaine = days.reduce((total, day) => total + day._dailyTotal, 0);
-      row.cost = row.depensesSemaine;
+      row.depensesSemaine = row.cost;
       row.margin = sales.value - row.depensesSemaine;
       row.date = 'Total semaine · ' + weekLabel(key);
       return row;
@@ -514,7 +516,7 @@ function GlobalOverviewPage() {
   const totalEggs = demoMode ? 5259 : filteredDays.reduce((total, row) => total + row.oeufs, 0);
   const totalBirdDays = filteredDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0);
   const layingRate = totalBirdDays ? totalEggs / totalBirdDays * 100 : null;
-  const totalCost = demoMode ? 6110 : filteredDays.reduce((total, row) => total + row._dailyTotal, 0);
+  const totalCost = demoMode ? 6110 : Number(periodSummary?.cost || 0);
   const salesByWeek = new Map(filteredDays.map((row) => [row._weekKey, row._weekSales || { value: 0 }]));
   const totalSales = demoMode ? 12100 : [...salesByWeek.values()].reduce((total, row) => total + Number(row.value || 0), 0);
   const actualBuildingDays = new Set(data?.rows.filter((row) => {
@@ -523,8 +525,11 @@ function GlobalOverviewPage() {
     const inPeriod = effectivePeriod === 'all' || weekStart(day) === effectivePeriod;
     return allowed && inPeriod;
   }).map((row) => Number(row.id_batiment) + ':' + parseRowDate(row)) || []).size;
-  const coverageStart = effectivePeriod === 'all' ? isoDate(selectedLot?.cycle.date_debut) : effectivePeriod;
-  const coverageEnd = effectivePeriod === 'all' ? (isoDate(selectedLot?.cycle.date_fin_reelle) || new Date().toISOString().slice(0, 10)) : weekEnd(effectivePeriod);
+  const cycleStart = isoDate(selectedLot?.cycle.date_debut);
+  const cycleEnd = isoDate(selectedLot?.cycle.date_fin_reelle) || new Date().toISOString().slice(0, 10);
+  const coverageStart = effectivePeriod === 'all' ? cycleStart : (effectivePeriod < cycleStart ? cycleStart : effectivePeriod);
+  const selectedWeekEnd = effectivePeriod === 'all' ? cycleEnd : weekEnd(effectivePeriod);
+  const coverageEnd = selectedWeekEnd > cycleEnd ? cycleEnd : selectedWeekEnd;
   const coverageDays = coverageStart && coverageEnd ? Math.max(0, Math.floor((new Date(coverageEnd + 'T12:00:00') - new Date(coverageStart + 'T12:00:00')) / 86400000) + 1) : 0;
   const selectedBuildings = selectedCycles.filter((cycle) => buildingId === 'all' || Number(cycle.id_batiment) === Number(buildingId));
   const expectedBuildingDays = demoMode ? 14 : coverageDays * selectedBuildings.length;
@@ -532,6 +537,13 @@ function GlobalOverviewPage() {
   const lotStatus = ['termine', 'terminé', 'cloture', 'clôturé'].includes(statusName) ? 'terminé' : 'en cours';
   const lotName = selectedLot?.cycle.nom_cycle || selectedLot?.cycle.souche || ('Lot #' + (selectedLot?.cycle.id_lot || selectedLot?.cycle.id_cycle));
   const detail = dailyRows.find((row) => row.id === detailId);
+
+  const columnGroups = useMemo(() => selectedColumns.reduce((groups, column) => {
+    const last = groups[groups.length - 1];
+    if (last && last.key === column.group) last.count += 1;
+    else groups.push({ key: column.group, count: 1 });
+    return groups;
+  }, []), [selectedColumns]);
 
   const handleExport = () => {
     const exportRows = groupedRows.length ? groupedRows : [];
@@ -626,9 +638,9 @@ function GlobalOverviewPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell rowSpan={2} sx={{ position: 'sticky', left: 0, zIndex: 5, width: 160, minWidth: 160, maxWidth: 160, bgcolor: 'background.paper' }}>{groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois'}</TableCell>
-                    {[...new Set(selectedColumns.map((column) => column.group))].map((group) => {
+                    {columnGroups.map((group, index) => {
                       const labels = { prod: 'Effectif & ponte', feed: 'Alimentation & poids', misc: 'Autres dépenses', fin: 'Dépenses & ventes' };
-                      return <TableCell key={group} colSpan={selectedColumns.filter((column) => column.group === group).length} align="center" sx={{ bgcolor: 'background.paper', fontWeight: 700 }}>{labels[group]}</TableCell>;
+                      return <TableCell key={group.key + '-' + index} colSpan={group.count} align="center" sx={{ bgcolor: 'background.paper', fontWeight: 700 }}>{labels[group.key]}</TableCell>;
                     })}
                   </TableRow>
                   <TableRow>{selectedColumns.map((column) => <TableCell key={column.key} sx={{ top: 37, bgcolor: 'background.paper', fontWeight: 700 }}>{column.label}{column.unit && <Typography component="span" variant="caption" color="text.secondary"> · {column.unit}</Typography>}</TableCell>)}</TableRow>
