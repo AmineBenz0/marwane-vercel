@@ -798,8 +798,7 @@ function GlobalOverviewPage() {
                   </TableRow></TableBody>}
                 </Table>
               </TableContainer>
-              <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary">Date et en-têtes figés</Typography>
+              <Stack direction="row" justifyContent="flex-end" flexWrap="wrap" gap={1} sx={{ px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="caption" color="text.secondary">{filteredDays.length} journées · {groupedRows.length} lignes affichées</Typography>
               </Stack>
             </Paper>
@@ -853,7 +852,6 @@ function GlobalOverviewPage() {
         <DialogContent><Typography variant="caption" sx={{ display: 'block', mb: 1 }}>{textDetail?.date}</Typography><Typography sx={wrappedTextSx}>{textDetail?.value}</Typography></DialogContent>
         <DialogActions><Button onClick={() => setTextDetail(null)}>Fermer</Button></DialogActions>
       </Dialog>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.25 }}>Les filtres mettent à jour les indicateurs et le tableau. Les ventes correspondent aux montants facturés.</Typography>
     </Box>
   );
 }
