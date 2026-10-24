@@ -119,17 +119,21 @@ def protect_production_source(db, source, *, quantity=0, category=None, producti
         raise HTTPException(409, "Des œufs de cette saisie sont déjà vendus. Annulez les ventes concernées avant de corriger leur origine ou de réduire la production.")
 
 
-def sale_sources(db, id_batiment, production_date, exclude_transaction_id=None):
+def sale_sources(db, id_batiment, production_date=None, exclude_transaction_id=None, *, through_date=None):
     # Exclusion is only for editing an existing sale from this building.
     if exclude_transaction_id:
         tx = db.get(Transaction, exclude_transaction_id)
         if not tx or tx.id_batiment != id_batiment:
             raise HTTPException(400, "Transaction incompatible avec ce bâtiment.")
-    rows, balances = source_balances(db, exclude_transaction_id=exclude_transaction_id)
+    rows, balances = source_balances(db, exclude_transaction_id=exclude_transaction_id,
+                                    through_date=through_date)
     return [{
         'id_production': p.id_production, 'date_production': p.date_production,
         'id_batiment': p.id_batiment, 'type_oeuf': p.type_oeuf, 'calibre': p.calibre,
         'grammage': p.grammage, 'nombre_oeufs': p.nombre_oeufs,
         'disponible': max(0, balances[p.id_production]) if p.type_oeuf not in {'casse', 'perdu'} else 0,
         'vendable': p.type_oeuf not in {'casse', 'perdu'} and p.nombre_oeufs > 0,
-    } for p in rows if p.id_batiment == id_batiment and p.date_production == production_date]
+    } for p in rows if p.id_batiment == id_batiment
+       and (production_date is None or p.date_production == production_date)
+       and (through_date is None or (p.type_oeuf not in {'casse', 'perdu'}
+                                    and balances[p.id_production] > 0))]

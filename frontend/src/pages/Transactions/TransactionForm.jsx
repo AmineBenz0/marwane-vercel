@@ -65,6 +65,8 @@ import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
 
+const EMPTY_INITIAL_VALUES = {};
+
 const today = () => new Date().toISOString().split('T')[0];
 
 const requiredFieldShake = keyframes`
@@ -285,13 +287,15 @@ function TransactionForm({
   open = false,
   onClose,
   onSubmit,
-  initialValues = {},
+  initialValues: providedInitialValues = EMPTY_INITIAL_VALUES,
   loading = false,
   errorMessage = null,
   prefillClientId = null,
   prefillFournisseurId = null,
   prefillBatimentId = null,
 }) {
+  const initialValues = providedInitialValues?.id_transaction ? providedInitialValues : EMPTY_INITIAL_VALUES;
+
   // État pour les données de référence
   const [clients, setClients] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -1149,79 +1153,7 @@ function TransactionForm({
                           (parseFloat(ligne.quantite) || 0) *
                           (parseFloat(ligne.prix_unitaire) || 0);
                   const shouldShowBatimentSource = watchedTypeEntite === 'client';
-                  
-                        return (
-                    <Paper
-                      key={index}
-                      variant="outlined"
-                      sx={{ p: { xs: 1.25, sm: 1.75 }, borderRadius: 2.5, bgcolor: 'background.paper' }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, gap: 1 }}>
-                        <Typography variant="subtitle2" fontWeight={800}>{watchedTypeEntite === 'client' ? 'Vente' : 'Produit'} {index + 1}</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                          <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
-                            <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total de la ligne : {ligneTotal.toFixed(2)} MAD</Typography>
-                          </Box>
-                          {!isEditing && watchedLignes.length > 1 && (
-                            <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          )}
-                        </Box>
-                      </Box>
-                      {shouldShowBatimentSource && <ProductionSourcePicker
-                        index={index} control={control} setValue={setValue} batiments={batiments}
-                        disabled={loading} transactionId={initialValues.id_transaction}
-                        saleDate={watch('date_transaction')} />}
-                      <Grid container spacing={1.25}>
-                        {!shouldShowBatimentSource && <>
-                        {/* Produit */}
-                        <Grid item xs={12} md={4}>
-                              <Controller
-                                name={`lignes.${index}.id_produit`}
-                                control={control}
-                                render={({ field, fieldState: { error } }) => (
-                                <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
-                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
-                                    <Select
-                                      {...field}
-                                      size="small"
-                                      value={field.value || ''}
-                                    label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}
-                                      disabled={loading}
-                                      onChange={(event) => {
-                                        field.onChange(event);
-                                        const selected = produits.find(p => Number(p.id_produit) === Number(event.target.value));
-                                        if (!isEggProduct(selected)) {
-                                          setValue(`lignes.${index}.id_batiment`, '');
-                                        }
-                                      }}
-                                    >
-                                      <MenuItem value="">
-                                      <em>{watchedTypeEntite === 'client' ? 'Sélectionner le produit vendu' : 'Sélectionner le produit acheté'}</em>
-                                      </MenuItem>
-                                      {produits.map((produit) => (
-                                        <MenuItem
-                                          key={produit.id_produit}
-                                          value={produit.id_produit}
-                                        >
-                                          {produit.nom_produit}
-                                        </MenuItem>
-                                      ))}
-                                    </Select>
-                                    {error && (
-                                      <FormHelperText error>
-                                        {error.message === 'Le produit est requis'
-                                          ? `Veuillez sélectionner ${watchedTypeEntite === 'client' ? 'le produit vendu' : 'le produit acheté'}.`
-                                          : error.message}
-                                      </FormHelperText>
-                                    )}
-                                  </FormControl>
-                                )}
-                              />
-                          </Grid>
-
-                          </>}
+                  const amountFields = (<>
                           {/* Quantité */}
                           <Grid item xs={12} sm={6} md={4}>
                               <Controller
@@ -1287,8 +1219,81 @@ function TransactionForm({
                                 )}
                               />
                           </Grid>
+                  </>);
+                  
+                        return (
+                    <Paper
+                      key={index}
+                      variant="outlined"
+                      sx={{ p: { xs: 1.25, sm: 1.75 }, borderRadius: 2.5, bgcolor: 'background.paper' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, gap: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={800}>{watchedTypeEntite === 'client' ? 'Vente' : 'Produit'} {index + 1}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
+                            <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total de la ligne : {ligneTotal.toFixed(2)} MAD</Typography>
+                          </Box>
+                          {!isEditing && watchedLignes.length > 1 && (
+                            <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Box>
+                      </Box>
+                      {shouldShowBatimentSource && <ProductionSourcePicker
+                        index={index} control={control} setValue={setValue} batiments={batiments}
+                        disabled={loading} transactionId={initialValues.id_transaction}
+                        saleDate={watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
+                      <Grid container spacing={1.25}>
+                        {!shouldShowBatimentSource && <>
+                        {/* Produit */}
+                        <Grid item xs={12} md={4}>
+                              <Controller
+                                name={`lignes.${index}.id_produit`}
+                                control={control}
+                                render={({ field, fieldState: { error } }) => (
+                                <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
+                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
+                                    <Select
+                                      {...field}
+                                      size="small"
+                                      value={field.value || ''}
+                                    label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}
+                                      disabled={loading}
+                                      onChange={(event) => {
+                                        field.onChange(event);
+                                        const selected = produits.find(p => Number(p.id_produit) === Number(event.target.value));
+                                        if (!isEggProduct(selected)) {
+                                          setValue(`lignes.${index}.id_batiment`, '');
+                                        }
+                                      }}
+                                    >
+                                      <MenuItem value="">
+                                      <em>{watchedTypeEntite === 'client' ? 'Sélectionner le produit vendu' : 'Sélectionner le produit acheté'}</em>
+                                      </MenuItem>
+                                      {produits.map((produit) => (
+                                        <MenuItem
+                                          key={produit.id_produit}
+                                          value={produit.id_produit}
+                                        >
+                                          {produit.nom_produit}
+                                        </MenuItem>
+                                      ))}
+                                    </Select>
+                                    {error && (
+                                      <FormHelperText error>
+                                        {error.message === 'Le produit est requis'
+                                          ? `Veuillez sélectionner ${watchedTypeEntite === 'client' ? 'le produit vendu' : 'le produit acheté'}.`
+                                          : error.message}
+                                      </FormHelperText>
+                                    )}
+                                  </FormControl>
+                                )}
+                              />
+                          </Grid>
 
-
+                          </>}
+                          {!shouldShowBatimentSource && amountFields}
 
                           <Grid item xs={12}>
                             <Divider />
