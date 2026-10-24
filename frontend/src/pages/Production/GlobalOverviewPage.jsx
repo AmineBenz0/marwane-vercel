@@ -659,10 +659,10 @@ function GlobalOverviewPage() {
       </Stack>
       <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ px: 1.5, py: 1 }}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" fontWeight={700} sx={wrappedTextSx}>{demoMode ? (demoProfile.name + ' · ' + (demoBuilding === 'all' ? demoProfile.buildings.length + ' bâtiments' : 'Bâtiment ' + demoBuilding) + ' · ' + (demoProfile.startAge + demoProfile.weeks - 1) + ' semaines · ' + demoProfile.status) : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
-            <Typography variant="caption" color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
-            {isMobile && <Typography variant="caption" sx={{ display: 'block' }}>{periods.find((item) => item.key === effectivePeriod)?.label}</Typography>}
+          <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}>
+            <Typography variant="body2" fontWeight={700} sx={{ ...wrappedTextSx, flex: '0 1 auto' }}>{demoMode ? (demoProfile.name + ' · ' + (demoBuilding === 'all' ? demoProfile.buildings.length + ' bâtiments' : 'Bâtiment ' + demoBuilding) + ' · ' + (demoProfile.startAge + demoProfile.weeks - 1) + ' semaines · ' + demoProfile.status) : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
+            <Typography variant="caption" sx={{ ml: 'auto', textAlign: 'right' }} color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
+            {isMobile && <Typography variant="caption" sx={{ display: 'block', flexBasis: '100%' }}>{periods.find((item) => item.key === effectivePeriod)?.label}</Typography>}
           </Box>
           <Button size="small" variant="outlined" sx={{ display: { xs: 'inline-flex', sm: 'none' }, flexShrink: 0 }} aria-expanded={filtersOpen} aria-controls="overview-filters" onClick={() => setFiltersOpen((open) => !open)}>{filtersOpen ? 'Masquer' : 'Filtres'}</Button>
         </Stack>
