@@ -14,7 +14,7 @@ const price = () => screen.getByRole('spinbutton', { name: /Prix unitaire/ });
 const selectBuilding = async (name) => {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Bâtiment source/ }));
   fireEvent.click(await screen.findByRole('option', { name, exact: true }));
-  await screen.findByRole('button', { name: 'Choisir Normaux Moyen du 20/10/26' });
+  await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
 };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -34,10 +34,10 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(quantity(), { target: { value: '50' } });
     fireEvent.change(price(), { target: { value: '1.25' } });
     await selectBuilding('Bâtiment A');
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen du 20/10/26' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
     expect(quantity()).toHaveValue(50);
     expect(price()).toHaveValue(1.25);
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Gros du 21/10/26' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Gros' }));
     expect(quantity()).toHaveValue(50);
     expect(price()).toHaveValue(1.25);
     expect(screen.getByText('Total de la ligne : 62.50 MAD')).toBeVisible();
@@ -52,8 +52,8 @@ describe('sale entry preserves user input', () => {
     expect(quantity()).toHaveValue(70);
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment A');
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen du 20/10/26' }));
-    await screen.findAllByText('La quantité dépasse le stock disponible de cette saisie.');
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    await screen.findAllByText('La quantité dépasse le stock disponible.');
     expect(quantity()).toHaveValue(70);
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment B');

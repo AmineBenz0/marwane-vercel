@@ -14,6 +14,7 @@ class TransactionBase(BaseModel):
     Schéma de base pour une transaction.
     Chaque transaction représente une ligne de vente/achat avec un seul produit.
     """
+    allocation_automatique: bool = False
     id_production: Optional[int] = Field(None, gt=0, description="Saisie de production source")
     date_transaction: date = Field(
         ...,
@@ -135,6 +136,7 @@ class TransactionUpdate(BaseModel):
     Schéma pour mettre à jour une transaction.
     Tous les champs sont optionnels pour permettre des mises à jour partielles.
     """
+    allocation_automatique: Optional[bool] = None
     id_production: Optional[int] = Field(None, gt=0)
     date_transaction: Optional[date] = Field(
         None,
@@ -246,11 +248,19 @@ class TransactionUpdate(BaseModel):
         return self
 
 
+class EggAllocationRead(BaseModel):
+    id_production: int
+    quantite: int
+    date_production: date
+    id_cycle: Optional[int] = None
+
+
 class TransactionRead(TransactionBase):
     """
     Schéma pour lire une transaction.
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
+    repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
     date_production: Optional[date] = None
     nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")

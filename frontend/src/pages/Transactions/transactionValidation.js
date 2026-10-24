@@ -47,6 +47,7 @@ const lineSchema = yup.object().shape({
   date_production: yup.string().nullable(),
   source_ready: yup.boolean(),
   source_available: optionalNumber(),
+  source_group: yup.string().nullable(),
   id_batiment: optionalNumber(),
   quantite: yup
     .number()
@@ -131,7 +132,7 @@ export const transactionValidationSchema = yup.object().shape({
         if (line.date_production > this.parent.date_transaction) return this.createError({
           path: `lignes.${i}.date_production`, message: 'La vente ne peut pas précéder la production',
         });
-        const requested = lines.reduce((sum, other) => Number(other.id_production) === Number(line.id_production) ? sum + Number(other.quantite || 0) : sum, 0);
+        const requested = lines.reduce((sum, other) => (line.source_group ? other.source_group === line.source_group : Number(other.id_production) === Number(line.id_production)) ? sum + Number(other.quantite || 0) : sum, 0);
         if (line.source_available != null && requested > line.source_available) return this.createError({
           path: `lignes.${i}.quantite`, message: 'La quantité dépasse le stock disponible de cette saisie',
         });

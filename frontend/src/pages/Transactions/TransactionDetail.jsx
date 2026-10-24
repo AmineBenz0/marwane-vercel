@@ -569,7 +569,10 @@ function TransactionDetail() {
           <Grid container spacing={{ xs: 1.5, sm: 2 }}>
             {transaction.id_production && <Grid item xs={12}>
               <Alert severity="info">
-                Origine : {transaction.nom_batiment_source} · Saisie du {formatShortDate(transaction.date_production)}
+                Origine : {transaction.nom_batiment_source}
+                {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
+                  <Box key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Box>)
+                  : <> · Saisie du {formatShortDate(transaction.date_production)}</>}
               </Alert>
             </Grid>}
             <Grid item xs={12} sm={6}>
