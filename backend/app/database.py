@@ -7,13 +7,12 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import NullPool
 from time import perf_counter
 from app.config import settings
+from app.utils.database_connection import runtime_database_url
 from app.utils.request_timing import instrument_engine, request_timing
 
 # Création du moteur SQLAlchemy
 # SQLAlchemy 1.4+ nécessite le préfixe postgresql:// au lieu de postgres://
-database_url = settings.DATABASE_URL
-if database_url and database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
+database_url = runtime_database_url(settings.DATABASE_URL, settings.ENVIRONMENT)
 
 if not database_url:
     raise RuntimeError("DATABASE_URL must be configured")
