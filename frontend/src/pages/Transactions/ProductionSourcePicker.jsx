@@ -7,7 +7,7 @@ import { get } from '../../services/api';
 const eggLabels = { normal: 'Normaux', double_jaune: 'Double jaune', blanc: 'Blancs', casse: 'Cassés', perdu: 'Perdus' };
 const sizeLabels = { demarrage: 'Démarrage', moyen: 'Moyen', gros: 'Gros' };
 
-export default function ProductionSourcePicker({ index, control, setValue, batiments, disabled, transactionId, saleDate }) {
+export default function ProductionSourcePicker({ index, control, setValue, batiments, disabled, transactionId, saleDate, children }) {
   const lines = useWatch({ control, name: 'lignes' });
   const line = lines?.[index] || {};
   const building = line.id_batiment;
@@ -28,7 +28,6 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
     setValue(`lignes.${index}.id_produit`, '');
     setValue(`lignes.${index}.date_production`, '');
     setValue(`lignes.${index}.source_ready`, false);
-    setValue(`lignes.${index}.quantite`, undefined);
   };
 
   useEffect(() => {
@@ -53,7 +52,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
 
   return <Box sx={{ width: '100%', mb: 1.5 }}>
     <Grid container spacing={1.25}>
-      <Grid item xs={12}>
+      <Grid item xs={12} md={4}>
         <Controller name={`lignes.${index}.id_batiment`} control={control} render={({ field, fieldState }) => (
           <TextField {...field} select fullWidth size="small" label="Bâtiment source *" value={field.value || ''}
             disabled={disabled} error={!!fieldState.error} helperText={fieldState.error?.message}
@@ -62,6 +61,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
           </TextField>
         )} />
       </Grid>
+      {children}
     </Grid>
     {building && saleDate && <Box sx={{ mt: 1 }}>
       {fetching && <CircularProgress size={22} aria-label="Chargement du stock" />}
@@ -88,7 +88,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
                   <TableCell>{source.vendable ? available.toLocaleString('fr-FR') : 'Non vendables'}</TableCell>
                   <TableCell><Button size="small" variant={selected ? 'contained' : 'outlined'} disabled={disabled || !source.vendable || available <= 0}
                     aria-label={`Choisir ${eggLabels[source.type_oeuf]} ${sizeLabels[source.calibre] || ''} du ${formatShortDate(source.date_production)}`}
-                    onClick={() => { field.onChange(source.id_production); setValue(`lignes.${index}.date_production`, source.date_production); setValue(`lignes.${index}.quantite`, undefined); }}>
+                    onClick={() => { field.onChange(source.id_production); setValue(`lignes.${index}.date_production`, source.date_production); }}>
                     {selected ? 'Choisi' : 'Choisir'}
                   </Button></TableCell>
                 </TableRow>;
