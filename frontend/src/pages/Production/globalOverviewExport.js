@@ -23,7 +23,7 @@ export async function exportOverview(format, rows, columns, context) {
   if (!rows.length) return;
   const title = 'Suivi global · ' + context.lot;
   const dates = rows.filter((row) => row.rowType !== 'summary').map((row) => row.date);
-  const subtitle = context.building + (dates.length ? ' · ' + dates[0] + ' – ' + dates[dates.length - 1] : '') + (context.demo ? ' · Données fictives de démonstration' : '');
+  const subtitle = context.building + (context.period ? ' · ' + context.period : dates.length ? ' · ' + dates[0] + ' – ' + dates[dates.length - 1] : '') + (context.demo ? ' · Données fictives de démonstration' : '');
   const filename = 'suivi-global' + (context.demo ? '-exemple' : '') + '-' + new Date().toISOString().slice(0, 10);
   if (format === 'excel') {
     const { default: ExcelJS } = await import('exceljs');

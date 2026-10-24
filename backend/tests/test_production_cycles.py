@@ -79,6 +79,11 @@ def test_explicit_cycle_assignment_and_performance_updates(client, db_session, a
     assert day_row["effectif_fin"] == 998
     assert day_row["mort"] == 2
     assert day_row["ponte_pct"] == "90.00"
+    assert day_row["normal"] == 900
+    assert sum(day_row[key] for key in ("double", "white", "broken", "lost")) == 0
+    summary = next(row for row in rows if row["rowType"] == "summary")
+    assert summary["normal"] == day_row["normal"]
+    assert summary["oeufs"] == 900
 
 
 def test_production_can_be_created_without_a_lot(client, db_session, auth_headers):
