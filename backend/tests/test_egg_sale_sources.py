@@ -156,3 +156,70 @@ def test_invalid_payment_rolls_back_source_sale_and_stock(db_session,source_data
     with pytest.raises(HTTPException):create_transactions_with_payments_batch(batch,db_session,None)
     assert db_session.query(Transaction).count()==0
     assert next(s for s in sale_sources(db_session,b.id_batiment,rows[1].date_production) if s['type_oeuf']=='normal')['disponible']==80
+
+
+def test_cumulative_sources_include_unsold_prior_days_without_daily_entry(db_session, source_data):
+    b, _, rows = source_data
+    tx = create_transaction(payload(source_data, 30, row=0), db_session, None)
+    sources = sale_sources(db_session, b.id_batiment, through_date=date.today())
+    assert [s['id_production'] for s in sources] == [p.id_production for p in rows[:3]]
+    assert [s['disponible'] for s in sources] == [70, 80, 20]
+    # Earlier production remains sellable even with no entry on the sale date.
+    create_transaction(payload(source_data, 70, row=0), db_session, None)
+    assert rows[0].id_production not in {
+        s['id_production'] for s in sale_sources(db_session, b.id_batiment, through_date=date.today())
+    }
+    delete_transaction(tx.id_transaction, 'Annulation', db_session, None)
+    restored = sale_sources(db_session, b.id_batiment, through_date=date.today())
+    assert restored[0]['id_production'] == rows[0].id_production
+    assert restored[0]['disponible'] == 30
+
+
+def test_cumulative_sources_cutoff_building_inactive_and_edit_reservation(db_session, source_data):
+    b, _, rows = source_data
+    other = Batiment(nom='Autre', est_actif=True)
+    db_session.add(other)
+    db_session.flush()
+    for building, day, active in [
+        (b.id_batiment, date.today() + timedelta(days=1), True),
+        (other.id_batiment, rows[0].date_production, True),
+        (b.id_batiment, rows[0].date_production, False),
+    ]:
+        db_session.add(Production(id_batiment=building, date_production=day,
+            type_oeuf='normal', calibre='gros', nombre_oeufs=500, grammage=70,
+            nombre_cartons=1, est_actif=active))
+    db_session.commit()
+    tx = create_transaction(payload(source_data, 80), db_session, None)
+    sources = sale_sources(db_session, b.id_batiment, through_date=date.today())
+    assert {s['id_production'] for s in sources} == {rows[0].id_production, rows[2].id_production}
+    editing = sale_sources(db_session, b.id_batiment,
+        exclude_transaction_id=tx.id_transaction, through_date=date.today())
+    assert next(s['disponible'] for s in editing if s['id_production'] == rows[1].id_production) == 80
+    earlier = sale_sources(db_session, b.id_batiment, through_date=rows[0].date_production)
+    assert [s['id_production'] for s in earlier] == [rows[0].id_production]
+
+
+def test_cumulative_sources_keep_legacy_reservations(db_session, source_data):
+    b, c, rows = source_data
+    product = ensure_sellable_egg_product(db_session, 'normal', 'moyen')
+    db_session.add(Transaction(date_transaction=date.today(), id_produit=product.id_produit,
+        id_client=c.id_client, id_batiment=b.id_batiment, quantite=120,
+        prix_unitaire=1, montant_total=120))
+    db_session.commit()
+    sources = sale_sources(db_session, b.id_batiment, through_date=date.today())
+    assert [(s['id_production'], s['disponible']) for s in sources] == [
+        (rows[1].id_production, 60), (rows[2].id_production, 20)]
+
+
+def test_cumulative_sources_endpoint_and_exact_date_compatibility(client, source_data):
+    b, _, rows = source_data
+    cumulative = client.get('/api/v1/transactions/production-sources', params={
+        'id_batiment': b.id_batiment, 'through_date': date.today().isoformat()})
+    assert cumulative.status_code == 200
+    assert len(cumulative.json()) == 3
+    exact = client.get('/api/v1/transactions/production-sources', params={
+        'id_batiment': b.id_batiment, 'date_production': rows[0].date_production.isoformat()})
+    assert exact.status_code == 200
+    assert len(exact.json()) == 1
+    assert client.get('/api/v1/transactions/production-sources', params={
+        'id_batiment': b.id_batiment}).status_code == 400

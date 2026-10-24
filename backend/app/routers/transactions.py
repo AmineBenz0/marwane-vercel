@@ -47,12 +47,16 @@ router = APIRouter(prefix="/transactions", tags=["Transactions"])
 @router.get("/production-sources")
 def get_production_sources(
     id_batiment: int,
-    date_production: date,
+    date_production: Optional[date] = None,
+    through_date: Optional[date] = None,
     exclude_transaction_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
-    return sale_sources(db, id_batiment, date_production, exclude_transaction_id)
+    if (date_production is None) == (through_date is None):
+        raise HTTPException(400, "Indiquez une date de saisie ou une date limite de stock.")
+    return sale_sources(db, id_batiment, date_production, exclude_transaction_id,
+                        through_date=through_date)
 
 
 def _validate_source_batiment(
