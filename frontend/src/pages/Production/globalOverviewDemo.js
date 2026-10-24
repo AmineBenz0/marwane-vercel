@@ -129,7 +129,6 @@ export function buildDemoDays(lotId, buildingId = 'all') {
       depensesSemaine: cost, totalDepenses: cumulativeCost, costPerEgg: cost / eggs,
       _dailySold: sold, _dailySales: sales, sold, sales, margin: sales - cost,
       ventesSemaine: null, prixOeuf: null, weeklyEggPrice: null,
-      valeurPoulette: cumulativeCost / remaining, pulletValue: cumulativeCost / remaining,
     });
   }
   const weeks = new Map();

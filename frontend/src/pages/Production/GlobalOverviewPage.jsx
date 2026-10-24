@@ -17,10 +17,10 @@ const COLUMN_GROUPS = [
   { key: 'sale', label: 'Ventes & rentabilité', fill: ['#e7f3f5', '#263e47'], edge: ['#b7d5dc', '#507c89'] },
 ];
 const COLUMN_PRESETS = {
-  register: ['mort', 'mort_pct', 'oeufs', 'oeufs_cum', 'ponte_pct', 'poidsOeuf', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'cost', 'totalDepenses', 'valeurPoulette', 'sales', 'prixOeuf'],
+  register: ['mort', 'mort_pct', 'oeufs', 'oeufs_cum', 'ponte_pct', 'poidsOeuf', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'cost', 'totalDepenses', 'sales', 'prixOeuf'],
   summary: ['birds', 'mort', 'mort_pct', 'oeufs', 'ponte_pct', 'aliment_kg', 'cost', 'sales', 'margin'],
   production: ['birds', 'mort', 'mort_pct', 'cumDead', 'cumDeadRate', 'normal', 'double', 'white', 'broken', 'lost', 'oeufs', 'oeufs_cum', 'cumEggs', 'ponte_pct', 'poidsOeuf', 'eggMass', 'formule', 'aliment_kg', 'prix_aliment', 'g_poule', 'g_oeuf', 'fcr'],
-  costs: ['formule', 'aliment_kg', 'prix_aliment', 'feedcost', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'cost', 'totalDepenses', 'valeurPoulette', 'sold', 'sales', 'prixOeuf', 'costPerEgg', 'margin'],
+  costs: ['formule', 'aliment_kg', 'prix_aliment', 'feedcost', 'autres', 'autresQuantite', 'autresPrix', 'labor', 'salary', 'electricity', 'cost', 'totalDepenses', 'sold', 'sales', 'prixOeuf', 'costPerEgg', 'margin'],
 };
 const groupColor = (theme, key, token = 'fill') => COLUMN_GROUPS.find((group) => group.key === key)[token][theme.palette.mode === 'dark' ? 1 : 0];
 
@@ -160,7 +160,6 @@ function aggregateDays(dayRows, label, rowType = 'summary') {
     _sales: sales,
     _sold: sold,
     prixOeuf: sold ? sales / sold : null,
-    valeurPoulette: last.effectif_fin && last.totalDepenses != null ? last.totalDepenses / last.effectif_fin : null,
     birds: last.effectif_fin,
     cumDead: last.cumDead,
     cumDeadRate: last.cumDeadRate,
@@ -174,7 +173,6 @@ function aggregateDays(dayRows, label, rowType = 'summary') {
     sales,
     margin: cost == null ? null : sales - cost,
     weeklyEggPrice: sold ? sales / sold : null,
-    pulletValue: last.effectif_fin && last.totalDepenses != null ? last.totalDepenses / last.effectif_fin : null,
     expected: dayRows.reduce((total, row) => total + Number(row._expectedBuildings || 0), 0),
   };
 }
@@ -313,7 +311,6 @@ function GlobalOverviewPage() {
     { key: 'electricity', label: 'Électricité', unit: 'DH', group: 'charge', value: (r) => fmt(r._electricity, 2) },
     { key: 'cost', label: 'Dépenses', unit: 'DH', group: 'charge', value: (r) => fmt(r.cost, 2) },
     { key: 'totalDepenses', label: 'Dépenses cumulées', unit: 'lot · DH', group: 'charge', value: (r) => fmt(r.totalDepenses, 2) },
-    { key: 'valeurPoulette', label: 'Valeur poulette', unit: 'DH / poulette', group: 'charge', value: (r) => fmt(r.valeurPoulette, 2) },
     { key: 'sold', label: 'Œufs vendus', unit: 'œufs', group: 'sale', value: (r) => fmt(r.sold) },
     { key: 'sales', label: 'Ventes facturées', unit: 'DH', group: 'sale', value: (r) => fmt(r.sales, 2) },
     { key: 'prixOeuf', label: 'Prix moyen de vente', unit: 'DH / œuf', group: 'sale', value: (r) => fmt(r.prixOeuf, 3) },
@@ -464,7 +461,6 @@ function GlobalOverviewPage() {
         totalDepenses: cumulativeSpend,
         ventesSemaine: null,
         prixOeuf: null,
-        valeurPoulette: remaining && cumulativeSpend != null ? cumulativeSpend / remaining : null,
         effectif_debut: opening,
         effectif_fin: remaining,
         birds: remaining,
@@ -486,7 +482,6 @@ function GlobalOverviewPage() {
         sales: sales.value,
         margin: dailyTotal == null ? null : sales.value - dailyTotal,
         weeklyEggPrice: null,
-        pulletValue: remaining && cumulativeSpend != null ? cumulativeSpend / remaining : null,
       };
       return result;
     });
@@ -837,7 +832,7 @@ function GlobalOverviewPage() {
                 {[
                   ['Production', [['Mort', fmt(detail.mort)], ['Oeufs', fmt(detail.oeufs)], ['Cumul du lot', fmt(detail.cumEggs)], ['Poids moyen', fmt(detail.poidsOeuf, 1) + ' g'], ['Effectif restant', fmt(detail.effectif_fin)]]],
                   ['Aliment & autres dépenses', [['Formule', detail.formule], ['Aliment', fmt(detail.aliment_kg, 2) + ' kg'], ['Prix aliment', fmt(detail.prix_aliment, 2) + ' DH/kg'], ['g/poule', fmt(detail.g_poule, 1)], ['g/oeuf', fmt(detail.g_oeuf, 1)], ['Autres', detail.autres]]],
-                  ['Dépenses & ventes', [['Main Oeuvre + CNSS', fmtDh(detail._labor)], ['Salaires', fmtDh(detail._salary)], ['Electricité', fmtDh(detail._electricity)], ['Dépenses du jour', fmtDh(detail._dailyTotal)], ['Total dépenses', fmtDh(detail.totalDepenses)], ['Valeur poulette', fmtDh(detail.valeurPoulette)]]],
+                  ['Dépenses & ventes', [['Main Oeuvre + CNSS', fmtDh(detail._labor)], ['Salaires', fmtDh(detail._salary)], ['Electricité', fmtDh(detail._electricity)], ['Dépenses du jour', fmtDh(detail._dailyTotal)], ['Total dépenses', fmtDh(detail.totalDepenses)]]],
                 ].map(([title, items]) => <Box key={title}>
                   <Typography variant="subtitle2" color="primary" sx={{ mb: 0.5 }}>{title}</Typography>
                   {items.map(([label, value]) => <Stack key={label} direction="row" justifyContent="space-between" gap={1} sx={{ py: 0.4, borderBottom: '1px solid', borderColor: 'divider' }}>

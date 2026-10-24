@@ -12,6 +12,7 @@ async function exportRows() {
  fireEvent.click(screen.getByRole('button',{name:'Exporter',exact:true}));
  fireEvent.click(await screen.findByRole('menuitem',{name:'Excel (.xlsx)',exact:true}));
  await waitFor(()=>expect(mocks.export).toHaveBeenCalled());
+ expect(mocks.export.mock.calls.at(-1)[2].some(column=>column.key==='valeurPoulette')).toBe(false);
  return mocks.export.mock.calls.at(-1)[1];
 }
 beforeEach(()=>{
@@ -50,7 +51,7 @@ describe('Suivi global release checks',()=>{
   render(<GlobalOverviewPage/>);await screen.findByText('01/10/2026');
   const exported=await exportRows();const total=exported.at(-1);
   expect(total.cost).toBeNull();expect(total.margin).toBeNull();
-  expect(total.totalDepenses).toBeNull();expect(total.valeurPoulette).toBeNull();
+  expect(total.totalDepenses).toBeNull();expect(total).not.toHaveProperty('valeurPoulette');
  });
  it('ignores a slow previous lot response after switching lots',async()=>{
   const second={...cycles[0],id_cycle:2,nom_cycle:'Lot suivant'};
