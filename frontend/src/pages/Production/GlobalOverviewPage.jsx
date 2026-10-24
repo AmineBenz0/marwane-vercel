@@ -355,7 +355,11 @@ function GlobalOverviewPage() {
     const productsById = new Map(data.products.map((product) => [Number(product.id_produit), product]));
     const cycleIds = new Set(allowedCycleIds);
     const buildingSet = new Set(buildingIds);
-    const relevantTransactions = data.transactions.filter((transaction) => {
+    const relevantTransactions = data.transactions.flatMap(transaction => {
+      if (!transaction.repartition_stock?.length) return [transaction];
+      const quantity = transaction.repartition_stock.filter(a => cycleIds.has(Number(a.id_cycle))).reduce((sum, a) => sum + a.quantite, 0);
+      return quantity ? [{ ...transaction, id_cycle: null, quantite: quantity, montant_total: Number(transaction.montant_total) * quantity / transaction.quantite }] : [];
+    }).filter((transaction) => {
       if (transaction.est_actif === false) return false;
       const hasOwner = transaction.id_cycle || transaction.id_batiment;
       if (!hasOwner) return true;

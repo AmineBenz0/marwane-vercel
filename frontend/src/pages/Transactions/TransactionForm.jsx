@@ -544,7 +544,7 @@ function TransactionForm({
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           ...(data.type_entite === 'client'
-            ? { id_production: Number(data.lignes[0].id_production) }
+            ? { id_production: Number(data.lignes[0].id_production), allocation_automatique: true }
             : { id_produit: Number(data.lignes[0].id_produit) }),
           id_batiment: data.type_entite === 'client' && data.lignes[0].id_batiment ? parseInt(data.lignes[0].id_batiment) : null,
           quantite: parseInt(data.lignes[0].quantite),
@@ -576,7 +576,7 @@ function TransactionForm({
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           ...(data.type_entite === 'client'
-            ? { id_production: Number(ligne.id_production) }
+            ? { id_production: Number(ligne.id_production), allocation_automatique: true }
             : { id_produit: Number(ligne.id_produit) }),
           id_batiment: data.type_entite === 'client' && ligne.id_batiment ? parseInt(ligne.id_batiment) : null,
           quantite: parseInt(ligne.quantite),

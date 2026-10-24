@@ -10,6 +10,7 @@ from decimal import Decimal
 
 from app.database import get_db
 from app.models.production import Production
+from app.models.egg_allocation import EggAllocation
 from app.models.transaction import Transaction
 from app.models.paiement import Paiement
 from app.models.client import Client
@@ -249,6 +250,7 @@ def create_transactions_batch(
                 date_transaction=tx_data.date_transaction,
                 id_produit=tx_data.id_produit,
                 id_production=tx_data.id_production,
+                allocation_automatique=tx_data.allocation_automatique,
                 quantite=tx_data.quantite,
                 prix_unitaire=tx_data.prix_unitaire,
                 montant_total=montant_total,
@@ -346,6 +348,7 @@ def _create_transaction_for_atomic_batch(
         date_transaction=tx_data.date_transaction,
         id_produit=tx_data.id_produit,
         id_production=tx_data.id_production,
+                allocation_automatique=tx_data.allocation_automatique,
         quantite=tx_data.quantite,
         prix_unitaire=tx_data.prix_unitaire,
         montant_total=montant_total,
@@ -521,7 +524,8 @@ def get_transactions(
     if id_batiment is not None:
         query = query.filter(Transaction.id_batiment == id_batiment)
     if id_cycle is not None:
-        query = query.filter(Transaction.id_cycle == id_cycle)
+        query = query.filter((Transaction.id_cycle == id_cycle) | Transaction.allocations.any(
+            EggAllocation.production.has(Production.id_cycle == id_cycle)))
 
     # Filtre par montant
     if montant_min is not None:

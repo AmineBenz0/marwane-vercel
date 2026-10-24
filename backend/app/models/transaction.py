@@ -46,6 +46,8 @@ class Transaction(Base):
     id_client = Column(Integer, ForeignKey("clients.id_client"), nullable=True, index=True)
     id_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True, index=True)
     id_batiment = Column(Integer, ForeignKey("batiments.id_batiment"), nullable=True, index=True)
+    allocation_automatique = Column(Boolean, nullable=False, default=False, server_default="false")
+    allocations = relationship("EggAllocation", cascade="all, delete-orphan", lazy="selectin")
     id_production = Column(Integer, ForeignKey("productions.id_production", ondelete="RESTRICT"), nullable=True, index=True)
     id_cycle = Column(Integer, ForeignKey("cycles_production.id_cycle"), nullable=True, index=True)
     date_echeance = Column(Date, nullable=True, index=True)
@@ -74,6 +76,12 @@ class Transaction(Base):
     produit = relationship("Produit", back_populates="transactions")
     batiment = relationship("Batiment")
     production = relationship("Production")
+
+    @property
+    def repartition_stock(self):
+        return [dict(id_production=a.id_production, quantite=a.quantite,
+                     date_production=a.production.date_production, id_cycle=a.production.id_cycle)
+                for a in self.allocations]
 
     @property
     def date_production(self):
