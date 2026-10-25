@@ -276,6 +276,22 @@ class EggAllocationRead(BaseModel):
     id_cycle: Optional[int] = None
 
 
+class DeferredSaleCompletion(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    quantite: int = Field(gt=0, strict=True)
+    quantite_couverte_attendue: int = Field(ge=0, strict=True)
+    empreinte_stock: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
+class DeferredSalePreview(BaseModel):
+    id_transaction: int
+    quantite_couverte: int
+    quantite_en_attente: int
+    quantite_proposee: int
+    repartition_stock: List[EggAllocationRead]
+    empreinte_stock: str
+
+
 class TransactionRead(TransactionBase):
     """
     Schéma pour lire une transaction.

@@ -55,6 +55,7 @@ import PaiementForm from '../../components/PaiementForm';
 import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
+import DeferredSaleCompletionDialog from './DeferredSaleCompletionDialog';
 
 /**
  * Composant TransactionDetail.
@@ -69,6 +70,7 @@ function TransactionDetail() {
   
   // États pour les données
   const [transaction, setTransaction] = useState(null);
+  const [completionOpen, setCompletionOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -568,9 +570,11 @@ function TransactionDetail() {
           <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           <Grid container spacing={{ xs: 1.5, sm: 2 }}>
             {(transaction.id_production || transaction.est_promesse) && <Grid item xs={12}>
-              <Alert severity={transaction.est_promesse ? 'warning' : 'info'}>
+              <Alert severity={transaction.est_promesse ? (transaction.quantite_en_attente > 0 ? 'warning' : 'success') : 'info'}
+                action={transaction.est_actif && transaction.est_promesse && transaction.quantite_en_attente > 0
+                  ? <Button onClick={() => setCompletionOpen(true)}>Compléter</Button> : undefined}>
                 {transaction.est_promesse ? <>
-                  <strong>Livraison différée</strong> · {Number(transaction.quantite_couverte || 0).toLocaleString('fr-FR')} couvert(s), {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} restant(s) à fournir.
+                  <strong>Livraison différée{transaction.quantite_en_attente === 0 ? ' · Complétée' : ''}</strong> · {Number(transaction.quantite_couverte || 0).toLocaleString('fr-FR')} couvert(s), {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} restant(s) à fournir.
                   {transaction.date_livraison_prevue && <> Date prévue : {formatShortDate(transaction.date_livraison_prevue)}.</>}
                   {transaction.nom_batiment_source && <> Bâtiment : {transaction.nom_batiment_source}.</>}
                 </> : <>Origine : {transaction.nom_batiment_source}</>}
@@ -1004,6 +1008,14 @@ function TransactionDetail() {
           </Button>
         </DialogActions>
       </Dialog>
+      <DeferredSaleCompletionDialog open={completionOpen} transactionId={transaction.id_transaction}
+        onClose={() => setCompletionOpen(false)} onCompleted={updated => {
+          setTransaction(updated);
+          setCompletionOpen(false);
+          notification.success(updated.quantite_en_attente > 0
+            ? `Stock complété. ${updated.quantite_en_attente} œufs restent à fournir.`
+            : 'Livraison différée complétée.');
+        }} />
     </Box>
   );
 }
