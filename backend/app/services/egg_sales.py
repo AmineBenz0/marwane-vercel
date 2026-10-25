@@ -7,7 +7,7 @@ import json
 from fastapi import HTTPException
 
 from app.models.egg_allocation import EggAllocation
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 from app.models.batiment import Batiment
 from app.models.production import Production
 from app.models.produit import Produit
@@ -67,7 +67,7 @@ def _stock_state(db, *, exclude_transaction_id=None, through_date=None):
     promises = db.query(Transaction).join(Produit).filter(
         Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
         Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
-    ).order_by(Transaction.date_livraison_prevue, Transaction.date_transaction,
+    ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit)).order_by(Transaction.date_livraison_prevue, Transaction.date_transaction,
                 Transaction.id_transaction).all()
     reservations = defaultdict(dict)
     for tx in promises:
@@ -244,6 +244,32 @@ def sale_sources(db, id_batiment, production_date=None, exclude_transaction_id=N
        and (production_date is None or p.date_production == production_date)
        and (through_date is None or (p.type_oeuf not in {'casse', 'perdu'}
                                     and balances[p.id_production] > 0))]
+
+
+def deferred_sale_reservations(db):
+    """One reservation calculation shared by dashboard and transaction lists."""
+    _, _, reservations = _stock_state(db, through_date=business_date())
+    return {transaction_id: sum(sources.values())
+            for transaction_id, sources in reservations.items()}
+
+
+def deferred_sales_overview(db):
+    """Open sales across all dates; payment status never hides a stock shortage."""
+    reservations = deferred_sale_reservations(db)
+    sales = db.query(Transaction).filter(
+        Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
+        Transaction.id_client.isnot(None),
+    ).options(selectinload(Transaction.allocations), joinedload(Transaction.client),
+              joinedload(Transaction.produit), joinedload(Transaction.batiment)).order_by(
+                  Transaction.date_livraison_prevue, Transaction.date_transaction,
+                  Transaction.id_transaction).all()
+    return [dict(id_transaction=tx.id_transaction, nom_client=tx.client.nom_client,
+                 nom_produit=tx.produit.nom_produit,
+                 nom_batiment=tx.batiment.nom if tx.batiment else None,
+                 date_livraison_prevue=tx.date_livraison_prevue,
+                 quantite_en_attente=tx.quantite_en_attente,
+                 quantite_reservee=reservations.get(tx.id_transaction, 0))
+            for tx in sales if tx.quantite_en_attente > 0]
 
 
 def completion_preview(db, transaction):

@@ -197,3 +197,57 @@ def test_one_source_can_be_partially_confirmed_twice_without_duplicate_origins(c
     db_session.expire_all()
     assert [a.quantite for a in tx.allocations if a.id_production == new_source.id_production] == [300]
     assert tx.quantite_en_attente == 100
+
+
+def test_discovery_tracks_paid_sale_partial_completion_and_history(client, db_session, deferred_sale):
+    building, customer, original_source, payload = deferred_sale
+    original_source.date_production = date.today() - timedelta(days=91)
+    db_session.commit()
+    # A sale from a previous accounting period must still be discoverable.
+    payload = payload.model_copy(update={'date_transaction': date.today() - timedelta(days=90)})
+    tx = create_transaction(payload, db_session, None)
+    db_session.add(Paiement(id_transaction=tx.id_transaction, date_paiement=date.today(),
+                           montant=1500, type_paiement='cash', statut='valide'))
+    db_session.commit()
+    endpoint = '/api/v1/transactions/deferred-sales'
+    rows = client.get(endpoint).json()
+    assert len(rows) == 1
+    assert rows[0]['nom_client'] == customer.nom_client
+    assert rows[0]['quantite_en_attente'] == 400
+    assert rows[0]['quantite_reservee'] == 0
+    enter_production(db_session, building.id_batiment, 300)
+    assert client.get(endpoint).json()[0]['quantite_reservee'] == 300
+    data = proposal(client, tx.id_transaction)
+    assert client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=confirmation(data)).status_code == 200
+    rows = client.get(endpoint).json()
+    assert (rows[0]['quantite_en_attente'], rows[0]['quantite_reservee']) == (100, 0)
+    enter_production(db_session, building.id_batiment, 100)
+    data = proposal(client, tx.id_transaction)
+    assert client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=confirmation(data)).status_code == 200
+    assert client.get(endpoint).json() == []
+    history = client.get('/api/v1/transactions', params={'est_promesse': True}).json()
+    assert len(history) == 1
+    assert history[0]['quantite_en_attente'] == 0
+    assert history[0]['montant_paye'] == '1500.00'
+    assert db_session.query(Transaction).count() == 1
+    assert db_session.query(Paiement).count() == 1
+
+
+def test_discovery_respects_priority_excludes_future_stock_and_cancelled_sales(client, db_session, deferred_sale):
+    building, _, _, payload = deferred_sale
+    first = create_transaction(payload, db_session, None)
+    later = create_transaction(payload.model_copy(update={
+        'date_livraison_prevue': date.today() + timedelta(days=2)}), db_session, None)
+    cancelled = create_transaction(payload.model_copy(update={
+        'date_livraison_prevue': date.today() + timedelta(days=3)}), db_session, None)
+    cancelled.est_actif = False
+    db_session.commit()
+    enter_production(db_session, building.id_batiment, 300)
+    enter_production(db_session, building.id_batiment, 1000, day=date.today() + timedelta(days=1))
+    rows = client.get('/api/v1/transactions/deferred-sales').json()
+    assert [r['id_transaction'] for r in rows] == [first.id_transaction, later.id_transaction]
+    assert [r['quantite_reservee'] for r in rows] == [300, 0]
+    history = client.get('/api/v1/transactions', params={'est_promesse': True, 'est_actif': True}).json()
+    assert {r['id_transaction']: r['quantite_reservee'] for r in history} == {
+        first.id_transaction: 300, later.id_transaction: 0}
+    assert client.get('/api/v1/transactions', params={'est_promesse': False}).json() == []

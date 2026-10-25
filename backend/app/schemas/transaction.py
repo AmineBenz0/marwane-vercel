@@ -292,12 +292,23 @@ class DeferredSalePreview(BaseModel):
     empreinte_stock: str
 
 
+class DeferredSaleSummary(BaseModel):
+    id_transaction: int
+    nom_client: str
+    nom_produit: str
+    nom_batiment: Optional[str] = None
+    date_livraison_prevue: Optional[date] = None
+    quantite_en_attente: int
+    quantite_reservee: int
+
+
 class TransactionRead(TransactionBase):
     """
     Schéma pour lire une transaction.
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
     repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
+    quantite_reservee: int = 0
     quantite_couverte: int = 0
     quantite_en_attente: int = 0
     date_production: Optional[date] = None

@@ -1,3 +1,4 @@
+import ProductionDeferredNotice from './ProductionDeferredNotice';
 import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
@@ -34,6 +35,7 @@ function ProductionList() {
   const [batiments, setBatiments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
+  const [savedRevision, setSavedRevision] = useState(0);
   const [editingProduction, setEditingProduction] = useState(null);
   const notification = useNotification();
 
@@ -92,6 +94,7 @@ function ProductionList() {
 
   return (
     <Box>
+      <ProductionDeferredNotice refreshKey={savedRevision} />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box>
           <Typography variant="h4" fontWeight="bold" gutterBottom>🐣 Suivi de Production</Typography>
@@ -209,7 +212,7 @@ function ProductionList() {
         <ProductionForm 
           open={openForm}
           onClose={() => setOpenForm(false)}
-          onSuccess={() => {
+          onSuccess={() => { setSavedRevision(value => value + 1);
             setOpenForm(false);
             loadData();
           }}
