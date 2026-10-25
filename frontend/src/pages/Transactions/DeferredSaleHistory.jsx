@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
 import { get } from '../../services/api';
 import { formatShortDate } from '../../utils/dateFormatting';
+import ExpandableDetails from '../../components/ExpandableDetails';
 
 export default function DeferredSaleHistory({ transactionId, refreshKey }) {
   const [events, setEvents] = useState([]);
@@ -11,18 +12,25 @@ export default function DeferredSaleHistory({ transactionId, refreshKey }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError('');
-    get(`/transactions/${transactionId}/completion-history`).then(data => { if (!cancelled) setEvents(data || []); })
+    get(`/transactions/${transactionId}/completion-history`, { params: { include_initial: true } }).then(data => { if (!cancelled) setEvents(data || []); })
       .catch(err => { if (!cancelled) setError(err.message || 'Historique indisponible.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [transactionId, refreshKey, revision]);
-  return <Box component="section" aria-label="Historique des compléments" sx={{ my: 3 }}>
-    <Typography variant="h6" component="h2" fontWeight={800} gutterBottom>Historique des compléments</Typography>
-    {loading ? <CircularProgress size={22} /> : error ? <Alert severity="warning" action={<Button onClick={() => setRevision(value => value + 1)}>Réessayer</Button>}>{error}</Alert> : !events.length ? <Typography color="text.secondary">Aucun complément enregistré.</Typography> : <Stack spacing={2}>
-      {events.map(event => <Box key={event.id} sx={{ borderLeft: '3px solid', borderColor: 'primary.main', pl: 2 }}>
-        <Typography fontWeight={700}>{formatShortDate(event.date)} · {event.quantite.toLocaleString('fr-FR')} œufs ajoutés</Typography>
-        <Typography variant="body2" color="text.secondary">{event.quantite_couverte.toLocaleString('fr-FR')} œufs couverts après ce complément · {event.operateur || `Opérateur #${event.id_utilisateur}`}</Typography>
-        {event.repartition_stock.length ? event.repartition_stock.map(source => <Typography variant="body2" key={source.id_production}>Production du {formatShortDate(source.date_production)} : {source.quantite.toLocaleString('fr-FR')} œufs</Typography>) : <Typography variant="caption">Répartition détaillée non enregistrée pour cet ancien complément.</Typography>}
+  return <Box component="section" aria-label="Suivi du stock" sx={{ my: 3 }}>
+    <Typography variant="h6" component="h2" fontWeight={800} gutterBottom>Suivi du stock</Typography>
+    {loading ? <CircularProgress size={22} aria-label="Chargement du suivi du stock" /> : error ? <Alert severity="warning" action={<Button onClick={() => setRevision(value => value + 1)}>Réessayer</Button>}>{error}</Alert> : !events.length ? <Typography color="text.secondary">Aucun mouvement enregistré.</Typography> : <Stack spacing={2}>
+      {events.map(event => <Box component="article" key={event.id} sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
+        <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
+          <Box><Typography fontWeight={700}>{event.type === 'initial' ? 'Stock à la création' : 'Stock complété'}</Typography><Typography variant="caption" color="text.secondary">{formatShortDate(event.date)}</Typography></Box>
+          <Typography fontWeight={700} sx={{ whiteSpace: 'nowrap' }}>{event.quantite.toLocaleString('fr-FR')} œufs</Typography>
+        </Stack>
+        <ExpandableDetails label="Origine du stock">
+          {event.repartition_stock?.length ? event.repartition_stock.map(source => <Stack direction="row" spacing={2} justifyContent="space-between" key={source.id_production} sx={{ py: 0.5 }}>
+            <Typography variant="body2">Production du {formatShortDate(source.date_production)}</Typography><Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>{source.quantite.toLocaleString('fr-FR')} œufs</Typography>
+          </Stack>) : event.quantite > 0 ? <Typography variant="body2" color="text.secondary">{event.type === 'initial' ? 'Répartition initiale non disponible.' : 'Répartition détaillée non enregistrée pour cet ancien complément.'}</Typography> : null}
+          {(event.operateur || event.id_utilisateur) && <Typography variant="caption" color="text.secondary">{event.operateur || `Opérateur #${event.id_utilisateur}`}</Typography>}
+        </ExpandableDetails>
       </Box>)}
     </Stack>}
   </Box>;

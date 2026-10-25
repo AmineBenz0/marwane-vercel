@@ -19,7 +19,9 @@ describe('deferred sale completion', () => {
     post.mockResolvedValue({ id_transaction: 7, quantite_couverte: 900, quantite_en_attente: 100 });
     render(<DeferredSaleCompletionDialog open transactionId={7} onClose={vi.fn()} onCompleted={done} />);
     expect(await screen.findByLabelText('Quantité à compléter')).toHaveValue(300);
-    expect(screen.getByText('26/10/26')).toBeVisible();
+    expect(screen.queryByText('26/10/26')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stock à utiliser' }));
+    expect(await screen.findByText('26/10/26')).toBeVisible();
     expect(screen.getByText('27/10/26')).toBeVisible();
     expect(screen.getByText(/Après confirmation : 100/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer 300 œufs' }));
@@ -57,10 +59,20 @@ describe('deferred sale completion', () => {
   it('offers reloading after new production when no stock is available', async () => {
     get.mockResolvedValue({ ...proposal, quantite_proposee: 0, repartition_stock: [] });
     render(<DeferredSaleCompletionDialog open transactionId={7} onClose={vi.fn()} onCompleted={vi.fn()} />);
-    expect(await screen.findByText(/Aucun stock réservé disponible/)).toBeVisible();
+    expect(await screen.findByText(/En attente de production/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Confirmer' })).toBeDisabled();
     get.mockResolvedValue(proposal);
     fireEvent.click(screen.getByRole('button', { name: 'Recharger le stock' }));
     expect(await screen.findByLabelText('Quantité à compléter')).toHaveValue(300);
   });
+});
+
+it('shows identity and remaining stock once while hiding a redundant full-availability badge', async () => {
+  get.mockResolvedValue({ ...proposal, quantite_en_attente: 300, nom_client: 'Client A', nom_produit: 'Œufs moyens', nom_batiment: 'Bâtiment A' });
+  render(<DeferredSaleCompletionDialog open transactionId={7} onClose={vi.fn()} onCompleted={vi.fn()} />);
+  expect(await screen.findByText('Client A')).toBeVisible();
+  expect(screen.getByText('Œufs moyens · Bâtiment A')).toBeVisible();
+  expect(screen.getByText('Reste à compléter')).toBeVisible();
+  expect(screen.queryByText(/Stock disponible :/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Son montant et ses paiements/)).not.toBeInTheDocument();
 });

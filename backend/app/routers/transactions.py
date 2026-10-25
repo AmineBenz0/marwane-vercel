@@ -634,15 +634,18 @@ def get_transaction_audit(
 
 @router.get("/{id}/completion-history")
 def get_completion_history(
-    id: int, db: Session = Depends(get_db),
+    id: int, include_initial: bool = False, db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
-    from app.services.deferred_reporting import completion_events
+    from app.services.deferred_reporting import completion_events, initial_stock_event
     transaction = db.get(Transaction, id)
     if not transaction:
         raise HTTPException(404, "Transaction introuvable.")
     events = completion_events(db, [id]).get(id, [])
-    users = {u.id_utilisateur: u.nom_utilisateur for u in db.query(Utilisateur).filter(Utilisateur.id_utilisateur.in_([e['id_utilisateur'] for e in events])).all()} if events else {}
+    if include_initial and transaction.est_promesse:
+        events = [initial_stock_event(transaction, events), *events]
+    user_ids = {e['id_utilisateur'] for e in events if e['id_utilisateur'] is not None}
+    users = {u.id_utilisateur: u.nom_utilisateur for u in db.query(Utilisateur).filter(Utilisateur.id_utilisateur.in_(user_ids)).all()} if user_ids else {}
     return [{**e, 'operateur': users.get(e['id_utilisateur'])} for e in events]
 
 
@@ -666,7 +669,8 @@ def complete_transaction(
         transaction = complete_deferred_sale(db, id, payload, current_user)
         db.commit()
         db.refresh(transaction)
-        return transaction
+        reserved = deferred_sale_reservations(db).get(id, 0) if transaction.quantite_en_attente > 0 else 0
+        return TransactionRead.model_validate(transaction).model_copy(update={'quantite_reservee': reserved})
     except Exception:
         db.rollback()
         raise
@@ -700,7 +704,8 @@ def get_transaction(
             detail=f"Transaction avec l'ID {id} introuvable"
         )
     
-    return transaction
+    reserved = deferred_sale_reservations(db).get(id, 0) if transaction.est_promesse and transaction.est_actif and transaction.quantite_en_attente > 0 else 0
+    return TransactionRead.model_validate(transaction).model_copy(update={'quantite_reservee': reserved})
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)

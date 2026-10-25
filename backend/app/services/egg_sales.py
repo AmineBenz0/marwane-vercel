@@ -299,6 +299,9 @@ def completion_preview(db, transaction):
         transaction.id_batiment, transaction.id_produit, sources,
     ], default=str, sort_keys=True).encode()).hexdigest()
     return dict(id_transaction=transaction.id_transaction,
+                nom_client=transaction.client.nom_client if transaction.client else None,
+                nom_produit=transaction.produit.nom_produit,
+                nom_batiment=transaction.batiment.nom if transaction.batiment else None,
                 quantite_couverte=transaction.quantite_couverte,
                 quantite_en_attente=transaction.quantite_en_attente,
                 quantite_proposee=sum(source['quantite'] for source in sources),

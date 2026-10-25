@@ -32,11 +32,12 @@ describe('ProductionDashboard single page', () => {
   beforeEach(() => { vi.clearAllMocks(); mockData(); });
   it('shows current stock, type breakdown and daily activity together without tabs', async () => {
     renderPage();
-    expect(await screen.findByText('Stock disponible maintenant')).toBeVisible();
+    expect(await screen.findByText('Disponible à la vente')).toBeVisible();
     expect(await screen.findByText('Non saisie')).toBeVisible();
-    expect(screen.getAllByText('120 œufs')).toHaveLength(2);
+    expect(screen.getByText('120 œufs')).toBeVisible();
     expect(screen.getByText('125 œufs')).toBeVisible();
-    expect(screen.getByText(/Normal - Gros :/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Détail du stock' }));
+    expect(await screen.findByText('Normal - Gros')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Suivi des bâtiments' })).toBeVisible();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Batiment 7' })).toBeVisible();
@@ -61,7 +62,8 @@ describe('ProductionDashboard single page', () => {
     renderPage();
     await screen.findByText(/Normaux :/);
     expect(within(screen.getByRole('region', { name: 'Collecte par type' })).getByText('30 œufs')).toBeVisible();
-    expect(screen.getByText(/Normal - Gros :/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Détail du stock' }));
+    expect(await screen.findByText('Normal - Gros')).toBeVisible();
     expect(screen.getAllByText('30 œufs')).toHaveLength(3);
     expect(screen.queryByText('Broken category')).not.toBeInTheDocument();
   });
@@ -77,7 +79,7 @@ describe('ProductionDashboard single page', () => {
     renderPage('/production?date=2026-10-05');
     await screen.findByText('Non saisie');
     fireEvent.change(screen.getByRole('textbox', { name: 'Date' }), { target: { value: '06/10/26' } });
-    expect(screen.getByText('Stock disponible maintenant')).toBeVisible();
+    expect(screen.getByText('Disponible à la vente')).toBeVisible();
     expect(screen.queryByText('Non saisie')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox', { name: 'Date' }), { target: { value: '07/10/26' } });
     await waitFor(() => expect(pending['2026-10-07']).toBeDefined());
@@ -85,7 +87,7 @@ describe('ProductionDashboard single page', () => {
     expect(await screen.findByText('300 œufs')).toBeVisible();
     await act(async () => pending['2026-10-06']({ ...daily, totals: { ...daily.totals, produced_eggs: 999 } }));
     expect(screen.queryByText('999 œufs')).not.toBeInTheDocument();
-    expect(screen.getAllByText('120 œufs')).toHaveLength(2);
+    expect(screen.getByText('120 œufs')).toBeVisible();
     expect(get.mock.calls.filter(([path]) => path === '/productions/stock')).toHaveLength(1);
   });
   it('keeps production entry available for the selected day', async () => {
@@ -100,17 +102,17 @@ describe('ProductionDashboard single page', () => {
     renderPage('/production?date=2026-10-05');
     expect(await screen.findByRole('alert')).toHaveTextContent('Stock indisponible');
     expect(await screen.findByText('Non saisie')).toBeVisible();
-    expect(screen.queryByText('Stock disponible maintenant')).not.toBeInTheDocument();
+    expect(screen.queryByText('Disponible à la vente')).not.toBeInTheDocument();
     mockData();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer le stock' }));
-    expect(await screen.findByText('Stock disponible maintenant')).toBeVisible();
+    expect(await screen.findByText('Disponible à la vente')).toBeVisible();
   });
   it('retains stock when daily data fails and retries only the daily request', async () => {
     get.mockImplementation((path) => path === '/productions/stock/daily' ? Promise.reject(new Error('Journée indisponible')) :
       Promise.resolve(path === '/productions/stock' ? stock : [{ id_batiment: 7, nom: 'Batiment 7' }]));
     renderPage('/production?date=2026-10-05');
     await screen.findByText('Journée indisponible');
-    expect(within(screen.getByRole('region', { name: 'Stock actuel' })).getByText('Stock disponible maintenant')).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Stock actuel' })).getByText('Disponible à la vente')).toBeVisible();
     mockData();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer la journée' }));
     expect(await screen.findByText('Non saisie')).toBeVisible();

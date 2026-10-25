@@ -690,9 +690,10 @@ function ClientProfile() {
         </Tabs>
       </Card>
 
-      <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} onCompleted={fetchClientProfile} />
+      <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} onCompleted={updated => setTransactions(previous => previous.map(sale => sale.id_transaction === updated.id_transaction ? updated : sale))} />
 
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Depuis le début</Typography>
       {/* Cartes statistiques */}
       <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <Grid item xs={12} sm={6} md={4}>
@@ -716,8 +717,8 @@ function ClientProfile() {
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <StatCard
-            title="Montant moyen"
-            value={statistiques?.montant_moyen_transaction || 0}
+            title="Reste à encaisser"
+            value={insightsFinanciers?.montant_impaye ?? null}
             icon={<TrendingUpIcon />}
             valueFormat="currency"
             currency="MAD"

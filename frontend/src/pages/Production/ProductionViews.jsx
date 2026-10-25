@@ -1,38 +1,43 @@
 import {
   Accordion, AccordionDetails, AccordionSummary, Box, Card, CardContent,
-  Divider, Stack, Typography,
+  Button, Divider, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
 import { ExpandMore } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
+import ExpandableDetails from '../../components/ExpandableDetails';
+import { formatShortDate } from '../../utils/dateFormatting';
 
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 
-export function StockSummary({ label, available, categories = [], reserved, covered, physical, embedded = false }) {
-  const sellable = categories.filter((category) => !['casse', 'perdu'].includes(category.type_oeuf));
-  const content = <>
-    <Box sx={{ minWidth: 0, flexShrink: 0 }}>
-      <Typography component={embedded ? 'h3' : 'h2'} variant={embedded ? 'body1' : 'h6'} fontWeight={700}>{label}</Typography>
-      <Typography variant={embedded ? 'h4' : 'h5'} fontWeight={800} color={Number(available) < 0 ? 'error.main' : 'primary.main'} sx={{ mt: 0.5 }}>
-        {number(available)} œufs
-      </Typography>
-    </Box>
-    {reserved != null && <Box>
-      <Typography variant="body2">{number(physical)} œufs en stock · {number(reserved)} réservés aux livraisons différées</Typography>
-      <Typography variant="body2" color="text.secondary">{number(covered)} œufs déjà affectés aux ventes. Le disponible exclut les réservations.</Typography>
-    </Box>}
-    {sellable.length > 0 && <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
-      {sellable.map((category) => <Typography key={category.type_oeuf + '-' + (category.calibre || 'none')} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-        {category.label} : <Box component="span" sx={{ fontWeight: 600, color: Number(category.available_eggs) < 0 ? 'error.main' : 'text.primary' }}>{number(category.available_eggs)} œufs</Box>{category.reserved_eggs > 0 ? ` · ${number(category.reserved_eggs)} réservés` : ''}
-      </Typography>)}
-    </Stack>}
-  </>;
-  if (embedded) return <Stack spacing={1.25}>{content}</Stack>;
-  return <Card variant="outlined" sx={{ borderRadius: 3, mb: 2.5 }}>
-    <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ md: 'center' }} spacing={{ xs: 1.5, md: 4 }}>{content}</Stack>
-    </CardContent>
-  </Card>;
+export function StockSummary({ available, categories = [], reserved, physical, embedded = false, asOf, onViewReservations }) {
+  const sellable = categories.filter(category => !['casse', 'perdu'].includes(category.type_oeuf));
+  const content = <Stack spacing={1.5}>
+    {asOf && <Typography variant="caption" color="text.secondary">Au {formatShortDate(asOf)}</Typography>}
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems={{ sm: 'center' }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography component={embedded ? 'h3' : 'h2'} variant={embedded ? 'body1' : 'h6'} fontWeight={700}>Disponible à la vente</Typography>
+        <Typography variant="h4" fontWeight={800} color={Number(available) < 0 ? 'error.main' : 'primary.main'} sx={{ mt: 0.5 }}>{number(available)} œufs</Typography>
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+        <Typography fontWeight={600}>Réservé aux clients</Typography>
+        <Typography variant="h5" fontWeight={800} sx={{ mt: 0.5 }}>{number(reserved)} œufs</Typography>
+        {Number(reserved) > 0 && onViewReservations && <Button size="small" onClick={onViewReservations} sx={{ mt: 0.5, px: 0 }}>Voir les ventes à compléter</Button>}
+      </Box>
+    </Stack>
+    <ExpandableDetails label="Détail du stock">
+      {sellable.length > 0 && <Box sx={{ overflowX: 'auto' }}><Table size="small" aria-label="Stock par produit">
+        <TableHead><TableRow><TableCell>Produit</TableCell><TableCell align="right">Disponible</TableCell><TableCell align="right">Réservé</TableCell></TableRow></TableHead>
+        <TableBody>{sellable.map(category => <TableRow key={`${category.type_oeuf}-${category.calibre || 'none'}`}>
+          <TableCell>{category.label}</TableCell><TableCell align="right">{number(category.available_eggs)}</TableCell><TableCell align="right">{number(category.reserved_eggs)}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table></Box>}
+      <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ pt: 2 }}><Typography variant="body2">Disponible + réservé</Typography><Typography variant="body2" fontWeight={700}>{number(physical)} œufs</Typography></Stack>
+    </ExpandableDetails>
+  </Stack>;
+  if (embedded) return content;
+  return <Card variant="outlined" sx={{ borderRadius: 3, mb: 2.5 }}><CardContent sx={{ p: { xs: 2, md: 2.5 } }}>{content}</CardContent></Card>;
 }
+
 
 export function DailySectionHeader({ selectedDate, onDateChange, title = 'Production du jour', subtitle, actions }) {
   return <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} spacing={2} sx={{ mb: 2 }}>

@@ -27,10 +27,10 @@ export default function DeferredSalesCard() {
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{sale.nom_client} · #{sale.id_transaction}</Typography>
               <Typography variant="body2" color="text.secondary">{sale.nom_produit}{sale.nom_batiment ? ` · ${sale.nom_batiment}` : ''}</Typography>
-              <Typography variant="body2" fontWeight={700}>{number(sale.quantite_reservee)} œufs disponibles sur {number(sale.quantite_en_attente)} restants</Typography>
+              <Typography variant="body2" fontWeight={700}>{number(sale.quantite_en_attente)} œufs restants</Typography>
               {sale.date_livraison_prevue && <Typography variant="caption" color="text.secondary">Prévue le {formatShortDate(sale.date_livraison_prevue)}</Typography>}
             </Box>
-            <Button variant="contained" onClick={() => setSelectedId(sale.id_transaction)} aria-label={`Compléter la vente ${sale.id_transaction}`}>Compléter</Button>
+            <Button variant="contained" onClick={() => setSelectedId(sale.id_transaction)} aria-label={`Compléter ${number(sale.quantite_reservee)} œufs pour la vente ${sale.id_transaction}`}>Compléter {number(sale.quantite_reservee)} œufs</Button>
           </Stack>)}
         </Stack>
         {!ready.length && <Typography variant="body2" color="text.secondary">{waiting.length ? 'Aucune vente à compléter avec le stock actuel.' : 'Toutes les livraisons différées sont complétées.'}</Typography>}

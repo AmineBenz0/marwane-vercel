@@ -11,7 +11,7 @@ vi.mock('../../components/PaiementForm/MultiPaiementForm', () => ({ default: () 
 const sale = {
   id_transaction: 7, id_client: 1, id_produit: 1, id_batiment: 1,
   est_actif: true, est_promesse: true, allocation_automatique: true,
-  quantite: 1000, quantite_couverte: 900, quantite_en_attente: 100,
+  quantite_reservee: 100, quantite: 1000, quantite_couverte: 900, quantite_en_attente: 100,
   prix_unitaire: 1.5, montant_total: 1500, montant_paye: 1500, montant_restant: 0,
   statut_paiement: 'paye', pourcentage_paye: 100, date_transaction: '2026-10-25',
   date_livraison_prevue: '2026-10-26', repartition_stock: [],
@@ -37,14 +37,15 @@ describe('completion from transaction details', () => {
   it('closes a paid deferred sale and preserves the displayed payment', async () => {
     post.mockResolvedValue({ ...sale, quantite_couverte: 1000, quantite_en_attente: 0 });
     render(<TransactionDetail />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Compléter' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Compléter 100 œufs' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmer 100 œufs' }));
-    expect(await screen.findByText('Livraison différée · Complétée')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Compléter' })).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Compléter la livraison différée' })).not.toBeInTheDocument());
+    expect(await screen.findByText('Stock complet')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Compléter 100 œufs' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Compléter la vente #7' })).not.toBeInTheDocument());
     expect(post).toHaveBeenCalledExactlyOnceWith('/transactions/7/completion', {
       quantite: 100, quantite_couverte_attendue: 900, empreinte_stock: 'a'.repeat(64),
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Détail des règlements' }));
     await waitFor(() => expect(screen.getByText('Espèces')).toBeVisible());
   });
 });
