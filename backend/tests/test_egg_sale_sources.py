@@ -72,7 +72,7 @@ def test_promise_covers_available_stock_and_reserves_future_stock(db_session, so
     tx = create_transaction(promise, db_session, None)
     assert sum(a.quantite for a in tx.allocations) == 180
     assert tx.quantite_en_attente == 70
-    assert sum(a.quantite for a in tx.allocations) == db_session.query(EggAllocation).filter_by(id_transaction=tx.id_transaction).with_entities(EggAllocation.quantite).all()[0][0]
+    assert sum(row[0] for row in db_session.query(EggAllocation.quantite).filter_by(id_transaction=tx.id_transaction).all()) == 180
     # The pending 70 reserve the next production before another sale can use it.
     remaining = sale_sources(db_session, b.id_batiment, through_date=future.date_production)
     assert sum(row['disponible'] for row in remaining if row['type_oeuf'] == 'normal') == 30
@@ -109,10 +109,14 @@ def test_promise_without_stock_is_saved_but_unmarked_shortage_is_rejected(db_ses
     product = ensure_sellable_egg_product(db_session, 'normal', 'gros')
     kwargs = dict(date_transaction=date.today(), id_client=c.id_client, id_produit=product.id_produit,
                   id_batiment=b.id_batiment, allocation_automatique=True, quantite=40,
-                  prix_unitaire=Decimal('1'), date_livraison_prevue=date.today() + timedelta(days=1))
-    with pytest.raises(Exception):
+                  prix_unitaire=Decimal('1'))
+    with pytest.raises(HTTPException) as exc:
         create_transaction(TransactionCreate(**kwargs), db_session, None)
-    accepted = create_transaction(TransactionCreate(**kwargs, est_promesse=True), db_session, None)
+    assert exc.value.status_code == 409
+    product = ensure_sellable_egg_product(db_session, 'normal', 'gros')
+    kwargs['id_produit'] = product.id_produit
+    accepted = create_transaction(TransactionCreate(**kwargs, est_promesse=True,
+        date_livraison_prevue=date.today() + timedelta(days=1)), db_session, None)
     assert accepted.quantite_couverte == 0
     assert accepted.quantite_en_attente == 40
 

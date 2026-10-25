@@ -117,8 +117,14 @@ def resolve_sale_source(db, payload):
 def validate_sale_stock(db, transaction):
     product = transaction.produit or db.get(Produit, transaction.id_produit)
     category = parse_sellable_egg_product_name(product.nom_produit) if product else None
-    if transaction.id_production is None and not (transaction.est_promesse and category):
+    if not category:
+        if transaction.est_promesse:
+            raise HTTPException(409, "Le produit sélectionné ne correspond pas à des œufs vendables.")
         return
+    if transaction.id_client is None:
+        return
+    if transaction.id_production is None and not transaction.allocation_automatique:
+        raise HTTPException(400, "Sélectionnez une saisie de production ou activez l'allocation automatique.")
     # Daily production corrections lock the same building first. The product
     # lock also serializes sales across buildings when legacy sales are unassigned.
     if transaction.id_batiment is None:
@@ -141,8 +147,7 @@ def validate_sale_stock(db, transaction):
                 and all(a.id_production in eligible_ids and a.quantite <= balances[a.id_production]
                         for a in transaction.allocations)):
             return
-        already_covered = sum(a.quantite for a in transaction.allocations)
-        quantity = max(0, transaction.quantite - already_covered)
+        quantity = transaction.quantite
         allocations = []
         for p in eligible:
             used = min(quantity, max(0, balances[p.id_production]))
@@ -154,12 +159,18 @@ def validate_sale_stock(db, transaction):
         if quantity and not transaction.est_promesse:
             covered = transaction.quantite - quantity
             raise HTTPException(409, f"Stock insuffisant : {covered} œuf(s) disponible(s), {transaction.quantite} demandé(s).")
+        transaction.allocations.clear()
+        db.flush()
         if allocations:
             transaction.allocations.extend(allocations)
             first = next(p for p in eligible if p.id_production == allocations[0].id_production)
             transaction.id_production = first.id_production
             transaction.production = first
             transaction.id_cycle = first.id_cycle
+        else:
+            transaction.id_production = None
+            transaction.production = None
+            transaction.id_cycle = None
         db.flush()
         return
     if not source:
