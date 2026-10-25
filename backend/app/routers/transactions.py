@@ -632,6 +632,20 @@ def get_transaction_audit(
     return audit_list
 
 
+@router.get("/{id}/completion-history")
+def get_completion_history(
+    id: int, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    from app.services.deferred_reporting import completion_events
+    transaction = db.get(Transaction, id)
+    if not transaction:
+        raise HTTPException(404, "Transaction introuvable.")
+    events = completion_events(db, [id]).get(id, [])
+    users = {u.id_utilisateur: u.nom_utilisateur for u in db.query(Utilisateur).filter(Utilisateur.id_utilisateur.in_([e['id_utilisateur'] for e in events])).all()} if events else {}
+    return [{**e, 'operateur': users.get(e['id_utilisateur'])} for e in events]
+
+
 @router.get("/{id}/completion", response_model=DeferredSalePreview)
 def get_completion_proposal(
     id: int, db: Session = Depends(get_db),

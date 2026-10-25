@@ -177,7 +177,7 @@ function BatimentProductionPage() {
       {stockLoading ? <CircularProgress size={24} aria-label="Chargement du stock actuel" /> : stockError ? (
         <Alert severity="error" action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>
       ) : buildingStock ? <>
-        <StockSummary embedded label="Stock disponible maintenant" available={buildingStock.available_eggs} categories={stockCategories} />
+        <StockSummary embedded label="Stock disponible maintenant" available={buildingStock.available_eggs} reserved={buildingStock.reserved_eggs} physical={buildingStock.physical_eggs} covered={buildingStock.sold_eggs} categories={stockCategories} />
         {lowStockCategory && <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>Stock bas sur {lowStockCategory.label} : {formatNumber(lowStockCategory.available_eggs)} œufs disponibles.</Typography>}
         {Number(currentStock?.totals?.unassigned_sold_eggs || 0) > 0 && <Alert severity="warning" sx={{ mt: 2 }}>
           Certaines ventes ne sont pas attribuées à un bâtiment. Elles sont déduites du stock global, mais le stock de ce bâtiment peut être surestimé.

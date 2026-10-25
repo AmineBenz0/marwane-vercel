@@ -7,7 +7,7 @@ import DateField from '../../utils/DateField';
 
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 
-export function StockSummary({ label, available, categories = [], embedded = false }) {
+export function StockSummary({ label, available, categories = [], reserved, covered, physical, embedded = false }) {
   const sellable = categories.filter((category) => !['casse', 'perdu'].includes(category.type_oeuf));
   const content = <>
     <Box sx={{ minWidth: 0, flexShrink: 0 }}>
@@ -16,9 +16,13 @@ export function StockSummary({ label, available, categories = [], embedded = fal
         {number(available)} œufs
       </Typography>
     </Box>
+    {reserved != null && <Box>
+      <Typography variant="body2">{number(physical)} œufs en stock · {number(reserved)} réservés aux livraisons différées</Typography>
+      <Typography variant="body2" color="text.secondary">{number(covered)} œufs déjà affectés aux ventes. Le disponible exclut les réservations.</Typography>
+    </Box>}
     {sellable.length > 0 && <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
       {sellable.map((category) => <Typography key={category.type_oeuf + '-' + (category.calibre || 'none')} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-        {category.label} : <Box component="span" sx={{ fontWeight: 600, color: Number(category.available_eggs) < 0 ? 'error.main' : 'text.primary' }}>{number(category.available_eggs)} œufs</Box>
+        {category.label} : <Box component="span" sx={{ fontWeight: 600, color: Number(category.available_eggs) < 0 ? 'error.main' : 'text.primary' }}>{number(category.available_eggs)} œufs</Box>{category.reserved_eggs > 0 ? ` · ${number(category.reserved_eggs)} réservés` : ''}
       </Typography>)}
     </Stack>}
   </>;

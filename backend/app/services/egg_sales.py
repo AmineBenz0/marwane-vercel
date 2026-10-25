@@ -246,6 +246,17 @@ def sale_sources(db, id_batiment, production_date=None, exclude_transaction_id=N
                                     and balances[p.id_production] > 0))]
 
 
+def reserved_stock_by_category(db, through_date):
+    rows, _, reservations = _stock_state(db, through_date=through_date)
+    totals = defaultdict(int)
+    by_id = {p.id_production: p for p in rows}
+    for sources in reservations.values():
+        for source_id, quantity in sources.items():
+            p = by_id[source_id]
+            totals[(p.id_batiment, p.type_oeuf, p.calibre if p.type_oeuf == 'normal' else None)] += quantity
+    return totals
+
+
 def deferred_sale_reservations(db):
     """One reservation calculation shared by dashboard and transaction lists."""
     _, _, reservations = _stock_state(db, through_date=business_date())
@@ -316,6 +327,7 @@ def complete_deferred_sale(db, transaction_id, payload, current_user):
         raise HTTPException(409, "La quantité dépasse le stock réservé disponible pour cette vente.")
     before = transaction.quantite_couverte
     remaining = payload.quantite
+    consumed = []
     existing = {allocation.id_production: allocation for allocation in transaction.allocations}
     for source in preview['repartition_stock']:
         used = min(remaining, source['quantite'])
@@ -329,6 +341,7 @@ def complete_deferred_sale(db, transaction_id, payload, current_user):
         if transaction.id_production is None:
             transaction.id_production = source['id_production']
             transaction.id_cycle = source['id_cycle']
+        consumed.append(dict(id_production=source['id_production'], date_production=str(source['date_production']), quantite=used, id_cycle=source['id_cycle']))
         remaining -= used
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
@@ -337,7 +350,9 @@ def complete_deferred_sale(db, transaction_id, payload, current_user):
             ancienne_valeur=str(before),
             nouvelle_valeur=json.dumps(dict(quantite_couverte=before + payload.quantite,
                                            date=business_date().isoformat(),
-                                           quantite_completee=payload.quantite))))
+                                           quantite_completee=payload.quantite,
+                                           quantite_totale=transaction.quantite,
+                                           repartition_stock=consumed))))
     transaction.date_modification = datetime.now(timezone.utc)
     db.flush()
     return transaction

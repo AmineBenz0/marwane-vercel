@@ -56,6 +56,7 @@ import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleCompletionDialog from './DeferredSaleCompletionDialog';
+import DeferredSaleHistory from './DeferredSaleHistory';
 
 /**
  * Composant TransactionDetail.
@@ -1008,6 +1009,7 @@ function TransactionDetail() {
           </Button>
         </DialogActions>
       </Dialog>
+      {transaction.est_promesse && <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={transaction.quantite_couverte} />}
       <DeferredSaleCompletionDialog open={completionOpen} transactionId={transaction.id_transaction}
         onClose={() => setCompletionOpen(false)} onCompleted={updated => {
           setTransaction(updated);
