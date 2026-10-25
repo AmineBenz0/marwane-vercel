@@ -48,6 +48,15 @@ const lineSchema = yup.object().shape({
   source_ready: yup.boolean(),
   source_available: optionalNumber(),
   source_group: yup.string().nullable(),
+  est_promesse: yup.boolean().default(false),
+  date_livraison_prevue: yup.string().nullable().when('est_promesse', {
+    is: true,
+    then: (schema) => schema.required('La date prévue est requise').test(
+      'date-promesse', 'La date prévue ne peut pas précéder la transaction',
+      function(value) { return !value || !this.parent.date_transaction || value >= this.parent.date_transaction; },
+    ),
+    otherwise: (schema) => schema.strip(),
+  }),
   id_batiment: optionalNumber(),
   quantite: yup
     .number()
@@ -117,9 +126,14 @@ export const transactionValidationSchema = yup.object().shape({
       is: 'client',
       then: (schema) => schema.of(lineSchema.shape({
         id_batiment: optionalNumber().required('Le bâtiment source est requis').positive(),
-        date_production: yup.string().required('La date de la saisie est requise'),
-        id_production: optionalNumber().required('Choisissez le type d’œufs dans la saisie').positive(),
-        source_ready: yup.boolean().oneOf([true], 'Chargez une saisie de production disponible'),
+        id_produit: optionalNumber().required('Choisissez le type d’œufs').positive(),
+        date_production: yup.string().nullable(),
+        id_production: optionalNumber().when('est_promesse', {
+          is: false,
+          then: (field) => field.required('Choisissez le type d’œufs').positive(),
+          otherwise: (field) => field.nullable(),
+        }),
+        source_ready: yup.boolean().oneOf([true], 'Chargez le stock disponible'),
       })),
       otherwise: (schema) => schema.of(lineSchema.shape({
         id_produit: optionalNumber().required('Le produit est requis').positive('Le produit est requis'),
@@ -129,12 +143,12 @@ export const transactionValidationSchema = yup.object().shape({
       if (this.parent.type_entite !== 'client') return true;
       for (let i = 0; i < (lines || []).length; i += 1) {
         const line = lines[i];
-        if (line.date_production > this.parent.date_transaction) return this.createError({
+        if (!line.est_promesse && line.date_production && line.date_production > this.parent.date_transaction) return this.createError({
           path: `lignes.${i}.date_production`, message: 'La vente ne peut pas précéder la production',
         });
         const requested = lines.reduce((sum, other) => (line.source_group ? other.source_group === line.source_group : Number(other.id_production) === Number(line.id_production)) ? sum + Number(other.quantite || 0) : sum, 0);
-        if (line.source_available != null && requested > line.source_available) return this.createError({
-          path: `lignes.${i}.quantite`, message: 'La quantité dépasse le stock disponible de cette saisie',
+        if (!line.est_promesse && line.source_available != null && requested > line.source_available) return this.createError({
+          path: `lignes.${i}.quantite`, message: 'La quantité dépasse le stock disponible. Enregistrez une promesse pour conserver le reste.',
         });
       }
       return true;

@@ -694,7 +694,9 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         if not category_from_product or category_from_product[0] in {"casse", "perdu"}:
             continue
 
-        quantity = int(transaction.quantite or 0)
+        quantity = int(transaction.quantite_couverte or 0)
+        if quantity <= 0:
+            continue
         if transaction.id_batiment is None:
             unassigned_sold_eggs += quantity
             unassigned_by_category[category_from_product] = unassigned_by_category.get(category_from_product, 0) + quantity

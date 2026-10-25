@@ -23,7 +23,10 @@ beforeEach(() => {
     if (path === '/transactions/production-sources') return sources;
     return [];
   });
-  getProduitsParType.mockResolvedValue([]);
+  getProduitsParType.mockResolvedValue([
+    { id_produit: 7, nom_produit: 'Oeufs - Moyen' },
+    { id_produit: 8, nom_produit: 'Oeufs - Gros' },
+  ]);
 });
 afterEach(cleanup);
 
@@ -53,7 +56,7 @@ describe('sale entry preserves user input', () => {
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment A');
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
-    await screen.findAllByText('La quantité dépasse le stock disponible.');
+    await screen.findAllByText(/Il manque .* œuf\(s\)/);
     expect(quantity()).toHaveValue(70);
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment B');

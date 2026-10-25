@@ -54,6 +54,69 @@ def test_sale_derives_identity_syncs_stock_and_cancellation_restores(db_session,
     assert next(s for s in sale_sources(db_session,b.id_batiment,rows[1].date_production) if s['type_oeuf']=='normal')['disponible']==80
 
 
+def test_promise_covers_available_stock_and_reserves_future_stock(db_session, source_data):
+    from app.models.egg_allocation import EggAllocation
+    b, c, rows = source_data
+    future = Production(id_batiment=b.id_batiment, date_production=date.today() + timedelta(days=1),
+        type_oeuf='normal', calibre='moyen', nombre_oeufs=100, grammage=55,
+        nombre_cartons=2, est_actif=True)
+    db_session.add(future)
+    db_session.flush()
+    product = ensure_sellable_egg_product(db_session, 'normal', 'moyen')
+    promise = TransactionCreate(
+        date_transaction=date.today(), id_client=c.id_client, id_produit=product.id_produit,
+        id_batiment=b.id_batiment, allocation_automatique=True, est_promesse=True,
+        date_livraison_prevue=date.today() + timedelta(days=1), quantite=250,
+        prix_unitaire=Decimal('1.5'),
+    )
+    tx = create_transaction(promise, db_session, None)
+    assert sum(a.quantite for a in tx.allocations) == 180
+    assert tx.quantite_en_attente == 70
+    assert sum(a.quantite for a in tx.allocations) == db_session.query(EggAllocation).filter_by(id_transaction=tx.id_transaction).with_entities(EggAllocation.quantite).all()[0][0]
+    # The pending 70 reserve the next production before another sale can use it.
+    remaining = sale_sources(db_session, b.id_batiment, through_date=future.date_production)
+    assert sum(row['disponible'] for row in remaining if row['type_oeuf'] == 'normal') == 30
+    tomorrow_sale = TransactionCreate(
+        date_transaction=future.date_production, id_client=c.id_client, id_produit=product.id_produit,
+        id_batiment=b.id_batiment, allocation_automatique=True, quantite=31,
+        prix_unitaire=Decimal('1.5'),
+    )
+    with pytest.raises(HTTPException) as exc:
+        create_transaction(tomorrow_sale, db_session, None)
+    assert exc.value.status_code == 409
+
+
+def test_promise_example_covers_600_and_keeps_400_pending(db_session, source_data):
+    b, c, rows = source_data
+    additional = Production(id_batiment=b.id_batiment, date_production=rows[1].date_production,
+        type_oeuf='normal', calibre='moyen', nombre_oeufs=420, grammage=55,
+        nombre_cartons=8, est_actif=True)
+    db_session.add(additional)
+    product = ensure_sellable_egg_product(db_session, 'normal', 'moyen')
+    promise = TransactionCreate(
+        date_transaction=date.today(), id_client=c.id_client, id_produit=product.id_produit,
+        id_batiment=b.id_batiment, allocation_automatique=True, est_promesse=True,
+        date_livraison_prevue=date.today() + timedelta(days=1), quantite=1000,
+        prix_unitaire=Decimal('1.5'),
+    )
+    tx = create_transaction(promise, db_session, None)
+    assert tx.quantite_couverte == 600
+    assert tx.quantite_en_attente == 400
+
+
+def test_promise_without_stock_is_saved_but_unmarked_shortage_is_rejected(db_session, source_data):
+    b, c, _ = source_data
+    product = ensure_sellable_egg_product(db_session, 'normal', 'gros')
+    kwargs = dict(date_transaction=date.today(), id_client=c.id_client, id_produit=product.id_produit,
+                  id_batiment=b.id_batiment, allocation_automatique=True, quantite=40,
+                  prix_unitaire=Decimal('1'), date_livraison_prevue=date.today() + timedelta(days=1))
+    with pytest.raises(Exception):
+        create_transaction(TransactionCreate(**kwargs), db_session, None)
+    accepted = create_transaction(TransactionCreate(**kwargs, est_promesse=True), db_session, None)
+    assert accepted.quantite_couverte == 0
+    assert accepted.quantite_en_attente == 40
+
+
 def test_oversell_batch_rolls_back_all_rows(db_session,source_data):
     with pytest.raises(HTTPException) as exc:
         create_transactions_batch([payload(source_data,50),payload(source_data,40)],db_session,None)

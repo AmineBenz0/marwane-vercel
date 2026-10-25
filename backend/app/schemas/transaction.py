@@ -15,6 +15,8 @@ class TransactionBase(BaseModel):
     Chaque transaction représente une ligne de vente/achat avec un seul produit.
     """
     allocation_automatique: bool = False
+    est_promesse: bool = False
+    date_livraison_prevue: Optional[date] = None
     id_production: Optional[int] = Field(None, gt=0, description="Saisie de production source")
     date_transaction: date = Field(
         ...,
@@ -130,6 +132,21 @@ class TransactionCreate(TransactionBase):
             self.montant_total = Decimal(str(self.quantite)) * self.prix_unitaire
         return self
 
+    @model_validator(mode='after')
+    def validate_promise(self):
+        if self.est_promesse:
+            if self.id_client is None or self.id_fournisseur is not None:
+                raise ValueError("Une promesse de vente doit être liée à un client")
+            if self.id_batiment is None or (self.id_produit is None and self.id_production is None):
+                raise ValueError("Sélectionnez le bâtiment et le type d’œufs de la promesse")
+            if self.date_livraison_prevue is None:
+                raise ValueError("Indiquez la date prévue pour compléter la promesse")
+            if self.date_livraison_prevue < self.date_transaction:
+                raise ValueError("La date prévue ne peut pas précéder la transaction")
+        elif self.date_livraison_prevue is not None:
+            raise ValueError("La date prévue nécessite une promesse de vente")
+        return self
+
 
 class TransactionUpdate(BaseModel):
     """
@@ -137,6 +154,8 @@ class TransactionUpdate(BaseModel):
     Tous les champs sont optionnels pour permettre des mises à jour partielles.
     """
     allocation_automatique: Optional[bool] = None
+    est_promesse: Optional[bool] = None
+    date_livraison_prevue: Optional[date] = None
     id_production: Optional[int] = Field(None, gt=0)
     date_transaction: Optional[date] = Field(
         None,
@@ -261,6 +280,8 @@ class TransactionRead(TransactionBase):
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
     repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
+    quantite_couverte: int = 0
+    quantite_en_attente: int = 0
     date_production: Optional[date] = None
     nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")

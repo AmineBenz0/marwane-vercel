@@ -7,7 +7,17 @@ import { get } from '../../services/api';
 
 const eggLabels = { normal: 'Normaux', double_jaune: 'Double jaune', blanc: 'Blancs' };
 const sizeLabels = { demarrage: 'Démarrage', moyen: 'Moyen', gros: 'Gros' };
-export default function ProductionSourcePicker({ index, control, setValue, batiments, disabled, transactionId, saleDate, children }) {
+const productCategory = (name = '') => {
+  const value = name.trim().toLowerCase().replaceAll('œ', 'oe');
+  if (value === 'oeufs - demarrage') return { type_oeuf: 'normal', calibre: 'demarrage' };
+  if (value === 'oeufs - moyen') return { type_oeuf: 'normal', calibre: 'moyen' };
+  if (value === 'oeufs - gros') return { type_oeuf: 'normal', calibre: 'gros' };
+  if (value === 'oeufs - double jaune') return { type_oeuf: 'double_jaune', calibre: null };
+  if (value === 'oeufs - blancs') return { type_oeuf: 'blanc', calibre: null };
+  return null;
+};
+
+export default function ProductionSourcePicker({ index, control, setValue, batiments, produits = [], disabled, transactionId, saleDate, children }) {
   const lines = useWatch({ control, name: 'lignes' }) || [];
   const line = lines[index] || {};
   const building = line.id_batiment;
@@ -16,16 +26,19 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const groups = groupStock(sources);
-  const selected = groups.find(g => g.sources.some(s => s.id_production === Number(line.id_production)));
+  const choices = productosChoices(produits, groups);
+  const selected = choices.find(g => g.sources.some(s => s.id_production === Number(line.id_production))
+    || Number(g.id_produit) === Number(line.id_produit));
   const available = selected?.disponible;
   const sourceDate = selected?.date_production;
   const groupKey = selected ? `${building}:${selected.key}` : null;
   useEffect(() => {
     setValue(`lignes.${index}.source_group`, groupKey);
     setValue(`lignes.${index}.source_available`, available ?? null);
-    setValue(`lignes.${index}.source_ready`, available > 0 && !fetching && !error);
+    setValue(`lignes.${index}.source_ready`, !fetching && !error);
     if (sourceDate) setValue(`lignes.${index}.date_production`, sourceDate);
-  }, [available, sourceDate, groupKey, fetching, error, index, setValue]);
+    setValue(`lignes.${index}.id_produit`, selected?.id_produit || '');
+  }, [available, sourceDate, groupKey, fetching, error, index, setValue, selected?.id_produit]);
   useEffect(() => {
     let cancelled = false;
     setSources([]); setError(''); setFetching(false);
@@ -60,19 +73,22 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
     {building && saleDate && <Box sx={{ mt: 1 }}>
       {fetching && <CircularProgress size={22} aria-label="Chargement du stock" />}
       {error && <Alert severity="error" action={<Button onClick={() => setRetry(v => v + 1)}>Réessayer</Button>}>{error}</Alert>}
-      {!fetching && !error && sources.length === 0 && <Alert severity="info">Aucun stock disponible pour ce bâtiment à la date de vente.</Alert>}
+      {!fetching && !error && sources.length === 0 && <Alert severity="info">Aucun stock disponible. Vous pouvez enregistrer une promesse de vente.</Alert>}
       <Controller name={`lignes.${index}.id_production`} control={control} render={({ field, fieldState }) => <>
-        {groups.length > 0 && <>
+        {choices.length > 0 && <>
           <Typography variant="body2" sx={{ my: 1 }}>Stock disponible au {formatShortDate(saleDate)}, saisies précédentes incluses.</Typography>
           <Table size="small" aria-label="Stock d’œufs disponible">
             <TableHead><TableRow>{['Type', 'Calibre', 'Disponibles', ''].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
-            <TableBody>{groups.map(group => <TableRow key={group.key} selected={group.key === selected?.key}>
+          <TableBody>{choices.map(group => <TableRow key={group.key} selected={group.key === selected?.key}>
               <TableCell>{eggLabels[group.type_oeuf]}</TableCell><TableCell>{sizeLabels[group.calibre] || '—'}</TableCell>
               <TableCell>{Math.max(0, group.disponible - reserved(group)).toLocaleString('fr-FR')}</TableCell>
               <TableCell><Button size="small" variant={group.key === selected?.key ? 'contained' : 'outlined'}
-                disabled={disabled || group.disponible <= reserved(group)}
+                disabled={disabled}
                 aria-label={`Choisir ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}
-                onClick={() => field.onChange(group.id_production)}>{group.key === selected?.key ? 'Choisi' : 'Choisir'}</Button></TableCell>
+                onClick={() => {
+                  field.onChange(group.id_production || '');
+                  setValue(`lignes.${index}.id_produit`, group.id_produit);
+                }}>{group.key === selected?.key ? 'Choisi' : 'Choisir'}</Button></TableCell>
             </TableRow>)}</TableBody>
           </Table>
         </>}
@@ -85,8 +101,24 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
           <TableBody>{dispatch.map(s => <TableRow key={s.id_production}><TableCell>{formatShortDate(s.date_production)}</TableCell>
             <TableCell>{s.disponible}</TableCell><TableCell>{s.deducted}</TableCell><TableCell>{s.remaining}</TableCell></TableRow>)}</TableBody>
         </Table>
-        {Number(line.quantite) > selected.disponible - reserved(selected) && <Alert severity="error">La quantité dépasse le stock disponible.</Alert>}
+        {Number(line.quantite) > selected.disponible - reserved(selected) && <Alert severity="warning">
+          Il manque {Math.max(0, Number(line.quantite || 0) - (selected.disponible - reserved(selected))).toLocaleString('fr-FR')} œuf(s). Enregistrez cette vente comme promesse pour conserver la quantité à compléter.
+        </Alert>}
       </>}
     </Box>}
   </Box>;
+}
+
+function productosChoices(products, stockGroups) {
+  return products.map((product) => {
+    const category = productCategory(product.nom_produit);
+    if (!category) return null;
+    const key = `${category.type_oeuf}:${category.calibre || ''}`;
+    const stock = stockGroups.find((group) => group.key === key);
+    return {
+      ...(stock || { ...category, key, disponible: 0, sources: [] }),
+      id_produit: product.id_produit,
+      id_production: stock?.id_production || null,
+    };
+  }).filter(Boolean);
 }
