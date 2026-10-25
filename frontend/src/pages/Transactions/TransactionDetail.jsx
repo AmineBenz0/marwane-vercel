@@ -567,12 +567,16 @@ function TransactionDetail() {
           </Typography>
           <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-            {transaction.id_production && <Grid item xs={12}>
-              <Alert severity="info">
-                Origine : {transaction.nom_batiment_source}
+            {(transaction.id_production || transaction.est_promesse) && <Grid item xs={12}>
+              <Alert severity={transaction.est_promesse ? 'warning' : 'info'}>
+                {transaction.est_promesse ? <>
+                  <strong>Promesse de vente</strong> · {Number(transaction.quantite_couverte || 0).toLocaleString('fr-FR')} couvert(s), {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} restant(s) à livrer.
+                  {transaction.date_livraison_prevue && <> Date prévue : {formatShortDate(transaction.date_livraison_prevue)}.</>}
+                  {transaction.nom_batiment_source && <> Bâtiment : {transaction.nom_batiment_source}.</>}
+                </> : <>Origine : {transaction.nom_batiment_source}</>}
                 {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
                   <Box key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Box>)
-                  : <> · Saisie du {formatShortDate(transaction.date_production)}</>}
+                  : transaction.id_production ? <> · Saisie du {formatShortDate(transaction.date_production)}</> : null}
               </Alert>
             </Grid>}
             <Grid item xs={12} sm={6}>
