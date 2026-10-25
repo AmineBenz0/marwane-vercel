@@ -53,7 +53,7 @@ describe('sale stock selection', () => {
     await waitFor(() => expect(line().source_ready).toBe(true));
     mocks.get.mockResolvedValue([]);
     view.rerender(<Form saleDate="2026-10-19" />);
-    await screen.findByText('Aucun stock disponible. Vous pouvez enregistrer une promesse de vente.');
+    await screen.findByText('Aucun stock disponible. Vous pouvez choisir une livraison différée.');
     expect(line().source_ready).toBe(true);
     expect(mocks.get.mock.calls.at(-1)[1].params.through_date).toBe('2026-10-19');
   });
@@ -64,7 +64,7 @@ describe('sale stock selection', () => {
     const view = render(<Form />);
     mocks.get.mockResolvedValue([]);
     view.rerender(<Form saleDate="2026-10-19" />);
-    await screen.findByText('Aucun stock disponible. Vous pouvez enregistrer une promesse de vente.');
+    await screen.findByText('Aucun stock disponible. Vous pouvez choisir une livraison différée.');
     await act(async () => resolveOld(sources));
     expect(screen.queryByText('20/10/26')).not.toBeInTheDocument();
     expect(line().source_ready).toBe(true);

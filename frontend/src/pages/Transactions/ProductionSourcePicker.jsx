@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Controller, useWatch } from 'react-hook-form';
-import { Alert, Box, Button, CircularProgress, Grid, MenuItem, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Grid, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { groupStock, dispatchStock } from './eggStockAllocation';
 import { get } from '../../services/api';
@@ -36,7 +36,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
     setValue(`lignes.${index}.source_group`, groupKey);
     setValue(`lignes.${index}.source_available`, available ?? null);
     setValue(`lignes.${index}.source_ready`, !fetching && !error);
-    if (sourceDate) setValue(`lignes.${index}.date_production`, sourceDate);
+    setValue(`lignes.${index}.date_production`, sourceDate || '');
     setValue(`lignes.${index}.id_produit`, selected?.id_produit || '');
   }, [available, sourceDate, groupKey, fetching, error, index, setValue, selected?.id_produit]);
   useEffect(() => {
@@ -53,8 +53,8 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
       .finally(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
   }, [building, saleDate, transactionId, retry, index, setValue]);
-  const reserved = (group, beforeOnly = false) => lines.reduce((sum, other, i) =>
-    i !== index && (!beforeOnly || i < index) && group.sources.some(s => s.id_production === Number(other.id_production))
+  const reserved = (group, beforeOnly = true) => lines.reduce((sum, other, i) =>
+    i !== index && (!beforeOnly || i < index) && (other.source_group === `${building}:${group.key}` || (Number(other.id_batiment) === Number(building) && group.sources.some(s => s.id_production === Number(other.id_production))))
       ? sum + Number(other.quantite || 0) : sum, 0);
   const before = selected ? dispatchStock(selected.sources, reserved(selected, true)) : [];
   const dispatch = selected ? dispatchStock(before.map(s => ({ ...s, disponible: s.remaining })), line.quantite) : [];
@@ -73,38 +73,56 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
     {building && saleDate && <Box sx={{ mt: 1 }}>
       {fetching && <CircularProgress size={22} aria-label="Chargement du stock" />}
       {error && <Alert severity="error" action={<Button onClick={() => setRetry(v => v + 1)}>Réessayer</Button>}>{error}</Alert>}
-      {!fetching && !error && sources.length === 0 && <Alert severity="info">Aucun stock disponible. Vous pouvez enregistrer une promesse de vente.</Alert>}
+      {!fetching && !error && sources.length === 0 && <Alert severity="info">Aucun stock disponible. Vous pouvez choisir une livraison différée.</Alert>}
       <Controller name={`lignes.${index}.id_production`} control={control} render={({ field, fieldState }) => <>
         {choices.length > 0 && <>
           <Typography variant="body2" sx={{ my: 1 }}>Stock disponible au {formatShortDate(saleDate)}, saisies précédentes incluses.</Typography>
-          <Table size="small" aria-label="Stock d’œufs disponible">
-            <TableHead><TableRow>{['Type', 'Calibre', 'Disponibles', ''].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
-          <TableBody>{choices.map(group => <TableRow key={group.key} selected={group.key === selected?.key}>
-              <TableCell>{eggLabels[group.type_oeuf]}</TableCell><TableCell>{sizeLabels[group.calibre] || '—'}</TableCell>
-              <TableCell>{Math.max(0, group.disponible - reserved(group)).toLocaleString('fr-FR')}</TableCell>
-              <TableCell><Button size="small" variant={group.key === selected?.key ? 'contained' : 'outlined'}
-                disabled={disabled}
-                aria-label={`Choisir ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}
-                onClick={() => {
-                  field.onChange(group.id_production || '');
-                  setValue(`lignes.${index}.id_produit`, group.id_produit);
-                }}>{group.key === selected?.key ? 'Choisi' : 'Choisir'}</Button></TableCell>
-            </TableRow>)}</TableBody>
-          </Table>
+          <Stack spacing={1.25} role="group" aria-label="Stock d’œufs disponible">
+            {choices.map(group => {
+              const chosen = group.key === selected?.key;
+              const count = Math.max(0, group.disponible - reserved(group));
+              const dates = new Set(group.sources.map(source => source.date_production));
+              return <Paper key={group.key} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', borderColor: chosen ? 'primary.main' : 'divider', bgcolor: chosen ? 'action.selected' : 'background.paper' }}>
+                <Button fullWidth disabled={disabled || fetching || !!error} aria-pressed={chosen}
+                  aria-label={`Choisir ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}
+                  onClick={() => {
+                    field.onChange(group.id_production || '');
+                    setValue(`lignes.${index}.id_produit`, group.id_produit, { shouldDirty: true });
+                  }}
+                  sx={{ p: 1.75, textTransform: 'none', justifyContent: 'space-between', textAlign: 'left', color: 'text.primary', gap: 2 }}>
+                  <Box>
+                    <Typography component="span" display="block" fontWeight={700}>{eggLabels[group.type_oeuf]}</Typography>
+                    <Typography component="span" display="block" variant="body2" color="text.secondary">{sizeLabels[group.calibre] ? `Calibre ${sizeLabels[group.calibre].toLowerCase()}` : 'Sans distinction de calibre'}</Typography>
+                    <Typography component="span" display="block" variant="caption" color="text.secondary" sx={{ mt: 0.75 }}>
+                      {count ? `Stock de ${dates.size} journée(s)` : 'Aucun stock · livraison différée possible'}{chosen ? ' · Sélectionné' : ''}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                    <Typography component="span" display="block" variant="h6" fontWeight={700}>{count.toLocaleString('fr-FR')}</Typography>
+                    <Typography component="span" variant="caption" color="text.secondary">œufs disponibles</Typography>
+                  </Box>
+                </Button>
+                {group.sources.length > 0 && <Box component="details" sx={{ mx: 1.75, borderTop: '1px solid', borderColor: 'divider', pb: 0.5 }}>
+                  <Box component="summary" sx={{ py: 1.25, color: 'primary.main', cursor: 'pointer', fontSize: '0.8rem', minHeight: 44 }}>
+                    {chosen ? 'Stock et prélèvements prévus' : 'Détail du stock par date'}
+                  </Box>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table size="small" aria-label={chosen ? 'Répartition prévue du stock' : `Stock ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}>
+                      <TableHead><TableRow><TableCell>Date de production</TableCell><TableCell align="right">Disponible</TableCell>{chosen && <TableCell align="right">Prélevé</TableCell>}</TableRow></TableHead>
+                      <TableBody>{(chosen ? dispatch : group.sources).map(source => <TableRow key={source.id_production}>
+                        <TableCell>{formatShortDate(source.date_production)}</TableCell><TableCell align="right">{source.disponible.toLocaleString('fr-FR')}</TableCell>
+                        {chosen && <TableCell align="right">{source.deducted.toLocaleString('fr-FR')}</TableCell>}
+                      </TableRow>)}</TableBody>
+                    </Table>
+                  </Box>
+                </Box>}
+              </Paper>;
+            })}
+          </Stack>
         </>}
         {fieldState.error && <Alert severity="error">{fieldState.error.message}</Alert>}
       </>} />
-      {selected && <>
-        <Typography variant="body2" sx={{ my: 1 }}>Répartition prévue du stock · les plus anciens d’abord</Typography>
-        <Table size="small" aria-label="Répartition prévue du stock">
-          <TableHead><TableRow>{['Date de production', 'Disponible', 'Prélevé pour cette vente', 'Restant'].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
-          <TableBody>{dispatch.map(s => <TableRow key={s.id_production}><TableCell>{formatShortDate(s.date_production)}</TableCell>
-            <TableCell>{s.disponible}</TableCell><TableCell>{s.deducted}</TableCell><TableCell>{s.remaining}</TableCell></TableRow>)}</TableBody>
-        </Table>
-        {Number(line.quantite) > selected.disponible - reserved(selected) && <Alert severity="warning">
-          Il manque {Math.max(0, Number(line.quantite || 0) - (selected.disponible - reserved(selected))).toLocaleString('fr-FR')} œuf(s). Enregistrez cette vente comme promesse pour conserver la quantité à compléter.
-        </Alert>}
-      </>}
+
     </Box>}
   </Box>;
 }
