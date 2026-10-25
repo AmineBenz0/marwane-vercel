@@ -284,6 +284,9 @@ class DeferredSaleCompletion(BaseModel):
 
 
 class DeferredSalePreview(BaseModel):
+    nom_client: Optional[str] = None
+    nom_produit: Optional[str] = None
+    nom_batiment: Optional[str] = None
     id_transaction: int
     quantite_couverte: int
     quantite_en_attente: int

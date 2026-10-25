@@ -41,7 +41,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  LinearProgress,
   IconButton,
   Tooltip,
 } from '@mui/material';
@@ -57,6 +56,8 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleCompletionDialog from './DeferredSaleCompletionDialog';
 import DeferredSaleHistory from './DeferredSaleHistory';
+import DeferredSaleStockSummary from './DeferredSaleStockSummary';
+import ExpandableDetails from '../../components/ExpandableDetails';
 
 /**
  * Composant TransactionDetail.
@@ -570,20 +571,22 @@ function TransactionDetail() {
           </Typography>
           <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-            {(transaction.id_production || transaction.est_promesse) && <Grid item xs={12}>
-              <Alert severity={transaction.est_promesse ? (transaction.quantite_en_attente > 0 ? 'warning' : 'success') : 'info'}
-                action={transaction.est_actif && transaction.est_promesse && transaction.quantite_en_attente > 0
-                  ? <Button onClick={() => setCompletionOpen(true)}>Compléter</Button> : undefined}>
-                {transaction.est_promesse ? <>
-                  <strong>Livraison différée{transaction.quantite_en_attente === 0 ? ' · Complétée' : ''}</strong> · {Number(transaction.quantite_couverte || 0).toLocaleString('fr-FR')} couvert(s), {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} restant(s) à fournir.
-                  {transaction.date_livraison_prevue && <> Date prévue : {formatShortDate(transaction.date_livraison_prevue)}.</>}
-                  {transaction.nom_batiment_source && <> Bâtiment : {transaction.nom_batiment_source}.</>}
-                </> : <>Origine : {transaction.nom_batiment_source}</>}
+            {transaction.est_promesse ? <Grid item xs={12}>
+              <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                <Typography component="h2" variant="h6" fontWeight={700}>Livraison différée</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+                  {[transaction.nom_batiment_source, transaction.date_livraison_prevue ? `Prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : null].filter(Boolean).join(' · ')}
+                </Typography>
+                <DeferredSaleStockSummary sale={transaction} onComplete={() => setCompletionOpen(true)} />
+              </Box>
+            </Grid> : transaction.id_production ? <Grid item xs={12}>
+              <Typography variant="body2">Origine : {transaction.nom_batiment_source}</Typography>
+              <ExpandableDetails label="Origine du stock">
                 {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
-                  <Box key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Box>)
-                  : transaction.id_production ? <> · Saisie du {formatShortDate(transaction.date_production)}</> : null}
-              </Alert>
-            </Grid>}
+                  <Typography variant="body2" key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Typography>)
+                  : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
+              </ExpandableDetails>
+            </Grid> : null}
             <Grid item xs={12} sm={6}>
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -628,162 +631,26 @@ function TransactionDetail() {
         </CardContent>
       </Card>
 
-      {/* État du paiement */}
-      {statutPaiement && (
-        <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-          <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-            <Typography 
-              variant="h6" 
-              gutterBottom
-              sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' }, mb: { xs: 2, sm: 2.5 } }}
-            >
-              💰 État du Paiement
-            </Typography>
+      {transaction.est_promesse && <Card sx={{ mb: 3 }}><CardContent>
+        <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={transaction.quantite_couverte} />
+      </CardContent></Card>}
+      {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
+          <Typography component="h2" variant="h6" fontWeight={700}>Paiement</Typography>
+          <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />
+        </Stack>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="space-between">
+          <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
+          {Number(statutPaiement.montant_restant) > 0 && <Box><Typography variant="body2" color="text.secondary">{transaction.id_client ? 'Reste à encaisser' : 'Reste à payer'}</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_restant)}</Typography></Box>}
+        </Stack>
+        {Number(statutPaiement.montant_restant) > 0 && <Stack direction="row" spacing={2} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddPaiement}>Ajouter un paiement</Button>
+          {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard ? 'error.main' : 'text.secondary'}>Échéance : {formatDate(transaction.date_echeance)}</Typography>}
+        </Stack>}
+      </CardContent></Card>}
 
-            {/* Barre de progression */}
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Progression du paiement
-                </Typography>
-                <Typography variant="body2" fontWeight="medium">
-                  {statutPaiement.pourcentage_paye.toFixed(1)}%
-                </Typography>
-              </Box>
-              <LinearProgress 
-                variant="determinate" 
-                value={Math.min(statutPaiement.pourcentage_paye, 100)}
-                sx={{ 
-                  height: 10, 
-                  borderRadius: 5,
-                  backgroundColor: 'grey.200',
-                  '& .MuiLinearProgress-bar': {
-                    borderRadius: 5,
-                    backgroundColor: 
-                      statutPaiement.pourcentage_paye >= 100 ? 'success.main' :
-                      statutPaiement.pourcentage_paye >= 50 ? 'warning.main' : 'error.main'
-                  }
-                }}
-              />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {formatMontant(statutPaiement.montant_paye)} payé
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {formatMontant(statutPaiement.montant_total)} total
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* KPIs Paiement */}
-            <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 2 }}>
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ 
-                  p: { xs: 1.5, sm: 2 }, 
-                  bgcolor: 'grey.50', 
-                  borderRadius: 1,
-                  textAlign: 'center'
-                }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Montant dû
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
-                    {formatMontant(statutPaiement.montant_total)}
-                  </Typography>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ 
-                  p: { xs: 1.5, sm: 2 }, 
-                  bgcolor: 'success.50', 
-                  borderRadius: 1,
-                  textAlign: 'center'
-                }}>
-                  <Typography variant="caption" color="success.dark">
-                    Montant payé
-                  </Typography>
-                  <Typography variant="h6" color="success.main" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
-                    {formatMontant(statutPaiement.montant_paye)}
-                  </Typography>
-                </Box>
-              </Grid>
-              
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ 
-                  p: { xs: 1.5, sm: 2 }, 
-                  bgcolor: statutPaiement.montant_restant > 0 ? 'error.50' : 'success.50',
-                  borderRadius: 1,
-                  textAlign: 'center'
-                }}>
-                  <Typography variant="caption" color={statutPaiement.montant_restant > 0 ? 'error.dark' : 'success.dark'}>
-                    Montant restant
-                  </Typography>
-                  <Typography 
-                    variant="h6" 
-                    color={statutPaiement.montant_restant > 0 ? 'error.main' : 'success.main'}
-                    sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}
-                  >
-                    {formatMontant(statutPaiement.montant_restant)}
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
-
-            {/* Badges de statut */}
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-              <PaymentStatusBadge statut={statutPaiement.statut_paiement} size="medium" />
-              {transaction.date_echeance && (
-                <Chip 
-                  label={`Échéance: ${formatDate(transaction.date_echeance)}`}
-                  size="small"
-                  color={statutPaiement.est_en_retard ? 'error' : 'default'}
-                  variant={statutPaiement.est_en_retard ? 'filled' : 'outlined'}
-                />
-              )}
-              {statutPaiement.nombre_paiements > 0 && (
-                <Chip 
-                  label={`${statutPaiement.nombre_paiements} paiement${statutPaiement.nombre_paiements > 1 ? 's' : ''}`}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
-            </Box>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Historique des paiements */}
-      {statutPaiement && (
-        <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-          <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: { xs: 'column', sm: 'row' },
-              justifyContent: 'space-between', 
-              alignItems: { xs: 'stretch', sm: 'center' }, 
-              mb: { xs: 1.5, sm: 2 },
-              gap: { xs: 1.5, sm: 0 }
-            }}>
-              <Typography 
-                variant="h6"
-                sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-              >
-                📋 Historique des Paiements
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleAddPaiement}
-                disabled={statutPaiement.montant_restant <= 0}
-                size={isMobile ? 'small' : 'medium'}
-                fullWidth={isMobile}
-              >
-                Ajouter un paiement
-              </Button>
-            </Box>
-            <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
-            
+      {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
+        <ExpandableDetails label="Détail des règlements">
             {loadingPaiements ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                 <CircularProgress size={30} />
@@ -869,26 +736,11 @@ function TransactionDetail() {
                 <Typography variant="body2" color="text.secondary">
                   Aucun paiement enregistré pour cette transaction
                 </Typography>
-                {statutPaiement.montant_restant > 0 && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddPaiement}
-                    sx={{ mt: 2 }}
-                    size="small"
-                  >
-                    Ajouter le premier paiement
-                  </Button>
-                )}
+
               </Box>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-
-
-
+        </ExpandableDetails>
+      </CardContent></Card>}
 
       {/* Modal d'ajout/édition de paiement */}
       <Dialog
@@ -901,7 +753,7 @@ function TransactionDetail() {
         <form noValidate onSubmit={handleSubmitPaiement(onSubmitPaiement)}>
           <DialogTitle>
             <Typography variant="h6" component="span">
-              {editingPaiement ? '✏️ Modifier le Paiement' : '➕ Ajouter un Paiement'}
+              {editingPaiement ? 'Modifier le paiement' : 'Ajouter un paiement'}
             </Typography>
             {statutPaiement && !editingPaiement && (
               <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -1009,14 +861,13 @@ function TransactionDetail() {
           </Button>
         </DialogActions>
       </Dialog>
-      {transaction.est_promesse && <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={transaction.quantite_couverte} />}
       <DeferredSaleCompletionDialog open={completionOpen} transactionId={transaction.id_transaction}
         onClose={() => setCompletionOpen(false)} onCompleted={updated => {
           setTransaction(updated);
           setCompletionOpen(false);
           notification.success(updated.quantite_en_attente > 0
             ? `Stock complété. ${updated.quantite_en_attente} œufs restent à fournir.`
-            : 'Livraison différée complétée.');
+            : 'Stock complet pour cette vente.');
         }} />
     </Box>
   );

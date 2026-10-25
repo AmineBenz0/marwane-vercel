@@ -53,12 +53,12 @@ afterEach(cleanup);
 describe('deferred sale discovery', () => {
   it('keeps paid sales actionable and refreshes the dashboard after partial completion', async () => {
     renderAt(<DeferredSalesCard />);
-    expect(await screen.findByText('300 œufs disponibles sur 400 restants')).toBeVisible();
+    expect(await screen.findByText('400 œufs restants')).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Compléter la vente 7' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Compléter 300 œufs pour la vente 7' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmer 300 œufs' }));
     expect(await screen.findByText('Vente #7 : 100 œufs restent à fournir.')).toBeVisible();
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Compléter la vente 7' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Compléter 300 œufs pour la vente 7' })).not.toBeInTheDocument());
     expect(screen.getByText('2 vente(s) en attente de production')).toBeVisible();
     expect(post).toHaveBeenCalledExactlyOnceWith('/transactions/7/completion', {
       quantite: 300, quantite_couverte_attendue: 600, empreinte_stock: 'a'.repeat(64),
@@ -77,11 +77,11 @@ describe('deferred sale discovery', () => {
   });
   it('opens the same completion dialog directly from a paid transaction row', async () => {
     render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=ready']}><TransactionsList /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole('button', { name: 'Compléter la vente 7' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Compléter la livraison différée' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Compléter 300 œufs pour la vente 7' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Compléter la vente #7' });
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Confirmer 300 œufs' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Compléter la vente 7' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Compléter 300 œufs pour la vente 7' })).not.toBeInTheDocument();
     expect(post).toHaveBeenCalledTimes(1);
   });
   it('checks stock only after production save and links to ready deferred sales without a popup', async () => {
@@ -95,6 +95,13 @@ describe('deferred sale discovery', () => {
     get.mockRejectedValueOnce(new Error('Connexion interrompue'));
     renderAt(<DeferredSalesCard />);
     fireEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
-    expect(await screen.findByText('300 œufs disponibles sur 400 restants')).toBeVisible();
+    expect(await screen.findByText('400 œufs restants')).toBeVisible();
   });
+});
+
+it('preserves the source-building filter when opening ready sales from stock', async () => {
+  render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=ready&building=1']}><TransactionsList /></MemoryRouter>);
+  await screen.findByRole('button', { name: 'Compléter 300 œufs pour la vente 7' });
+  expect(get).toHaveBeenCalledWith('/transactions', expect.objectContaining({ params: expect.objectContaining({ est_promesse: true, id_batiment: 1 }) }));
+  expect(screen.getByText('Bâtiment : Bâtiment A')).toBeVisible();
 });

@@ -314,3 +314,68 @@ def test_current_report_reservations_agree_with_legacy_global_sales(client, db_s
     assert stock['reserved_eggs'] == 200
     assert stock['available_eggs'] == 0
     assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=date.today())) == 0
+
+
+def test_completion_context_and_initial_history_are_read_only_and_traceable(client, db_session, deferred_sale, test_user):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    building, customer, initial_source, payload = deferred_sale
+    tx = create_transaction(payload, db_session, None)
+    late_source = enter_production(db_session, building.id_batiment, 300)
+    preview = proposal(client, tx.id_transaction)
+    assert preview['nom_client'] == customer.nom_client
+    assert preview['nom_batiment'] == building.nom
+    assert client.get(f'/api/v1/transactions/{tx.id_transaction}').json()['quantite_reservee'] == 300
+    completed = client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=confirmation(preview, 200))
+    assert completed.status_code == 200, completed.text
+    assert completed.json()['quantite_reservee'] == 100
+    # The existing API still returns only completion events unless opted in.
+    assert len(client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history').json()) == 1
+    history = client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history', params={'include_initial': True}).json()
+    assert [e['quantite'] for e in history] == [600, 200]
+    assert history[0]['type'] == 'initial'
+    assert history[0]['repartition_stock'][0]['id_production'] == initial_source.id_production
+    assert history[0]['repartition_stock'][0]['quantite'] == 600
+    assert history[1]['repartition_stock'][0]['id_production'] == late_source.id_production
+    # Old audit records without per-event origins must not invent initial origins.
+    import json
+    audit = db_session.query(TransactionAudit).filter_by(champ_modifie='completion_livraison_differee').one()
+    data = json.loads(audit.nouvelle_valeur)
+    data.pop('repartition_stock')
+    audit.nouvelle_valeur = json.dumps(data)
+    db_session.commit()
+    baseline = client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history', params={'include_initial': True}).json()[0]
+    assert baseline['quantite'] == 600
+    assert baseline['repartition_stock'] == []
+    assert db_session.query(Transaction).count() == 1
+    assert db_session.query(Paiement).count() == 0
+
+
+def test_monthly_report_keeps_historical_debts_separate_from_current_debts(client, db_session, deferred_sale, monkeypatch):
+    _, customer, _, payload = deferred_sale
+    cutoff = date.today().replace(day=20)
+    monkeypatch.setattr('app.routers.reports.business_date', lambda: cutoff)
+    prior = cutoff.replace(day=1) - timedelta(days=1)
+    transactions = []
+    for day in (prior, cutoff.replace(day=10), cutoff.replace(day=27)):
+        tx = Transaction(date_transaction=day, id_client=customer.id_client,
+            id_produit=payload.id_produit, quantite=1, prix_unitaire=100, montant_total=100, est_actif=True)
+        db_session.add(tx)
+        transactions.append(tx)
+    db_session.flush()
+    db_session.add(Paiement(id_transaction=transactions[0].id_transaction,
+        date_paiement=cutoff.replace(day=15), montant=100, type_paiement='cash', statut='valide'))
+    db_session.commit()
+    response = client.get('/api/v1/reports/monthly', params={'month': prior.strftime('%Y-%m')})
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data['date_soldes_actuels'] == cutoff.isoformat()
+    assert Decimal(data['creances']) == 100
+    # The prior sale has since been paid, the current sale is unpaid, and the
+    # future-dated sale must not enter the current snapshot.
+    assert Decimal(data['creances_actuelles']) == 100
+    current = client.get('/api/v1/reports/monthly', params={'month': cutoff.strftime('%Y-%m')}).json()
+    assert Decimal(current['ventes']) == 200
+    assert Decimal(current['creances']) == 200
+    assert Decimal(current['creances_actuelles']) == 100
