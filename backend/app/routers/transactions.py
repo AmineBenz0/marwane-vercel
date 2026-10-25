@@ -24,6 +24,8 @@ from app.schemas.transaction import (
     TransactionCreate,
     TransactionUpdate,
     TransactionRead,
+    DeferredSaleCompletion,
+    DeferredSalePreview,
     TransactionAuditRead
 )
 from app.schemas.paiement import PaiementCreate
@@ -40,7 +42,7 @@ from app.services.financial import validate_payment_date, validate_payment_idemp
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.ledger import record_correction
-from app.services.egg_sales import resolve_sale_source, sale_sources
+from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
@@ -613,6 +615,32 @@ def get_transaction_audit(
     return audit_list
 
 
+@router.get("/{id}/completion", response_model=DeferredSalePreview)
+def get_completion_proposal(
+    id: int, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    transaction = db.get(Transaction, id)
+    if not transaction:
+        raise HTTPException(404, "Transaction introuvable.")
+    return completion_preview(db, transaction)
+
+
+@router.post("/{id}/completion", response_model=TransactionRead)
+def complete_transaction(
+    id: int, payload: DeferredSaleCompletion, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    try:
+        transaction = complete_deferred_sale(db, id, payload, current_user)
+        db.commit()
+        db.refresh(transaction)
+        return transaction
+    except Exception:
+        db.rollback()
+        raise
+
+
 @router.get("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def get_transaction(
     id: int,
@@ -855,6 +883,12 @@ def update_transaction(
         db=db,
     )
     
+    stock_fields = ('quantite', 'id_produit', 'id_batiment', 'id_production',
+                    'date_transaction', 'id_client', 'id_fournisseur', 'est_promesse',
+                    'allocation_automatique')
+    preserve_egg_allocations = bool(transaction.est_promesse) and not any(
+        field in update_data and update_data[field] != getattr(transaction, field)
+        for field in stock_fields)
     for field, value in update_data.items():
         setattr(transaction, field, value)
     if "id_client" in update_data and update_data["id_client"] is not None and "id_fournisseur" not in update_data:
@@ -873,7 +907,8 @@ def update_transaction(
         transaction.id_utilisateur_modification = current_user.id_utilisateur
 
     if inventory_changed and transaction.est_actif:
-        record_transaction_movement(db, transaction, current_user)
+        record_transaction_movement(db, transaction, current_user,
+                                    preserve_egg_allocations=preserve_egg_allocations)
     
     db.commit()
     db.refresh(transaction)

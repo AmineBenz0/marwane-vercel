@@ -1,5 +1,8 @@
 """Trace egg sales to a daily production row without duplicating stock ledgers."""
 from collections import defaultdict
+from datetime import datetime, timezone
+from hashlib import sha256
+import json
 
 from fastapi import HTTPException
 
@@ -9,12 +12,14 @@ from app.models.batiment import Batiment
 from app.models.production import Production
 from app.models.produit import Produit
 from app.models.transaction import Transaction
+from app.models.audit import TransactionAudit
+from app.utils.business_date import business_date
 from app.utils.egg_product_sync import (
     ensure_sellable_egg_product, parse_sellable_egg_product_name,
 )
 
 
-def source_balances(db, *, exclude_transaction_id=None, through_date=None):
+def _stock_state(db, *, exclude_transaction_id=None, through_date=None):
     """Reserve historical unlinked sales FIFO; never invent their provenance.
 
     Legacy building sales consume that building's oldest remaining category.
@@ -64,6 +69,7 @@ def source_balances(db, *, exclude_transaction_id=None, through_date=None):
         Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
     ).order_by(Transaction.date_livraison_prevue, Transaction.date_transaction,
                 Transaction.id_transaction).all()
+    reservations = defaultdict(dict)
     for tx in promises:
         if tx.id_transaction == exclude_transaction_id:
             continue
@@ -76,10 +82,18 @@ def source_balances(db, *, exclude_transaction_id=None, through_date=None):
             if p.id_batiment != tx.id_batiment:
                 continue
             used = min(pending, max(0, remaining[p.id_production]))
+            if used:
+                reservations[tx.id_transaction][p.id_production] = used
             remaining[p.id_production] -= used
             pending -= used
             if not pending:
                 break
+    return rows, remaining, reservations
+
+
+def source_balances(db, *, exclude_transaction_id=None, through_date=None):
+    rows, remaining, _ = _stock_state(db, exclude_transaction_id=exclude_transaction_id,
+                                      through_date=through_date)
     return rows, remaining
 
 
@@ -90,6 +104,8 @@ def resolve_sale_source(db, payload):
             raise HTTPException(400, "Sélectionnez une production pour la vente ou un produit pour l'achat.")
         # Lock before inserting a transaction: acquiring FOR UPDATE after an
         # FK insert can deadlock against another request's FK key-share lock.
+        if payload.id_batiment is not None:
+            db.query(Batiment).filter(Batiment.id_batiment == payload.id_batiment).with_for_update().first()
         db.query(Produit).filter(Produit.id_produit == payload.id_produit).with_for_update().first()
         return
     source = db.get(Production, payload.id_production)
@@ -114,7 +130,7 @@ def resolve_sale_source(db, payload):
         setattr(payload, field, expected)
 
 
-def validate_sale_stock(db, transaction):
+def validate_sale_stock(db, transaction, *, preserve_allocations=False):
     product = transaction.produit or db.get(Produit, transaction.id_produit)
     category = parse_sellable_egg_product_name(product.nom_produit) if product else None
     if not category:
@@ -135,6 +151,9 @@ def validate_sale_stock(db, transaction):
         raise HTTPException(400, "Sélectionnez le bâtiment source pour cette livraison différée.")
     db.query(Batiment).filter(Batiment.id_batiment == transaction.id_batiment).with_for_update().one()
     db.query(Produit).filter(Produit.id_produit == transaction.id_produit).with_for_update().one()
+    if transaction.est_promesse and preserve_allocations:
+        # Price-only edits cannot confirm more eggs or erase confirmed origins.
+        return
     rows, balances = source_balances(db, exclude_transaction_id=transaction.id_transaction,
                                     through_date=transaction.date_transaction)
     source = next((p for p in rows if p.id_production == transaction.id_production), None)
@@ -225,3 +244,74 @@ def sale_sources(db, id_batiment, production_date=None, exclude_transaction_id=N
        and (production_date is None or p.date_production == production_date)
        and (through_date is None or (p.type_oeuf not in {'casse', 'perdu'}
                                     and balances[p.id_production] > 0))]
+
+
+def completion_preview(db, transaction):
+    """Expose only this sale's reserved eggs, in the existing reservation order."""
+    if not transaction.est_actif or not transaction.est_promesse or not transaction.id_client:
+        raise HTTPException(409, "Cette transaction n’est pas une livraison différée active.")
+    if not transaction.id_batiment or not transaction.allocation_automatique:
+        raise HTTPException(409, "L’origine du stock de cette vente doit être renseignée.")
+    rows, _, reservations = _stock_state(db, through_date=business_date())
+    owned = reservations.get(transaction.id_transaction, {})
+    sources = [dict(id_production=p.id_production, date_production=p.date_production,
+                    quantite=owned[p.id_production], id_cycle=p.id_cycle)
+               for p in rows if owned.get(p.id_production, 0) > 0]
+    fingerprint = sha256(json.dumps([
+        transaction.id_transaction, transaction.quantite, transaction.quantite_couverte,
+        transaction.id_batiment, transaction.id_produit, sources,
+    ], default=str, sort_keys=True).encode()).hexdigest()
+    return dict(id_transaction=transaction.id_transaction,
+                quantite_couverte=transaction.quantite_couverte,
+                quantite_en_attente=transaction.quantite_en_attente,
+                quantite_proposee=sum(source['quantite'] for source in sources),
+                repartition_stock=sources, empreinte_stock=fingerprint)
+
+
+def complete_deferred_sale(db, transaction_id, payload, current_user):
+    """Append stock allocations only; never create another sale or payment."""
+    snapshot = db.get(Transaction, transaction_id)
+    if not snapshot:
+        raise HTTPException(404, "Transaction introuvable.")
+    building_id, product_id = snapshot.id_batiment, snapshot.id_produit
+    # Same lock order as production corrections and new linked sales.
+    db.query(Batiment).filter(Batiment.id_batiment == building_id).with_for_update().first()
+    db.query(Produit).filter(Produit.id_produit == product_id).with_for_update().one()
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == transaction_id).populate_existing().with_for_update().one()
+    if transaction.id_batiment != building_id or transaction.id_produit != product_id:
+        raise HTTPException(409, "La vente a changé. Rechargez la proposition de stock.")
+    preview = completion_preview(db, transaction)
+    if transaction.quantite_en_attente == 0:
+        raise HTTPException(409, "Cette livraison différée est déjà complétée.")
+    if (payload.quantite_couverte_attendue != transaction.quantite_couverte
+            or payload.empreinte_stock != preview['empreinte_stock']):
+        raise HTTPException(409, "Le stock ou la vente a changé. Rechargez la proposition avant de confirmer.")
+    if payload.quantite > preview['quantite_proposee']:
+        raise HTTPException(409, "La quantité dépasse le stock réservé disponible pour cette vente.")
+    before = transaction.quantite_couverte
+    remaining = payload.quantite
+    existing = {allocation.id_production: allocation for allocation in transaction.allocations}
+    for source in preview['repartition_stock']:
+        used = min(remaining, source['quantite'])
+        if not used:
+            break
+        allocation = existing.get(source['id_production'])
+        if allocation:
+            allocation.quantite += used
+        else:
+            transaction.allocations.append(EggAllocation(id_production=source['id_production'], quantite=used))
+        if transaction.id_production is None:
+            transaction.id_production = source['id_production']
+            transaction.id_cycle = source['id_cycle']
+        remaining -= used
+    if current_user:
+        transaction.id_utilisateur_modification = current_user.id_utilisateur
+        db.add(TransactionAudit(id_transaction=transaction_id,
+            id_utilisateur=current_user.id_utilisateur, champ_modifie='completion_livraison_differee',
+            ancienne_valeur=str(before),
+            nouvelle_valeur=json.dumps(dict(quantite_couverte=before + payload.quantite,
+                                           date=business_date().isoformat(),
+                                           quantite_completee=payload.quantite))))
+    transaction.date_modification = datetime.now(timezone.utc)
+    db.flush()
+    return transaction
