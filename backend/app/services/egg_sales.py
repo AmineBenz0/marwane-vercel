@@ -124,7 +124,11 @@ def validate_sale_stock(db, transaction):
     if transaction.id_client is None:
         return
     if transaction.id_production is None and not transaction.allocation_automatique:
-        raise HTTPException(400, "Sélectionnez une saisie de production ou activez l'allocation automatique.")
+        if transaction.est_promesse:
+            raise HTTPException(400, "Une promesse de vente doit utiliser l'allocation automatique.")
+        # Keep accepting historical API callers that create unlinked sales.
+        # New sale entry sends allocation_automatique=true and is stock checked.
+        return
     # Daily production corrections lock the same building first. The product
     # lock also serializes sales across buildings when legacy sales are unassigned.
     if transaction.id_batiment is None:

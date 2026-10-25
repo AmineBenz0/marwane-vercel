@@ -137,6 +137,8 @@ class TransactionCreate(TransactionBase):
         if self.est_promesse:
             if self.id_client is None or self.id_fournisseur is not None:
                 raise ValueError("Une promesse de vente doit être liée à un client")
+            if not self.allocation_automatique:
+                raise ValueError("Une promesse de vente nécessite l’allocation automatique du stock")
             if self.id_batiment is None or (self.id_produit is None and self.id_production is None):
                 raise ValueError("Sélectionnez le bâtiment et le type d’œufs de la promesse")
             if self.date_livraison_prevue is None:
