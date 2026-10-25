@@ -92,7 +92,7 @@ function ProductionDashboard() {
       <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
         {stockLoading ? <Box sx={{ p: 3 }}><CircularProgress size={24} aria-label="Chargement du stock actuel" /></Box>
           : stockError ? <Alert severity="error" sx={{ mb: 2.5 }} action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>
-          : <StockSummary label="Stock disponible maintenant" available={currentStock?.totals?.available_eggs} categories={currentStock?.categories} />}
+          : <StockSummary label="Stock disponible maintenant" available={currentStock?.totals?.available_eggs} reserved={currentStock?.totals?.reserved_eggs} physical={currentStock?.totals?.physical_eggs} covered={currentStock?.totals?.sold_eggs} categories={currentStock?.categories} />}
         {!stockLoading && !stockError && Number(currentStock?.totals?.unassigned_sold_eggs || 0) > 0 && <Alert severity="warning" sx={{ mb: 2.5 }}>
           {formatNumber(currentStock.totals.unassigned_sold_eggs)} œufs vendus sans bâtiment source.
           Ces ventes sont déduites du stock global. Attribuez-les pour fiabiliser le stock de chaque bâtiment.

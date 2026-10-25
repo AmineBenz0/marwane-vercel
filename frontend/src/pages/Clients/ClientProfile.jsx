@@ -60,6 +60,7 @@ import { formatMonthYear, formatShortDate } from '../../utils/dateFormatting';
 import StatCard from '../../components/StatCard/StatCard';
 import ModalForm from '../../components/ModalForm/ModalForm';
 import TransactionForm from '../Transactions/TransactionForm';
+import ClientDeferredSales from './ClientDeferredSales';
 import FinancialInsights from '../../components/FinancialInsights/FinancialInsights';
 import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
@@ -319,6 +320,9 @@ function ClientProfile() {
    * Colonnes exportées dans le même ordre que le registre visible.
    */
   const transactionColumns = [
+    { id: 'date_livraison_prevue', label: 'Livraison prévue' },
+    { id: 'quantite_couverte', label: 'Quantité couverte' },
+    { id: 'quantite_en_attente', label: 'Quantité restante à fournir' },
     {
       id: 'date_transaction',
       label: 'Date',
@@ -686,6 +690,8 @@ function ClientProfile() {
         </Tabs>
       </Card>
 
+      <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} onCompleted={fetchClientProfile} />
+
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
       {/* Cartes statistiques */}
       <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
@@ -901,6 +907,7 @@ function ClientProfile() {
       </Box>
 
       <Box sx={{ display: activeTab === 'produits' ? 'block' : 'none' }}>
+      <Alert severity="info" sx={{ mb: 2 }}>Les quantités achetées incluent les livraisons différées. Consultez leur suivi pour distinguer les œufs couverts de ceux restant à fournir.</Alert>
       {/* Section Produits Achetés */}
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>

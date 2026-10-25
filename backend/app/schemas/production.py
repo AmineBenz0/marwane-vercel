@@ -113,6 +113,8 @@ class ProductionStockTotals(BaseModel):
     produced_eggs: int
     sold_eggs: int
     lost_eggs: int
+    reserved_eggs: int = 0
+    physical_eggs: int = 0
     available_eggs: int
     unassigned_sold_eggs: int
     buildings_count: int
@@ -126,6 +128,8 @@ class ProductionStockCategory(BaseModel):
     produced_eggs: int
     lost_eggs: int
     sold_eggs: int
+    reserved_eggs: int = 0
+    physical_eggs: int = 0
     available_eggs: int
 
 
@@ -137,6 +141,8 @@ class ProductionStockBuilding(BaseModel):
     produced_eggs: int
     sold_eggs: int
     lost_eggs: int
+    reserved_eggs: int = 0
+    physical_eggs: int = 0
     available_eggs: int
     mortalite: int
     consommation_aliment_kg: Decimal

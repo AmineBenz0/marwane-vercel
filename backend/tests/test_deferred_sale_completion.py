@@ -251,3 +251,66 @@ def test_discovery_respects_priority_excludes_future_stock_and_cancelled_sales(c
     assert {r['id_transaction']: r['quantite_reservee'] for r in history} == {
         first.id_transaction: 300, later.id_transaction: 0}
     assert client.get('/api/v1/transactions', params={'est_promesse': False}).json() == []
+
+
+def test_paid_sale_agrees_across_profile_stock_history_and_monthly_reports(client, db_session, deferred_sale, test_user):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    building, customer, original_source, payload = deferred_sale
+    prior_month = date.today().replace(day=1) - timedelta(days=1)
+    original_source.date_production = prior_month - timedelta(days=1)
+    db_session.commit()
+    payload = payload.model_copy(update={'date_transaction': prior_month})
+    batch = TransactionPaymentBatchCreate(items=[dict(client_ref='reporting',
+        transaction=payload.model_dump(), paiements=[dict(date_paiement=prior_month,
+            montant='1500', type_paiement='cash')])])
+    tx = create_transactions_with_payments_batch(batch, db_session, None)[0]['transaction']
+    def report(month):
+        result = client.get('/api/v1/reports/monthly', params={'month': month.strftime('%Y-%m')})
+        assert result.status_code == 200, result.text
+        return result.json()
+    before = [report(prior_month), report(date.today())]
+    historical = client.get('/api/v1/productions/stock', params={'date_stock': prior_month.isoformat()}).json()
+    assert historical['totals']['sold_eggs'] == 600
+    for quantity in (300, 100):
+        enter_production(db_session, building.id_batiment, quantity)
+        stock = client.get('/api/v1/productions/stock').json()['totals']
+        assert stock['physical_eggs'] == quantity
+        assert stock['reserved_eggs'] == quantity
+        assert stock['available_eggs'] == 0
+        preview = proposal(client, tx.id_transaction)
+        result = client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=confirmation(preview))
+        assert result.status_code == 200, result.text
+    profile = client.get(f'/api/v1/clients/{customer.id_client}/profile').json()
+    assert len(profile['transactions']) == 1
+    sale = profile['transactions'][0]
+    assert sale['quantite_couverte'] == 1000
+    assert sale['quantite_en_attente'] == 0
+    assert Decimal(sale['montant_paye']) == 1500
+    history = client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history').json()
+    assert [e['quantite'] for e in history] == [300, 100]
+    assert [sum(s['quantite'] for s in e['repartition_stock']) for e in history] == [300, 100]
+    assert all(s['date_production'] == date.today().isoformat() for e in history for s in e['repartition_stock'])
+    assert client.get('/api/v1/productions/stock/daily').json()['totals']['sold_eggs'] == 400
+    assert client.get('/api/v1/productions/stock', params={'date_stock': prior_month.isoformat()}).json() == historical
+    assert before == [report(prior_month), report(date.today())]
+    assert Decimal(before[0]['ventes']) == 1500
+    assert Decimal(before[1]['ventes']) == 0
+    assert db_session.query(Transaction).count() == 1
+    assert db_session.query(Paiement).count() == 1
+
+
+def test_current_report_reservations_agree_with_legacy_global_sales(client, db_session, deferred_sale):
+    building, customer, _, payload = deferred_sale
+    create_transaction(payload, db_session, None)
+    db_session.add(Transaction(date_transaction=payload.date_transaction,
+        id_client=customer.id_client, id_produit=payload.id_produit,
+        quantite=100, prix_unitaire=1, montant_total=100, est_actif=True))
+    db_session.commit()
+    enter_production(db_session, building.id_batiment, 300)
+    stock = client.get('/api/v1/productions/stock').json()['totals']
+    assert stock['physical_eggs'] == 200
+    assert stock['reserved_eggs'] == 200
+    assert stock['available_eggs'] == 0
+    assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=date.today())) == 0
