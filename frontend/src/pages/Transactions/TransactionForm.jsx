@@ -50,6 +50,7 @@ import {
   Divider,
   Collapse,
   Grid,
+  Checkbox,
 } from '@mui/material';
 import { 
   Close as CloseIcon, 
@@ -68,6 +69,11 @@ import { transactionValidationSchema } from './transactionValidation';
 const EMPTY_INITIAL_VALUES = {};
 
 const today = () => new Date().toISOString().split('T')[0];
+const tomorrow = () => {
+  const value = new Date(`${today()}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().split('T')[0];
+};
 
 const requiredFieldShake = keyframes`
   0%, 100% { transform: translateX(0); }
@@ -186,6 +192,8 @@ const createLineDefaults = (prefillBatimentId = '', date = today(), paymentType 
   id_production: '',
   date_production: '',
   source_ready: false,
+  est_promesse: false,
+  date_livraison_prevue: tomorrow(),
   id_batiment: prefillBatimentId || '',
   quantite: undefined,
   prix_unitaire: undefined,
@@ -544,7 +552,10 @@ function TransactionForm({
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           ...(data.type_entite === 'client'
-            ? { id_production: Number(data.lignes[0].id_production), allocation_automatique: true }
+            ? { id_production: data.lignes[0].id_production ? Number(data.lignes[0].id_production) : null,
+              id_produit: Number(data.lignes[0].id_produit), allocation_automatique: true,
+              est_promesse: !!data.lignes[0].est_promesse,
+              date_livraison_prevue: data.lignes[0].est_promesse ? data.lignes[0].date_livraison_prevue : null }
             : { id_produit: Number(data.lignes[0].id_produit) }),
           id_batiment: data.type_entite === 'client' && data.lignes[0].id_batiment ? parseInt(data.lignes[0].id_batiment) : null,
           quantite: parseInt(data.lignes[0].quantite),
@@ -576,7 +587,10 @@ function TransactionForm({
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           ...(data.type_entite === 'client'
-            ? { id_production: Number(ligne.id_production), allocation_automatique: true }
+            ? { id_production: ligne.id_production ? Number(ligne.id_production) : null,
+              id_produit: Number(ligne.id_produit), allocation_automatique: true,
+              est_promesse: !!ligne.est_promesse,
+              date_livraison_prevue: ligne.est_promesse ? ligne.date_livraison_prevue : null }
             : { id_produit: Number(ligne.id_produit) }),
           id_batiment: data.type_entite === 'client' && ligne.id_batiment ? parseInt(ligne.id_batiment) : null,
           quantite: parseInt(ligne.quantite),
@@ -1153,6 +1167,13 @@ function TransactionForm({
                           (parseFloat(ligne.quantite) || 0) *
                           (parseFloat(ligne.prix_unitaire) || 0);
                   const shouldShowBatimentSource = watchedTypeEntite === 'client';
+                  const availableForLine = Number(ligne.source_available || 0) -
+                    (watchedLignes || []).reduce((sum, other, otherIndex) => (
+                      otherIndex !== index && ligne.source_group && other.source_group === ligne.source_group
+                        ? sum + Number(other.quantite || 0) : sum
+                    ), 0);
+                  const needsPromise = shouldShowBatimentSource && ligne.source_available != null
+                    && Number(ligne.quantite || 0) > Math.max(0, availableForLine);
                   const amountFields = (<>
                           {/* Quantité */}
                           <Grid item xs={12} sm={6} md={4}>
@@ -1242,8 +1263,22 @@ function TransactionForm({
                       </Box>
                       {shouldShowBatimentSource && <ProductionSourcePicker
                         index={index} control={control} setValue={setValue} batiments={batiments}
+                        produits={produits}
                         disabled={loading} transactionId={initialValues.id_transaction}
                         saleDate={watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
+                      {needsPromise && (
+                        <Controller name={`lignes.${index}.est_promesse`} control={control} render={({ field }) => (
+                          <Box sx={{ mt: 1, p: 1.5, border: '1px solid', borderColor: 'warning.light', borderRadius: 2 }}>
+                            <FormControlLabel control={<Checkbox checked={!!field.value} onChange={(event) => field.onChange(event.target.checked)} />}
+                              label="Promesse de vente ?" />
+                            {!!field.value && <Controller name={`lignes.${index}.date_livraison_prevue`} control={control} render={({ field: dateField, fieldState }) => (
+                              <TextField {...dateField} type="date" size="small" fullWidth label="Date prévue pour compléter la promesse *"
+                                InputLabelProps={{ shrink: true }} inputProps={{ min: watch('date_transaction') || today() }}
+                                error={!!fieldState.error} helperText={fieldState.error?.message || 'Le stock restant sera réservé à cette vente au fur et à mesure des nouvelles productions.'} />
+                            )} />}
+                          </Box>
+                        )} />
+                      )}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>
                         {/* Produit */}

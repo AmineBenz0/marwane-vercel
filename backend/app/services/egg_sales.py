@@ -42,7 +42,7 @@ def source_balances(db, *, exclude_transaction_id=None, through_date=None):
         elif tx.id_production in remaining:
             remaining[tx.id_production] -= tx.quantite
     # Building-specific reservations must precede global reservations.
-    legacy = sorted((item for item in sales if item[0].id_production is None and not item[0].allocations),
+    legacy = sorted((item for item in sales if item[0].id_production is None and not item[0].allocations and not item[0].est_promesse),
                     key=lambda item: (item[0].id_batiment is None, item[0].date_transaction, item[0].id_transaction))
     for tx, name in legacy:
         category = parse_sellable_egg_product_name(name)
@@ -56,6 +56,29 @@ def source_balances(db, *, exclude_transaction_id=None, through_date=None):
             remaining[p.id_production] -= used
             quantity -= used
             if not quantity:
+                break
+    # Open promises reserve newly produced eggs oldest-commitment first after
+    # confirmed sales have been accounted for. No promise can reserve stock twice.
+    promises = db.query(Transaction).join(Produit).filter(
+        Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
+        Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
+    ).order_by(Transaction.date_livraison_prevue, Transaction.date_transaction,
+                Transaction.id_transaction).all()
+    for tx in promises:
+        if tx.id_transaction == exclude_transaction_id:
+            continue
+        category = parse_sellable_egg_product_name(tx.produit.nom_produit)
+        if not category:
+            continue
+        covered = sum(a.quantite for a in tx.allocations)
+        pending = max(0, tx.quantite - covered)
+        for p in by_category.get(category, []):
+            if p.id_batiment != tx.id_batiment:
+                continue
+            used = min(pending, max(0, remaining[p.id_production]))
+            remaining[p.id_production] -= used
+            pending -= used
+            if not pending:
                 break
     return rows, remaining
 
@@ -92,20 +115,35 @@ def resolve_sale_source(db, payload):
 
 
 def validate_sale_stock(db, transaction):
-    if transaction.id_production is None:
+    product = transaction.produit or db.get(Produit, transaction.id_produit)
+    category = parse_sellable_egg_product_name(product.nom_produit) if product else None
+    if not category:
+        if transaction.est_promesse:
+            raise HTTPException(409, "Le produit sélectionné ne correspond pas à des œufs vendables.")
+        return
+    if transaction.id_client is None:
+        return
+    if transaction.id_production is None and not transaction.allocation_automatique:
+        if transaction.est_promesse:
+            raise HTTPException(400, "Une promesse de vente doit utiliser l'allocation automatique.")
+        # Keep accepting historical API callers that create unlinked sales.
+        # New sale entry sends allocation_automatique=true and is stock checked.
         return
     # Daily production corrections lock the same building first. The product
     # lock also serializes sales across buildings when legacy sales are unassigned.
+    if transaction.id_batiment is None:
+        raise HTTPException(400, "Sélectionnez le bâtiment source pour cette promesse.")
     db.query(Batiment).filter(Batiment.id_batiment == transaction.id_batiment).with_for_update().one()
     db.query(Produit).filter(Produit.id_produit == transaction.id_produit).with_for_update().one()
     rows, balances = source_balances(db, exclude_transaction_id=transaction.id_transaction,
                                     through_date=transaction.date_transaction)
     source = next((p for p in rows if p.id_production == transaction.id_production), None)
-    if not source or source.type_oeuf in {'casse', 'perdu'}:
+    if category is None or category[0] in {'casse', 'perdu'}:
+        raise HTTPException(409, "Le produit sélectionné ne correspond pas à des œufs vendables.")
+    if source and source.type_oeuf in {'casse', 'perdu'}:
         raise HTTPException(409, "La production sélectionnée n'est plus disponible.")
     if transaction.allocation_automatique:
-        category = (source.type_oeuf, source.calibre)
-        eligible = [p for p in rows if p.id_batiment == source.id_batiment
+        eligible = [p for p in rows if p.id_batiment == transaction.id_batiment
                     and (p.type_oeuf, p.calibre) == category]
         # Preserve exact origins for price/payment-only edits.
         eligible_ids = {p.id_production for p in eligible}
@@ -122,17 +160,25 @@ def validate_sale_stock(db, transaction):
                 quantity -= used
             if quantity == 0:
                 break
-        if quantity:
-            raise HTTPException(409, f"Stock insuffisant : {transaction.quantite - quantity} œuf(s) disponible(s).")
+        if quantity and not transaction.est_promesse:
+            covered = transaction.quantite - quantity
+            raise HTTPException(409, f"Stock insuffisant : {covered} œuf(s) disponible(s), {transaction.quantite} demandé(s).")
         transaction.allocations.clear()
         db.flush()
-        transaction.allocations.extend(allocations)
-        first = next(p for p in eligible if p.id_production == allocations[0].id_production)
-        transaction.id_production = first.id_production
-        transaction.production = first
-        transaction.id_cycle = first.id_cycle
+        if allocations:
+            transaction.allocations.extend(allocations)
+            first = next(p for p in eligible if p.id_production == allocations[0].id_production)
+            transaction.id_production = first.id_production
+            transaction.production = first
+            transaction.id_cycle = first.id_cycle
+        else:
+            transaction.id_production = None
+            transaction.production = None
+            transaction.id_cycle = None
         db.flush()
         return
+    if not source:
+        raise HTTPException(409, "La production sélectionnée n'est plus disponible.")
     if transaction.quantite > balances[source.id_production]:
         raise HTTPException(409, f"Stock insuffisant pour cette saisie : {max(0, balances[source.id_production])} œuf(s) disponible(s).")
     if transaction.allocations:

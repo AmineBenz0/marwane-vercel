@@ -47,6 +47,8 @@ class Transaction(Base):
     id_fournisseur = Column(Integer, ForeignKey("fournisseurs.id_fournisseur"), nullable=True, index=True)
     id_batiment = Column(Integer, ForeignKey("batiments.id_batiment"), nullable=True, index=True)
     allocation_automatique = Column(Boolean, nullable=False, default=False, server_default="false")
+    est_promesse = Column(Boolean, nullable=False, default=False, server_default="false")
+    date_livraison_prevue = Column(Date, nullable=True, index=True)
     allocations = relationship("EggAllocation", cascade="all, delete-orphan", lazy="selectin")
     id_production = Column(Integer, ForeignKey("productions.id_production", ondelete="RESTRICT"), nullable=True, index=True)
     id_cycle = Column(Integer, ForeignKey("cycles_production.id_cycle"), nullable=True, index=True)
@@ -82,6 +84,16 @@ class Transaction(Base):
         return [dict(id_production=a.id_production, quantite=a.quantite,
                      date_production=a.production.date_production, id_cycle=a.production.id_cycle)
                 for a in self.allocations]
+
+    @property
+    def quantite_couverte(self):
+        if self.est_promesse:
+            return sum(allocation.quantite for allocation in self.allocations)
+        return self.quantite
+
+    @property
+    def quantite_en_attente(self):
+        return max(0, self.quantite - self.quantite_couverte) if self.est_promesse else 0
 
     @property
     def date_production(self):
