@@ -1,3 +1,4 @@
+import ProductionDeferredNotice from './ProductionDeferredNotice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -53,6 +54,7 @@ function BatimentProductionPage() {
   const loadRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
+  const [savedRevision, setSavedRevision] = useState(0);
   const [editingProduction, setEditingProduction] = useState(null);
   const [preselectedEggType, setPreselectedEggType] = useState('normal');
   const [formTitle, setFormTitle] = useState('');
@@ -186,6 +188,7 @@ function BatimentProductionPage() {
 
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
+      <ProductionDeferredNotice refreshKey={savedRevision} />
       <Box sx={{ mb: 2.5 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(productionLink(null, selectedDate))} sx={{ mb: 1.5 }}>Vue globale</Button>
         <Typography component="h1" variant="h3" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, letterSpacing: '-0.04em', overflowWrap: 'anywhere' }}>
@@ -251,7 +254,7 @@ function BatimentProductionPage() {
           key={`${selectedBatimentId}-${preselectedEggType}-${formTitle}-${editingProduction?.id_production || 'new'}`}
           open={openForm}
           onClose={() => setOpenForm(false)}
-          onSuccess={() => {
+          onSuccess={() => { setSavedRevision(value => value + 1);
             setOpenForm(false);
             loadData();
             reloadStock();

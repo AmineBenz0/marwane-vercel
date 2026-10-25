@@ -26,6 +26,7 @@ from app.schemas.transaction import (
     TransactionRead,
     DeferredSaleCompletion,
     DeferredSalePreview,
+    DeferredSaleSummary,
     TransactionAuditRead
 )
 from app.schemas.paiement import PaiementCreate
@@ -42,7 +43,7 @@ from app.services.financial import validate_payment_date, validate_payment_idemp
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.ledger import record_correction
-from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale
+from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
@@ -60,6 +61,14 @@ def get_production_sources(
         raise HTTPException(400, "Indiquez une date de saisie ou une date limite de stock.")
     return sale_sources(db, id_batiment, date_production, exclude_transaction_id,
                         through_date=through_date)
+
+
+@router.get("/deferred-sales", response_model=List[DeferredSaleSummary])
+def get_deferred_sales(
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    return deferred_sales_overview(db)
 
 
 def _validate_source_batiment(
@@ -476,6 +485,7 @@ def get_transactions(
     montant_min: Optional[Decimal] = None,
     montant_max: Optional[Decimal] = None,
     est_actif: Optional[bool] = None,
+    est_promesse: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -507,6 +517,7 @@ def get_transactions(
         selectinload(Transaction.paiements).joinedload(Paiement.lettre_credit),
         joinedload(Transaction.production),
         joinedload(Transaction.batiment),
+        selectinload(Transaction.allocations).joinedload(EggAllocation.production),
     )
     
     # Filtre par date
@@ -543,10 +554,16 @@ def get_transactions(
     if est_actif is not None:
         query = query.filter(Transaction.est_actif == est_actif)
     
+    if est_promesse is not None:
+        query = query.filter(Transaction.est_promesse == est_promesse)
+
     # Pagination
     transactions = query.order_by(Transaction.date_transaction.desc()).offset(skip).limit(limit).all()
     
-    return transactions
+    reservations = deferred_sale_reservations(db) if any(tx.est_promesse for tx in transactions) else {}
+    return [TransactionRead.model_validate(tx).model_copy(update={
+        'quantite_reservee': reservations.get(tx.id_transaction, 0) if tx.est_actif else 0,
+    }) for tx in transactions]
 
 
 @router.get("/{id}/audit", response_model=List[TransactionAuditRead], status_code=status.HTTP_200_OK)

@@ -1,3 +1,4 @@
+import ProductionDeferredNotice from './ProductionDeferredNotice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Box, Button, Card, CardContent, CircularProgress, Divider, Stack,
@@ -29,6 +30,7 @@ function ProductionDashboard() {
   const [loading, setLoading] = useState(true);
   const [lotRevision, setLotRevision] = useState(0);
   const [openForm, setOpenForm] = useState(false);
+  const [savedRevision, setSavedRevision] = useState(0);
   const [selectedBatimentId, setSelectedBatimentId] = useState('');
 
   const loadData = useCallback(async () => {
@@ -82,6 +84,7 @@ function ProductionDashboard() {
 
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
+      <ProductionDeferredNotice refreshKey={savedRevision} />
       <Box sx={{ mb: 3 }}>
         <Typography component="h1" variant="h3" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, letterSpacing: '-0.04em' }}>Production & stock</Typography>
         <Typography color="text.secondary" sx={{ mt: 1 }}>Le stock disponible, la collecte et les saisies de vos bâtiments.</Typography>
@@ -126,7 +129,7 @@ function ProductionDashboard() {
       <ProductionLotChart refreshKey={lotRevision} />
       </Card>
       {openForm && <ProductionForm key={selectedBatimentId} open={openForm} onClose={() => setOpenForm(false)}
-        onSuccess={() => { setOpenForm(false); setLotRevision((old) => old + 1); reloadStock(); loadData(); }}
+        onSuccess={() => { setSavedRevision(value => value + 1); setOpenForm(false); setLotRevision((old) => old + 1); reloadStock(); loadData(); }}
         batiments={batiments} preselectedBatimentId={selectedBatimentId} preselectedDate={selectedDate} />}
     </Box>
   );
