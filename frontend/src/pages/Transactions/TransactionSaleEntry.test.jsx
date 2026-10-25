@@ -19,6 +19,7 @@ const selectBuilding = async (name) => {
 beforeEach(() => {
   vi.clearAllMocks();
   get.mockImplementation(async (path) => {
+    if (path === '/clients') return [{ id_client: 1, nom_client: 'Client test' }];
     if (path === '/batiments') return [{ id_batiment: 1, nom: 'Bâtiment A' }, { id_batiment: 2, nom: 'Bâtiment B' }];
     if (path === '/transactions/production-sources') return sources;
     return [];
@@ -31,6 +32,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
+  it.each([600, 0])('submits deferred delivery with %i eggs available and blocks an unaccepted shortage', async (available) => {
+    get.mockImplementation(async (path) => {
+      if (path === '/clients') return [{ id_client: 1, nom_client: 'Client test' }];
+      if (path === '/batiments') return [{ id_batiment: 1, nom: 'Bâtiment A' }];
+      if (path === '/transactions/production-sources') return available ? [{ ...sources[0], disponible: available }] : [];
+      return [];
+    });
+    render(<TransactionForm {...props} />);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
+    fireEvent.change(quantity(), { target: { value: '1000' } });
+    fireEvent.change(price(), { target: { value: '1.20' } });
+    await selectBuilding('Bâtiment A');
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    expect(await screen.findByText(`Les ${(1000 - available).toLocaleString('fr-FR').replace(/\s/g, ' ')} œufs manquants seront fournis ultérieurement.`)).toBeVisible();
+    const save = screen.getByRole('button', { name: 'Enregistrer la vente' });
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Livraison différée' }));
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
+    expect(props.onSubmit.mock.calls[0][0].transactions[0]).toMatchObject({ quantite: 1000, prix_unitaire: 1.2, est_promesse: true, date_livraison_prevue: '2099-10-26' });
+  });
+
   it('keeps price and quantity entered before selecting a building and stock row', async () => {
     render(<TransactionForm {...props} />);
     await waitFor(() => expect(get).toHaveBeenCalledWith('/batiments'));
@@ -56,7 +82,7 @@ describe('sale entry preserves user input', () => {
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment A');
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
-    await screen.findAllByText(/Il manque .* œuf\(s\)/);
+    await screen.findByText(/Les 10 œufs manquants/);
     expect(quantity()).toHaveValue(70);
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment B');

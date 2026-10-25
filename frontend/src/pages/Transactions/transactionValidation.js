@@ -1,3 +1,4 @@
+import { saleStockSummary } from './saleStockSummary';
 import * as yup from 'yup';
 
 const optionalNumber = () => yup
@@ -53,7 +54,10 @@ const lineSchema = yup.object().shape({
     is: true,
     then: (schema) => schema.required('La date prévue est requise').test(
       'date-promesse', 'La date prévue ne peut pas précéder la transaction',
-      function(value) { return !value || !this.parent.date_transaction || value >= this.parent.date_transaction; },
+      function(value) {
+        const saleDate = this.from?.find(entry => entry.value?.date_transaction)?.value.date_transaction;
+        return !value || !saleDate || value >= saleDate;
+      },
     ),
     otherwise: (schema) => schema.strip(),
   }),
@@ -146,9 +150,9 @@ export const transactionValidationSchema = yup.object().shape({
         if (!line.est_promesse && line.date_production && line.date_production > this.parent.date_transaction) return this.createError({
           path: `lignes.${i}.date_production`, message: 'La vente ne peut pas précéder la production',
         });
-        const requested = lines.reduce((sum, other) => (line.source_group ? other.source_group === line.source_group : Number(other.id_production) === Number(line.id_production)) ? sum + Number(other.quantite || 0) : sum, 0);
-        if (!line.est_promesse && line.source_available != null && requested > line.source_available) return this.createError({
-          path: `lignes.${i}.quantite`, message: 'La quantité dépasse le stock disponible. Enregistrez une promesse pour conserver le reste.',
+        const stock = saleStockSummary(line, i, lines);
+        if (!line.est_promesse && line.source_available != null && stock.pending > 0) return this.createError({
+          path: `lignes.${i}.quantite`, message: 'La quantité dépasse le stock disponible. Choisissez la livraison différée pour fournir le reste.',
         });
       }
       return true;

@@ -125,14 +125,14 @@ def validate_sale_stock(db, transaction):
         return
     if transaction.id_production is None and not transaction.allocation_automatique:
         if transaction.est_promesse:
-            raise HTTPException(400, "Une promesse de vente doit utiliser l'allocation automatique.")
+            raise HTTPException(400, "Une vente avec livraison différée doit utiliser l'allocation automatique.")
         # Keep accepting historical API callers that create unlinked sales.
         # New sale entry sends allocation_automatique=true and is stock checked.
         return
     # Daily production corrections lock the same building first. The product
     # lock also serializes sales across buildings when legacy sales are unassigned.
     if transaction.id_batiment is None:
-        raise HTTPException(400, "Sélectionnez le bâtiment source pour cette promesse.")
+        raise HTTPException(400, "Sélectionnez le bâtiment source pour cette livraison différée.")
     db.query(Batiment).filter(Batiment.id_batiment == transaction.id_batiment).with_for_update().one()
     db.query(Produit).filter(Produit.id_produit == transaction.id_produit).with_for_update().one()
     rows, balances = source_balances(db, exclude_transaction_id=transaction.id_transaction,

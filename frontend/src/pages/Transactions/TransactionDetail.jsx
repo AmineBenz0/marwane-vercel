@@ -570,7 +570,7 @@ function TransactionDetail() {
             {(transaction.id_production || transaction.est_promesse) && <Grid item xs={12}>
               <Alert severity={transaction.est_promesse ? 'warning' : 'info'}>
                 {transaction.est_promesse ? <>
-                  <strong>Promesse de vente</strong> · {Number(transaction.quantite_couverte || 0).toLocaleString('fr-FR')} couvert(s), {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} restant(s) à livrer.
+                  <strong>Livraison différée</strong> · {Number(transaction.quantite_couverte || 0).toLocaleString('fr-FR')} couvert(s), {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} restant(s) à fournir.
                   {transaction.date_livraison_prevue && <> Date prévue : {formatShortDate(transaction.date_livraison_prevue)}.</>}
                   {transaction.nom_batiment_source && <> Bâtiment : {transaction.nom_batiment_source}.</>}
                 </> : <>Origine : {transaction.nom_batiment_source}</>}

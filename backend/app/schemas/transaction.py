@@ -136,17 +136,17 @@ class TransactionCreate(TransactionBase):
     def validate_promise(self):
         if self.est_promesse:
             if self.id_client is None or self.id_fournisseur is not None:
-                raise ValueError("Une promesse de vente doit être liée à un client")
+                raise ValueError("Une vente avec livraison différée doit être liée à un client")
             if not self.allocation_automatique:
-                raise ValueError("Une promesse de vente nécessite l’allocation automatique du stock")
+                raise ValueError("Une vente avec livraison différée nécessite l’allocation automatique du stock")
             if self.id_batiment is None or (self.id_produit is None and self.id_production is None):
-                raise ValueError("Sélectionnez le bâtiment et le type d’œufs de la promesse")
+                raise ValueError("Sélectionnez le bâtiment et le type d’œufs de la vente")
             if self.date_livraison_prevue is None:
-                raise ValueError("Indiquez la date prévue pour compléter la promesse")
+                raise ValueError("Indiquez la date prévue de livraison")
             if self.date_livraison_prevue < self.date_transaction:
                 raise ValueError("La date prévue ne peut pas précéder la transaction")
         elif self.date_livraison_prevue is not None:
-            raise ValueError("La date prévue nécessite une promesse de vente")
+            raise ValueError("La date prévue nécessite une livraison différée")
         return self
 
 
