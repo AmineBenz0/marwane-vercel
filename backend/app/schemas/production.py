@@ -225,11 +225,17 @@ class ProductionDailyInput(BaseModel):
         return self
 
 
+class ProductionStockReservation(BaseModel):
+    id_transaction: int
+    quantite: int
+
+
 class ProductionDailyRead(BaseModel):
     records: List[ProductionRead]
     versions: dict[int, str]
     depenses_vaccins: list[ChargeRead] = Field(default_factory=list)
     charge_versions: dict[int, str] = Field(default_factory=dict)
+    reservations_stock: List[ProductionStockReservation] = Field(default_factory=list)
 
 
 class ProductionDailyCancel(BaseModel):

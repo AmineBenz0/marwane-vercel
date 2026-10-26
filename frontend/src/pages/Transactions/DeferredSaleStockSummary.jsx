@@ -10,7 +10,7 @@ export default function DeferredSaleStockSummary({ sale }) {
   ));
   return <Stack spacing={1.5}>
     {state && <Box><Chip size="small" color={state.color} label={state.label} /></Box>}
-    {complete ? <Typography variant="body2" color="text.secondary">{number(covered)} / {number(sale.quantite)} œufs réservés</Typography> : <>
+    {complete ? <Typography variant="body2" color="text.secondary">{number(covered)} œufs réservés</Typography> : <>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
         <Box><Typography variant="body2" color="text.secondary">Réservés pour cette vente</Typography>
           <Typography fontWeight={700}>{number(covered)} / {number(sale.quantite)} œufs</Typography>

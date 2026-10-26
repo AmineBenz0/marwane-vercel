@@ -126,7 +126,7 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
         if category:
             grouped[(tx.id_batiment, category)].append(tx)
     if not grouped:
-        return
+        return []
 
     # Match the established stock-write lock order: buildings, then products.
     building_ids = sorted({building for building, _ in grouped})
@@ -150,6 +150,7 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
     rows, balances = source_balances(
         db, through_date=business_date(), reserve_open_promises=False,
     )
+    assignments = []
     for (scope_building, category), items in sorted(
         grouped.items(), key=lambda item: (item[0][0], item[0][1][0], item[0][1][1] or "")
     ):
@@ -189,6 +190,8 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
                     ))
                 if not pending:
                     break
+            if allocated:
+                assignments.append(dict(id_transaction=tx.id_transaction, quantite=allocated))
             if allocated and current_user and tx.id_transaction != skip_audit_transaction_id:
                 tx.id_utilisateur_modification = current_user.id_utilisateur
                 tx.date_modification = datetime.now(timezone.utc)
@@ -206,6 +209,7 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
                     )),
                 ))
     db.flush()
+    return assignments
 
 
 def resolve_sale_source(db, payload):

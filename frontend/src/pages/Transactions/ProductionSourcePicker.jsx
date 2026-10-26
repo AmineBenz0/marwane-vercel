@@ -4,6 +4,7 @@ import { Alert, Box, Button, CircularProgress, Grid, MenuItem, Paper, Stack, Tab
 import { formatShortDate } from '../../utils/dateFormatting';
 import { groupStock, dispatchStock } from './eggStockAllocation';
 import { get } from '../../services/api';
+import ExpandableDetails from '../../components/ExpandableDetails';
 
 const eggLabels = { normal: 'Normaux', double_jaune: 'Double jaune', blanc: 'Blancs' };
 const sizeLabels = { demarrage: 'Démarrage', moyen: 'Moyen', gros: 'Gros' };
@@ -102,10 +103,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
                     <Typography component="span" variant="caption" color="text.secondary">œufs disponibles</Typography>
                   </Box>
                 </Button>
-                {group.sources.length > 0 && <Box component="details" sx={{ mx: 1.75, borderTop: '1px solid', borderColor: 'divider', pb: 0.5 }}>
-                  <Box component="summary" sx={{ py: 1.25, color: 'primary.main', cursor: 'pointer', fontSize: '0.8rem', minHeight: 44 }}>
-                    {chosen ? 'Stock et prélèvements prévus' : 'Détail du stock par date'}
-                  </Box>
+                {group.sources.length > 0 && <Box sx={{ mx: 1.75, borderTop: '1px solid', borderColor: 'divider' }}><ExpandableDetails label={chosen ? 'Stock et prélèvements prévus' : 'Détail du stock par date'}>
                   <Box sx={{ overflowX: 'auto' }}>
                     <Table size="small" aria-label={chosen ? 'Répartition prévue du stock' : `Stock ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}>
                       <TableHead><TableRow><TableCell>Date de production</TableCell><TableCell align="right">Disponible</TableCell>{chosen && <TableCell align="right">Prélevé</TableCell>}</TableRow></TableHead>
@@ -115,7 +113,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
                       </TableRow>)}</TableBody>
                     </Table>
                   </Box>
-                </Box>}
+                </ExpandableDetails></Box>}
               </Paper>;
             })}
           </Stack>

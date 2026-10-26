@@ -32,6 +32,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
+  it('preserves an existing deferred sale and its expected date when editing the price', async () => {
+    const submit = vi.fn();
+    render(<TransactionForm {...props} onSubmit={submit} initialValues={{
+      id_transaction: 31, id_client: 1, id_produit: 7, id_batiment: 1,
+      date_transaction: '2026-10-21', date_livraison_prevue: '2099-10-29',
+      quantite: 1000, prix_unitaire: 1.5, est_promesse: true, allocation_automatique: true,
+    }} />);
+    expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
+    await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
+    fireEvent.change(price(), { target: { value: '1.6' } });
+    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(submit.mock.calls[0][0]).toMatchObject({
+      est_promesse: true, date_livraison_prevue: '2099-10-29', prix_unitaire: 1.6,
+    });
+  });
+
   it.each([600, 0])('submits deferred delivery with %i eggs available and blocks an unaccepted shortage', async (available) => {
     get.mockImplementation(async (path) => {
       if (path === '/clients') return [{ id_client: 1, nom_client: 'Client test' }];

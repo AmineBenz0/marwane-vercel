@@ -960,9 +960,10 @@ function TransactionsList() {
   }, [transactions, clientsMap, fournisseursMap, produitsMap]);
 
   const transactionSummary = useMemo(() => {
-    const ventes = transactionsForGrid.filter((transaction) => transaction.id_client !== null);
-    const achats = transactionsForGrid.filter((transaction) => transaction.id_fournisseur !== null);
-    const nonPayees = transactionsForGrid.filter((transaction) => {
+    const active = transactionsForGrid.filter(transaction => transaction.est_actif !== false);
+    const ventes = active.filter((transaction) => transaction.id_client !== null);
+    const achats = active.filter((transaction) => transaction.id_fournisseur !== null);
+    const nonPayees = active.filter((transaction) => {
       const statut = transaction.est_en_retard ? 'en_retard' : (transaction.statut_paiement || 'impaye');
       return statut === 'impaye' || statut === 'partiel' || statut === 'en_retard';
     });
@@ -987,10 +988,15 @@ function TransactionsList() {
 
   const displayedTransactions = useMemo(() => {
     return transactionsForGrid.filter((transaction) => {
-      if (quickFilter === 'deferred') return transaction.est_promesse && (stockFilter === 'all' || deferredSaleStatus(transaction)?.id === stockFilter);
+      if (quickFilter === 'deferred') return transaction.est_promesse && (
+        stockFilter === 'all' || (stockFilter === 'reserved'
+          ? transaction.est_actif !== false && Number(transaction.quantite_couverte || 0) > 0
+          : deferredSaleStatus(transaction)?.id === stockFilter)
+      );
       if (quickFilter === 'ventes') return transaction.id_client !== null;
       if (quickFilter === 'achats') return transaction.id_fournisseur !== null;
       if (quickFilter === 'non_payees') {
+        if (transaction.est_actif === false) return false;
         const statut = transaction.est_en_retard ? 'en_retard' : (transaction.statut_paiement || 'impaye');
         return statut === 'impaye' || statut === 'partiel' || statut === 'en_retard';
       }
@@ -1131,7 +1137,7 @@ function TransactionsList() {
         navigate({ pathname: location.pathname, search: params.toString() });
       }} />}
       {deferredOnly && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }} aria-label="Filtrer par état du stock">
-        {[['all', 'Tous les états du stock'], ['ready', 'Stock partiellement réservé'], ['waiting', 'En attente de production'], ['complete', 'Réservation complète']].map(([value, label]) =>
+        {[['all', 'Tous les états du stock'], ['reserved', 'Avec du stock réservé'], ['ready', 'Stock partiellement réservé'], ['waiting', 'En attente de production'], ['complete', 'Réservation complète']].map(([value, label]) =>
           <Button key={value} size="small" variant={stockFilter === value ? 'contained' : 'outlined'} aria-pressed={stockFilter === value} onClick={() => {
             const params = new URLSearchParams(location.search);
             params.set('stock', value);
@@ -1388,18 +1394,20 @@ function TransactionsExcelRegister({
         followUpCount: 0,
       };
 
-      const total = Math.abs(Number(transaction.montant_total || 0));
-      if (transaction.id_client !== null) {
-        group.entries += total;
-      } else {
-        group.exits += total;
-      }
-      group.paid += Math.abs(Number(transaction.montant_paye || 0));
-      group.remaining += Math.abs(Number(transaction.montant_restant || 0));
+      if (transaction.est_actif !== false) {
+        const total = Math.abs(Number(transaction.montant_total || 0));
+        if (transaction.id_client !== null) {
+          group.entries += total;
+        } else {
+          group.exits += total;
+        }
+        group.paid += Math.abs(Number(transaction.montant_paye || 0));
+        group.remaining += Math.abs(Number(transaction.montant_restant || 0));
 
-      const status = getPaymentStatus(transaction);
-      if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
-        group.followUpCount += 1;
+        const status = getPaymentStatus(transaction);
+        if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
+          group.followUpCount += 1;
+        }
       }
 
       group.rows.push(transaction);
@@ -1696,7 +1704,7 @@ function TransactionExcelRow({
         {transaction.est_promesse ? <Stack spacing={0.75} alignItems="flex-start">
           <Chip size="small" label={deferredSaleStatus(transaction).label} color={deferredSaleStatus(transaction).color} />
           {transaction.date_livraison_prevue && <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>}
-          {!inactive && <Typography variant="caption">{formatNumberValue(transaction.quantite_couverte || 0)} œufs réservés · {formatNumberValue(transaction.quantite_en_attente || 0)} à produire</Typography>}
+          {!inactive && Number(transaction.quantite_en_attente) > 0 && <Typography variant="caption">{Number(transaction.quantite_couverte) > 0 ? `${formatNumberValue(transaction.quantite_couverte)} œufs réservés · ` : ''}{formatNumberValue(transaction.quantite_en_attente)} à produire</Typography>}
         </Stack> : '—'}
       </TableCell>
       <TableCell align="right" sx={stickyActionBodySx}>

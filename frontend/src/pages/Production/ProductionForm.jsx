@@ -253,14 +253,15 @@ function ProductionForm({
         })),
         ...(initialData ? { versions, charge_versions: chargeVersions } : {}),
       };
+      let result;
       if (initialData) {
-        await productionService.updateDailyProduction(payload);
+        result = await productionService.updateDailyProduction(payload);
         notification.success('Saisie quotidienne mise à jour');
       } else {
-        await productionService.createDailyProduction(payload);
+        result = await productionService.createDailyProduction(payload);
         notification.success('Production quotidienne enregistrée');
       }
-      onSuccess();
+      onSuccess({ ...result, id_batiment: payload.id_batiment });
     } catch (err) {
       const detail = err.data?.detail || err.response?.data?.detail;
       const message = typeof detail === 'string' ? detail : (err.message || 'Une erreur est survenue');
