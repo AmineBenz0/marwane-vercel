@@ -9,6 +9,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
+from app.utils.business_date import business_date
 from app.models.caisse import Caisse
 from app.models.charge import Charge
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
@@ -38,6 +39,7 @@ def monthly_report(
         date_fin = date(year, month_number, monthrange(year, month_number)[1])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="month doit être au format YYYY-MM") from exc
+    current_date = business_date()
     transactions = db.query(Transaction).filter(Transaction.est_actif.is_(True), Transaction.date_transaction.between(date_debut, date_fin)).all()
     sales = [row for row in transactions if row.id_client is not None]
     purchases = [row for row in transactions if row.id_fournisseur is not None]
@@ -51,10 +53,10 @@ def monthly_report(
         joinedload(Transaction.paiements),
     ).filter(
         Transaction.est_actif.is_(True),
-        Transaction.date_transaction <= date_fin,
+        Transaction.date_transaction <= max(date_fin, current_date),
     ).all()
-    receivables = [row for row in historical_transactions if row.id_client is not None]
-    payables = [row for row in historical_transactions if row.id_fournisseur is not None]
+    receivables = [row for row in historical_transactions if row.id_client is not None and row.date_transaction <= date_fin]
+    payables = [row for row in historical_transactions if row.id_fournisseur is not None and row.date_transaction <= date_fin]
     inventory_count, inventory_quantity_delta = db.query(
         func.count(MouvementStock.id_mouvement_stock),
         func.coalesce(func.sum(MouvementStock.quantite_delta), 0),
@@ -105,6 +107,11 @@ def monthly_report(
         month=month,
         date_debut=date_debut,
         date_fin=date_fin,
+        date_soldes_actuels=current_date,
+        creances_actuelles=sum((_money(row.montant_total) - payment_total_as_of(row, current_date)
+                               for row in historical_transactions if row.id_client is not None and row.date_transaction <= current_date), Decimal("0")),
+        dettes_actuelles=sum((_money(row.montant_total) - payment_total_as_of(row, current_date)
+                             for row in historical_transactions if row.id_fournisseur is not None and row.date_transaction <= current_date), Decimal("0")),
         ventes=sum((_money(row.montant_total) for row in sales), Decimal("0")),
         achats=sum((_money(row.montant_total) for row in purchases), Decimal("0")),
         charges=_money(charge_total),

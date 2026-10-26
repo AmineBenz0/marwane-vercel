@@ -1,3 +1,4 @@
+import ProductionDeferredNotice from './ProductionDeferredNotice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -53,6 +54,7 @@ function BatimentProductionPage() {
   const loadRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
+  const [savedProduction, setSavedProduction] = useState(null);
   const [editingProduction, setEditingProduction] = useState(null);
   const [preselectedEggType, setPreselectedEggType] = useState('normal');
   const [formTitle, setFormTitle] = useState('');
@@ -175,7 +177,7 @@ function BatimentProductionPage() {
       {stockLoading ? <CircularProgress size={24} aria-label="Chargement du stock actuel" /> : stockError ? (
         <Alert severity="error" action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>
       ) : buildingStock ? <>
-        <StockSummary embedded label="Stock disponible maintenant" available={buildingStock.available_eggs} categories={stockCategories} />
+        <StockSummary embedded available={buildingStock.available_eggs} reserved={buildingStock.reserved_eggs} physical={buildingStock.physical_eggs} asOf={currentStock?.date} onViewReservations={() => navigate(`/transactions?view=deferred&stock=reserved&building=${selectedBatimentId}`)} categories={stockCategories} />
         {lowStockCategory && <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>Stock bas sur {lowStockCategory.label} : {formatNumber(lowStockCategory.available_eggs)} œufs disponibles.</Typography>}
         {Number(currentStock?.totals?.unassigned_sold_eggs || 0) > 0 && <Alert severity="warning" sx={{ mt: 2 }}>
           Certaines ventes ne sont pas attribuées à un bâtiment. Elles sont déduites du stock global, mais le stock de ce bâtiment peut être surestimé.
@@ -186,6 +188,7 @@ function BatimentProductionPage() {
 
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
+      <ProductionDeferredNotice savedProduction={savedProduction} />
       <Box sx={{ mb: 2.5 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(productionLink(null, selectedDate))} sx={{ mb: 1.5 }}>Vue globale</Button>
         <Typography component="h1" variant="h3" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, letterSpacing: '-0.04em', overflowWrap: 'anywhere' }}>
@@ -251,7 +254,7 @@ function BatimentProductionPage() {
           key={`${selectedBatimentId}-${preselectedEggType}-${formTitle}-${editingProduction?.id_production || 'new'}`}
           open={openForm}
           onClose={() => setOpenForm(false)}
-          onSuccess={() => {
+          onSuccess={(result) => { setSavedProduction(result);
             setOpenForm(false);
             loadData();
             reloadStock();

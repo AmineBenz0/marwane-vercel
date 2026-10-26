@@ -60,3 +60,5 @@ __all__ = [
     "JobExecution",
     "Tache",
 ]
+
+from app.models.egg_allocation import EggAllocation  # noqa: F401

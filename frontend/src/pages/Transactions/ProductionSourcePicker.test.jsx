@@ -16,7 +16,8 @@ function Form({ saleDate = '2026-10-24', initial = {}, otherLines = [] }) {
   const lines = useWatch({ control, name: 'lignes' });
   return <>
     <ProductionSourcePicker index={0} control={control} setValue={setValue}
-      batiments={[{ id_batiment: 1, nom: 'Bâtiment 1' }]} saleDate={saleDate} />
+      batiments={[{ id_batiment: 1, nom: 'Bâtiment 1' }]}
+      produits={[{ id_produit: 7, nom_produit: 'Oeufs - Moyen' }]} saleDate={saleDate} />
     <output data-testid="line">{JSON.stringify(lines[0])}</output>
   </>;
 }
@@ -27,14 +28,23 @@ beforeEach(() => { vi.clearAllMocks(); mocks.get.mockResolvedValue(sources); });
 describe('sale stock selection', () => {
   it('loads carryover stock by sale date without requiring a daily entry date', async () => {
     render(<Form />);
-    await screen.findByText('20/10/26');
+    await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
     expect(mocks.get).toHaveBeenCalledWith('/transactions/production-sources', {
       params: { id_batiment: 1, through_date: '2026-10-24' },
     });
     expect(screen.queryByLabelText(/Date de la saisie/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen du 20/10/26' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
     await waitFor(() => expect(line()).toMatchObject({
-      id_production: 11, date_production: '2026-10-20', source_available: 60, source_ready: true,
+      id_production: 11, date_production: '2026-10-20', source_available: 140, source_ready: true,
+    }));
+  });
+
+  it('lets the user select an egg category when its available stock is zero', async () => {
+    mocks.get.mockResolvedValue([]);
+    render(<Form />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Choisir Normaux Moyen' }));
+    await waitFor(() => expect(line()).toMatchObject({
+      id_production: '', id_produit: 7, source_available: 0, source_ready: true,
     }));
   });
 
@@ -43,8 +53,8 @@ describe('sale stock selection', () => {
     await waitFor(() => expect(line().source_ready).toBe(true));
     mocks.get.mockResolvedValue([]);
     view.rerender(<Form saleDate="2026-10-19" />);
-    await screen.findByText('Aucun stock disponible pour ce bâtiment à la date de vente.');
-    expect(line().source_ready).toBe(false);
+    await screen.findByText('Aucun stock disponible. Vous pouvez choisir une livraison différée.');
+    expect(line().source_ready).toBe(true);
     expect(mocks.get.mock.calls.at(-1)[1].params.through_date).toBe('2026-10-19');
   });
 
@@ -54,15 +64,15 @@ describe('sale stock selection', () => {
     const view = render(<Form />);
     mocks.get.mockResolvedValue([]);
     view.rerender(<Form saleDate="2026-10-19" />);
-    await screen.findByText('Aucun stock disponible pour ce bâtiment à la date de vente.');
+    await screen.findByText('Aucun stock disponible. Vous pouvez choisir une livraison différée.');
     await act(async () => resolveOld(sources));
     expect(screen.queryByText('20/10/26')).not.toBeInTheDocument();
-    expect(line().source_ready).toBe(false);
+    expect(line().source_ready).toBe(true);
   });
 
   it('accounts for the same stock reserved in another line', async () => {
-    render(<Form otherLines={[{ id_production: 11, quantite: 60 }]} />);
-    expect(await screen.findByRole('button', { name: 'Choisir Normaux Moyen du 20/10/26' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Choisir Normaux Moyen du 21/10/26' })).toBeEnabled();
+    render(<Form otherLines={[{ id_production: 11, quantite: 140 }]} />);
+    expect(await screen.findByRole('button', { name: 'Choisir Normaux Moyen' })).toBeEnabled();
+
   });
 });

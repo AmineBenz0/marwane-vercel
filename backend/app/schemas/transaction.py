@@ -14,6 +14,9 @@ class TransactionBase(BaseModel):
     Schéma de base pour une transaction.
     Chaque transaction représente une ligne de vente/achat avec un seul produit.
     """
+    allocation_automatique: bool = False
+    est_promesse: bool = False
+    date_livraison_prevue: Optional[date] = None
     id_production: Optional[int] = Field(None, gt=0, description="Saisie de production source")
     date_transaction: date = Field(
         ...,
@@ -129,12 +132,32 @@ class TransactionCreate(TransactionBase):
             self.montant_total = Decimal(str(self.quantite)) * self.prix_unitaire
         return self
 
+    @model_validator(mode='after')
+    def validate_promise(self):
+        if self.est_promesse:
+            if self.id_client is None or self.id_fournisseur is not None:
+                raise ValueError("Une vente avec livraison différée doit être liée à un client")
+            if not self.allocation_automatique:
+                raise ValueError("Une vente avec livraison différée nécessite l’allocation automatique du stock")
+            if self.id_batiment is None or (self.id_produit is None and self.id_production is None):
+                raise ValueError("Sélectionnez le bâtiment et le type d’œufs de la vente")
+            if self.date_livraison_prevue is None:
+                raise ValueError("Indiquez la date prévue de livraison")
+            if self.date_livraison_prevue < self.date_transaction:
+                raise ValueError("La date prévue ne peut pas précéder la transaction")
+        elif self.date_livraison_prevue is not None:
+            raise ValueError("La date prévue nécessite une livraison différée")
+        return self
+
 
 class TransactionUpdate(BaseModel):
     """
     Schéma pour mettre à jour une transaction.
     Tous les champs sont optionnels pour permettre des mises à jour partielles.
     """
+    allocation_automatique: Optional[bool] = None
+    est_promesse: Optional[bool] = None
+    date_livraison_prevue: Optional[date] = None
     id_production: Optional[int] = Field(None, gt=0)
     date_transaction: Optional[date] = Field(
         None,
@@ -246,11 +269,52 @@ class TransactionUpdate(BaseModel):
         return self
 
 
+class EggAllocationRead(BaseModel):
+    id_production: int
+    quantite: int
+    date_production: date
+    id_cycle: Optional[int] = None
+
+
+class DeferredSaleCompletion(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    quantite: int = Field(gt=0, strict=True)
+    quantite_couverte_attendue: int = Field(ge=0, strict=True)
+    empreinte_stock: str = Field(pattern=r'^[a-f0-9]{64}$')
+
+
+class DeferredSalePreview(BaseModel):
+    nom_client: Optional[str] = None
+    nom_produit: Optional[str] = None
+    nom_batiment: Optional[str] = None
+    id_transaction: int
+    quantite_couverte: int
+    quantite_en_attente: int
+    quantite_proposee: int
+    repartition_stock: List[EggAllocationRead]
+    empreinte_stock: str
+
+
+class DeferredSaleSummary(BaseModel):
+    id_transaction: int
+    nom_client: str
+    nom_produit: str
+    nom_batiment: Optional[str] = None
+    date_livraison_prevue: Optional[date] = None
+    quantite_couverte: int
+    quantite_en_attente: int
+    quantite_reservee: int
+
+
 class TransactionRead(TransactionBase):
     """
     Schéma pour lire une transaction.
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
+    repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
+    quantite_reservee: int = 0
+    quantite_couverte: int = 0
+    quantite_en_attente: int = 0
     date_production: Optional[date] = None
     nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")

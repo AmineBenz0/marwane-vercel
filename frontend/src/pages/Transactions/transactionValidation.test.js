@@ -47,10 +47,37 @@ describe('transactionValidationSchema', () => {
     await expect(transactionValidationSchema.validate(data)).rejects.toThrow('précéder');
   });
 
+  it('rejects a deferred delivery date before the sale', async () => {
+    const data = validTransaction();
+    Object.assign(data.lignes[0], { est_promesse: true, date_livraison_prevue: '2026-10-03' });
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('La date prévue ne peut pas précéder');
+  });
+
+  it('keeps stock for the first sale line when a later line accepts deferred delivery', async () => {
+    const data = validTransaction();
+    data.lignes[0].quantite = 60;
+    data.lignes[0].source_group = '1:normal:moyen';
+    data.lignes.push({ ...data.lignes[0], quantite: 50, est_promesse: true, date_livraison_prevue: '2026-10-05' });
+    await expect(transactionValidationSchema.validate(data)).resolves.toBeDefined();
+  });
+
   it('blocks submission while source details cannot be loaded', async () => {
     const data = validTransaction();
     data.lignes[0].source_ready = false;
-    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('Chargez une saisie');
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('Chargez le stock disponible');
+  });
+
+  it('allows a zero-stock promise only when explicitly accepted with a completion date', async () => {
+    const data = validTransaction();
+    data.lignes[0].id_production = '';
+    data.lignes[0].source_available = 0;
+    data.lignes[0].est_promesse = true;
+    data.lignes[0].date_livraison_prevue = '2026-10-05';
+    await expect(transactionValidationSchema.validate(data)).resolves.toMatchObject({
+      lignes: [{ est_promesse: true, date_livraison_prevue: '2026-10-05' }],
+    });
+    data.lignes[0].est_promesse = false;
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('stock disponible');
   });
   it.each([
     ['client', { id_client: '12', id_fournisseur: '' }, 12, null],

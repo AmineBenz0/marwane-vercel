@@ -1,3 +1,4 @@
+import ProductionDeferredNotice from './ProductionDeferredNotice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Box, Button, Card, CardContent, CircularProgress, Divider, Stack,
@@ -29,6 +30,7 @@ function ProductionDashboard() {
   const [loading, setLoading] = useState(true);
   const [lotRevision, setLotRevision] = useState(0);
   const [openForm, setOpenForm] = useState(false);
+  const [savedProduction, setSavedProduction] = useState(null);
   const [selectedBatimentId, setSelectedBatimentId] = useState('');
 
   const loadData = useCallback(async () => {
@@ -82,6 +84,7 @@ function ProductionDashboard() {
 
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
+      <ProductionDeferredNotice savedProduction={savedProduction} />
       <Box sx={{ mb: 3 }}>
         <Typography component="h1" variant="h3" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, letterSpacing: '-0.04em' }}>Production & stock</Typography>
         <Typography color="text.secondary" sx={{ mt: 1 }}>Le stock disponible, la collecte et les saisies de vos bâtiments.</Typography>
@@ -89,7 +92,7 @@ function ProductionDashboard() {
       <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
         {stockLoading ? <Box sx={{ p: 3 }}><CircularProgress size={24} aria-label="Chargement du stock actuel" /></Box>
           : stockError ? <Alert severity="error" sx={{ mb: 2.5 }} action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>
-          : <StockSummary label="Stock disponible maintenant" available={currentStock?.totals?.available_eggs} categories={currentStock?.categories} />}
+          : <StockSummary available={currentStock?.totals?.available_eggs} reserved={currentStock?.totals?.reserved_eggs} physical={currentStock?.totals?.physical_eggs} asOf={currentStock?.date} onViewReservations={() => navigate('/transactions?view=deferred&stock=reserved')} categories={currentStock?.categories} />}
         {!stockLoading && !stockError && Number(currentStock?.totals?.unassigned_sold_eggs || 0) > 0 && <Alert severity="warning" sx={{ mb: 2.5 }}>
           {formatNumber(currentStock.totals.unassigned_sold_eggs)} œufs vendus sans bâtiment source.
           Ces ventes sont déduites du stock global. Attribuez-les pour fiabiliser le stock de chaque bâtiment.
@@ -126,7 +129,7 @@ function ProductionDashboard() {
       <ProductionLotChart refreshKey={lotRevision} />
       </Card>
       {openForm && <ProductionForm key={selectedBatimentId} open={openForm} onClose={() => setOpenForm(false)}
-        onSuccess={() => { setOpenForm(false); setLotRevision((old) => old + 1); reloadStock(); loadData(); }}
+        onSuccess={(result) => { setSavedProduction(result); setOpenForm(false); setLotRevision((old) => old + 1); reloadStock(); loadData(); }}
         batiments={batiments} preselectedBatimentId={selectedBatimentId} preselectedDate={selectedDate} />}
     </Box>
   );
