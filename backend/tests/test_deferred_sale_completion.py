@@ -309,6 +309,14 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(clien
     assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (1000, 0)
     assert (later.quantite_couverte, later.quantite_en_attente) == (100, 200)
     assert daily['reservations_stock'] == []
+    editing_oldest = sale_sources(db_session, building.id_batiment,
+        exclude_transaction_id=oldest.id_transaction, through_date=today)
+    editing_later = sale_sources(db_session, building.id_batiment,
+        exclude_transaction_id=later.id_transaction, through_date=today)
+    assert sum(row['disponible'] for row in editing_oldest) == 1000
+    assert sum(row['disponible'] for row in editing_later) == 100
+    assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=today)) == 0
+    assert (oldest.quantite_couverte, later.quantite_couverte) == (1000, 100)
     audits = db_session.query(TransactionAudit).filter(
         TransactionAudit.champ_modifie == 'reservation_automatique_stock',
         TransactionAudit.id_transaction.in_([oldest.id_transaction, later.id_transaction]),

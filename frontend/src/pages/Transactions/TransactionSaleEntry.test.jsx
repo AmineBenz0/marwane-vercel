@@ -42,6 +42,7 @@ describe('sale entry preserves user input', () => {
     expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
     expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
     await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/production-sources', expect.objectContaining({ params: expect.objectContaining({ through_date: new Date().toISOString().slice(0, 10), exclude_transaction_id: 31 }) })));
     fireEvent.change(price(), { target: { value: '1.6' } });
     const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
     await waitFor(() => expect(save).toBeEnabled());
@@ -50,6 +51,29 @@ describe('sale entry preserves user input', () => {
     expect(submit.mock.calls[0][0]).toMatchObject({
       est_promesse: true, date_livraison_prevue: '2099-10-29', prix_unitaire: 1.6,
     });
+  });
+
+  it('saves the delivery date of a paid sale without resubmitting unchanged financial fields', async () => {
+    const submit = vi.fn();
+    const originalGet = get.getMockImplementation();
+    get.mockImplementation(async (path, options) => path === '/paiements' ? [{
+      id_paiement: 8, date_paiement: '2026-10-21', montant: '1500.00', type_paiement: 'cash',
+    }] : originalGet(path, options));
+    render(<TransactionForm {...props} onSubmit={submit} initialValues={{
+      id_transaction: 31, id_client: 1, id_fournisseur: null, id_produit: 7, id_batiment: 1,
+      date_transaction: '2026-10-21', date_livraison_prevue: '2099-10-29',
+      quantite: 1000, prix_unitaire: '1.50', est_promesse: true, allocation_automatique: true,
+    }} />);
+    const expectedDate = await screen.findByLabelText(/Date prévue de livraison/);
+    fireEvent.change(expectedDate, { target: { value: '2099-10-30' } });
+    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    const sent = submit.mock.calls[0][0];
+    expect(sent.date_livraison_prevue).toBe('2099-10-30');
+    for (const key of ['date_transaction', 'id_production', 'id_batiment', 'id_produit', 'quantite', 'prix_unitaire', 'id_client', 'id_fournisseur']) expect(sent).not.toHaveProperty(key);
+    expect(sent.paiements).toEqual([expect.objectContaining({ id_paiement: 8, montant: 1500 })]);
   });
 
   it.each([600, 0])('submits deferred delivery with %i eggs available and blocks an unaccepted shortage', async (available) => {
