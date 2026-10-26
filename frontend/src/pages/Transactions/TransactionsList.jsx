@@ -990,7 +990,9 @@ function TransactionsList() {
   const displayedTransactions = useMemo(() => {
     return transactionsForGrid.filter((transaction) => {
       if (quickFilter === 'deferred') return transaction.est_promesse && (
-        stockFilter === 'all' || (stockFilter === 'reserved'
+        stockFilter === 'all' || (stockFilter === 'pending'
+          ? transaction.est_actif !== false && Number(transaction.quantite_en_attente || 0) > 0
+          : stockFilter === 'reserved'
           ? transaction.est_actif !== false && Number(transaction.quantite_couverte || 0) > 0
           : deferredSaleStatus(transaction)?.id === stockFilter)
       );
@@ -1138,7 +1140,7 @@ function TransactionsList() {
         navigate({ pathname: location.pathname, search: params.toString() });
       }} />}
       {deferredOnly && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }} aria-label="Filtrer par état du stock">
-        {[['all', 'Tous les états du stock'], ['reserved', 'Avec du stock réservé'], ['ready', 'Stock partiellement réservé'], ['waiting', 'En attente de production'], ['complete', 'Réservation complète']].map(([value, label]) =>
+        {[['all', 'Tous les états du stock'], ['pending', 'À produire'], ['reserved', 'Avec du stock réservé'], ['ready', 'Stock partiellement réservé'], ['waiting', 'En attente de production'], ['complete', 'Réservation complète']].map(([value, label]) =>
           <Button key={value} size="small" variant={stockFilter === value ? 'contained' : 'outlined'} aria-pressed={stockFilter === value} onClick={() => {
             const params = new URLSearchParams(location.search);
             params.set('stock', value);
