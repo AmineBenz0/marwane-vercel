@@ -32,6 +32,44 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
+  it('keeps the saved deferred status when editing a sale that is fully covered', async () => {
+    render(<TransactionForm {...props} initialValues={{
+      id_transaction: 32, id_client: 1, id_produit: 7, id_batiment: 1,
+      date_transaction: '2026-10-21', date_livraison_prevue: '2099-10-29',
+      quantite: 50, prix_unitaire: 1.5, est_promesse: true, allocation_automatique: true,
+    }} />);
+    await screen.findByText('Stock et prélèvements prévus');
+    expect(screen.getByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
+    expect(quantity()).toHaveValue(50);
+  });
+
+  it('clears a new deferred sale when its quantity fits stock and requires acceptance again if increased', async () => {
+    const submit = vi.fn();
+    render(<TransactionForm {...props} onSubmit={submit} />);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
+    await selectBuilding('Bâtiment A');
+    fireEvent.change(quantity(), { target: { value: '100' } });
+    fireEvent.change(price(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Livraison différée' }));
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    fireEvent.change(quantity(), { target: { value: '60' } });
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
+    expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
+    expect(price()).toHaveValue(1.5);
+    fireEvent.change(quantity(), { target: { value: '100' } });
+    expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Enregistrer la vente' })).toBeDisabled();
+    fireEvent.change(quantity(), { target: { value: '50' } });
+    const save = screen.getByRole('button', { name: 'Enregistrer la vente' });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(submit.mock.calls[0][0].transactions[0]).toMatchObject({ quantite: 50, prix_unitaire: 1.5, est_promesse: false, date_livraison_prevue: null });
+  });
+
   it('preserves an existing deferred sale and its expected date when editing the price', async () => {
     const submit = vi.fn();
     render(<TransactionForm {...props} onSubmit={submit} initialValues={{
