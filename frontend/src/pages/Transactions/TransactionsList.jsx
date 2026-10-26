@@ -54,6 +54,7 @@ import {
 } from '@mui/icons-material';
 import TransactionForm from './TransactionForm';
 import { deferredSaleStatus } from './deferredSaleStatus';
+import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import { get, post, put, patch, del } from '../../services/api';
@@ -1702,7 +1703,7 @@ function TransactionExcelRow({
       </TableCell>
       <TableCell>
         {transaction.est_promesse ? <Stack spacing={0.75} alignItems="flex-start">
-          <Chip size="small" label={deferredSaleStatus(transaction).label} color={deferredSaleStatus(transaction).color} />
+          <DeferredSaleStatusBadge sale={transaction} />
           {transaction.date_livraison_prevue && <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>}
           {!inactive && Number(transaction.quantite_en_attente) > 0 && <Typography variant="caption">{Number(transaction.quantite_couverte) > 0 ? `${formatNumberValue(transaction.quantite_couverte)} œufs réservés · ` : ''}{formatNumberValue(transaction.quantite_en_attente)} à produire</Typography>}
         </Stack> : '—'}

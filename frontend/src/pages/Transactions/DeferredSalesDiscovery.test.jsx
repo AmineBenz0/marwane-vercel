@@ -54,7 +54,7 @@ describe('deferred sale stock reservations', () => {
   it('shows automatic FIFO reservations and pending production without a completion action', async () => {
     renderAt(<DeferredSalesCard />);
     expect(await screen.findByText('600 œufs réservés · 400 à produire')).toBeVisible();
-    expect(screen.getByText('1 avec du stock réservé')).toBeVisible();
+    expect(screen.getByText('2 à suivre')).toBeVisible();
     expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -86,6 +86,21 @@ describe('deferred sale stock reservations', () => {
     renderAt(<DeferredSalesCard />);
     fireEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
     expect(await screen.findByText('600 œufs réservés · 400 à produire')).toBeVisible();
+  });
+
+  it('hides the card when there are no pending deliveries', async () => {
+    get.mockResolvedValueOnce([]);
+    renderAt(<DeferredSalesCard />);
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/deferred-sales'));
+    expect(screen.queryByRole('region', { name: 'Livraisons différées' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/0 avec du stock réservé|Aucune livraison différée en attente/)).not.toBeInTheDocument();
+  });
+
+  it('keeps completed and canceled deliveries out of the action card', async () => {
+    get.mockResolvedValueOnce([summary(closed), summary({ ...waiting, est_actif: false })]);
+    renderAt(<DeferredSalesCard />);
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/deferred-sales'));
+    expect(screen.queryByRole('region', { name: 'Livraisons différées' })).not.toBeInTheDocument();
   });
 });
 
