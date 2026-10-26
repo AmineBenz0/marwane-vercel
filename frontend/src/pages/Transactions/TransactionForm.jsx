@@ -25,7 +25,7 @@ import { saleStockSummary } from './saleStockSummary';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { keyframes } from '@emotion/react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
   Dialog,
@@ -348,10 +348,19 @@ function TransactionForm({
   }, []);
 
   // Observer les valeurs du formulaire pour calculer le total
-  const watchedLignes = watch('lignes');
+  const watchedLignes = useWatch({ control, name: 'lignes' });
   const watchedTypeEntite = watch('type_entite');
   const watchedFournisseurId = watch('id_fournisseur');
   const isEditingTransaction = Boolean(initialValues?.id_transaction);
+  useEffect(() => {
+    if (!open || isEditingTransaction || watchedTypeEntite !== 'client') return;
+    (watchedLignes || []).forEach((line, index, lines) => {
+      const stock = saleStockSummary(line, index, lines);
+      if (line.est_promesse && stock.ready && stock.pending === 0) {
+        setValue(`lignes.${index}.est_promesse`, false, { shouldDirty: true, shouldValidate: true });
+      }
+    });
+  }, [open, isEditingTransaction, watchedTypeEntite, watchedLignes, setValue]);
   const supplierSource = watchedTypeEntite === 'fournisseur'
     ? fournisseurs.find((item) => String(item.id_fournisseur) === String(watchedFournisseurId))?.mode_reglement_prefere || null
     : null;
