@@ -43,7 +43,8 @@ from app.services.financial import validate_payment_date, validate_payment_idemp
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.ledger import record_correction
-from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations
+from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations, assign_pending_promises, source_balances
+from app.utils.business_date import business_date
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
@@ -279,7 +280,7 @@ def create_transactions_batch(
             db.add(new_transaction)
             db.flush()  # Pour obtenir l'ID
             if new_transaction.est_actif:
-                record_transaction_movement(db, new_transaction, current_user)
+                record_transaction_movement(db, new_transaction, current_user, is_new_transaction=True)
             
             # Création du mouvement de caisse supprimée ici. 
             # Les mouvements sont désormains créés lors de l'enregistrement des paiements.
@@ -378,7 +379,7 @@ def _create_transaction_for_atomic_batch(
     db.add(transaction)
     db.flush()
     if transaction.est_actif:
-        record_transaction_movement(db, transaction, current_user)
+        record_transaction_movement(db, transaction, current_user, is_new_transaction=True)
     return transaction
 
 
@@ -778,6 +779,40 @@ def update_transaction(
         )
     
     update_data = transaction_data.model_dump(exclude_unset=True)
+    original_building_id = transaction.id_batiment
+
+    promise_identity_fields = {
+        "date_transaction", "id_production", "id_batiment", "id_cycle",
+        "id_produit", "id_client", "id_fournisseur",
+    }
+    if transaction.est_promesse and any(
+        field in update_data and update_data[field] != getattr(transaction, field)
+        for field in promise_identity_fields
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "L'origine et l'identité d'une livraison différée sont fixes pour préserver ses réservations. "
+                "Annulez-la puis créez une nouvelle livraison corrigée."
+            ),
+        )
+    if (
+        "est_promesse" in update_data and update_data["est_promesse"] != transaction.est_promesse
+        or "allocation_automatique" in update_data
+        and update_data["allocation_automatique"] != transaction.allocation_automatique
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le mode de réservation d'une transaction existante ne peut pas être modifié.",
+        )
+    if (
+        transaction.est_promesse and "quantite" in update_data
+        and update_data["quantite"] < transaction.quantite_couverte
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La quantité ne peut pas être inférieure au stock déjà réservé.",
+        )
 
     if "est_actif" in update_data and update_data["est_actif"] != transaction.est_actif:
         raise HTTPException(
@@ -830,7 +865,7 @@ def update_transaction(
             detail="La date de transaction ne peut pas être postérieure à un paiement existant",
         )
 
-    if transaction.id_production is not None or update_data.get("id_production") is not None:
+    if (transaction.id_production is not None or update_data.get("id_production") is not None) and not transaction.est_promesse:
         if "id_production" in update_data and update_data["id_production"] is None:
             raise HTTPException(400, "Une vente liée à une saisie doit conserver son origine.")
         final = TransactionCreate(**{
@@ -922,6 +957,11 @@ def update_transaction(
     stock_fields = ('quantite', 'id_produit', 'id_batiment', 'id_production',
                     'date_transaction', 'id_client', 'id_fournisseur', 'est_promesse',
                     'allocation_automatique')
+    reservation_rebalance_fields = {
+        'quantite', 'id_produit', 'id_batiment', 'id_production', 'id_cycle',
+        'date_transaction', 'id_client', 'id_fournisseur', 'est_promesse',
+        'allocation_automatique',
+    }
     preserve_egg_allocations = bool(transaction.est_promesse) and not any(
         field in update_data and update_data[field] != getattr(transaction, field)
         for field in stock_fields)
@@ -945,6 +985,12 @@ def update_transaction(
     if inventory_changed and transaction.est_actif:
         record_transaction_movement(db, transaction, current_user,
                                     preserve_egg_allocations=preserve_egg_allocations)
+    if reservation_rebalance_fields.intersection(update_data) and transaction.id_client is not None:
+        assign_pending_promises(
+            db,
+            building_ids={original_building_id, transaction.id_batiment},
+            current_user=current_user,
+        )
     
     db.commit()
     db.refresh(transaction)
@@ -1039,6 +1085,9 @@ def delete_transaction(
         current_user=current_user,
         details={"paiements_annules": payment_ids},
     )
+
+    # Reassign released production to the oldest active promise.
+    assign_pending_promises(db, building_id=transaction.id_batiment, current_user=current_user)
     
     db.commit()
     
@@ -1085,8 +1134,31 @@ def reactivate_transaction(
         )
     
     # Réactiver : mettre est_actif à True
+    if transaction.est_promesse:
+        db.query(Batiment).filter(
+            Batiment.id_batiment == transaction.id_batiment,
+        ).with_for_update().one()
+        db.query(Produit).filter(
+            Produit.id_produit == transaction.id_produit,
+        ).with_for_update().one()
+        _, balances = source_balances(
+            db, through_date=business_date(), reserve_open_promises=False,
+        )
+        if any(
+            balances.get(allocation.id_production, 0) < allocation.quantite
+            for allocation in transaction.allocations
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Le stock de cette livraison différée a été réservé à d'autres ventes. "
+                    "Créez une nouvelle livraison pour reprendre la place dans la file FIFO."
+                ),
+            )
     transaction.est_actif = True
     record_transaction_movement(db, transaction, current_user)
+    if transaction.id_client is not None:
+        assign_pending_promises(db, building_id=transaction.id_batiment, current_user=current_user)
     # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur

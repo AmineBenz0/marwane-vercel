@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DeferredSalesCard from './DeferredSalesCard';
 import TransactionsList from './TransactionsList';
 import ProductionDeferredNotice from '../Production/ProductionDeferredNotice';
-import { get, post } from '../../services/api';
+import { get } from '../../services/api';
 
 vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() }));
 vi.mock('./TransactionForm', () => ({ default: () => null }));
@@ -15,12 +15,12 @@ vi.mock('../../utils/exportToPDF', () => ({ exportToPDF: vi.fn() }));
 const paid = {
   id_transaction: 7, id_client: 1, id_fournisseur: null, id_produit: 1, id_batiment: 1,
   est_actif: true, est_promesse: true, allocation_automatique: true,
-  quantite: 1000, quantite_couverte: 600, quantite_en_attente: 400, quantite_reservee: 300,
+  quantite: 1000, quantite_couverte: 600, quantite_en_attente: 400, quantite_reservee: 600,
   prix_unitaire: 1.5, montant_total: 1500, montant_paye: 1500, montant_restant: 0,
   statut_paiement: 'paye', date_transaction: '2026-10-24', paiements: [],
 };
-const waiting = { ...paid, id_transaction: 8, id_client: 2, quantite_reservee: 0 };
-const closed = { ...paid, id_transaction: 9, id_client: 3, quantite_couverte: 1000, quantite_en_attente: 0, quantite_reservee: 0 };
+const waiting = { ...paid, id_transaction: 8, id_client: 2, quantite_couverte: 0, quantite_reservee: 0 };
+const closed = { ...paid, id_transaction: 9, id_client: 3, quantite_couverte: 1000, quantite_en_attente: 0, quantite_reservee: 1000 };
 let sales;
 const summary = row => ({ ...row, nom_client: `Client ${row.id_client}`, nom_produit: 'Œufs moyens', nom_batiment: 'Bâtiment A', date_livraison_prevue: '2026-10-25' });
 const renderAt = (element, url = '/') => render(<MemoryRouter initialEntries={[url]}><Routes>
@@ -36,72 +36,51 @@ beforeEach(() => {
     if (path === '/clients') return [1, 2, 3].map(id => ({ id_client: id, nom_client: `Client ${id}` }));
     if (path === '/produits') return [{ id_produit: 1, nom_produit: 'Œufs moyens' }];
     if (path === '/batiments') return [{ id_batiment: 1, nom: 'Bâtiment A' }];
-    if (path === '/transactions/7/completion') return {
-      quantite_couverte: 600, quantite_en_attente: 400, quantite_proposee: 300,
-      empreinte_stock: 'a'.repeat(64), repartition_stock: [{ id_production: 1, date_production: '2026-10-25', quantite: 300 }],
-    };
     return [];
-  });
-  post.mockImplementation(async () => {
-    const updated = { ...paid, quantite_couverte: 900, quantite_en_attente: 100, quantite_reservee: 0 };
-    sales = [updated, waiting, closed];
-    return updated;
   });
 });
 afterEach(cleanup);
 
-describe('deferred sale discovery', () => {
-  it('keeps paid sales actionable and refreshes the dashboard after partial completion', async () => {
+describe('deferred sale stock reservations', () => {
+  it('shows automatic FIFO reservations and pending production without a completion action', async () => {
     renderAt(<DeferredSalesCard />);
-    expect(await screen.findByText('400 œufs restants')).toBeVisible();
+    expect(await screen.findByText('600 œufs réservés · 400 à produire')).toBeVisible();
+    expect(screen.getByText('1 avec du stock réservé')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Compléter 300 œufs pour la vente 7' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Confirmer 300 œufs' }));
-    expect(await screen.findByText('Vente #7 : 100 œufs restent à fournir.')).toBeVisible();
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Compléter 300 œufs pour la vente 7' })).not.toBeInTheDocument());
-    expect(screen.getByText('2 vente(s) en attente de production')).toBeVisible();
-    expect(post).toHaveBeenCalledExactlyOnceWith('/transactions/7/completion', {
-      quantite: 300, quantite_couverte_attendue: 600, empreinte_stock: 'a'.repeat(64),
-    });
   });
-  it('collapses waiting rows and retains completed sales in the filtered register', async () => {
+
+  it('collapses unreserved promises and filters the register by reservation status', async () => {
     renderAt(<DeferredSalesCard />);
     fireEvent.click(await screen.findByRole('button', { name: '1 vente(s) en attente de production' }));
     expect(screen.getByText('Client 2 · #8')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Voir les ventes' }));
-    expect(await screen.findByRole('button', { name: 'Stock complet' })).toBeVisible();
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions', expect.objectContaining({ params: expect.objectContaining({ est_promesse: true }) })));
-    fireEvent.click(screen.getByRole('button', { name: 'Stock complet' }));
+    expect(await screen.findByRole('button', { name: 'Réservation complète' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Réservation complète' }));
     expect(await screen.findByText('Client 3')).toBeVisible();
     expect(screen.queryByText('Client 1')).not.toBeInTheDocument();
   });
-  it('opens the same completion dialog directly from a paid transaction row', async () => {
-    render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=ready']}><TransactionsList /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole('button', { name: 'Compléter 300 œufs pour la vente 7' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Compléter la vente #7' });
-    fireEvent.click(await within(dialog).findByRole('button', { name: 'Confirmer 300 œufs' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Compléter 300 œufs pour la vente 7' })).not.toBeInTheDocument();
-    expect(post).toHaveBeenCalledTimes(1);
-  });
-  it('checks stock only after production save and links to ready deferred sales without a popup', async () => {
+
+  it('checks reservations after a production save and explains the automatic assignment', async () => {
     const view = renderAt(<ProductionDeferredNotice refreshKey={0} />);
     expect(get).not.toHaveBeenCalled();
     view.rerender(<MemoryRouter><ProductionDeferredNotice refreshKey={1} /></MemoryRouter>);
-    expect(await screen.findByText(/Du stock est disponible pour compléter 1 vente/)).toBeVisible();
+    expect(await screen.findByText(/Le stock a été réservé automatiquement pour 1 livraison/)).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
   it('shows a retry instead of reporting no pending sales when discovery fails', async () => {
     get.mockRejectedValueOnce(new Error('Connexion interrompue'));
     renderAt(<DeferredSalesCard />);
     fireEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
-    expect(await screen.findByText('400 œufs restants')).toBeVisible();
+    expect(await screen.findByText('600 œufs réservés · 400 à produire')).toBeVisible();
   });
 });
 
-it('preserves the source-building filter when opening ready sales from stock', async () => {
+it('preserves the source-building filter when opening stock-reserved sales', async () => {
   render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=ready&building=1']}><TransactionsList /></MemoryRouter>);
-  await screen.findByRole('button', { name: 'Compléter 300 œufs pour la vente 7' });
-  expect(get).toHaveBeenCalledWith('/transactions', expect.objectContaining({ params: expect.objectContaining({ est_promesse: true, id_batiment: 1 }) }));
+  await screen.findByText('600 œufs réservés · 400 à produire');
+  await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions', expect.objectContaining({ params: expect.objectContaining({ est_promesse: true, id_batiment: 1 }) })));
   expect(screen.getByText('Bâtiment : Bâtiment A')).toBeVisible();
+  expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
 });

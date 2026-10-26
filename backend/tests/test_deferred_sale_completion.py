@@ -12,13 +12,15 @@ from app.models.paiement import Paiement
 from app.models.caisse import Caisse
 from app.models.inventory import MouvementStock
 from app.models.audit import TransactionAudit
-from app.routers.transactions import create_transaction, create_transactions_with_payments_batch, update_transaction
+from app.routers.transactions import create_transaction, create_transactions_with_payments_batch, update_transaction, delete_transaction
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.schemas.transaction_payment import TransactionPaymentBatchCreate
 from app.services.egg_sales import sale_sources
 from app.routers.transactions import complete_transaction
 from app.schemas.transaction import DeferredSaleCompletion
 from app.utils.egg_product_sync import ensure_sellable_egg_product
+from app.routers.productions import create_daily_production, update_daily_production
+from app.schemas.production import ProductionDailyInput
 
 
 @pytest.fixture
@@ -108,7 +110,7 @@ def test_complete_300_then_100_preserves_sale_payments_and_origins(client, db_se
     assert tx.montant_paye == (Decimal('1500') if paid else Decimal('0'))
 
 
-def test_partial_choice_keeps_earlier_reservations_and_blocks_another_client(client, db_session, deferred_sale):
+def test_automatic_reservation_keeps_stock_for_the_older_promise(client, db_session, deferred_sale):
     building, _, _, payload = deferred_sale
     tx = create_transaction(payload, db_session, None)
     newcomer = Client(nom_client='Autre client', est_actif=True)
@@ -125,11 +127,10 @@ def test_partial_choice_keeps_earlier_reservations_and_blocks_another_client(cli
         id_client=newcomer.id_client, id_produit=payload.id_produit, id_batiment=building.id_batiment,
         allocation_automatique=True, quantite=1, prix_unitaire='1.5'))
     assert denied.status_code == 409
-    preview = proposal(client, tx.id_transaction)
-    response = client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=confirmation(preview, 200))
-    assert response.status_code == 200
-    assert response.json()['quantite_en_attente'] == 200
-    assert proposal(client, tx.id_transaction)['quantite_proposee'] == 100
+    assert tx.quantite_couverte == 900
+    assert tx.quantite_en_attente == 100
+    assert proposal(client, tx.id_transaction)['quantite_proposee'] == 0
+    assert later.quantite_couverte == 0
     assert proposal(client, later.id_transaction)['quantite_proposee'] == 0
 
 
@@ -251,6 +252,72 @@ def test_discovery_respects_priority_excludes_future_stock_and_cancelled_sales(c
     assert {r['id_transaction']: r['quantite_reservee'] for r in history} == {
         first.id_transaction: 300, later.id_transaction: 0}
     assert client.get('/api/v1/transactions', params={'est_promesse': False}).json() == []
+
+
+def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(db_session, deferred_sale, monkeypatch, test_user):
+    building, _, _, payload = deferred_sale
+    today = date.today()
+    monkeypatch.setattr('app.services.egg_sales.business_date', lambda: today)
+    oldest = create_transaction(payload, db_session, test_user)
+    later = create_transaction(payload.model_copy(update={
+        'quantite': 300, 'montant_total': Decimal('450'),
+    }), db_session, test_user)
+    assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (600, 400)
+    assert (later.quantite_couverte, later.quantite_en_attente) == (0, 300)
+
+    daily = create_daily_production(ProductionDailyInput(
+        id_batiment=building.id_batiment,
+        date_production=today,
+        quantites={'normal': 300},
+        grammage=Decimal('55'),
+    ), db_session, test_user)
+    assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (900, 100)
+    assert (later.quantite_couverte, later.quantite_en_attente) == (0, 300)
+
+    daily = update_daily_production(ProductionDailyInput(
+        id_batiment=building.id_batiment,
+        date_production=today,
+        quantites={'normal': 500},
+        grammage=Decimal('55'),
+        versions=daily['versions'],
+        charge_versions=daily['charge_versions'],
+    ), db_session, test_user)
+    assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (1000, 0)
+    assert (later.quantite_couverte, later.quantite_en_attente) == (100, 200)
+
+    daily = update_daily_production(ProductionDailyInput(
+        id_batiment=building.id_batiment,
+        date_production=today,
+        quantites={'normal': 500},
+        grammage=Decimal('55'),
+        versions=daily['versions'],
+        charge_versions=daily['charge_versions'],
+    ), db_session, test_user)
+    assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (1000, 0)
+    assert (later.quantite_couverte, later.quantite_en_attente) == (100, 200)
+    audits = db_session.query(TransactionAudit).filter(
+        TransactionAudit.champ_modifie == 'reservation_automatique_stock',
+        TransactionAudit.id_transaction.in_([oldest.id_transaction, later.id_transaction]),
+    ).all()
+    assert len(audits) == 3
+    assert {audit.id_utilisateur for audit in audits} == {test_user.id_utilisateur}
+
+
+def test_cancelling_old_promise_releases_reserved_stock_to_next_sale(db_session, deferred_sale, monkeypatch):
+    _, _, _, payload = deferred_sale
+    today = date.today()
+    monkeypatch.setattr('app.services.egg_sales.business_date', lambda: today)
+    oldest = create_transaction(payload.model_copy(update={
+        'quantite': 500, 'montant_total': Decimal('750'),
+    }), db_session, None)
+    next_sale = create_transaction(payload.model_copy(update={
+        'quantite': 300, 'montant_total': Decimal('450'),
+    }), db_session, None)
+    assert (next_sale.quantite_couverte, next_sale.quantite_en_attente) == (100, 200)
+
+    delete_transaction(oldest.id_transaction, 'Annulation du test', db_session, None)
+
+    assert (next_sale.quantite_couverte, next_sale.quantite_en_attente) == (300, 0)
 
 
 def test_paid_sale_agrees_across_profile_stock_history_and_monthly_reports(client, db_session, deferred_sale, test_user):

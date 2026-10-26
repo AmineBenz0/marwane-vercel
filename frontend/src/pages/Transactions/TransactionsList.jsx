@@ -53,7 +53,6 @@ import {
   ReceiptLong as ReceiptLongIcon,
 } from '@mui/icons-material';
 import TransactionForm from './TransactionForm';
-import DeferredSaleCompletionDialog from './DeferredSaleCompletionDialog';
 import { deferredSaleStatus } from './deferredSaleStatus';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
@@ -113,7 +112,6 @@ function TransactionsList() {
   const [quickFilter, setQuickFilter] = useState(() => new URLSearchParams(location.search).get('view') || 'all');
   const loadRequest = useRef(0);
   const [stockFilter, setStockFilter] = useState(() => new URLSearchParams(location.search).get('stock') || 'all');
-  const [completionId, setCompletionId] = useState(null);
   const deferredOnly = quickFilter === 'deferred';
   const sourceBuilding = new URLSearchParams(location.search).get('building');
   useEffect(() => {
@@ -1133,7 +1131,7 @@ function TransactionsList() {
         navigate({ pathname: location.pathname, search: params.toString() });
       }} />}
       {deferredOnly && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }} aria-label="Filtrer par état du stock">
-        {[['all', 'Tous les états du stock'], ['ready', 'À compléter'], ['waiting', 'En attente de production'], ['complete', 'Stock complet']].map(([value, label]) =>
+        {[['all', 'Tous les états du stock'], ['ready', 'Stock partiellement réservé'], ['waiting', 'En attente de production'], ['complete', 'Réservation complète']].map(([value, label]) =>
           <Button key={value} size="small" variant={stockFilter === value ? 'contained' : 'outlined'} aria-pressed={stockFilter === value} onClick={() => {
             const params = new URLSearchParams(location.search);
             params.set('stock', value);
@@ -1160,18 +1158,10 @@ function TransactionsList() {
         batimentsMap={batimentsMap}
         formatMontant={formatMontant}
         onView={handleViewDetails}
-        onComplete={transaction => setCompletionId(transaction.id_transaction)}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         onReactivate={handleReactivate}
       />
-
-      <DeferredSaleCompletionDialog open={completionId !== null} transactionId={completionId} onClose={() => setCompletionId(null)} onCompleted={updated => {
-        setCompletionId(null);
-        setTransactions(previous => previous.map(sale => sale.id_transaction === updated.id_transaction ? { ...updated, quantite_reservee: 0 } : sale));
-        notification.success(updated.quantite_en_attente ? `${updated.quantite_en_attente} œufs restent à fournir.` : 'Stock complet pour cette vente.');
-        fetchTransactions();
-      }} />
 
       <TransactionForm
         open={modalOpen}
@@ -1371,7 +1361,6 @@ function TransactionsExcelRegister({
   batimentsMap,
   formatMontant,
   onView,
-  onComplete,
   onEdit,
   onDelete,
   onReactivate,
@@ -1530,7 +1519,6 @@ function TransactionsExcelRegister({
                         batimentsMap={batimentsMap}
                         formatMontant={formatMontant}
                         onView={onView}
-                        onComplete={onComplete}
                         onEdit={onEdit}
                         onDelete={onDelete}
                         onReactivate={onReactivate}
@@ -1620,7 +1608,6 @@ function TransactionExcelRow({
   batimentsMap,
   formatMontant,
   onView,
-  onComplete,
   onEdit,
   onDelete,
   onReactivate,
@@ -1709,8 +1696,7 @@ function TransactionExcelRow({
         {transaction.est_promesse ? <Stack spacing={0.75} alignItems="flex-start">
           <Chip size="small" label={deferredSaleStatus(transaction).label} color={deferredSaleStatus(transaction).color} />
           {transaction.date_livraison_prevue && <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>}
-          {!inactive && transaction.quantite_en_attente > 0 && <Typography variant="caption">{formatNumberValue(transaction.quantite_en_attente)} œufs restants</Typography>}
-          {deferredSaleStatus(transaction).id === 'ready' && <Button size="small" variant="outlined" onClick={() => onComplete(transaction)} aria-label={`Compléter ${formatNumberValue(transaction.quantite_reservee)} œufs pour la vente ${transaction.id_transaction}`}>Compléter {formatNumberValue(transaction.quantite_reservee)} œufs</Button>}
+          {!inactive && <Typography variant="caption">{formatNumberValue(transaction.quantite_couverte || 0)} œufs réservés · {formatNumberValue(transaction.quantite_en_attente || 0)} à produire</Typography>}
         </Stack> : '—'}
       </TableCell>
       <TableCell align="right" sx={stickyActionBodySx}>

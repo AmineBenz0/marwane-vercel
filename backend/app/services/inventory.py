@@ -139,10 +139,15 @@ def record_transaction_movement(
     transaction: Transaction,
     current_user: Optional[Utilisateur],
     *, preserve_egg_allocations: bool = False,
+    is_new_transaction: bool = False,
 ) -> Optional[MouvementStock]:
     """Record inventory impact for a purchase or sale transaction."""
     from app.services.egg_sales import validate_sale_stock
-    validate_sale_stock(db, transaction, preserve_allocations=preserve_egg_allocations)
+    validate_sale_stock(
+        db, transaction, current_user=current_user,
+        preserve_allocations=preserve_egg_allocations,
+        skip_promise_audit=is_new_transaction,
+    )
     # Lock the product row while checking and writing its ledger impact. This
     # serializes concurrent sales of the same product on PostgreSQL and
     # prevents two requests from consuming the same available stock.

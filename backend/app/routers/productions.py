@@ -12,7 +12,7 @@ from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
 from app.utils.business_date import business_date
 from app.services.deferred_reporting import completion_events, covered_quantity
-from app.services.egg_sales import protect_production_source, reserved_stock_by_category
+from app.services.egg_sales import protect_production_source, reserved_stock_by_category, assign_pending_promises
 from app.models.transaction import Transaction
 from app.models.produit import Produit
 from app.schemas.production import (
@@ -327,6 +327,7 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         for record in records:
             db.refresh(record)
         sync_vaccine_expenses(db, prod_in, charges, cycle_id, current_user)
+        assign_pending_promises(db, building_id=prod_in.id_batiment, current_user=current_user)
         response = _daily_response(records, batiment, db, prod_in.date_production)
         db.commit()
         return response
@@ -391,6 +392,7 @@ def delete_daily_production(
             record.motif_annulation = "Desactivation de la saisie quotidienne"
             record.id_utilisateur_annulation = user_id
             record.id_utilisateur_modification = user_id
+        assign_pending_promises(db, building_id=prod_in.id_batiment, current_user=current_user)
         db.commit()
     except HTTPException:
         db.rollback()
@@ -473,6 +475,7 @@ def create_production(
         db.add_all(records)
         db.flush()
         db.refresh(db_prod)
+        assign_pending_promises(db, building_id=prod_in.id_batiment, current_user=current_user)
 
         res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
         res["nom_batiment"] = batiment.nom
@@ -1168,6 +1171,7 @@ def update_production(
         prod.nombre_cartons = Production.calculer_cartons(prod.nombre_oeufs, prod.type_oeuf)
 
     ensure_sellable_egg_product(db, prod.type_oeuf, prod.calibre)
+    assign_pending_promises(db, building_id=prod.id_batiment, current_user=current_user)
 
     prod.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
@@ -1217,5 +1221,6 @@ def delete_production(
     prod.motif_annulation = raison.strip()
     prod.id_utilisateur_annulation = current_user.id_utilisateur if current_user else None
     prod.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+    assign_pending_promises(db, building_id=prod.id_batiment, current_user=current_user)
     db.commit()
     return None

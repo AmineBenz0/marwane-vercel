@@ -301,6 +301,7 @@ class DeferredSaleSummary(BaseModel):
     nom_produit: str
     nom_batiment: Optional[str] = None
     date_livraison_prevue: Optional[date] = None
+    quantite_couverte: int
     quantite_en_attente: int
     quantite_reservee: int
 

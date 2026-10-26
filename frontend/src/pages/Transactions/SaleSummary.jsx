@@ -15,8 +15,8 @@ export default function SaleSummary({ lines, products, control, saleDate, loadin
           <Stack spacing={1} aria-live="polite">
             {[
               ['Demandés', stock.requested.toLocaleString('fr-FR')],
-              ['Couverts par le stock', stock.ready ? stock.covered.toLocaleString('fr-FR') : '—'],
-              ['Reste à fournir', stock.ready ? stock.pending.toLocaleString('fr-FR') : '—'],
+              ['Stock disponible à réserver', stock.ready ? stock.covered.toLocaleString('fr-FR') : '—'],
+              ['Reste à produire', stock.ready ? stock.pending.toLocaleString('fr-FR') : '—'],
             ].map(([label, value]) => <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
               <Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="body2" fontWeight={700}>{value}</Typography>
             </Box>)}

@@ -690,7 +690,7 @@ function ClientProfile() {
         </Tabs>
       </Card>
 
-      <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} onCompleted={updated => setTransactions(previous => previous.map(sale => sale.id_transaction === updated.id_transaction ? updated : sale))} />
+      <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} />
 
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Depuis le début</Typography>

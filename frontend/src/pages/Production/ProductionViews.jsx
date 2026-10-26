@@ -21,7 +21,7 @@ export function StockSummary({ available, categories = [], reserved, physical, e
       <Box sx={{ flex: 1, minWidth: 0, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
         <Typography fontWeight={600}>Réservé aux clients</Typography>
         <Typography variant="h5" fontWeight={800} sx={{ mt: 0.5 }}>{number(reserved)} œufs</Typography>
-        {Number(reserved) > 0 && onViewReservations && <Button size="small" onClick={onViewReservations} sx={{ mt: 0.5, px: 0 }}>Voir les ventes à compléter</Button>}
+        {Number(reserved) > 0 && onViewReservations && <Button size="small" onClick={onViewReservations} sx={{ mt: 0.5, px: 0 }}>Voir les ventes avec stock réservé</Button>}
       </Box>
     </Stack>
     <ExpandableDetails label="Détail du stock">
