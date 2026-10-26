@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import { ArrowForwardRounded as ArrowForwardRoundedIcon } from '@mui/icons-material';
 import useDeferredSales from './useDeferredSales';
 
 const number = value => Number(value || 0).toLocaleString('fr-FR');
