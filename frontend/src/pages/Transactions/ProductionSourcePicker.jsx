@@ -33,6 +33,11 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
   const available = selected?.disponible;
   const sourceDate = selected?.date_production;
   const groupKey = selected ? `${building}:${selected.key}` : null;
+  const resetNewDeferredDelivery = () => {
+    if (transactionId) return;
+    setValue(`lignes.${index}.est_promesse`, false, { shouldDirty: true, shouldValidate: true });
+    setValue(`lignes.${index}.date_livraison_prevue`, '', { shouldDirty: true, shouldValidate: true });
+  };
   useEffect(() => {
     setValue(`lignes.${index}.source_group`, groupKey);
     setValue(`lignes.${index}.source_available`, available ?? null);
@@ -65,7 +70,12 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
         <Controller name={`lignes.${index}.id_batiment`} control={control} render={({ field, fieldState }) =>
           <TextField {...field} select fullWidth size="small" label="Bâtiment source *" value={field.value || ''}
             disabled={disabled} error={!!fieldState.error} helperText={fieldState.error?.message}
-            onChange={event => { setValue(`lignes.${index}.id_production`, ''); setValue(`lignes.${index}.id_produit`, ''); field.onChange(event); }}>
+            onChange={event => {
+              if (String(event.target.value) !== String(field.value || '')) resetNewDeferredDelivery();
+              setValue(`lignes.${index}.id_production`, '');
+              setValue(`lignes.${index}.id_produit`, '');
+              field.onChange(event);
+            }}>
             {batiments.map(b => <MenuItem key={b.id_batiment} value={b.id_batiment}>{b.nom}</MenuItem>)}
           </TextField>} />
       </Grid>
@@ -87,6 +97,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
                 <Button fullWidth disabled={disabled || fetching || !!error} aria-pressed={chosen}
                   aria-label={`Choisir ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}
                   onClick={() => {
+                    if (Number(group.id_produit) !== Number(line.id_produit)) resetNewDeferredDelivery();
                     field.onChange(group.id_production || '');
                     setValue(`lignes.${index}.id_produit`, group.id_produit, { shouldDirty: true });
                   }}
