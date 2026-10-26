@@ -478,6 +478,9 @@ function TransactionForm({
               id_batiment: initialValues.id_batiment || '',
               quantite: initialValues.quantite || undefined,
               prix_unitaire: initialValues.prix_unitaire || undefined,
+              est_promesse: !!initialValues.est_promesse,
+              date_livraison_prevue: initialValues.date_livraison_prevue || tomorrow(),
+              allocation_automatique: initialValues.allocation_automatique ?? true,
               ajouter_paiement: paiements.length > 0,
               paiements: paiements.length > 0 ? paiements.map(p => ({
                 date: new Date(p.date_paiement).toISOString().split('T')[0],

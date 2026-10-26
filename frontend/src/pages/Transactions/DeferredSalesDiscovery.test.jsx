@@ -42,6 +42,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('deferred sale stock reservations', () => {
+  it('keeps canceled sales in the register without adding them to financial totals or follow-up', async () => {
+    sales.push({ ...paid, id_transaction: 99, est_actif: false, montant_total: 999, montant_restant: 999, montant_paye: 0, statut_paiement: 'impaye' });
+    render(<MemoryRouter initialEntries={['/transactions']}><TransactionsList /></MemoryRouter>);
+    expect(await screen.findByText('Annulée')).toBeVisible();
+    expect(screen.getAllByText('4 500 MAD')[0]).toBeVisible();
+    expect(screen.getByText(/Entrées 4\s500\sMAD \| Sorties 0\sMAD/)).toBeVisible();
+    expect(screen.getByText('Tout est réglé')).toBeVisible();
+  });
+
   it('shows automatic FIFO reservations and pending production without a completion action', async () => {
     renderAt(<DeferredSalesCard />);
     expect(await screen.findByText('600 œufs réservés · 400 à produire')).toBeVisible();
@@ -61,11 +70,14 @@ describe('deferred sale stock reservations', () => {
     expect(screen.queryByText('Client 1')).not.toBeInTheDocument();
   });
 
-  it('checks reservations after a production save and explains the automatic assignment', async () => {
-    const view = renderAt(<ProductionDeferredNotice refreshKey={0} />);
+  it('reports only assignments made by the saved production, including fully reserved sales', async () => {
+    const view = render(<MemoryRouter><ProductionDeferredNotice /></MemoryRouter>);
     expect(get).not.toHaveBeenCalled();
-    view.rerender(<MemoryRouter><ProductionDeferredNotice refreshKey={1} /></MemoryRouter>);
-    expect(await screen.findByText(/Le stock a été réservé automatiquement pour 1 livraison/)).toBeVisible();
+    view.rerender(<MemoryRouter><ProductionDeferredNotice savedProduction={{ id_batiment: 1, reservations_stock: [] }} /></MemoryRouter>);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    view.rerender(<MemoryRouter><ProductionDeferredNotice savedProduction={{ id_batiment: 1, reservations_stock: [{id_transaction: 9, quantite: 100}] }} /></MemoryRouter>);
+    expect(screen.getByText('100 œufs réservés pour 1 vente.')).toBeVisible();
+    expect(get).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -78,9 +90,12 @@ describe('deferred sale stock reservations', () => {
 });
 
 it('preserves the source-building filter when opening stock-reserved sales', async () => {
-  render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=ready&building=1']}><TransactionsList /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=reserved&building=1']}><TransactionsList /></MemoryRouter>);
   await screen.findByText('600 œufs réservés · 400 à produire');
   await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions', expect.objectContaining({ params: expect.objectContaining({ est_promesse: true, id_batiment: 1 }) })));
   expect(screen.getByText('Bâtiment : Bâtiment A')).toBeVisible();
+  expect(screen.getByText('Client 3')).toBeVisible();
+  expect(screen.queryByText('Client 2')).not.toBeInTheDocument();
+  expect(screen.queryByText(/(?:^|· )0 à produire/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
 });

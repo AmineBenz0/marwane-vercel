@@ -254,7 +254,7 @@ def test_discovery_respects_priority_excludes_future_stock_and_cancelled_sales(c
     assert client.get('/api/v1/transactions', params={'est_promesse': False}).json() == []
 
 
-def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(db_session, deferred_sale, monkeypatch, test_user):
+def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(client, db_session, deferred_sale, monkeypatch, test_user):
     building, _, _, payload = deferred_sale
     today = date.today()
     monkeypatch.setattr('app.services.egg_sales.business_date', lambda: today)
@@ -273,6 +273,13 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(db_se
     ), db_session, test_user)
     assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (900, 100)
     assert (later.quantite_couverte, later.quantite_en_attente) == (0, 300)
+    assert daily['reservations_stock'] == [dict(id_transaction=oldest.id_transaction, quantite=300)]
+    stock = client.get('/api/v1/productions/stock').json()
+    assert stock['totals']['reserved_eggs'] == 900
+    assert stock['totals']['physical_eggs'] == 900
+    assert stock['totals']['available_eggs'] == 0
+    assert stock['batiments'][0]['categories'][0]['reserved_eggs'] == 900
+    assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=today)) == 0
 
     daily = update_daily_production(ProductionDailyInput(
         id_batiment=building.id_batiment,
@@ -284,6 +291,12 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(db_se
     ), db_session, test_user)
     assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (1000, 0)
     assert (later.quantite_couverte, later.quantite_en_attente) == (100, 200)
+    assert daily['reservations_stock'] == [
+        dict(id_transaction=oldest.id_transaction, quantite=100),
+        dict(id_transaction=later.id_transaction, quantite=100),
+    ]
+    stock = client.get('/api/v1/productions/stock').json()['totals']
+    assert (stock['available_eggs'], stock['reserved_eggs'], stock['physical_eggs']) == (0, 1100, 1100)
 
     daily = update_daily_production(ProductionDailyInput(
         id_batiment=building.id_batiment,
@@ -295,6 +308,7 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(db_se
     ), db_session, test_user)
     assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (1000, 0)
     assert (later.quantite_couverte, later.quantite_en_attente) == (100, 200)
+    assert daily['reservations_stock'] == []
     audits = db_session.query(TransactionAudit).filter(
         TransactionAudit.champ_modifie == 'reservation_automatique_stock',
         TransactionAudit.id_transaction.in_([oldest.id_transaction, later.id_transaction]),
@@ -343,8 +357,9 @@ def test_paid_sale_agrees_across_profile_stock_history_and_monthly_reports(clien
     for quantity in (300, 100):
         enter_production(db_session, building.id_batiment, quantity)
         stock = client.get('/api/v1/productions/stock').json()['totals']
-        assert stock['physical_eggs'] == quantity
-        assert stock['reserved_eggs'] == quantity
+        expected_reserved = (600 if quantity == 300 else 900) + quantity
+        assert stock['physical_eggs'] == expected_reserved
+        assert stock['reserved_eggs'] == expected_reserved
         assert stock['available_eggs'] == 0
         preview = proposal(client, tx.id_transaction)
         result = client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=confirmation(preview))
@@ -377,8 +392,8 @@ def test_current_report_reservations_agree_with_legacy_global_sales(client, db_s
     db_session.commit()
     enter_production(db_session, building.id_batiment, 300)
     stock = client.get('/api/v1/productions/stock').json()['totals']
-    assert stock['physical_eggs'] == 200
-    assert stock['reserved_eggs'] == 200
+    assert stock['physical_eggs'] == 800
+    assert stock['reserved_eggs'] == 800
     assert stock['available_eggs'] == 0
     assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=date.today())) == 0
 

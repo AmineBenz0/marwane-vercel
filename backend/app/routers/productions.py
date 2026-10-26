@@ -327,8 +327,9 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         for record in records:
             db.refresh(record)
         sync_vaccine_expenses(db, prod_in, charges, cycle_id, current_user)
-        assign_pending_promises(db, building_id=prod_in.id_batiment, current_user=current_user)
+        assignments = assign_pending_promises(db, building_id=prod_in.id_batiment, current_user=current_user)
         response = _daily_response(records, batiment, db, prod_in.date_production)
+        response['reservations_stock'] = assignments
         db.commit()
         return response
     except HTTPException:
@@ -735,6 +736,10 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         )
         building["sold_eggs"] += quantity
         category["sold_eggs"] += quantity
+        if cumulative and transaction.est_promesse:
+            # Deferred allocations exclude eggs from resale, but are stock
+            # reserved for the client; allocation does not record a delivery.
+            category['allocated_deferred_eggs'] = category.get('allocated_deferred_eggs', 0) + quantity
         add_movement({
             "time": transaction.date_creation.strftime("%H:%M") if transaction.date_creation else None,
             "type": "sale",
@@ -772,8 +777,10 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
     missing_count = 0
 
     for building in stock_by_batiment.values():
-        reserved = sum(category.get("reserved_eggs", 0) for category in building["categories"].values())
-        available = building["produced_eggs"] - building["sold_eggs"] - reserved
+        unallocated_reserved = sum(category.get("reserved_eggs", 0) for category in building["categories"].values())
+        allocated_reserved = sum(category.get("allocated_deferred_eggs", 0) for category in building["categories"].values())
+        reserved = unallocated_reserved + allocated_reserved
+        available = building["produced_eggs"] - building["sold_eggs"] - unallocated_reserved
         status_value = _stock_status(0 if cumulative else building["produced_eggs"], available, building["entries_count"])
         if status_value == "missing":
             missing_count += 1
@@ -781,11 +788,12 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         categories = []
         for category in building["categories"].values():
             category_available = category["produced_eggs"] - category["sold_eggs"] - category.get("reserved_eggs", 0)
+            allocated = category.pop('allocated_deferred_eggs', 0)
             categories.append({
                 **category,
                 "available_eggs": category_available,
-                "reserved_eggs": category.get("reserved_eggs", 0),
-                "physical_eggs": category["produced_eggs"] - category["sold_eggs"],
+                "reserved_eggs": category.get("reserved_eggs", 0) + allocated,
+                "physical_eggs": category["produced_eggs"] - category["sold_eggs"] + allocated,
             })
 
         building_payload.append({
@@ -797,7 +805,7 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             "lost_eggs": building["lost_eggs"],
             "available_eggs": available,
             "reserved_eggs": reserved,
-            "physical_eggs": building["produced_eggs"] - building["sold_eggs"],
+            "physical_eggs": building["produced_eggs"] - building["sold_eggs"] + allocated_reserved,
             "cycle": building["cycle"],
             "mortalite": building["mortalite"],
             "consommation_aliment_kg": building["consommation_aliment_kg"],
@@ -838,9 +846,9 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             "produced_eggs": total_produced,
             "sold_eggs": total_sold + unassigned_sold_eggs,
             "lost_eggs": total_lost,
-            "available_eggs": total_produced - total_sold - unassigned_sold_eggs - sum(b["reserved_eggs"] for b in building_payload),
+            "available_eggs": sum(b['available_eggs'] for b in building_payload) - unassigned_sold_eggs,
             "reserved_eggs": sum(b["reserved_eggs"] for b in building_payload),
-            "physical_eggs": total_produced - total_sold - unassigned_sold_eggs,
+            "physical_eggs": sum(b['physical_eggs'] for b in building_payload) - unassigned_sold_eggs,
             "unassigned_sold_eggs": unassigned_sold_eggs,
             "buildings_count": len(batiments),
             "missing_buildings_count": missing_count,

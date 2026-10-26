@@ -32,7 +32,7 @@ it('labels a fully reserved sale as reserved and keeps it in reservation history
   renderSales();
   fireEvent.click(await screen.findByRole('button', { name: 'Voir les réservations complètes (1)' }));
   expect(await screen.findByText('Réservation complète')).toBeVisible();
-  expect(screen.getByText('1 000 / 1 000 œufs réservés')).toBeVisible();
+  expect(screen.getByText('1 000 œufs réservés')).toBeVisible();
   expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
 });
 
