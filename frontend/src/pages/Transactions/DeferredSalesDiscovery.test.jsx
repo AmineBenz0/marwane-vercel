@@ -51,19 +51,23 @@ describe('deferred sale stock reservations', () => {
     expect(screen.getByText('Tout est réglé')).toBeVisible();
   });
 
-  it('shows automatic FIFO reservations and pending production without a completion action', async () => {
+  it('summarizes all pending sales without listing their details', async () => {
     renderAt(<DeferredSalesCard />);
-    expect(await screen.findByText('600 œufs réservés · 400 à produire')).toBeVisible();
-    expect(screen.getByText('2 à suivre')).toBeVisible();
+    expect(await screen.findByText('2 ventes · 800 œufs à produire')).toBeVisible();
+    expect(screen.queryByText(/Client 1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Client 2/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('collapses unreserved promises and filters the register by reservation status', async () => {
+  it('opens pending sales including unreserved sales and excludes completed and canceled sales', async () => {
+    sales.push({ ...paid, id_transaction: 99, id_client: 3, est_actif: false });
     renderAt(<DeferredSalesCard />);
-    fireEvent.click(await screen.findByRole('button', { name: '1 vente(s) en attente de production' }));
-    expect(screen.getByText('Client 2 · #8')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Voir les ventes' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir les livraisons' }));
+    expect(await screen.findByText('Client 1')).toBeVisible();
+    expect(screen.getByText('Client 2')).toBeVisible();
+    expect(screen.queryByText('Client 3')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'À produire' })).toHaveAttribute('aria-pressed', 'true');
     expect(await screen.findByRole('button', { name: 'Réservation complète' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Réservation complète' }));
     expect(await screen.findByText('Client 3')).toBeVisible();
@@ -85,7 +89,7 @@ describe('deferred sale stock reservations', () => {
     get.mockRejectedValueOnce(new Error('Connexion interrompue'));
     renderAt(<DeferredSalesCard />);
     fireEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
-    expect(await screen.findByText('600 œufs réservés · 400 à produire')).toBeVisible();
+    expect(await screen.findByText('2 ventes · 800 œufs à produire')).toBeVisible();
   });
 
   it('hides the card when there are no pending deliveries', async () => {
