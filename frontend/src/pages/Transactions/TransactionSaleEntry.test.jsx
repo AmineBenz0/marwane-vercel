@@ -70,6 +70,29 @@ describe('sale entry preserves user input', () => {
     expect(submit.mock.calls[0][0].transactions[0]).toMatchObject({ quantite: 50, prix_unitaire: 1.5, est_promesse: false, date_livraison_prevue: null });
   });
 
+  it('requires fresh deferred-delivery acceptance after changing the source building', async () => {
+    render(<TransactionForm {...props} />);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
+    await selectBuilding('Bâtiment A');
+    fireEvent.change(quantity(), { target: { value: '100' } });
+    fireEvent.change(price(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Livraison différée' }));
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+
+    await selectBuilding('Bâtiment B');
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
+    expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
+    expect(quantity()).toHaveValue(100);
+    expect(price()).toHaveValue(1.5);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Gros' }));
+    expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).not.toBeChecked();
+    expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enregistrer la vente' })).toBeDisabled();
+  });
+
   it('preserves an existing deferred sale and its expected date when editing the price', async () => {
     const submit = vi.fn();
     render(<TransactionForm {...props} onSubmit={submit} initialValues={{
