@@ -22,13 +22,13 @@ export default function DeferredSaleHistory({ transactionId, refreshKey }) {
     {loading ? <CircularProgress size={22} aria-label="Chargement du suivi du stock" /> : error ? <Alert severity="warning" action={<Button onClick={() => setRevision(value => value + 1)}>Réessayer</Button>}>{error}</Alert> : !events.length ? <Typography color="text.secondary">Aucun mouvement enregistré.</Typography> : <Stack spacing={2}>
       {events.map(event => <Box component="article" key={event.id} sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
         <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
-          <Box><Typography fontWeight={700}>{event.type === 'initial' ? 'Stock à la création' : 'Stock complété'}</Typography><Typography variant="caption" color="text.secondary">{formatShortDate(event.date)}</Typography></Box>
+          <Box><Typography fontWeight={700}>{event.type === 'initial' ? 'Réservé à la création' : event.type === 'reservation' ? 'Réservé automatiquement' : 'Stock ajouté manuellement'}</Typography><Typography variant="caption" color="text.secondary">{formatShortDate(event.date)}</Typography></Box>
           <Typography fontWeight={700} sx={{ whiteSpace: 'nowrap' }}>{event.quantite.toLocaleString('fr-FR')} œufs</Typography>
         </Stack>
         <ExpandableDetails label="Origine du stock">
           {event.repartition_stock?.length ? event.repartition_stock.map(source => <Stack direction="row" spacing={2} justifyContent="space-between" key={source.id_production} sx={{ py: 0.5 }}>
             <Typography variant="body2">Production du {formatShortDate(source.date_production)}</Typography><Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>{source.quantite.toLocaleString('fr-FR')} œufs</Typography>
-          </Stack>) : event.quantite > 0 ? <Typography variant="body2" color="text.secondary">{event.type === 'initial' ? 'Répartition initiale non disponible.' : 'Répartition détaillée non enregistrée pour cet ancien complément.'}</Typography> : null}
+          </Stack>) : event.quantite > 0 ? <Typography variant="body2" color="text.secondary">{event.type === 'initial' ? 'Répartition initiale non disponible.' : 'Répartition détaillée non enregistrée pour cet ancien ajout.'}</Typography> : null}
           {(event.operateur || event.id_utilisateur) && <Typography variant="caption" color="text.secondary">{event.operateur || `Opérateur #${event.id_utilisateur}`}</Typography>}
         </ExpandableDetails>
       </Box>)}

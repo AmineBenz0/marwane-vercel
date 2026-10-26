@@ -3,18 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Stack, Typography } from '@mui/material';
 import { get } from '../../services/api';
 import { formatShortDate } from '../../utils/dateFormatting';
-import DeferredSaleCompletionDialog from '../Transactions/DeferredSaleCompletionDialog';
 import DeferredSaleStockSummary from '../Transactions/DeferredSaleStockSummary';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 
-export default function ClientDeferredSales({ clientId, produitsMap, onCompleted }) {
+export default function ClientDeferredSales({ clientId, produitsMap }) {
   const navigate = useNavigate();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [recentlyCompletedId, setRecentlyCompletedId] = useState(null);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let cancelled = false;
@@ -32,8 +29,8 @@ export default function ClientDeferredSales({ clientId, produitsMap, onCompleted
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [clientId, revision]);
-  const completedSales = sales.filter(sale => sale.quantite_en_attente === 0);
-  const displayedSales = sales.filter(sale => sale.quantite_en_attente > 0 || showCompleted || sale.id_transaction === recentlyCompletedId);
+  const fullyReservedSales = sales.filter(sale => sale.quantite_en_attente === 0);
+  const displayedSales = sales.filter(sale => sale.quantite_en_attente > 0 || showCompleted);
   return <Card variant="outlined" sx={{ mb: 3 }}><CardContent>
     <Typography component="h2" variant="h6" fontWeight={800} gutterBottom>Livraisons différées</Typography>
     {loading ? <CircularProgress size={24} aria-label="Chargement des livraisons du client" /> : error ? <Alert severity="warning" action={<Button onClick={() => setRevision(value => value + 1)}>Réessayer</Button>}>{error}</Alert> : !sales.length ? <Typography>Aucune livraison différée.</Typography> : <Stack spacing={2}>
@@ -43,18 +40,13 @@ export default function ClientDeferredSales({ clientId, produitsMap, onCompleted
             <Typography variant="body2">Prévue le {formatShortDate(sale.date_livraison_prevue)} · {sale.nom_batiment_source || 'Bâtiment non renseigné'}</Typography>
           </Box>
         </Stack>
-        <Box sx={{ my: 2 }}><DeferredSaleStockSummary sale={sale} onComplete={() => setSelected(sale.id_transaction)} /></Box>
+        <Box sx={{ my: 2 }}><DeferredSaleStockSummary sale={sale} /></Box>
         <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button onClick={() => navigate(`/transactions/${sale.id_transaction}`)}>Détails et historique</Button>
           <Stack direction="row" alignItems="center" spacing={1}><Typography variant="caption" color="text.secondary">Paiement</Typography><PaymentStatusBadge statut={sale.est_en_retard ? 'en_retard' : (sale.statut_paiement || 'impaye')} /></Stack>
         </Stack>
       </Box>)}
     </Stack>}
-    {!loading && !error && completedSales.length > 0 && <Button sx={{ mt: 2 }} aria-expanded={showCompleted} onClick={() => setShowCompleted(value => !value)}>{showCompleted ? 'Masquer' : 'Voir'} l’historique ({completedSales.length})</Button>}
-    <DeferredSaleCompletionDialog open={selected !== null} transactionId={selected} onClose={() => setSelected(null)} onCompleted={updated => {
-      setSelected(null);
-      if (updated.quantite_en_attente === 0) setRecentlyCompletedId(updated.id_transaction);
-      setRevision(value => value + 1); onCompleted?.(updated);
-    }} />
+    {!loading && !error && fullyReservedSales.length > 0 && <Button sx={{ mt: 2 }} aria-expanded={showCompleted} onClick={() => setShowCompleted(value => !value)}>{showCompleted ? 'Masquer' : 'Voir'} les réservations complètes ({fullyReservedSales.length})</Button>}
   </CardContent></Card>;
 }

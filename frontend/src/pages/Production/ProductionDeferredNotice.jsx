@@ -9,9 +9,9 @@ export default function ProductionDeferredNotice({ refreshKey }) {
   if (error) return <Alert severity="warning" sx={{ mb: 2 }} action={<Button onClick={reload}>Réessayer</Button>}>
     Production enregistrée. La vérification des livraisons différées est indisponible.
   </Alert>;
-  const count = sales.filter(sale => sale.quantite_reservee > 0).length;
+  const count = sales.filter(sale => Number(sale.quantite_couverte || 0) > 0).length;
   if (!count) return null;
   return <Alert severity="info" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => navigate('/transactions?view=deferred&stock=ready')}>Voir les ventes</Button>}>
-    Production enregistrée. Du stock est disponible pour compléter {count} vente(s).
+    Production enregistrée. Le stock a été réservé automatiquement pour {count} livraison(s) différée(s).
   </Alert>;
 }

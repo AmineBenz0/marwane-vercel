@@ -9,7 +9,7 @@ it('shows free and reserved stock, keeps the combined balance in details, and li
   expect(screen.getByRole('heading', { name: 'Disponible à la vente' })).toBeVisible();
   expect(screen.getByText('Réservé aux clients')).toBeVisible();
   expect(screen.queryByText('Disponible + réservé')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Voir les ventes à compléter' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Voir les ventes avec stock réservé' }));
   expect(view).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button', { name: 'Détail du stock' }));
   expect(await screen.findByText('Disponible + réservé')).toBeVisible();

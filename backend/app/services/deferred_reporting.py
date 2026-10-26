@@ -1,4 +1,4 @@
-"""Read completion events without creating financial or stock ledger entries."""
+"""Read deferred-sale stock events without changing financial ledgers."""
 import json
 from collections import defaultdict
 from datetime import date
@@ -11,12 +11,16 @@ def completion_events(db, transaction_ids):
         return grouped
     rows = db.query(TransactionAudit).filter(
         TransactionAudit.id_transaction.in_(transaction_ids),
-        TransactionAudit.champ_modifie == 'completion_livraison_differee',
+        TransactionAudit.champ_modifie.in_([
+            'completion_livraison_differee', 'reservation_automatique_stock',
+        ]),
     ).order_by(TransactionAudit.date_changement, TransactionAudit.id_audit).all()
     for row in rows:
         data = json.loads(row.nouvelle_valeur)
+        automatic = row.champ_modifie == 'reservation_automatique_stock'
         grouped[row.id_transaction].append(dict(
-            id=row.id_audit, date=data['date'], quantite=data['quantite_completee'],
+            id=row.id_audit, type='reservation' if automatic else 'completion',
+            date=data['date'], quantite=data['quantite_attribuee'] if automatic else data['quantite_completee'],
             quantite_couverte=data['quantite_couverte'], avant=int(row.ancienne_valeur),
             repartition_stock=data.get('repartition_stock', []),
             quantite_totale=data.get('quantite_totale'),

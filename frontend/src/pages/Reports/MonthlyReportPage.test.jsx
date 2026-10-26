@@ -64,9 +64,10 @@ it('keeps current balances separate from month-end amounts and explains accounti
   const current = await screen.findByRole('region', { name: 'Situation actuelle' });
   expect(within(current).getByText('Au 25/10/26')).toBeVisible();
   expect(within(current).getByText(/20,00/)).toBeVisible();
-  expect(screen.getByText(/Une livraison différée compte/)).not.toBeVisible();
+  const deferredSaleExplanation = /Le stock disponible est réservé automatiquement/;
+  expect(screen.getByText(deferredSaleExplanation)).not.toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Calcul des livraisons différées' }));
-  expect(await screen.findByText(/Une livraison différée compte/)).toBeVisible();
+  expect(await screen.findByText(deferredSaleExplanation)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois · Au 30/09/26' }));
   expect(await screen.findByText(/25,00/)).toBeVisible();
   expect(screen.getAllByText('Ventes', { exact: true })).toHaveLength(1);

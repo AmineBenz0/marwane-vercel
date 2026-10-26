@@ -54,7 +54,6 @@ import PaiementForm from '../../components/PaiementForm';
 import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
-import DeferredSaleCompletionDialog from './DeferredSaleCompletionDialog';
 import DeferredSaleHistory from './DeferredSaleHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
 import ExpandableDetails from '../../components/ExpandableDetails';
@@ -72,7 +71,6 @@ function TransactionDetail() {
   
   // États pour les données
   const [transaction, setTransaction] = useState(null);
-  const [completionOpen, setCompletionOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -577,13 +575,13 @@ function TransactionDetail() {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
                   {[transaction.nom_batiment_source, transaction.date_livraison_prevue ? `Prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : null].filter(Boolean).join(' · ')}
                 </Typography>
-                <DeferredSaleStockSummary sale={transaction} onComplete={() => setCompletionOpen(true)} />
+                <DeferredSaleStockSummary sale={transaction} />
               </Box>
             </Grid> : transaction.id_production ? <Grid item xs={12}>
               <Typography variant="body2">Origine : {transaction.nom_batiment_source}</Typography>
               <ExpandableDetails label="Origine du stock">
                 {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
-                  <Typography variant="body2" key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Typography>)
+                  <Typography variant="body2" key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Typography> )
                   : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
               </ExpandableDetails>
             </Grid> : null}
@@ -861,14 +859,6 @@ function TransactionDetail() {
           </Button>
         </DialogActions>
       </Dialog>
-      <DeferredSaleCompletionDialog open={completionOpen} transactionId={transaction.id_transaction}
-        onClose={() => setCompletionOpen(false)} onCompleted={updated => {
-          setTransaction(updated);
-          setCompletionOpen(false);
-          notification.success(updated.quantite_en_attente > 0
-            ? `Stock complété. ${updated.quantite_en_attente} œufs restent à fournir.`
-            : 'Stock complet pour cette vente.');
-        }} />
     </Box>
   );
 }

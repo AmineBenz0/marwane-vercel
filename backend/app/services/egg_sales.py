@@ -19,7 +19,8 @@ from app.utils.egg_product_sync import (
 )
 
 
-def _stock_state(db, *, exclude_transaction_id=None, through_date=None):
+def _stock_state(db, *, exclude_transaction_id=None, through_date=None,
+                 reserve_open_promises=True):
     """Reserve historical unlinked sales FIFO; never invent their provenance.
 
     Legacy building sales consume that building's oldest remaining category.
@@ -64,37 +65,147 @@ def _stock_state(db, *, exclude_transaction_id=None, through_date=None):
                 break
     # Open promises reserve newly produced eggs oldest-commitment first after
     # confirmed sales have been accounted for. No promise can reserve stock twice.
-    promises = db.query(Transaction).join(Produit).filter(
-        Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
-        Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
-    ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit)).order_by(Transaction.date_livraison_prevue, Transaction.date_transaction,
-                Transaction.id_transaction).all()
     reservations = defaultdict(dict)
-    for tx in promises:
-        if tx.id_transaction == exclude_transaction_id:
-            continue
-        category = parse_sellable_egg_product_name(tx.produit.nom_produit)
-        if not category:
-            continue
-        covered = sum(a.quantite for a in tx.allocations)
-        pending = max(0, tx.quantite - covered)
-        for p in by_category.get(category, []):
-            if p.id_batiment != tx.id_batiment:
+    if reserve_open_promises:
+        promises = db.query(Transaction).join(Produit).filter(
+            Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
+            Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
+        ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit)).order_by(
+            Transaction.date_creation, Transaction.id_transaction
+        ).all()
+        for tx in promises:
+            if tx.id_transaction == exclude_transaction_id:
                 continue
-            used = min(pending, max(0, remaining[p.id_production]))
-            if used:
-                reservations[tx.id_transaction][p.id_production] = used
-            remaining[p.id_production] -= used
-            pending -= used
-            if not pending:
-                break
+            category = parse_sellable_egg_product_name(tx.produit.nom_produit)
+            if not category:
+                continue
+            covered = sum(a.quantite for a in tx.allocations)
+            pending = max(0, tx.quantite - covered)
+            for p in by_category.get(category, []):
+                if p.id_batiment != tx.id_batiment:
+                    continue
+                used = min(pending, max(0, remaining[p.id_production]))
+                if used:
+                    reservations[tx.id_transaction][p.id_production] = used
+                remaining[p.id_production] -= used
+                pending -= used
+                if not pending:
+                    break
     return rows, remaining, reservations
 
 
-def source_balances(db, *, exclude_transaction_id=None, through_date=None):
+def source_balances(db, *, exclude_transaction_id=None, through_date=None,
+                    reserve_open_promises=True):
     rows, remaining, _ = _stock_state(db, exclude_transaction_id=exclude_transaction_id,
-                                      through_date=through_date)
+                                      through_date=through_date,
+                                      reserve_open_promises=reserve_open_promises)
     return rows, remaining
+
+
+def assign_pending_promises(db, *, building_id=None, building_ids=None,
+                            current_user=None, skip_audit_transaction_id=None):
+    """Persist newly available production against the oldest open promises.
+
+    Existing allocations remain attached to their sale. Only unassigned units
+    are distributed, so repeated production saves are safe and canceled sales
+    naturally release their allocations to the next promise.
+    """
+    query = db.query(Transaction).join(Produit).filter(
+        Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
+        Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
+    ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit))
+    scoped_buildings = {building for building in (building_ids or ()) if building is not None}
+    if building_id is not None:
+        scoped_buildings.add(building_id)
+    if scoped_buildings:
+        query = query.filter(Transaction.id_batiment.in_(sorted(scoped_buildings)))
+    promises = query.order_by(Transaction.date_creation, Transaction.id_transaction).all()
+    grouped = defaultdict(list)
+    for tx in promises:
+        category = parse_sellable_egg_product_name(tx.produit.nom_produit)
+        if category:
+            grouped[(tx.id_batiment, category)].append(tx)
+    if not grouped:
+        return
+
+    # Match the established stock-write lock order: buildings, then products.
+    building_ids = sorted({building for building, _ in grouped})
+    db.query(Batiment).filter(Batiment.id_batiment.in_(building_ids)).order_by(
+        Batiment.id_batiment
+    ).with_for_update().all()
+    product_ids = sorted({tx.id_produit for items in grouped.values() for tx in items})
+    db.query(Produit).filter(Produit.id_produit.in_(product_ids)).order_by(
+        Produit.id_produit
+    ).with_for_update().all()
+
+    for tx in promises:
+        # A single production pointer cannot describe a multi-row reservation.
+        if tx.id_production is not None or tx.id_cycle is not None:
+            tx.id_production = None
+            tx.production = None
+            tx.id_cycle = None
+            tx.cycle = None
+    db.flush()
+
+    rows, balances = source_balances(
+        db, through_date=business_date(), reserve_open_promises=False,
+    )
+    for (scope_building, category), items in sorted(
+        grouped.items(), key=lambda item: (item[0][0], item[0][1][0], item[0][1][1] or "")
+    ):
+        eligible = [
+            row for row in rows
+            if row.id_batiment == scope_building
+            and (row.type_oeuf, row.calibre if row.type_oeuf == "normal" else None) == category
+            and row.type_oeuf not in {"casse", "perdu"}
+        ]
+        for tx in items:
+            before = sum(a.quantite for a in tx.allocations)
+            pending = max(0, tx.quantite - before)
+            allocated = 0
+            used_sources = []
+            existing = {allocation.id_production: allocation for allocation in tx.allocations}
+            for production in eligible:
+                quantity = min(pending, max(0, balances[production.id_production]))
+                if quantity:
+                    allocation = existing.get(production.id_production)
+                    if allocation:
+                        allocation.quantite += quantity
+                    else:
+                        allocation = EggAllocation(
+                            id_production=production.id_production,
+                            quantite=quantity,
+                        )
+                        tx.allocations.append(allocation)
+                        existing[production.id_production] = allocation
+                    balances[production.id_production] -= quantity
+                    pending -= quantity
+                    allocated += quantity
+                    used_sources.append(dict(
+                        id_production=production.id_production,
+                        date_production=production.date_production.isoformat(),
+                        quantite=quantity,
+                        id_cycle=production.id_cycle,
+                    ))
+                if not pending:
+                    break
+            if allocated and current_user and tx.id_transaction != skip_audit_transaction_id:
+                tx.id_utilisateur_modification = current_user.id_utilisateur
+                tx.date_modification = datetime.now(timezone.utc)
+                db.add(TransactionAudit(
+                    id_transaction=tx.id_transaction,
+                    id_utilisateur=current_user.id_utilisateur,
+                    champ_modifie='reservation_automatique_stock',
+                    ancienne_valeur=str(before),
+                    nouvelle_valeur=json.dumps(dict(
+                        quantite_couverte=before + allocated,
+                        quantite_attribuee=allocated,
+                        quantite_totale=tx.quantite,
+                        date=business_date().isoformat(),
+                        repartition_stock=used_sources,
+                    )),
+                ))
+    db.flush()
 
 
 def resolve_sale_source(db, payload):
@@ -130,7 +241,8 @@ def resolve_sale_source(db, payload):
         setattr(payload, field, expected)
 
 
-def validate_sale_stock(db, transaction, *, preserve_allocations=False):
+def validate_sale_stock(db, transaction, current_user=None, *, preserve_allocations=False,
+                        skip_promise_audit=False):
     product = transaction.produit or db.get(Produit, transaction.id_produit)
     category = parse_sellable_egg_product_name(product.nom_produit) if product else None
     if not category:
@@ -139,9 +251,28 @@ def validate_sale_stock(db, transaction, *, preserve_allocations=False):
         return
     if transaction.id_client is None:
         return
-    if transaction.id_production is None and not transaction.allocation_automatique:
-        if transaction.est_promesse:
+    if transaction.est_promesse:
+        if not transaction.allocation_automatique:
             raise HTTPException(400, "Une vente avec livraison différée doit utiliser l'allocation automatique.")
+        if transaction.id_batiment is None:
+            raise HTTPException(400, "Sélectionnez le bâtiment source pour cette livraison différée.")
+        covered = sum(allocation.quantite for allocation in transaction.allocations)
+        if covered > transaction.quantite:
+            raise HTTPException(409, "La quantité ne peut pas être inférieure au stock déjà réservé.")
+        if preserve_allocations:
+            return
+        # Keep existing sources stable. Newly produced stock fills only the
+        # remaining quantity, while the helper preserves FIFO across promises.
+        assign_pending_promises(
+            db,
+            building_id=transaction.id_batiment,
+            current_user=current_user,
+            skip_audit_transaction_id=(
+                transaction.id_transaction if skip_promise_audit else None
+            ),
+        )
+        return
+    if transaction.id_production is None and not transaction.allocation_automatique:
         # Keep accepting historical API callers that create unlinked sales.
         # New sale entry sends allocation_automatique=true and is stock checked.
         return
@@ -258,7 +389,7 @@ def reserved_stock_by_category(db, through_date):
 
 
 def deferred_sale_reservations(db):
-    """One reservation calculation shared by dashboard and transaction lists."""
+    """Unallocated current stock available for each promise, for legacy previews."""
     _, _, reservations = _stock_state(db, through_date=business_date())
     return {transaction_id: sum(sources.values())
             for transaction_id, sources in reservations.items()}
@@ -272,12 +403,12 @@ def deferred_sales_overview(db):
         Transaction.id_client.isnot(None),
     ).options(selectinload(Transaction.allocations), joinedload(Transaction.client),
               joinedload(Transaction.produit), joinedload(Transaction.batiment)).order_by(
-                  Transaction.date_livraison_prevue, Transaction.date_transaction,
-                  Transaction.id_transaction).all()
+                  Transaction.date_creation, Transaction.id_transaction).all()
     return [dict(id_transaction=tx.id_transaction, nom_client=tx.client.nom_client,
                  nom_produit=tx.produit.nom_produit,
                  nom_batiment=tx.batiment.nom if tx.batiment else None,
                  date_livraison_prevue=tx.date_livraison_prevue,
+                 quantite_couverte=tx.quantite_couverte,
                  quantite_en_attente=tx.quantite_en_attente,
                  quantite_reservee=reservations.get(tx.id_transaction, 0))
             for tx in sales if tx.quantite_en_attente > 0]
