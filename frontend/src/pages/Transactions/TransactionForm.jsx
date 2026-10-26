@@ -317,7 +317,7 @@ function TransactionForm({
 
   // État pour gérer les paiements par ligne (tableau de booleans)
   // État pour stocker les paiements existants (en mode édition)
-  const [, setPaiementsExistants] = useState([]);
+  const [paiementsExistants, setPaiementsExistants] = useState([]);
 
   // Initialiser react-hook-form avec le resolver Yup
   const {
@@ -582,6 +582,17 @@ function TransactionForm({
           notes: p.notes || null,
         })) : [];
 
+        if (paiementsExistants.length > 0) {
+          // Paid sales accept operational edits only. Omit unchanged financial
+          // fields so saving a delivery date does not look like rewriting a sale.
+          const numericFields = ['id_production', 'id_batiment', 'id_cycle', 'id_produit',
+            'quantite', 'prix_unitaire', 'montant_total', 'id_client', 'id_fournisseur'];
+          const numberOrNull = value => value == null || value === '' ? null : Number(value);
+          numericFields.forEach(key => {
+            if (key in transactionData && numberOrNull(transactionData[key]) === numberOrNull(initialValues[key])) delete transactionData[key];
+          });
+          if (transactionData.date_transaction === initialValues.date_transaction?.slice(0, 10)) delete transactionData.date_transaction;
+        }
         await onSubmit({ ...transactionData, paiements: paiementsData });
       } else {
         // Mode création : on crée N transactions via l'endpoint batch
@@ -1662,7 +1673,7 @@ function TransactionForm({
                         index={index} control={control} setValue={setValue} batiments={batiments}
                         produits={produits}
                         disabled={loading} transactionId={initialValues.id_transaction}
-                        saleDate={watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
+                        saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>
                         {/* Produit */}

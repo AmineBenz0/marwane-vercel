@@ -363,12 +363,24 @@ def protect_production_source(db, source, *, quantity=0, category=None, producti
 
 def sale_sources(db, id_batiment, production_date=None, exclude_transaction_id=None, *, through_date=None):
     # Exclusion is only for editing an existing sale from this building.
+    tx = None
     if exclude_transaction_id:
         tx = db.get(Transaction, exclude_transaction_id)
         if not tx or tx.id_client is None:
             raise HTTPException(400, "Transaction incompatible avec ce bâtiment.")
-    rows, balances = source_balances(db, exclude_transaction_id=exclude_transaction_id,
-                                    through_date=through_date)
+    if tx and tx.est_actif and tx.est_promesse:
+        # Keep every client's priority intact, then expose this sale's own
+        # eggs for editing. Removing it first lets newer promises reserve its
+        # allocations and makes an unchanged sale appear short of stock.
+        rows, balances, reservations = _stock_state(db, through_date=through_date)
+        for allocation in tx.allocations:
+            if allocation.id_production in balances:
+                balances[allocation.id_production] += allocation.quantite
+        for source_id, quantity in reservations.get(tx.id_transaction, {}).items():
+            balances[source_id] += quantity
+    else:
+        rows, balances = source_balances(db, exclude_transaction_id=exclude_transaction_id,
+                                        through_date=through_date)
     return [{
         'id_production': p.id_production, 'date_production': p.date_production,
         'id_batiment': p.id_batiment, 'id_cycle': p.id_cycle, 'type_oeuf': p.type_oeuf, 'calibre': p.calibre,
