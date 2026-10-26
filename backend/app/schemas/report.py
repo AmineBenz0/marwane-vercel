@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -21,6 +21,9 @@ class MonthlyReport(BaseModel):
     month: str
     date_debut: date
     date_fin: date
+    date_soldes_actuels: Optional[date] = None
+    creances_actuelles: Optional[Decimal] = None
+    dettes_actuelles: Optional[Decimal] = None
     ventes: Decimal
     achats: Decimal
     charges: Decimal

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page Liste Transactions.
  * 
  * Affiche la liste des transactions avec :
@@ -10,7 +10,7 @@
  * Chaque transaction représente une ligne de vente/achat avec un seul produit.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -53,6 +53,7 @@ import {
   ReceiptLong as ReceiptLongIcon,
 } from '@mui/icons-material';
 import TransactionForm from './TransactionForm';
+import { deferredSaleStatus } from './deferredSaleStatus';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import { get, post, put, patch, del } from '../../services/api';
@@ -108,7 +109,25 @@ function TransactionsList() {
     montantMax: '',
     estActif: '',
   });
-  const [quickFilter, setQuickFilter] = useState('all');
+  const [quickFilter, setQuickFilter] = useState(() => new URLSearchParams(location.search).get('view') || 'all');
+  const loadRequest = useRef(0);
+  const [stockFilter, setStockFilter] = useState(() => new URLSearchParams(location.search).get('stock') || 'all');
+  const deferredOnly = quickFilter === 'deferred';
+  const sourceBuilding = new URLSearchParams(location.search).get('building');
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setQuickFilter(params.get('view') || 'all');
+    setStockFilter(params.get('stock') || 'all');
+  }, [location.search]);
+  const selectQuickFilter = value => {
+    setQuickFilter(value);
+    setStockFilter('all');
+    const params = new URLSearchParams(location.search);
+    params.delete('stock');
+    if (value !== 'all') params.set('view', value);
+    else params.delete('view');
+    if (params.toString() !== location.search.replace(/^\?/, '')) navigate({ pathname: location.pathname, search: params.toString() });
+  };
 
   /**
    * Gestion des filtres.
@@ -279,6 +298,7 @@ function TransactionsList() {
    * Charge la liste des transactions depuis l'API.
    */
   const fetchTransactions = async () => {
+    const request = ++loadRequest.current;
     setLoading(true);
     setError(null);
 
@@ -311,6 +331,9 @@ function TransactionsList() {
         params.est_actif = filters.estActif === 'true';
       }
 
+      if (deferredOnly) params.est_promesse = true;
+      if (sourceBuilding) params.id_batiment = Number(sourceBuilding);
+
       // Récupérer les transactions
       const data = await get('/transactions', {
         params: {
@@ -319,14 +342,15 @@ function TransactionsList() {
         },
       });
 
-      setTransactions(data || []);
+      if (request === loadRequest.current) setTransactions(data || []);
     } catch (err) {
+      if (request !== loadRequest.current) return;
       console.error('Erreur lors du chargement des transactions:', err);
       setError(
         err?.message || 'Une erreur est survenue lors du chargement des transactions'
       );
     } finally {
-      setLoading(false);
+      if (request === loadRequest.current) setLoading(false);
     }
   };
 
@@ -338,7 +362,8 @@ function TransactionsList() {
   // Charger les transactions au montage et lorsque les filtres changent
   useEffect(() => {
     fetchTransactions();
-  }, [filters]);
+    return () => { loadRequest.current += 1; };
+  }, [filters, deferredOnly, sourceBuilding]);
 
   useEffect(() => {
     const sourceBatimentId = location.state?.sourceBatimentId;
@@ -920,6 +945,8 @@ function TransactionsList() {
         return <PaymentStatusBadge statut={statut} />;
       },
     },
+    { id: 'etat_stock', label: 'Stock' },
+    { id: 'date_livraison_prevue', label: 'Livraison prévue' },
   ];
 
   // Préparer les données pour le registre
@@ -927,14 +954,16 @@ function TransactionsList() {
     return transactions.map((transaction) => ({
       ...transaction,
       client_ou_fournisseur: getClientOuFournisseur(transaction),
+      etat_stock: deferredSaleStatus(transaction)?.label || '—',
       id: transaction.id_transaction, // ID pour React key
     }));
   }, [transactions, clientsMap, fournisseursMap, produitsMap]);
 
   const transactionSummary = useMemo(() => {
-    const ventes = transactionsForGrid.filter((transaction) => transaction.id_client !== null);
-    const achats = transactionsForGrid.filter((transaction) => transaction.id_fournisseur !== null);
-    const nonPayees = transactionsForGrid.filter((transaction) => {
+    const active = transactionsForGrid.filter(transaction => transaction.est_actif !== false);
+    const ventes = active.filter((transaction) => transaction.id_client !== null);
+    const achats = active.filter((transaction) => transaction.id_fournisseur !== null);
+    const nonPayees = active.filter((transaction) => {
       const statut = transaction.est_en_retard ? 'en_retard' : (transaction.statut_paiement || 'impaye');
       return statut === 'impaye' || statut === 'partiel' || statut === 'en_retard';
     });
@@ -954,19 +983,26 @@ function TransactionsList() {
     { id: 'ventes', label: 'Ventes', count: transactionSummary.ventes },
     { id: 'achats', label: 'Achats', count: transactionSummary.achats },
     { id: 'non_payees', label: 'Non payées', count: transactionSummary.nonPayees },
+    { id: 'deferred', label: 'Livraisons différées' },
   ], [transactionSummary]);
 
   const displayedTransactions = useMemo(() => {
     return transactionsForGrid.filter((transaction) => {
+      if (quickFilter === 'deferred') return transaction.est_promesse && (
+        stockFilter === 'all' || (stockFilter === 'reserved'
+          ? transaction.est_actif !== false && Number(transaction.quantite_couverte || 0) > 0
+          : deferredSaleStatus(transaction)?.id === stockFilter)
+      );
       if (quickFilter === 'ventes') return transaction.id_client !== null;
       if (quickFilter === 'achats') return transaction.id_fournisseur !== null;
       if (quickFilter === 'non_payees') {
+        if (transaction.est_actif === false) return false;
         const statut = transaction.est_en_retard ? 'en_retard' : (transaction.statut_paiement || 'impaye');
         return statut === 'impaye' || statut === 'partiel' || statut === 'en_retard';
       }
       return true;
     });
-  }, [quickFilter, transactionsForGrid]);
+  }, [quickFilter, stockFilter, transactionsForGrid]);
 
   /**
    * Lignes actuellement affichées dans le registre, utilisées pour les exports.
@@ -1084,16 +1120,30 @@ function TransactionsList() {
                   key={option.id}
                   variant={quickFilter === option.id ? 'contained' : 'outlined'}
                   size="small"
-                  onClick={() => setQuickFilter(option.id)}
+                  onClick={() => selectQuickFilter(option.id)}
                   sx={{ borderRadius: 999 }}
                 >
-                  {option.label} ({option.count})
+                  {option.label}{!deferredOnly && option.count !== undefined ? ` (${option.count})` : ''}
                 </Button>
               ))}
             </Stack>
           </Stack>
         </CardContent>
       </Card>
+
+      {sourceBuilding && <Chip sx={{ mb: 2 }} label={`Bâtiment : ${batimentsMap.get(Number(sourceBuilding)) || sourceBuilding}`} onDelete={() => {
+        const params = new URLSearchParams(location.search);
+        params.delete('building');
+        navigate({ pathname: location.pathname, search: params.toString() });
+      }} />}
+      {deferredOnly && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }} aria-label="Filtrer par état du stock">
+        {[['all', 'Tous les états du stock'], ['reserved', 'Avec du stock réservé'], ['ready', 'Stock partiellement réservé'], ['waiting', 'En attente de production'], ['complete', 'Réservation complète']].map(([value, label]) =>
+          <Button key={value} size="small" variant={stockFilter === value ? 'contained' : 'outlined'} aria-pressed={stockFilter === value} onClick={() => {
+            const params = new URLSearchParams(location.search);
+            params.set('stock', value);
+            navigate({ pathname: location.pathname, search: params.toString() });
+          }}>{label}</Button>)}
+      </Stack>}
 
       <SmartFilterPanel
         pageKey="transactions"
@@ -1344,18 +1394,20 @@ function TransactionsExcelRegister({
         followUpCount: 0,
       };
 
-      const total = Math.abs(Number(transaction.montant_total || 0));
-      if (transaction.id_client !== null) {
-        group.entries += total;
-      } else {
-        group.exits += total;
-      }
-      group.paid += Math.abs(Number(transaction.montant_paye || 0));
-      group.remaining += Math.abs(Number(transaction.montant_restant || 0));
+      if (transaction.est_actif !== false) {
+        const total = Math.abs(Number(transaction.montant_total || 0));
+        if (transaction.id_client !== null) {
+          group.entries += total;
+        } else {
+          group.exits += total;
+        }
+        group.paid += Math.abs(Number(transaction.montant_paye || 0));
+        group.remaining += Math.abs(Number(transaction.montant_restant || 0));
 
-      const status = getPaymentStatus(transaction);
-      if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
-        group.followUpCount += 1;
+        const status = getPaymentStatus(transaction);
+        if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
+          group.followUpCount += 1;
+        }
       }
 
       group.rows.push(transaction);
@@ -1435,20 +1487,21 @@ function TransactionsExcelRegister({
                 <TableCell align="right">Payé</TableCell>
                 <TableCell align="right">Reste</TableCell>
                 <TableCell>Règlement</TableCell>
-                <TableCell>Statut</TableCell>
+                <TableCell>Paiement</TableCell>
+                <TableCell>Stock</TableCell>
                 <TableCell align="center" sx={stickyActionHeaderSx} aria-label="Actions" />
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={12} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={13} align="center" sx={{ py: 5 }}>
                     Chargement des transactions...
                   </TableCell>
                 </TableRow>
               ) : groupedRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={13} align="center" sx={{ py: 5 }}>
                     <Typography fontWeight={800}>Aucune transaction trouvée</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       Essayez d'élargir la période ou de supprimer certains filtres.
@@ -1460,7 +1513,7 @@ function TransactionsExcelRegister({
                   <React.Fragment key={group.dateKey}>
                     <TableRow>
                       <TableCell sx={stickyDateGroupSx}>{group.label}</TableCell>
-                      <TableCell colSpan={11} sx={groupRowSx}>
+                      <TableCell colSpan={12} sx={groupRowSx}>
                         Journée du {group.label} - {group.rows.length} opération{group.rows.length > 1 ? 's' : ''}
                       </TableCell>
                     </TableRow>
@@ -1492,7 +1545,7 @@ function TransactionsExcelRegister({
                       </TableCell>
                       <TableCell align="right" sx={summaryRowSx}>{formatMontant(group.paid)}</TableCell>
                       <TableCell align="right" sx={summaryRowSx}>{formatMontant(group.remaining)}</TableCell>
-                      <TableCell colSpan={3} sx={summaryRowSx}>
+                      <TableCell colSpan={4} sx={summaryRowSx}>
                         {group.followUpCount > 0
                           ? `${group.followUpCount} opération${group.followUpCount > 1 ? 's' : ''} à suivre`
                           : 'Tout est réglé'}
@@ -1646,6 +1699,13 @@ function TransactionExcelRow({
       </TableCell>
       <TableCell>
         {!inactive && <PaymentStatusBadge statut={paymentStatus} />}
+      </TableCell>
+      <TableCell>
+        {transaction.est_promesse ? <Stack spacing={0.75} alignItems="flex-start">
+          <Chip size="small" label={deferredSaleStatus(transaction).label} color={deferredSaleStatus(transaction).color} />
+          {transaction.date_livraison_prevue && <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>}
+          {!inactive && Number(transaction.quantite_en_attente) > 0 && <Typography variant="caption">{Number(transaction.quantite_couverte) > 0 ? `${formatNumberValue(transaction.quantite_couverte)} œufs réservés · ` : ''}{formatNumberValue(transaction.quantite_en_attente)} à produire</Typography>}
+        </Stack> : '—'}
       </TableCell>
       <TableCell align="right" sx={stickyActionBodySx}>
         <Stack direction="row" spacing={0} justifyContent="center" alignItems="center" sx={{ minWidth: 28 }}>

@@ -31,7 +31,8 @@ describe('Supplier funding while editing a transaction', () => {
   it('allows a new cash payment to use the second bank account on an existing unpaid transaction', async () => {
     const submit = vi.fn();
     render(<TransactionForm open initialValues={transaction} onClose={vi.fn()} onSubmit={submit} />);
-    fireEvent.click(await screen.findByRole('radio', { name: 'Payer maintenant' }));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Fournisseur/ })).toHaveTextContent('Supplier'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Payer maintenant' }));
     const account = await screen.findByRole('combobox', { name: /Compte bancaire/ });
     expect(account).not.toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('combobox', { name: 'Mode de paiement' })).toHaveTextContent('Virement');

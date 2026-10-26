@@ -39,6 +39,7 @@ import {
 import { endOfMonth, format, parseISO, startOfMonth, subDays } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import { get } from '../services/api';
+import DeferredSalesCard from './Transactions/DeferredSalesCard';
 import { formatMontant, formatSimpleNumber } from '../utils/formatNumber';
 import { formatNumberForAxis, formatMontantForTooltip } from '../utils/formatNumberForChart';
 
@@ -235,8 +236,8 @@ function Dashboard() {
 
     if (items.length === 0) {
       items.push({
-        title: 'Journ\u00e9e sous contr\u00f4le',
-        description: 'Aucune alerte critique d\u00e9tect\u00e9e sur les donn\u00e9es charg\u00e9es.',
+        title: 'Production et caisse à jour',
+        description: 'Aucune alerte de production ou de caisse détectée.',
         action: 'Caisse',
         path: '/caisse',
         severity: 'success',
@@ -306,6 +307,7 @@ function Dashboard() {
               </Stack>
 
               <Stack spacing={1.5}>
+                <DeferredSalesCard />
                 {alerts.map((alert) => {
                   const isError = alert.severity === 'error';
                   const isSuccess = alert.severity === 'success';

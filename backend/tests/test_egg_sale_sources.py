@@ -54,6 +54,73 @@ def test_sale_derives_identity_syncs_stock_and_cancellation_restores(db_session,
     assert next(s for s in sale_sources(db_session,b.id_batiment,rows[1].date_production) if s['type_oeuf']=='normal')['disponible']==80
 
 
+def test_promise_covers_available_stock_and_reserves_future_stock(db_session, source_data):
+    from app.models.egg_allocation import EggAllocation
+    b, c, rows = source_data
+    future = Production(id_batiment=b.id_batiment, date_production=date.today() + timedelta(days=1),
+        type_oeuf='normal', calibre='moyen', nombre_oeufs=100, grammage=55,
+        nombre_cartons=2, est_actif=True)
+    db_session.add(future)
+    db_session.flush()
+    product = ensure_sellable_egg_product(db_session, 'normal', 'moyen')
+    promise = TransactionCreate(
+        date_transaction=date.today(), id_client=c.id_client, id_produit=product.id_produit,
+        id_batiment=b.id_batiment, allocation_automatique=True, est_promesse=True,
+        date_livraison_prevue=date.today() + timedelta(days=1), quantite=250,
+        prix_unitaire=Decimal('1.5'),
+    )
+    tx = create_transaction(promise, db_session, None)
+    assert sum(a.quantite for a in tx.allocations) == 180
+    assert tx.quantite_en_attente == 70
+    assert sum(row[0] for row in db_session.query(EggAllocation.quantite).filter_by(id_transaction=tx.id_transaction).all()) == 180
+    # The pending 70 reserve the next production before another sale can use it.
+    remaining = sale_sources(db_session, b.id_batiment, through_date=future.date_production)
+    assert sum(row['disponible'] for row in remaining if row['type_oeuf'] == 'normal') == 30
+    tomorrow_sale = TransactionCreate(
+        date_transaction=future.date_production, id_client=c.id_client, id_produit=product.id_produit,
+        id_batiment=b.id_batiment, allocation_automatique=True, quantite=31,
+        prix_unitaire=Decimal('1.5'),
+    )
+    with pytest.raises(HTTPException) as exc:
+        create_transaction(tomorrow_sale, db_session, None)
+    assert exc.value.status_code == 409
+
+
+def test_promise_example_covers_600_and_keeps_400_pending(db_session, source_data):
+    b, c, rows = source_data
+    additional = Production(id_batiment=b.id_batiment, date_production=rows[1].date_production,
+        type_oeuf='normal', calibre='moyen', nombre_oeufs=420, grammage=55,
+        nombre_cartons=8, est_actif=True)
+    db_session.add(additional)
+    product = ensure_sellable_egg_product(db_session, 'normal', 'moyen')
+    promise = TransactionCreate(
+        date_transaction=date.today(), id_client=c.id_client, id_produit=product.id_produit,
+        id_batiment=b.id_batiment, allocation_automatique=True, est_promesse=True,
+        date_livraison_prevue=date.today() + timedelta(days=1), quantite=1000,
+        prix_unitaire=Decimal('1.5'),
+    )
+    tx = create_transaction(promise, db_session, None)
+    assert tx.quantite_couverte == 600
+    assert tx.quantite_en_attente == 400
+
+
+def test_promise_without_stock_is_saved_but_unmarked_shortage_is_rejected(db_session, source_data):
+    b, c, _ = source_data
+    product = ensure_sellable_egg_product(db_session, 'normal', 'gros')
+    kwargs = dict(date_transaction=date.today(), id_client=c.id_client, id_produit=product.id_produit,
+                  id_batiment=b.id_batiment, allocation_automatique=True, quantite=40,
+                  prix_unitaire=Decimal('1'))
+    with pytest.raises(HTTPException) as exc:
+        create_transaction(TransactionCreate(**kwargs), db_session, None)
+    assert exc.value.status_code == 409
+    product = ensure_sellable_egg_product(db_session, 'normal', 'gros')
+    kwargs['id_produit'] = product.id_produit
+    accepted = create_transaction(TransactionCreate(**kwargs, est_promesse=True,
+        date_livraison_prevue=date.today() + timedelta(days=1)), db_session, None)
+    assert accepted.quantite_couverte == 0
+    assert accepted.quantite_en_attente == 40
+
+
 def test_oversell_batch_rolls_back_all_rows(db_session,source_data):
     with pytest.raises(HTTPException) as exc:
         create_transactions_batch([payload(source_data,50),payload(source_data,40)],db_session,None)
@@ -223,3 +290,62 @@ def test_cumulative_sources_endpoint_and_exact_date_compatibility(client, source
     assert len(exact.json()) == 1
     assert client.get('/api/v1/transactions/production-sources', params={
         'id_batiment': b.id_batiment}).status_code == 400
+
+
+def test_fifo_sale_spans_days_as_one_transaction_and_cancels_exact_origins(db_session, source_data):
+    b, _, rows = source_data
+    tx = create_transaction(payload(source_data, 150, allocation_automatique=True), db_session, None)
+    assert db_session.query(Transaction).count() == 1
+    assert [(a.id_production, a.quantite) for a in tx.allocations] == [(rows[0].id_production, 100), (rows[1].id_production, 50)]
+    assert sum(a.quantite for a in tx.allocations) == tx.quantite
+    assert next(s['disponible'] for s in sale_sources(db_session, b.id_batiment, through_date=date.today()) if s['id_production'] == rows[1].id_production) == 30
+    update_transaction(tx.id_transaction, TransactionUpdate(prix_unitaire=2), db_session, None)
+    assert [(a.id_production, a.quantite) for a in tx.allocations] == [(rows[0].id_production, 100), (rows[1].id_production, 50)]
+    delete_transaction(tx.id_transaction, 'Annulation', db_session, None)
+    assert [s['disponible'] for s in sale_sources(db_session, b.id_batiment, through_date=date.today())] == [100, 80, 20]
+
+
+def test_fifo_quantity_edit_reallocates_and_protects_each_origin(db_session, source_data):
+    tx = create_transaction(payload(source_data, 150, allocation_automatique=True), db_session, None)
+    update_transaction(tx.id_transaction, TransactionUpdate(quantite=120), db_session, None)
+    assert [(a.id_production, a.quantite) for a in tx.allocations] == [(source_data[2][0].id_production, 100), (source_data[2][1].id_production, 20)]
+    with pytest.raises(HTTPException):
+        protect_production_source(db_session, source_data[2][0], quantity=99)
+    with pytest.raises(HTTPException):
+        create_transaction(payload(source_data, 61, allocation_automatique=True), db_session, None)
+
+
+def test_fifo_batch_oversell_rolls_back_allocations(db_session, source_data):
+    from app.models.egg_allocation import EggAllocation
+    with pytest.raises(HTTPException):
+        create_transactions_batch([payload(source_data, 100, allocation_automatique=True), payload(source_data, 81, allocation_automatique=True)], db_session, None)
+    assert db_session.query(Transaction).count() == 0
+    assert db_session.query(EggAllocation).count() == 0
+
+
+def test_fifo_never_uses_production_after_sale_date(db_session, source_data):
+    data = payload(source_data, 101, row=0, allocation_automatique=True)
+    data.date_transaction = source_data[2][0].date_production
+    with pytest.raises(HTTPException) as exc:
+        create_transaction(data, db_session, None)
+    assert exc.value.status_code == 409
+    assert db_session.query(Transaction).count() == 0
+
+
+def test_fifo_payment_is_recorded_once_and_cancellation_restores_all_sources(db_session, source_data):
+    from app.routers.transactions import create_transactions_with_payments_batch
+    from app.schemas.transaction_payment import TransactionPaymentBatchCreate
+    from app.models.paiement import Paiement
+    from app.models.caisse import Caisse
+    data = payload(source_data, 150, allocation_automatique=True)
+    batch = TransactionPaymentBatchCreate(items=[{'client_ref': 'fifo', 'transaction': data.model_dump(),
+        'paiements': [{'date_paiement': date.today(), 'montant': '225', 'type_paiement': 'cash'}]}])
+    tx = create_transactions_with_payments_batch(batch, db_session, None)[0]['transaction']
+    assert len(tx.allocations) == 2
+    assert tx.id_production == source_data[2][0].id_production
+    assert db_session.query(Transaction).count() == 1
+    assert db_session.query(Paiement).count() == 1
+    assert db_session.query(Caisse).filter(Caisse.statut == 'active').count() == 1
+    delete_transaction(tx.id_transaction, 'Annulation FIFO', db_session, None)
+    assert db_session.query(Caisse).filter(Caisse.statut == 'active').count() == 0
+    assert sum(s['disponible'] for s in sale_sources(db_session, source_data[0].id_batiment, through_date=date.today())) == 200

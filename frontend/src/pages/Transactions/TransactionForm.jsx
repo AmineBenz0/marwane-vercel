@@ -1,18 +1,20 @@
 import DateField from '../../utils/DateField';
 import ProductionSourcePicker from './ProductionSourcePicker';
+import SaleSummary from './SaleSummary';
+import { saleStockSummary } from './saleStockSummary';
 /**
  * Composant TransactionForm.
- * 
+ *
  * Formulaire pour créer et éditer des transactions avec :
  * - Date transaction
  * - Sélection Client OU Fournisseur (radio buttons)
  * - Liste de lignes dynamique (produit + quantité + prix unitaire)
  * - Calcul automatique du montant total
  * - Validation complète
- * 
+ *
  * En mode création : crée N transactions indépendantes (une par ligne) via /batch
  * En mode édition : édite UNE transaction existante
- * 
+ *
  * @param {boolean} open - Contrôle l'ouverture/fermeture de la modal
  * @param {Function} onClose - Callback appelé lors de la fermeture de la modal
  * @param {Function} onSubmit - Callback appelé lors de la soumission du formulaire (reçoit les données validées)
@@ -23,7 +25,7 @@ import ProductionSourcePicker from './ProductionSourcePicker';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { keyframes } from '@emotion/react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
   Dialog,
@@ -51,9 +53,9 @@ import {
   Collapse,
   Grid,
 } from '@mui/material';
-import { 
-  Close as CloseIcon, 
-  Add as AddIcon, 
+import {
+  Close as CloseIcon,
+  Add as AddIcon,
   Delete as DeleteIcon,
   PaymentsOutlined as PaymentsIcon,
   ReceiptLongOutlined as ChequeIcon,
@@ -68,6 +70,11 @@ import { transactionValidationSchema } from './transactionValidation';
 const EMPTY_INITIAL_VALUES = {};
 
 const today = () => new Date().toISOString().split('T')[0];
+const tomorrow = () => {
+  const value = new Date(`${today()}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().split('T')[0];
+};
 
 const requiredFieldShake = keyframes`
   0%, 100% { transform: translateX(0); }
@@ -186,6 +193,8 @@ const createLineDefaults = (prefillBatimentId = '', date = today(), paymentType 
   id_production: '',
   date_production: '',
   source_ready: false,
+  est_promesse: false,
+  date_livraison_prevue: tomorrow(),
   id_batiment: prefillBatimentId || '',
   quantite: undefined,
   prix_unitaire: undefined,
@@ -201,7 +210,7 @@ const createLineDefaults = (prefillBatimentId = '', date = today(), paymentType 
 const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, loading, formatMontant, animateInvalidFields }) => {
   const [lcs, setLcs] = React.useState([]);
   const [fetching, setFetching] = React.useState(false);
-  
+
   const typeEntite = watch('type_entite');
   const clientId = watch('id_client');
   const fournisseurId = watch('id_fournisseur');
@@ -302,13 +311,13 @@ function TransactionForm({
   const [comptesBancaires, setComptesBancaires] = useState([]);
   const [produits, setProduits] = useState([]);
   const [batiments, setBatiments] = useState([]);
-  const [loadingData, setLoadingData] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   const [animateInvalidFields, setAnimateInvalidFields] = useState(false);
   const validationAnimationTimer = useRef(null);
-  
+
   // État pour gérer les paiements par ligne (tableau de booleans)
   // État pour stocker les paiements existants (en mode édition)
-  const [, setPaiementsExistants] = useState([]);
+  const [paiementsExistants, setPaiementsExistants] = useState([]);
 
   // Initialiser react-hook-form avec le resolver Yup
   const {
@@ -339,10 +348,19 @@ function TransactionForm({
   }, []);
 
   // Observer les valeurs du formulaire pour calculer le total
-  const watchedLignes = watch('lignes');
+  const watchedLignes = useWatch({ control, name: 'lignes' });
   const watchedTypeEntite = watch('type_entite');
   const watchedFournisseurId = watch('id_fournisseur');
   const isEditingTransaction = Boolean(initialValues?.id_transaction);
+  useEffect(() => {
+    if (!open || isEditingTransaction || watchedTypeEntite !== 'client') return;
+    (watchedLignes || []).forEach((line, index, lines) => {
+      const stock = saleStockSummary(line, index, lines);
+      if (line.est_promesse && stock.ready && stock.pending === 0) {
+        setValue(`lignes.${index}.est_promesse`, false, { shouldDirty: true, shouldValidate: true });
+      }
+    });
+  }, [open, isEditingTransaction, watchedTypeEntite, watchedLignes, setValue]);
   const supplierSource = watchedTypeEntite === 'fournisseur'
     ? fournisseurs.find((item) => String(item.id_fournisseur) === String(watchedFournisseurId))?.mode_reglement_prefere || null
     : null;
@@ -440,14 +458,14 @@ function TransactionForm({
     const loadFormData = async () => {
       if (open) {
         const isEditing = initialValues && initialValues.id_transaction;
-        
+
         if (isEditing) {
           // Mode édition : pré-remplir avec UNE ligne (la transaction à éditer)
           const typeEntite = initialValues.id_client ? 'client' : 'fournisseur';
-          
+
           // Charger les paiements existants
           const paiements = await fetchPaiementsExistants(initialValues.id_transaction);
-          
+
           // Vérifier s'il y a au moins un paiement
           reset({
             date_transaction: initialValues.date_transaction
@@ -469,6 +487,9 @@ function TransactionForm({
               id_batiment: initialValues.id_batiment || '',
               quantite: initialValues.quantite || undefined,
               prix_unitaire: initialValues.prix_unitaire || undefined,
+              est_promesse: !!initialValues.est_promesse,
+              date_livraison_prevue: initialValues.date_livraison_prevue || tomorrow(),
+              allocation_automatique: initialValues.allocation_automatique ?? true,
               ajouter_paiement: paiements.length > 0,
               paiements: paiements.length > 0 ? paiements.map(p => ({
                 date: new Date(p.date_paiement).toISOString().split('T')[0],
@@ -489,7 +510,7 @@ function TransactionForm({
           // Mode création : valeurs par défaut ou pré-remplies
           const hasPrefillClient = prefillClientId !== null && prefillClientId !== undefined;
           const hasPrefillFournisseur = prefillFournisseurId !== null && prefillFournisseurId !== undefined;
-          
+
           reset({
             date_transaction: today(),
             date_echeance: getDefaultDueDate(today()),
@@ -502,7 +523,7 @@ function TransactionForm({
         clearErrors();
       }
     };
-    
+
     loadFormData();
   }, [open, initialValues, reset, clearErrors, prefillClientId, prefillFournisseurId, prefillBatimentId]);
 
@@ -519,7 +540,7 @@ function TransactionForm({
    */
   const calculateTotal = () => {
     if (!watchedLignes || watchedLignes.length === 0) return 0;
-    
+
     return watchedLignes.reduce((total, ligne) => {
       const quantite = parseFloat(ligne.quantite) || 0;
       const prix = parseFloat(ligne.prix_unitaire) || 0;
@@ -535,7 +556,7 @@ function TransactionForm({
     clearErrors('root');
     try {
       const isEditing = initialValues && initialValues.id_transaction;
-      
+
       if (isEditing) {
         // Mode édition : on édite UNE seule transaction
         const transactionData = {
@@ -544,14 +565,17 @@ function TransactionForm({
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           ...(data.type_entite === 'client'
-            ? { id_production: Number(data.lignes[0].id_production) }
+            ? { id_production: data.lignes[0].id_production ? Number(data.lignes[0].id_production) : null,
+              id_produit: Number(data.lignes[0].id_produit), allocation_automatique: true,
+              est_promesse: !!data.lignes[0].est_promesse,
+              date_livraison_prevue: data.lignes[0].est_promesse ? data.lignes[0].date_livraison_prevue : null }
             : { id_produit: Number(data.lignes[0].id_produit) }),
           id_batiment: data.type_entite === 'client' && data.lignes[0].id_batiment ? parseInt(data.lignes[0].id_batiment) : null,
           quantite: parseInt(data.lignes[0].quantite),
           prix_unitaire: parseFloat(data.lignes[0].prix_unitaire),
           est_actif: initialValues.est_actif !== undefined ? initialValues.est_actif : true,
         };
-        
+
         // Passer aussi les données de paiement pour que le parent les gère
         const paiementsData = data.lignes[0].ajouter_paiement ? data.lignes[0].paiements.map(p => ({
           id_paiement: p.id_paiement || null,
@@ -566,7 +590,18 @@ function TransactionForm({
           id_lc: p.id_lc || null,
           notes: p.notes || null,
         })) : [];
-        
+
+        if (paiementsExistants.length > 0) {
+          // Paid sales accept operational edits only. Omit unchanged financial
+          // fields so saving a delivery date does not look like rewriting a sale.
+          const numericFields = ['id_production', 'id_batiment', 'id_cycle', 'id_produit',
+            'quantite', 'prix_unitaire', 'montant_total', 'id_client', 'id_fournisseur'];
+          const numberOrNull = value => value == null || value === '' ? null : Number(value);
+          numericFields.forEach(key => {
+            if (key in transactionData && numberOrNull(transactionData[key]) === numberOrNull(initialValues[key])) delete transactionData[key];
+          });
+          if (transactionData.date_transaction === initialValues.date_transaction?.slice(0, 10)) delete transactionData.date_transaction;
+        }
         await onSubmit({ ...transactionData, paiements: paiementsData });
       } else {
         // Mode création : on crée N transactions via l'endpoint batch
@@ -576,25 +611,28 @@ function TransactionForm({
           id_client: data.type_entite === 'client' ? data.id_client : null,
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           ...(data.type_entite === 'client'
-            ? { id_production: Number(ligne.id_production) }
+            ? { id_production: ligne.id_production ? Number(ligne.id_production) : null,
+              id_produit: Number(ligne.id_produit), allocation_automatique: true,
+              est_promesse: !!ligne.est_promesse,
+              date_livraison_prevue: ligne.est_promesse ? ligne.date_livraison_prevue : null }
             : { id_produit: Number(ligne.id_produit) }),
           id_batiment: data.type_entite === 'client' && ligne.id_batiment ? parseInt(ligne.id_batiment) : null,
           quantite: parseInt(ligne.quantite),
           prix_unitaire: parseFloat(ligne.prix_unitaire),
           est_actif: true,
         }));
-        
+
         // Appeler le callback onSubmit avec le tableau de transactions et les données des lignes (pour les paiements)
         await onSubmit({ batch: true, transactions: transactionsData, lignesData: data.lignes });
       }
-      
+
       // Si la soumission réussit, réinitialiser le formulaire
       reset();
     } catch (error) {
       // Gérer les erreurs de validation serveur
       if (error?.data?.detail) {
         const detail = error.data.detail;
-        
+
         if (Array.isArray(detail)) {
           const mappedPaths = [];
           detail.forEach((apiError) => {
@@ -628,7 +666,7 @@ function TransactionForm({
           message: error.message,
         });
       }
-      
+
       // Re-throw pour que le composant parent puisse aussi gérer l'erreur
       throw error;
     }
@@ -718,7 +756,7 @@ function TransactionForm({
     if (currentLignes.length > 1) {
       const newLignes = currentLignes.filter((_, i) => i !== index);
       setValue('lignes', newLignes, { shouldDirty: true });
-      
+
     }
   };
 
@@ -756,6 +794,405 @@ function TransactionForm({
   const montantRestant = Math.max(0, montantTotal - montantPaye);
   const isEditing = initialValues && initialValues.id_transaction;
 
+  const saleBlocked = watchedTypeEntite === 'client' && (watchedLignes || []).some((line, index, lines) => {
+    const stock = saleStockSummary(line, index, lines);
+    return !stock.ready || (stock.pending > 0 && !line.est_promesse);
+  });
+  const renderLinePayment = (ligne, index) => {
+    const ligneTotal = (Number(ligne.quantite) || 0) * (Number(ligne.prix_unitaire) || 0);
+    return <>
+      <Grid item xs={12}>
+        <Divider />
+      </Grid>
+
+      {/* Paiement */}
+      <Grid item xs={12}>
+        <Controller
+          name={`lignes.${index}.ajouter_paiement`}
+          control={control}
+          render={({ field }) => (
+            <RadioGroup
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 1,
+              }}
+              value={field.value ? 'now' : 'later'}
+              onChange={(event) => {
+                const shouldPayNow = event.target.value === 'now';
+                field.onChange(shouldPayNow);
+                if (shouldPayNow && ligneTotal > 0) {
+                  const existingPaiements = watch(`lignes.${index}.paiements`);
+                  if (!existingPaiements || existingPaiements.length === 0) {
+                    setValue(`lignes.${index}.paiements`, [
+                      createPaymentDefaults(
+                        watch('date_transaction') || today(),
+                        watchedTypeEntite === 'fournisseur'
+                          ? getFournisseurPaymentType(fournisseurs, watchedFournisseurId) || 'cash'
+                          : 'cash'
+                      ),
+                    ]);
+                    setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
+                  } else {
+                    setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
+                    setValue(
+                      `lignes.${index}.paiements.0.date`,
+                      watch('date_transaction') || today()
+                    );
+                  }
+                }
+              }}
+              aria-label="Choix du paiement"
+            >
+              <FormControlLabel
+                value="now"
+                sx={{
+                  m: 0,
+                  px: 1,
+                  py: 0.5,
+                  minHeight: 48,
+                  border: '1px solid',
+                  borderRadius: 1.5,
+                  borderColor: field.value ? 'primary.main' : 'divider',
+                  bgcolor: field.value ? 'action.selected' : 'background.paper',
+                  '& .MuiFormControlLabel-label': { fontWeight: field.value ? 700 : 500 },
+                  '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+                }}
+                control={<Radio size="small" />}
+                label="Payer maintenant"
+                disabled={loading}
+              />
+              <FormControlLabel
+                value="later"
+                sx={{
+                  m: 0,
+                  px: 1,
+                  py: 0.5,
+                  minHeight: 48,
+                  border: '1px solid',
+                  borderRadius: 1.5,
+                  borderColor: !field.value ? 'primary.main' : 'divider',
+                  bgcolor: !field.value ? 'action.selected' : 'background.paper',
+                  '& .MuiFormControlLabel-label': { fontWeight: !field.value ? 700 : 500 },
+                  '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+                }}
+                control={<Radio size="small" />}
+                label="À régler plus tard"
+                disabled={loading}
+              />
+            </RadioGroup>
+          )}
+        />
+      </Grid>
+
+      {/* Champs de paiement conditionnels */}
+      <Grid item xs={12} sx={{ display: watch(`lignes.${index}.ajouter_paiement`) ? 'block' : 'none' }}>
+        <Collapse in={!!watch(`lignes.${index}.ajouter_paiement`)}>
+          <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="subtitle2" color="text.primary" fontWeight={700}>
+                Paiement
+              </Typography>
+              <Button
+                size="small"
+                disabled={loading}
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  const currentPaiements = watch(`lignes.${index}.paiements`) || [];
+                  setValue(`lignes.${index}.paiements`, [
+                    ...currentPaiements,
+                    createPaymentDefaults(
+                      watch('date_transaction') || today(),
+                      watchedTypeEntite === 'fournisseur'
+                        ? getFournisseurPaymentType(fournisseurs, watchedFournisseurId) || 'cash'
+                        : 'cash'
+                    ),
+                  ]);
+                }}
+              >
+                Ajouter un paiement
+              </Button>
+            </Box>
+
+            {ligne.paiements?.map((paiement, pIndex) => (
+              <Box key={pIndex} sx={{ mb: 2, pb: 2, borderBottom: pIndex < ligne.paiements.length - 1 ? '1px dashed #ccc' : 'none' }}>
+                {paiement.source_reglement && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Source débitée : {paiement.source_reglement === 'banque' ? 'compte bancaire' : 'caisse'}.
+                    Le type de paiement peut être choisi indépendamment.
+                  </Alert>
+                )}
+                {ligne.paiements.length > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" fontWeight="bold">Paiement #{pIndex + 1}</Typography>
+
+                    <IconButton size="small" color="error" disabled={loading} aria-label={`Supprimer le paiement ${pIndex + 1}`} onClick={() => {
+                      const newPaiements = ligne.paiements.filter((_, i) => i !== pIndex);
+                      setValue(`lignes.${index}.paiements`, newPaiements);
+                    }}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+                )}
+                <Grid container spacing={2}>
+                  {/* Montant */}
+                  <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                    <Controller
+                      name={`lignes.${index}.paiements.${pIndex}.montant`}
+                      control={control}
+                      render={({ field, fieldState: { error } }) => (
+                        <TextField
+                          {...field}
+                          fullWidth
+                          label="Montant (MAD)"
+                          type="number"
+                          error={!!error}
+                          sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                          helperText={error?.message}
+                          disabled={loading}
+                          inputProps={{ step: '0.01', min: '0.01' }}
+                          InputLabelProps={{ shrink: true }}
+                          size="small"
+                        />
+                      )}
+                    />
+                  </Grid>
+
+                  {/* Type de paiement */}
+                  <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                    <Controller
+                      name={`lignes.${index}.paiements.${pIndex}.type`}
+                      control={control}
+                      render={({ field, fieldState: { error } }) => (
+                        <TextField
+                          {...field}
+                          select
+                          fullWidth
+                          label="Mode de paiement"
+                          error={!!error}
+                          sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                          helperText={error?.message}
+                          disabled={loading}
+                          size="small"
+                          onChange={(event) => {
+                            field.onChange(event);
+                            if (event.target.value !== 'virement' && paiement.source_reglement !== 'banque') {
+                              setValue(`lignes.${index}.paiements.${pIndex}.id_compte`, '');
+                            }
+                          }}
+                        >
+                          <MenuItem value="cash">
+                            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                              <PaymentsIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                              <Box component="span">Espèces</Box>
+                            </Box>
+                          </MenuItem>
+                          <MenuItem value="cheque">
+                            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                              <ChequeIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                              <Box component="span">Chèque</Box>
+                            </Box>
+                          </MenuItem>
+                          <MenuItem value="virement">
+                            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                              <BankTransferIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                              <Box component="span">Virement</Box>
+                            </Box>
+                          </MenuItem>
+                          <MenuItem value="lc">
+                            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+                              <CreditLetterIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                              <Box component="span">Lettre de Crédit</Box>
+                            </Box>
+                          </MenuItem>
+                        </TextField>
+                      )}
+                    />
+                  </Grid>
+
+                  {/* Date du paiement */}
+                  <Grid item xs={12} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                    <Controller
+                      name={`lignes.${index}.paiements.${pIndex}.date`}
+                      control={control}
+                      render={({ field, fieldState: { error } }) => (
+                        <DateField
+                          {...field}
+                          fullWidth
+                          label="Date du paiement"
+
+                          error={!!error}
+                          sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                          helperText={error?.message}
+                          disabled={loading}
+                          InputLabelProps={{ shrink: true }}
+                          size="small"
+                        />
+                      )}
+                    />
+                  </Grid>
+
+                  {/* Champs conditionnels */}
+                  {paiement.type === 'cheque' && (
+                    <>
+                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                        <Controller
+                          name={`lignes.${index}.paiements.${pIndex}.numero_cheque`}
+                          control={control}
+                          render={({ field }) => (
+                            <TextField {...field} fullWidth label="N° Chèque" disabled={loading} size="small" />
+                          )}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                        <Controller
+                          name={`lignes.${index}.paiements.${pIndex}.banque`}
+                          control={control}
+                          render={({ field }) => (
+                            <TextField {...field} fullWidth label="Banque" disabled={loading} size="small" />
+                          )}
+                        />
+                      </Grid>
+                    </>
+                  )}
+
+                  {(paiement.source_reglement === 'banque' || (!paiement.source_reglement && paiement.type === 'virement')) && (
+                    <>
+                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                        <Controller
+                          name={`lignes.${index}.paiements.${pIndex}.id_compte`}
+                          control={control}
+                          render={({ field, fieldState: { error } }) => (
+                            <TextField
+                              {...field}
+                              select
+                              fullWidth
+                              required={!isEditingTransaction || (watchedTypeEntite === 'fournisseur' && !paiement.id_paiement)}
+                              label="Compte bancaire"
+                              error={!!error}
+                              helperText={error?.message || (comptesBancaires.length ? '' : 'Aucun compte bancaire configuré')}
+                              disabled={loading || (isEditingTransaction && (watchedTypeEntite !== 'fournisseur' || Boolean(paiement.id_paiement))) || comptesBancaires.length === 0}
+                              size="small"
+                              value={field.value || ''}
+                              onChange={(event) => field.onChange(event.target.value)}
+                            >
+                              <MenuItem value=""><em>Sélectionner un compte</em></MenuItem>
+                              {comptesBancaires.map((compte) => (
+                                <MenuItem key={compte.id_compte} value={compte.id_compte}>
+                                  {compte.nom_banque} · {compte.numero_compte}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                        />
+                      </Grid>
+                    </>
+                  )}
+                  {paiement.type === 'virement' && (
+                    <>
+                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                        <Controller
+                          name={`lignes.${index}.paiements.${pIndex}.reference`}
+                          control={control}
+                          render={({ field }) => (
+                            <TextField {...field} fullWidth label="Référence" disabled={loading} size="small" />
+                          )}
+                        />
+                      </Grid>
+                    </>
+                  )}
+
+                  {paiement.type === 'lc' && (
+                    <Grid item xs={12}>
+                      <LcPaymentSelector
+                        index={index}
+                        paymentIndex={pIndex}
+                        control={control}
+                        watch={watch}
+                        setValue={setValue}
+                        loading={loading}
+                        formatMontant={formatMontant}
+                        animateInvalidFields={animateInvalidFields}
+                      />
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+            ))}
+
+            <Box sx={{
+              mt: 1,
+              pt: 1.5,
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 1,
+            }}>
+              <Typography variant="body2" color="text.secondary">
+                Total du produit : <Box component="span" fontWeight={600} color="text.primary">{formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
+              </Typography>
+              <Typography variant="body2" fontWeight={700}>
+                Reste à régler : <Box component="span" color="primary.main">{formatMontant(Math.max(0, ligneTotal - (ligne.paiements || []).reduce((acc, paiement) => acc + (parseFloat(paiement.montant) || 0), 0)), { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
+              </Typography>
+            </Box>
+          </Box>
+        </Collapse>
+      </Grid>
+    </>;
+  };
+  const totalsAndActions = (<>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: watchedTypeEntite === 'client' ? '1fr' : 'repeat(3, minmax(0, 1fr))',
+              '& > div': watchedTypeEntite === 'client' ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 } : undefined,
+              gap: { xs: 1, sm: 3 },
+              width: { xs: '100%', sm: 'auto' },
+            }}
+          >
+            <Box>
+              <Typography variant="caption" color="text.secondary">{watchedTypeEntite === 'client' ? 'Montant de la vente' : 'Montant de l’achat'}</Typography>
+              <Typography variant="subtitle1" fontWeight={800}>{montantTotal.toFixed(2)} MAD</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Déjà payé</Typography>
+              <Typography variant="subtitle1" fontWeight={700}>{montantPaye.toFixed(2)} MAD</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Reste à payer</Typography>
+              <Typography variant="subtitle1" fontWeight={800} color="primary.main">{montantRestant.toFixed(2)} MAD</Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: watchedTypeEntite === 'client' ? 'column-reverse' : 'row', gap: 1, mt: watchedTypeEntite === 'client' ? 2 : 0, width: '100%' }}>
+            <Button
+              onClick={handleClose}
+              disabled={loading}
+              color="inherit"
+              sx={{ flex: { xs: 1, sm: 'initial' } }}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loading || !isDirty || saleBlocked}
+              startIcon={loading ? <CircularProgress size={16} /> : null}
+              sx={{ flex: { xs: 1, sm: 'initial' } }}
+            >
+              {loading
+                ? 'Enregistrement...'
+                : isEditing
+                  ? 'Enregistrer les modifications'
+                  : watchedTypeEntite === 'client'
+                    ? 'Enregistrer la vente'
+                    : "Enregistrer l’achat"}
+            </Button>
+          </Box>
+  </>);
+
   return (
     <Dialog
       open={open}
@@ -768,7 +1205,7 @@ function TransactionForm({
         noValidate: true,
         onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
         sx: {
-          minHeight: '640px',
+          minHeight: { xs: 0, sm: '640px' },
           maxHeight: '90vh',
           borderRadius: 4,
           overflow: 'hidden',
@@ -1106,6 +1543,7 @@ function TransactionForm({
                 </Grid>
               </Paper>
 
+              <Box sx={{ display: 'grid', gridTemplateColumns: watchedTypeEntite === 'client' ? { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 340px' } : 'minmax(0, 1fr)', gap: 2, alignItems: 'start' }}>
               {/* Produits et paiements */}
               <Paper variant="outlined" sx={{ mb: 2, p: { xs: 1.25, sm: 2 }, borderRadius: 2.5, backgroundColor: 'background.paper' }}>
                 <Box
@@ -1220,7 +1658,7 @@ function TransactionForm({
                               />
                           </Grid>
                   </>);
-                  
+
                         return (
                     <Paper
                       key={index}
@@ -1242,8 +1680,9 @@ function TransactionForm({
                       </Box>
                       {shouldShowBatimentSource && <ProductionSourcePicker
                         index={index} control={control} setValue={setValue} batiments={batiments}
+                        produits={produits}
                         disabled={loading} transactionId={initialValues.id_transaction}
-                        saleDate={watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
+                        saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>
                         {/* Produit */}
@@ -1295,357 +1734,24 @@ function TransactionForm({
                           </>}
                           {!shouldShowBatimentSource && amountFields}
 
-                          <Grid item xs={12}>
-                            <Divider />
-                          </Grid>
-
-                          {/* Paiement */}
-                          <Grid item xs={12}>
-                            <Controller
-                              name={`lignes.${index}.ajouter_paiement`}
-                              control={control}
-                              render={({ field }) => (
-                                <RadioGroup
-                                  sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                                    gap: 1,
-                                  }}
-                                  value={field.value ? 'now' : 'later'}
-                                  onChange={(event) => {
-                                    const shouldPayNow = event.target.value === 'now';
-                                    field.onChange(shouldPayNow);
-                                    if (shouldPayNow && ligneTotal > 0) {
-                                      const existingPaiements = watch(`lignes.${index}.paiements`);
-                                      if (!existingPaiements || existingPaiements.length === 0) {
-                                        setValue(`lignes.${index}.paiements`, [
-                                          createPaymentDefaults(
-                                            watch('date_transaction') || today(),
-                                            watchedTypeEntite === 'fournisseur'
-                                              ? getFournisseurPaymentType(fournisseurs, watchedFournisseurId) || 'cash'
-                                              : 'cash'
-                                          ),
-                                        ]);
-                                        setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
-                                      } else {
-                                        setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
-                                        setValue(
-                                          `lignes.${index}.paiements.0.date`,
-                                          watch('date_transaction') || today()
-                                        );
-                                      }
-                                    }
-                                  }}
-                                  aria-label="Choix du paiement"
-                                >
-                                  <FormControlLabel
-                                    value="now"
-                                    sx={{
-                                      m: 0,
-                                      px: 1,
-                                      py: 0.5,
-                                      minHeight: 48,
-                                      border: '1px solid',
-                                      borderRadius: 1.5,
-                                      borderColor: field.value ? 'primary.main' : 'divider',
-                                      bgcolor: field.value ? 'action.selected' : 'background.paper',
-                                      '& .MuiFormControlLabel-label': { fontWeight: field.value ? 700 : 500 },
-                                      '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
-                                    }}
-                                    control={<Radio size="small" />}
-                                    label="Payer maintenant"
-                                    disabled={loading}
-                                  />
-                                  <FormControlLabel
-                                    value="later"
-                                    sx={{
-                                      m: 0,
-                                      px: 1,
-                                      py: 0.5,
-                                      minHeight: 48,
-                                      border: '1px solid',
-                                      borderRadius: 1.5,
-                                      borderColor: !field.value ? 'primary.main' : 'divider',
-                                      bgcolor: !field.value ? 'action.selected' : 'background.paper',
-                                      '& .MuiFormControlLabel-label': { fontWeight: !field.value ? 700 : 500 },
-                                      '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
-                                    }}
-                                    control={<Radio size="small" />}
-                                    label="À régler plus tard"
-                                    disabled={loading}
-                                  />
-                                </RadioGroup>
-                              )}
-                            />
-                          </Grid>
-
-                          {/* Champs de paiement conditionnels */}
-                          <Grid item xs={12} sx={{ display: ligne.ajouter_paiement ? 'block' : 'none' }}>
-                            <Collapse in={ligne.ajouter_paiement}>
-                              <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                  <Typography variant="subtitle2" color="text.primary" fontWeight={700}>
-                                    Paiement
-                                  </Typography>
-                                  <Button 
-                                    size="small"
-                                    disabled={loading}
-                                    startIcon={<AddIcon />} 
-                                    onClick={() => {
-                                      const currentPaiements = watch(`lignes.${index}.paiements`) || [];
-                                      setValue(`lignes.${index}.paiements`, [
-                                        ...currentPaiements,
-                                        createPaymentDefaults(
-                                          watch('date_transaction') || today(),
-                                          watchedTypeEntite === 'fournisseur'
-                                            ? getFournisseurPaymentType(fournisseurs, watchedFournisseurId) || 'cash'
-                                            : 'cash'
-                                        ),
-                                      ]);
-                                    }}
-                                  >
-                                    Ajouter un paiement
-                                  </Button>
-                                </Box>
-                                
-                                {ligne.paiements?.map((paiement, pIndex) => (
-                                  <Box key={pIndex} sx={{ mb: 2, pb: 2, borderBottom: pIndex < ligne.paiements.length - 1 ? '1px dashed #ccc' : 'none' }}>
-                                    {paiement.source_reglement && (
-                                      <Alert severity="info" sx={{ mb: 2 }}>
-                                        Source débitée : {paiement.source_reglement === 'banque' ? 'compte bancaire' : 'caisse'}.
-                                        Le type de paiement peut être choisi indépendamment.
-                                      </Alert>
-                                    )}
-                                    {ligne.paiements.length > 1 && (
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                      <Typography variant="caption" fontWeight="bold">Paiement #{pIndex + 1}</Typography>
-                                      
-                                        <IconButton size="small" color="error" disabled={loading} aria-label={`Supprimer le paiement ${pIndex + 1}`} onClick={() => {
-                                          const newPaiements = ligne.paiements.filter((_, i) => i !== pIndex);
-                                          setValue(`lignes.${index}.paiements`, newPaiements);
-                                        }}>
-                                          <DeleteIcon fontSize="small" />
-                                        </IconButton>
-                                    </Box>
-                                    )}
-                                    <Grid container spacing={2}>
-                                      {/* Montant */}
-                                      <Grid item xs={12} sm={6} md={4}>
-                                        <Controller
-                                          name={`lignes.${index}.paiements.${pIndex}.montant`}
-                                          control={control}
-                                          render={({ field, fieldState: { error } }) => (
-                                            <TextField
-                                              {...field}
-                                              fullWidth
-                                              label="Montant (MAD)"
-                                              type="number"
-                                              error={!!error}
-                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                                              helperText={error?.message}
-                                              disabled={loading}
-                                              inputProps={{ step: '0.01', min: '0.01' }}
-                                              InputLabelProps={{ shrink: true }}
-                                              size="small"
-                                            />
-                                          )}
-                                        />
-                                      </Grid>
-
-                                      {/* Type de paiement */}
-                                      <Grid item xs={12} sm={6} md={4}>
-                                        <Controller
-                                          name={`lignes.${index}.paiements.${pIndex}.type`}
-                                          control={control}
-                                          render={({ field, fieldState: { error } }) => (
-                                            <TextField
-                                              {...field}
-                                              select
-                                              fullWidth
-                                              label="Mode de paiement"
-                                              error={!!error}
-                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                                              helperText={error?.message}
-                                              disabled={loading}
-                                              size="small"
-                                              onChange={(event) => {
-                                                field.onChange(event);
-                                                if (event.target.value !== 'virement' && paiement.source_reglement !== 'banque') {
-                                                  setValue(`lignes.${index}.paiements.${pIndex}.id_compte`, '');
-                                                }
-                                              }}
-                                            >
-                                              <MenuItem value="cash">
-                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
-                                                  <PaymentsIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                                                  <Box component="span">Espèces</Box>
-                                                </Box>
-                                              </MenuItem>
-                                              <MenuItem value="cheque">
-                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
-                                                  <ChequeIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                                                  <Box component="span">Chèque</Box>
-                                                </Box>
-                                              </MenuItem>
-                                              <MenuItem value="virement">
-                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
-                                                  <BankTransferIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                                                  <Box component="span">Virement</Box>
-                                                </Box>
-                                              </MenuItem>
-                                              <MenuItem value="lc">
-                                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
-                                                  <CreditLetterIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                                                  <Box component="span">Lettre de Crédit</Box>
-                                                </Box>
-                                              </MenuItem>
-                                            </TextField>
-                                          )}
-                                        />
-                                      </Grid>
-
-                                      {/* Date du paiement */}
-                                      <Grid item xs={12} md={4}>
-                                        <Controller
-                                          name={`lignes.${index}.paiements.${pIndex}.date`}
-                                          control={control}
-                                          render={({ field, fieldState: { error } }) => (
-                                            <DateField
-                                              {...field}
-                                              fullWidth
-                                              label="Date du paiement"
-
-                                              error={!!error}
-                                              sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                                              helperText={error?.message}
-                                              disabled={loading}
-                                              InputLabelProps={{ shrink: true }}
-                                              size="small"
-                                            />
-                                          )}
-                                        />
-                                      </Grid>
-
-                                      {/* Champs conditionnels */}
-                                      {paiement.type === 'cheque' && (
-                                        <>
-                                          <Grid item xs={12} sm={6}>
-                                            <Controller
-                                              name={`lignes.${index}.paiements.${pIndex}.numero_cheque`}
-                                              control={control}
-                                              render={({ field }) => (
-                                                <TextField {...field} fullWidth label="N° Chèque" disabled={loading} size="small" />
-                                              )}
-                                            />
-                                          </Grid>
-                                          <Grid item xs={12} sm={6}>
-                                            <Controller
-                                              name={`lignes.${index}.paiements.${pIndex}.banque`}
-                                              control={control}
-                                              render={({ field }) => (
-                                                <TextField {...field} fullWidth label="Banque" disabled={loading} size="small" />
-                                              )}
-                                            />
-                                          </Grid>
-                                        </>
-                                      )}
-
-                                      {(paiement.source_reglement === 'banque' || (!paiement.source_reglement && paiement.type === 'virement')) && (
-                                        <>
-                                          <Grid item xs={12} sm={6}>
-                                            <Controller
-                                              name={`lignes.${index}.paiements.${pIndex}.id_compte`}
-                                              control={control}
-                                              render={({ field, fieldState: { error } }) => (
-                                                <TextField
-                                                  {...field}
-                                                  select
-                                                  fullWidth
-                                                  required={!isEditingTransaction || (watchedTypeEntite === 'fournisseur' && !paiement.id_paiement)}
-                                                  label="Compte bancaire"
-                                                  error={!!error}
-                                                  helperText={error?.message || (comptesBancaires.length ? '' : 'Aucun compte bancaire configuré')}
-                                                  disabled={loading || (isEditingTransaction && (watchedTypeEntite !== 'fournisseur' || Boolean(paiement.id_paiement))) || comptesBancaires.length === 0}
-                                                  size="small"
-                                                  value={field.value || ''}
-                                                  onChange={(event) => field.onChange(event.target.value)}
-                                                >
-                                                  <MenuItem value=""><em>Sélectionner un compte</em></MenuItem>
-                                                  {comptesBancaires.map((compte) => (
-                                                    <MenuItem key={compte.id_compte} value={compte.id_compte}>
-                                                      {compte.nom_banque} · {compte.numero_compte}
-                                                    </MenuItem>
-                                                  ))}
-                                                </TextField>
-                                              )}
-                                            />
-                                          </Grid>
-                                        </>
-                                      )}
-                                      {paiement.type === 'virement' && (
-                                        <>
-                                          <Grid item xs={12} sm={6}>
-                                            <Controller
-                                              name={`lignes.${index}.paiements.${pIndex}.reference`}
-                                              control={control}
-                                              render={({ field }) => (
-                                                <TextField {...field} fullWidth label="Référence" disabled={loading} size="small" />
-                                              )}
-                                            />
-                                          </Grid>
-                                        </>
-                                      )}
-
-                                      {paiement.type === 'lc' && (
-                                        <Grid item xs={12}>
-                                          <LcPaymentSelector
-                                            index={index}
-                                            paymentIndex={pIndex}
-                                            control={control}
-                                            watch={watch}
-                                            setValue={setValue}
-                                            loading={loading}
-                                            formatMontant={formatMontant}
-                                            animateInvalidFields={animateInvalidFields}
-                                          />
-                                        </Grid>
-                                      )}
-                                    </Grid>
-                                  </Box>
-                                ))}
-                                
-                                <Box sx={{
-                                  mt: 1,
-                                  pt: 1.5,
-                                  borderTop: '1px solid',
-                                  borderColor: 'divider',
-                                  display: 'flex',
-                                  flexWrap: 'wrap',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  gap: 1,
-                                }}>
-                                  <Typography variant="body2" color="text.secondary">
-                                    Total du produit : <Box component="span" fontWeight={600} color="text.primary">{formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
-                                  </Typography>
-                                  <Typography variant="body2" fontWeight={700}>
-                                    Reste à régler : <Box component="span" color="primary.main">{formatMontant(Math.max(0, ligneTotal - (ligne.paiements || []).reduce((acc, paiement) => acc + (parseFloat(paiement.montant) || 0), 0)), { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
-                                  </Typography>
-                                </Box>
-                              </Box>
-                            </Collapse>
-                          </Grid>
+                          {!shouldShowBatimentSource && renderLinePayment(ligne, index)}
                           </Grid>
                     </Paper>
                         );
                   })}
                 </Box>
               </Paper>
+              {watchedTypeEntite === 'client' && <SaleSummary
+                lines={watchedLignes || []} products={produits} control={control} saleDate={watch('date_transaction')}
+                loading={loading} renderPayment={renderLinePayment}>
+                {totalsAndActions}
+              </SaleSummary>}
+              </Box>
             </Box>
           )}
         </DialogContent>
 
-        <DialogActions
+        {watchedTypeEntite !== 'client' && <DialogActions
           sx={{
             px: { xs: 1.5, sm: 3 },
             py: 1.5,
@@ -1658,53 +1764,8 @@ function TransactionForm({
             gap: 1.5,
           }}
         >
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-              gap: { xs: 1, sm: 3 },
-              width: { xs: '100%', sm: 'auto' },
-            }}
-          >
-            <Box>
-              <Typography variant="caption" color="text.secondary">Total</Typography>
-              <Typography variant="subtitle1" fontWeight={800}>{montantTotal.toFixed(2)} MAD</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Déjà payé</Typography>
-              <Typography variant="subtitle1" fontWeight={700}>{montantPaye.toFixed(2)} MAD</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Reste à payer</Typography>
-              <Typography variant="subtitle1" fontWeight={800} color="primary.main">{montantRestant.toFixed(2)} MAD</Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
-            <Button
-              onClick={handleClose}
-              disabled={loading}
-              color="inherit"
-              sx={{ flex: { xs: 1, sm: 'initial' } }}
-            >
-              Annuler
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={loading || !isDirty}
-              startIcon={loading ? <CircularProgress size={16} /> : null}
-              sx={{ flex: { xs: 1, sm: 'initial' } }}
-            >
-              {loading
-                ? 'Enregistrement...'
-                : isEditing
-                  ? 'Enregistrer les modifications'
-                  : watchedTypeEntite === 'client'
-                    ? 'Enregistrer la vente'
-                    : "Enregistrer l’achat"}
-            </Button>
-          </Box>
-        </DialogActions>
+          {totalsAndActions}
+        </DialogActions>}
     </Dialog>
   );
 }
