@@ -56,27 +56,41 @@ const renderRowLabel = (row) => {
 
 const fmt = (value, digits = 0) => value == null || value === '' || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('fr-FR', { maximumFractionDigits: digits });
 const fmtDh = (value, digits = 2) => value == null || !Number.isFinite(Number(value)) ? '—' : fmt(value, digits) + ' DH';
+const isValidIsoDate = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const [, year, month, day] = match.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+};
+const dateAtNoon = (value) => isValidIsoDate(value) ? new Date(value + 'T12:00:00') : null;
 const isoDate = (value) => {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? String(value).slice(0, 10) : date.toISOString().slice(0, 10);
+  if (Number.isNaN(date.valueOf())) return '';
+  const dateOnly = date.toISOString().slice(0, 10);
+  return isValidIsoDate(dateOnly) ? dateOnly : '';
 };
 const dateFromDisplay = (value) => {
   const match = String(value || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return match ? match[3] + '-' + match[2] + '-' + match[1] : '';
+  if (!match) return '';
+  const date = match[3] + '-' + match[2] + '-' + match[1];
+  return isValidIsoDate(date) ? date : '';
 };
 const parseRowDate = (row) => dateFromDisplay(row.date);
 const weekStart = (value) => {
-  const date = new Date(value + 'T12:00:00');
+  const date = dateAtNoon(value);
+  if (!date) return '';
   date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
   return date.toISOString().slice(0, 10);
 };
 const weekEnd = (value) => {
-  const date = new Date(value + 'T12:00:00');
+  const date = dateAtNoon(value);
+  if (!date) return '';
   date.setDate(date.getDate() + 6);
   return date.toISOString().slice(0, 10);
 };
-const dateLabel = (value) => new Date(value + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const dateLabel = (value) => dateAtNoon(value)?.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) || '—';
 const weekLabel = (value) => dateLabel(value) + ' – ' + dateLabel(weekEnd(value));
 const isMatch = (value, pattern) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replaceAll('œ', 'oe').includes(pattern);
 const chargeBucket = (charge) => {
