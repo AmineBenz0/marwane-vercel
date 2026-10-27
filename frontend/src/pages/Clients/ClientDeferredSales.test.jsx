@@ -21,7 +21,8 @@ it('shows a partial reservation for a paid deferred sale without a manual comple
   renderSales();
   expect(await screen.findByText('600 / 1 000 œufs')).toBeVisible();
   expect(screen.getByText('400 œufs à produire')).toBeVisible();
-  expect(screen.getByText('Stock partiellement réservé')).toBeVisible();
+  expect(screen.getByText('Stock réservé')).toBeVisible();
+  expect(screen.queryByText('Stock partiellement réservé')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Détails et historique' })).toBeVisible();
   expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/transactions', { params: { id_client: 12, est_promesse: true, est_actif: true, skip: 0, limit: 100 } });
@@ -31,8 +32,8 @@ it('labels a fully reserved sale as reserved and keeps it in reservation history
   sales = [{ ...base, quantite_couverte: 1000, quantite_en_attente: 0, quantite_reservee: 1000 }];
   renderSales();
   fireEvent.click(await screen.findByRole('button', { name: 'Réservations complètes' }));
-  expect(await screen.findByText('Réservation complète')).toBeVisible();
-  expect(screen.getByText('1 000 œufs réservés')).toBeVisible();
+  expect(await screen.findByText('1 000 / 1 000 œufs')).toBeVisible();
+  expect(screen.getByText('Tout le stock est réservé')).toBeVisible();
   expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
 });
 
