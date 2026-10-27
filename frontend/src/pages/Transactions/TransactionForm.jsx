@@ -105,6 +105,8 @@ const getFieldLabel = (path) => {
     id_production: 'Type d’œufs de la saisie',
     id_batiment: 'Bâtiment source',
     date_production: 'Date de la saisie',
+    date_livraison_prevue: 'Date prévue de livraison',
+    est_promesse: 'Livraison différée',
     source_ready: 'Saisie de production',
     quantite: 'Quantité',
     prix_unitaire: 'Prix unitaire',
