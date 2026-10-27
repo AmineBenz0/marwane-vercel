@@ -77,7 +77,7 @@ test('compiled dashboard opens delivery cards, details and return navigation', a
     await historyButton.click();
     await expect(historyButton).toHaveAttribute('aria-expanded', 'true');
     await expect(detail.getByText('Production du 27/10/26')).toBeVisible();
-    await expect(detail.getByText('Enregistré par Admin')).toHaveCount(2);
+    await expect(detail.getByText(/Enregistré par/)).toHaveCount(0);
     await expect(detail.getByRole('button', { name: 'Origine du stock' })).toHaveCount(0);
     await expect(detail.getByRole('heading', { name: 'Suivi du stock' })).toHaveCount(0);
     const history = detail.getByRole('region', { name: 'Suivi du stock' });

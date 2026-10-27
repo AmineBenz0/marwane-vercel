@@ -26,11 +26,11 @@ it('shows initial and automatic stock reservations with immediately visible orig
   expect(get).toHaveBeenCalledWith('/transactions/7/completion-history', { params: { include_initial: true } });
 });
 
-it('embeds the history without a duplicate heading and keeps operator attribution', async () => {
+it('embeds the history without a duplicate heading or operator attribution', async () => {
   get.mockResolvedValue([{ id: 'initial', type: 'initial', date: '2026-10-23', quantite: 24,
     operateur: 'Admin', repartition_stock: [{ id_production: 1, date_production: '2026-10-12', quantite: 24 }] }]);
   render(<DeferredSaleHistory transactionId={7} embedded />);
-  expect(await screen.findByText('Enregistré par Admin')).toBeVisible();
-  expect(screen.getByText('Production du 12/10/26')).toBeVisible();
+  expect(await screen.findByText('Production du 12/10/26')).toBeVisible();
+  expect(screen.queryByText(/Enregistré par/)).not.toBeInTheDocument();
   expect(screen.queryByRole('heading')).not.toBeInTheDocument();
 });

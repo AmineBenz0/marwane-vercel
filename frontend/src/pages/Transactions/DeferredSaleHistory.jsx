@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
-import { PersonOutline } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { formatShortDate } from '../../utils/dateFormatting';
 
@@ -33,7 +32,6 @@ export default function DeferredSaleHistory({ transactionId, refreshKey, embedde
             <Typography variant="body2" fontWeight={700} sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{eggs(source.quantite)}</Typography>
           </Stack>)}
         </Stack> : Number(event.quantite) > 0 ? <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>{event.type === 'initial' ? 'Répartition initiale non disponible.' : 'Répartition détaillée non enregistrée pour cet ancien ajout.'}</Typography> : null}
-        {(event.operateur || event.id_utilisateur) && <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1.5 }}><PersonOutline aria-hidden="true" sx={{ fontSize: 15, color: 'text.secondary' }} /><Typography variant="caption" color="text.secondary">Enregistré par {event.operateur || `Opérateur #${event.id_utilisateur}`}</Typography></Stack>}
       </Box>)}
     </Stack>}
   </Box>;
