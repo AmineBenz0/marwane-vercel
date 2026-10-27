@@ -63,6 +63,8 @@ test('compiled dashboard opens delivery cards, details and return navigation', a
     await page.getByRole('button', { name: /Voir le détail de la vente #1/ }).click();
     const detail = page.getByRole('dialog', { name: 'Vente #1', exact: true });
     await expect(detail.getByRole('heading', { name: 'Production utilisée' })).toBeVisible();
+    await expect(detail).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(detail.getByRole('heading', { name: 'Vente #1', exact: true })).toHaveCSS('color', 'rgb(15, 23, 42)');
     await expect(detail.getByText('65 œufs', { exact: true })).toBeVisible();
     const drawerBounds = await detail.boundingBox();
     expect(drawerBounds && drawerBounds.x >= 0 && drawerBounds.x + drawerBounds.width <= width + 1).toBeTruthy();
