@@ -34,7 +34,7 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose }) 
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, [transactionId]);
-  return <Drawer anchor="right" open={!!transactionId} onClose={onClose} PaperProps={{ role: 'dialog', 'aria-modal': true, 'aria-labelledby': 'delivery-sale-title', sx: { width: { xs: '100%', sm: 480 }, maxWidth: '100%' } }}>
+  return <Drawer anchor="right" open={!!transactionId} onClose={onClose} PaperProps={{ role: 'dialog', 'aria-modal': true, 'aria-labelledby': 'delivery-sale-title', sx: { width: { xs: '100%', sm: 480 }, maxWidth: '100%', bgcolor: 'background.paper', color: 'text.primary' } }}>
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 2 }}>
         <Typography component="h2" variant="h5" fontWeight={800} id="delivery-sale-title">Vente #{transactionId}</Typography>
