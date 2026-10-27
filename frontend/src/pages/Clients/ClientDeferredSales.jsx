@@ -40,7 +40,7 @@ export default function ClientDeferredSales({ clientId, produitsMap }) {
             <Typography variant="body2">Prévue le {formatShortDate(sale.date_livraison_prevue)} · {sale.nom_batiment_source || 'Bâtiment non renseigné'}</Typography>
           </Box>
         </Stack>
-        <Box sx={{ my: 2 }}><DeferredSaleStockSummary sale={sale} /></Box>
+        <Box sx={{ my: 2 }}><DeferredSaleStockSummary sale={sale} showStatus={false} /></Box>
         <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button onClick={() => navigate(`/transactions/${sale.id_transaction}`)}>Détails et historique</Button>
           <Stack direction="row" alignItems="center" spacing={1}><Typography variant="caption" color="text.secondary">Paiement</Typography><PaymentStatusBadge statut={sale.est_en_retard ? 'en_retard' : (sale.statut_paiement || 'impaye')} /></Stack>
