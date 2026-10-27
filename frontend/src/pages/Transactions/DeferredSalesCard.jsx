@@ -21,7 +21,7 @@ export default function DeferredSalesCard() {
           {number(pending.length)} {pending.length === 1 ? 'vente' : 'ventes'} · {number(remaining)} {remaining === 1 ? 'œuf' : 'œufs'} à produire
         </Typography>
       </Box>
-      <Button variant="contained" size="small" endIcon={<ArrowForwardRoundedIcon />} onClick={() => navigate('/transactions?view=deferred&stock=pending')} sx={{ flexShrink: 0 }}>
+      <Button variant="contained" size="small" endIcon={<ArrowForwardRoundedIcon />} onClick={() => navigate('/livraisons-a-suivre')} sx={{ flexShrink: 0 }}>
         Voir les livraisons
       </Button>
     </Stack>}

@@ -29,6 +29,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Transactions = lazy(() => import('./pages/Transactions'));
+const DeferredSalesPage = lazy(() => import('./pages/Transactions/DeferredSalesPage'));
 const TransactionDetail = lazy(() => import('./pages/Transactions/TransactionDetail'));
 const Clients = lazy(() => import('./pages/Clients'));
 const ClientProfile = lazy(() => import('./pages/Clients/ClientProfile'));
@@ -96,6 +97,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/livraisons-a-suivre" element={<ProtectedRoute><AppLayout><DeferredSalesPage /></AppLayout></ProtectedRoute>} />
         <Route
           path="/transactions"
           element={
