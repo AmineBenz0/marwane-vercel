@@ -3,7 +3,7 @@ import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
 
 const number = value => Number(value || 0).toLocaleString('fr-FR');
 export default function DeferredSaleStockSummary({ sale, showStatus = true }) {
-  const quantity = Number(sale.quantite || 0);
+  const quantity = Number(sale.quantite ?? (Number(sale.quantite_couverte || 0) + Number(sale.quantite_en_attente || 0)));
   const complete = Number(sale.quantite_en_attente) === 0;
   const covered = Number(sale.quantite_couverte ?? Math.max(
     0, quantity - Number(sale.quantite_en_attente || 0),
