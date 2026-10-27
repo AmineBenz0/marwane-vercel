@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // Run against `vite preview` to exercise the production bundle's icon imports.
 // API fixtures keep this check independent of real farm records and credentials.
-test('compiled dashboard renders pending deliveries and opens their filtered list', async ({ page, baseURL }) => {
+test('compiled dashboard opens delivery cards, details and return navigation', async ({ page, baseURL }) => {
   test.skip(!baseURL || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname), 'Local preview with API fixtures only');
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -12,7 +12,8 @@ test('compiled dashboard renders pending deliveries and opens their filtered lis
     est_actif: true, est_promesse: true, allocation_automatique: true,
     quantite: 70, quantite_couverte: 65, quantite_en_attente: 5, quantite_reservee: 65,
     prix_unitaire: 1.5, montant_total: 105, montant_paye: 0, montant_restant: 105,
-    statut_paiement: 'impaye', date_transaction: '2026-10-26', paiements: [],
+    statut_paiement: 'impaye', date_transaction: '2026-10-26', date_livraison_prevue: '2026-10-27', paiements: [],
+    repartition_stock: [{ id_production: 1, date_production: '2026-10-25', quantite: 65 }],
   };
   const sales = [
     { ...sale, id_transaction: 1 },
@@ -27,6 +28,8 @@ test('compiled dashboard renders pending deliveries and opens their filtered lis
     else if (path === '/health/ready' || path === '/health/live') data = { status: 'ok' };
     else if (path === '/transactions/deferred-sales') data = sales.map(row => ({ ...row, nom_client: `Client ${row.id_client}`, nom_produit: 'Œufs moyens' }));
     else if (path === '/transactions') data = sales;
+    else if (/^\/transactions\/\d+$/.test(path)) data = sales.find(row => row.id_transaction === Number(path.split('/').pop()));
+    else if (/^\/paiements\/transaction\/\d+\/statut$/.test(path)) data = sale;
     else if (path === '/clients') data = [1, 2, 3].map(id => ({ id_client: id, nom_client: `Client ${id}` }));
     else if (path === '/produits') data = [{ id_produit: 1, nom_produit: 'Œufs moyens' }];
     else if (path === '/batiments') data = [{ id_batiment: 1, nom: 'Bâtiment A' }];
@@ -47,10 +50,33 @@ test('compiled dashboard renders pending deliveries and opens their filtered lis
   const bounds = await card.boundingBox();
   expect(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 390).toBeTruthy();
   await card.getByRole('button', { name: 'Voir les livraisons' }).click();
-  await expect(page).toHaveURL(/\/transactions\?view=deferred&stock=pending$/);
-  await expect(page.getByRole('button', { name: 'À produire', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page).toHaveURL(/\/livraisons-a-suivre$/);
+  await expect(page.getByRole('heading', { name: 'Livraisons à suivre' })).toBeVisible();
   await expect(page.getByText('Client 1', { exact: true })).toBeVisible();
   await expect(page.getByText('Client 2', { exact: true })).toBeVisible();
   await expect(page.getByText('Client 3', { exact: true })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Rechercher un client' }).fill('Client 2');
+  await expect(page.getByRole('button', { name: /Voir le détail de la vente #1/ })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Rechercher un client' }).fill('');
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByRole('button', { name: /Voir le détail de la vente #1/ }).click();
+    const detail = page.getByRole('dialog', { name: 'Vente #1', exact: true });
+    await expect(detail.getByRole('heading', { name: 'Production utilisée' })).toBeVisible();
+    await expect(detail.getByText('65 œufs', { exact: true })).toBeVisible();
+    const drawerBounds = await detail.boundingBox();
+    expect(drawerBounds && drawerBounds.x >= 0 && drawerBounds.x + drawerBounds.width <= width + 1).toBeTruthy();
+    if (width === 390) await expect(detail).toHaveCSS('width', '390px');
+    await detail.getByRole('button', { name: 'Fermer le détail' }).click();
+    await expect(detail).toHaveCount(0);
+  }
+  await page.getByRole('button', { name: /Voir le détail de la vente #1/ }).click();
+  await page.getByRole('button', { name: 'Ouvrir la vente et ses paiements' }).click();
+  await expect(page).toHaveURL(/\/transactions\/1\?from=deliveries$/);
+  await page.getByRole('button', { name: 'Retour aux livraisons' }).click();
+  await expect(page.getByRole('dialog', { name: 'Vente #1', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Fermer le détail' }).click();
+  await page.getByRole('button', { name: 'Retour à l’accueil' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
   expect(errors).toEqual([]);
 });

@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -64,6 +64,9 @@ import ExpandableDetails from '../../components/ExpandableDetails';
 function TransactionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromDeliveries = new URLSearchParams(location.search).get('from') === 'deliveries';
+  const returnPath = fromDeliveries ? `/livraisons-a-suivre?vente=${id}` : '/transactions';
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -477,8 +480,8 @@ function TransactionDetail() {
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/transactions')}>
-          Retour à la liste
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(returnPath)}>
+          {fromDeliveries ? 'Retour aux livraisons' : 'Retour à la liste'}
         </Button>
       </Box>
     );
@@ -490,8 +493,8 @@ function TransactionDetail() {
         <Alert severity="warning" sx={{ mb: 2 }}>
           Transaction introuvable
         </Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/transactions')}>
-          Retour à la liste
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(returnPath)}>
+          {fromDeliveries ? 'Retour aux livraisons' : 'Retour à la liste'}
         </Button>
       </Box>
     );
@@ -509,11 +512,11 @@ function TransactionDetail() {
       }}>
         <Button
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/transactions')}
+          onClick={() => navigate(returnPath)}
           variant="outlined"
           size={isMobile ? 'small' : 'medium'}
         >
-          Retour
+          {fromDeliveries ? 'Retour aux livraisons' : 'Retour'}
         </Button>
         <Typography 
           variant="h4" 

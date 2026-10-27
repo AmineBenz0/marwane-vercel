@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DeferredSalesCard from './DeferredSalesCard';
+import DeferredSalesPage from './DeferredSalesPage';
 import TransactionsList from './TransactionsList';
 import ProductionDeferredNotice from '../Production/ProductionDeferredNotice';
 import { get } from '../../services/api';
@@ -26,6 +27,8 @@ const summary = row => ({ ...row, nom_client: `Client ${row.id_client}`, nom_pro
 const renderAt = (element, url = '/') => render(<MemoryRouter initialEntries={[url]}><Routes>
   <Route path="*" element={element} />
   <Route path="/transactions" element={<TransactionsList />} />
+  <Route path="/livraisons-a-suivre" element={<DeferredSalesPage />} />
+  <Route path="/dashboard" element={<h1>Accueil quotidien</h1>} />
 </Routes></MemoryRouter>);
 beforeEach(() => {
   vi.clearAllMocks();
@@ -67,11 +70,8 @@ describe('deferred sale stock reservations', () => {
     expect(await screen.findByText('Client 1')).toBeVisible();
     expect(screen.getByText('Client 2')).toBeVisible();
     expect(screen.queryByText('Client 3')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'À produire' })).toHaveAttribute('aria-pressed', 'true');
-    expect(await screen.findByRole('button', { name: 'Réservation complète' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Réservation complète' }));
-    expect(await screen.findByText('Client 3')).toBeVisible();
-    expect(screen.queryByText('Client 1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retour à l’accueil' }));
+    expect(await screen.findByRole('heading', { name: 'Accueil quotidien' })).toBeVisible();
   });
 
   it('reports only assignments made by the saved production, including fully reserved sales', async () => {
