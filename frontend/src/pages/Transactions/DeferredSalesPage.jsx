@@ -51,7 +51,7 @@ export default function DeferredSalesPage() {
                   </Stack>
                   <Typography component="h2" variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{sale.nom_client}</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, overflowWrap: 'anywhere' }}>{sale.nom_produit}{sale.nom_batiment ? ` · ${sale.nom_batiment}` : ''}</Typography>
-                  <Typography fontWeight={700}>{number(sale.quantite_couverte)} / {number(sale.quantite)} réservés · {number(sale.quantite_en_attente)} à produire</Typography>
+                  <Typography fontWeight={700}>{number(sale.quantite_couverte)} / {number(sale.quantite ?? (Number(sale.quantite_couverte || 0) + Number(sale.quantite_en_attente || 0)))} réservés · {number(sale.quantite_en_attente)} à produire</Typography>
                   {expected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Prévue le {formatShortDate(expected)}</Typography>}
                 </CardContent>
               </CardActionArea>
