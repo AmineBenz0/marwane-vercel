@@ -1,5 +1,5 @@
 import DateField from '../../utils/DateField';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import {
   Box,
   TextField,
@@ -44,6 +44,7 @@ const TYPES_PAIEMENT = [
  */
 function MultiPaiementForm({ transaction, fields, append, remove, register, errors, watch, setValue, availableLcs, loadingLcs, supplierSource = null }) {
   const watchedFields = watch('paiements');
+  const detailsId = useId();
   const [expandedRows, setExpandedRows] = useState({});
   const [accounts, setAccounts] = useState([]);
   const [accountError, setAccountError] = useState('');
@@ -163,6 +164,8 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         <IconButton
                           size="small"
                           onClick={() => toggleExpand(index)}
+                          aria-expanded={Boolean(expandedRows[index])}
+                          aria-controls={`${detailsId}-${item.id}`}
                           aria-label={`${expandedRows[index] ? 'Réduire' : 'Développer'} le paiement ${index + 1}`}
                         >
                         {expandedRows[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -253,7 +256,8 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                   <TableRow>
                     <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
                       <Collapse in={expandedRows[index]} timeout="auto" unmountOnExit>
-                        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, mb: 1 }}>
+                        <Box id={`${detailsId}-${item.id}`} role="region" aria-label={`Détails du paiement ${index + 1}`} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1.5, mb: 1.5 }}>
+                          <Typography variant="body2" fontWeight={700} sx={{ mb: 2 }}>Détails du paiement</Typography>
                           <Grid container spacing={2}>
                             {/* Détails Chèque */}
                             {type === 'cheque' && (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Button, CircularProgress, Divider, Drawer, IconButton, Stack, Typography } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import { Close, HistoryOutlined } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant } from '../../utils/formatNumber';
@@ -64,7 +64,7 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose }) 
           <Stack spacing={1}><Row label="Total" value={money(sale.montant_total)} /><Row label="Payé" value={money(sale.montant_paye)} /><Row label="Reste à encaisser" value={money(sale.montant_restant)} /></Stack>
           <Button variant="outlined" onClick={() => navigate(`/transactions/${transactionId}?from=deliveries`)} sx={{ mt: 2 }}>Ouvrir la vente et ses paiements</Button>
         </Box>
-        <ExpandableDetails label="Historique des réservations"><DeferredSaleHistory transactionId={transactionId} refreshKey={revision} /></ExpandableDetails>
+        <ExpandableDetails label="Historique des réservations" icon={<HistoryOutlined />}><DeferredSaleHistory transactionId={transactionId} refreshKey={revision} embedded /></ExpandableDetails>
       </Stack>}
     </Box>
   </Drawer>;

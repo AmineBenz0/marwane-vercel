@@ -4,6 +4,7 @@ import { Alert, Box, Button, CircularProgress, Grid, MenuItem, Paper, Stack, Tab
 import { formatShortDate } from '../../utils/dateFormatting';
 import { groupStock, dispatchStock } from './eggStockAllocation';
 import { get } from '../../services/api';
+import { LayersOutlined } from '@mui/icons-material';
 import ExpandableDetails from '../../components/ExpandableDetails';
 
 const eggLabels = { normal: 'Normaux', double_jaune: 'Double jaune', blanc: 'Blancs' };
@@ -114,9 +115,9 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
                     <Typography component="span" variant="caption" color="text.secondary">œufs disponibles</Typography>
                   </Box>
                 </Button>
-                {group.sources.length > 0 && <Box sx={{ mx: 1.75, borderTop: '1px solid', borderColor: 'divider' }}><ExpandableDetails label={chosen ? 'Stock et prélèvements prévus' : 'Détail du stock par date'}>
+                {group.sources.length > 0 && <Box sx={{ m: 1.5, mt: 0 }}><ExpandableDetails icon={<LayersOutlined />} label={chosen ? 'Stock et prélèvements prévus' : 'Détail du stock par date'} contentSx={{ p: 1.25 }}>
                   <Box sx={{ overflowX: 'auto' }}>
-                    <Table size="small" aria-label={chosen ? 'Répartition prévue du stock' : `Stock ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}>
+                    <Table size="small" sx={{ '& th, & td': { px: 1, py: 1.25 }, '& th': { textTransform: 'none !important' } }} aria-label={chosen ? 'Répartition prévue du stock' : `Stock ${eggLabels[group.type_oeuf]} ${sizeLabels[group.calibre] || ''}`}>
                       <TableHead><TableRow><TableCell>Date de production</TableCell><TableCell align="right">Disponible</TableCell>{chosen && <TableCell align="right">Prélevé</TableCell>}</TableRow></TableHead>
                       <TableBody>{(chosen ? dispatch : group.sources).map(source => <TableRow key={source.id_production}>
                         <TableCell>{formatShortDate(source.date_production)}</TableCell><TableCell align="right">{source.disponible.toLocaleString('fr-FR')}</TableCell>

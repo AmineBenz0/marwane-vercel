@@ -27,6 +27,10 @@ test('compiled dashboard opens delivery cards, details and return navigation', a
     if (path.startsWith('/auth/')) data = { access_token: token, refresh_token: 'local-fixture', token_type: 'bearer' };
     else if (path === '/health/ready' || path === '/health/live') data = { status: 'ok' };
     else if (path === '/transactions/deferred-sales') data = sales.map(row => ({ ...row, nom_client: `Client ${row.id_client}`, nom_produit: 'Œufs moyens' }));
+    else if (path.endsWith('/completion-history')) data = [
+      { id: 'initial', type: 'initial', date: '2026-10-26', quantite: 60, operateur: 'Admin', repartition_stock: [{ id_production: 1, date_production: '2026-10-25', quantite: 60 }] },
+      { id: 2, type: 'reservation', date: '2026-10-27', quantite: 5, operateur: 'Admin', repartition_stock: [{ id_production: 2, date_production: '2026-10-27', quantite: 5 }] },
+    ];
     else if (path === '/transactions') data = sales;
     else if (/^\/transactions\/\d+$/.test(path)) data = sales.find(row => row.id_transaction === Number(path.split('/').pop()));
     else if (/^\/paiements\/transaction\/\d+\/statut$/.test(path)) data = sale;
@@ -58,7 +62,7 @@ test('compiled dashboard opens delivery cards, details and return navigation', a
   await page.getByRole('textbox', { name: 'Rechercher un client' }).fill('Client 2');
   await expect(page.getByRole('button', { name: /Voir le détail de la vente #1/ })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Rechercher un client' }).fill('');
-  for (const width of [1280, 390]) {
+  for (const width of [1280, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await page.getByRole('button', { name: /Voir le détail de la vente #1/ }).click();
     const detail = page.getByRole('dialog', { name: 'Vente #1', exact: true });
@@ -69,6 +73,20 @@ test('compiled dashboard opens delivery cards, details and return navigation', a
     const drawerBounds = await detail.boundingBox();
     expect(drawerBounds && drawerBounds.x >= 0 && drawerBounds.x + drawerBounds.width <= width + 1).toBeTruthy();
     if (width === 390) await expect(detail).toHaveCSS('width', '390px');
+    const historyButton = detail.getByRole('button', { name: 'Historique des réservations' });
+    await historyButton.click();
+    await expect(historyButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(detail.getByText('Production du 27/10/26')).toBeVisible();
+    await expect(detail.getByText('Enregistré par Admin')).toHaveCount(2);
+    await expect(detail.getByRole('button', { name: 'Origine du stock' })).toHaveCount(0);
+    await expect(detail.getByRole('heading', { name: 'Suivi du stock' })).toHaveCount(0);
+    const history = detail.getByRole('region', { name: 'Suivi du stock' });
+    await expect(history.locator('xpath=ancestor::*[contains(@class, "MuiCollapse-root")]')).toHaveClass(/MuiCollapse-entered/);
+    const historyBounds = await history.boundingBox();
+    expect(historyBounds && historyBounds.x >= 0 && historyBounds.x + historyBounds.width <= width + 1).toBeTruthy();
+    expect(await history.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBeTruthy();
+    if (width === 390) await page.screenshot({ path: '/workspace/scratch/c8c21a888029/reservation-history-mobile.png', fullPage: true });
+    if (width === 1280) await page.screenshot({ path: '/workspace/scratch/c8c21a888029/reservation-history-desktop.png', fullPage: true });
     await detail.getByRole('button', { name: 'Fermer le détail' }).click();
     await expect(detail).toHaveCount(0);
   }

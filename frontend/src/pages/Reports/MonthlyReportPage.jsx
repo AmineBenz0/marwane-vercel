@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Collapse, Grid, IconButton, Paper, Stack, Typography } from '@mui/material';
-import { FileDownload as DownloadIcon, InfoOutlined, PictureAsPdf as PdfIcon } from '@mui/icons-material';
+import { FileDownload as DownloadIcon, InfoOutlined, PictureAsPdf as PdfIcon, CalendarTodayOutlined, LayersOutlined } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportToPDF } from '../../utils/exportToPDF';
@@ -13,8 +13,8 @@ const money = value => value == null ? '—' : new Intl.NumberFormat('fr-FR', { 
 const displayReportValue = row => row.type === 'text' ? row.valeur : row.type === 'money' ? money(row.valeur) : number(row.valeur, 3);
 
 function ReportRows({ rows }) {
-  return <Stack spacing={1.5}>{rows.map(row => <Stack direction="row" justifyContent="space-between" spacing={2} key={row.indicateur}>
-    <Typography>{row.indicateur}</Typography><Typography fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{displayReportValue(row)}</Typography>
+  return <Stack spacing={1.5}>{rows.map(row => <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="baseline" key={row.indicateur}>
+    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{row.indicateur}</Typography><Typography variant="body2" fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{displayReportValue(row)}</Typography>
   </Stack>)}</Stack>;
 }
 
@@ -105,8 +105,8 @@ function MonthlyReportPage() {
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements de caisse du mois</Typography><ReportRows rows={groups.cash} /></Paper>
       {hasBankActivity && <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements bancaires du mois</Typography><ReportRows rows={groups.bank} /></Paper>}
       <Paper component="section" aria-label="Situation actuelle" variant="outlined" sx={{ p: 2, mb: 2 }}><Stack direction="row" justifyContent="space-between" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700}>Situation actuelle</Typography><Typography variant="body2" color="text.secondary">Au {currentDate}</Typography></Stack><ReportRows rows={groups.current} /></Paper>
-      <ExpandableDetails label={`Situation à la fin du mois · Au ${historicalDate}`}><ReportRows rows={groups.historical} /></ExpandableDetails>
-      <ExpandableDetails label="Stock du mois"><ReportRows rows={groups.stock} /></ExpandableDetails>
+      <ExpandableDetails label="Situation à la fin du mois" description={`Au ${historicalDate}`} icon={<CalendarTodayOutlined />} ><ReportRows rows={groups.historical} /></ExpandableDetails>
+      <ExpandableDetails label="Stock du mois" description={`Du ${formatShortDate(report.date_debut)} au ${historicalDate}`} icon={<LayersOutlined />} ><ReportRows rows={groups.stock} /></ExpandableDetails>
     </>}
   </Box>;
 }

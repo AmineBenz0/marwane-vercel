@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Typography,
   Grid,
   Box,
@@ -11,7 +8,6 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import {
-  ExpandMore as ExpandMoreIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   CheckCircle as CheckCircleIcon,
@@ -21,6 +17,8 @@ import {
   Speed as SpeedIcon,
   AttachMoney as AttachMoneyIcon,
 } from '@mui/icons-material';
+import ExpandableDetails from '../ExpandableDetails';
+import { alpha } from '@mui/material/styles';
 import { formatMontant } from '../../utils/formatNumber';
 
 const formatJours = (jours) => {
@@ -40,10 +38,10 @@ const InsightCard = ({ icon, label, value, subValue, color = 'primary', alert = 
     <Box
       sx={{
         p: { xs: 1.5, sm: 2 },
-        bgcolor: alert ? 'error.50' : 'background.paper',
+        bgcolor: alert ? alpha(theme.palette.error.main, 0.05) : 'grey.50',
         borderRadius: 2,
         border: '1px solid',
-        borderColor: alert ? 'error.light' : 'divider',
+        borderColor: alert ? alpha(theme.palette.error.main, 0.15) : 'transparent',
         textAlign: 'center',
         height: '100%',
       }}
@@ -125,56 +123,14 @@ function FinancialInsights({
   };
 
   return (
-    <Accordion
-      expanded={expanded}
-      onChange={() => setExpanded(!expanded)}
-      sx={{
-        mb: { xs: 2, sm: 2.5, md: 3 },
-        borderRadius: 2,
-        border: '1px solid',
-        borderColor: 'divider',
-        boxShadow: 'none',
-        '&:before': { display: 'none' },
-      }}
-    >
-      <AccordionSummary
-        expandIcon={<ExpandMoreIcon />}
-        sx={{
-          borderRadius: expanded ? '8px 8px 0 0' : 2,
-          px: { xs: 2, sm: 3 },
-          py: { xs: 1, sm: 1.5 },
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-          <SpeedIcon sx={{ color: 'primary.main', fontSize: { xs: 24, sm: 28 } }} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography
-              variant="h6"
-              sx={{ fontSize: { xs: '1rem', sm: '1.125rem' }, fontWeight: 700 }}
-            >
-              Santé financière
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              Paiement, retards et rythme d'activité
-            </Typography>
-          </Box>
-
-          {!expanded && (
-            <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-              <Typography variant="body2" fontWeight={800} color={`${getTauxColor()}.main`}>
-                {taux_paiement.toFixed(0)}% payé
-              </Typography>
-              {nombre_transactions_en_retard > 0 && (
-                <Typography variant="caption" color="error.main" fontWeight={700}>
-                  {nombre_transactions_en_retard} en retard
-                </Typography>
-              )}
-            </Box>
-          )}
-        </Box>
-      </AccordionSummary>
-
-      <AccordionDetails sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'grey.50' }}>
+    <ExpandableDetails label="Santé financière" icon={<SpeedIcon />}
+      description="Paiement, retards et rythme d'activité"
+      expanded={expanded} onChange={(_, next) => setExpanded(next)}
+      sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}
+      meta={!expanded ? <Box>
+        <Typography variant="body2" fontWeight={700} color={`${getTauxColor()}.main`}>{taux_paiement.toFixed(0)}% payé</Typography>
+        {nombre_transactions_en_retard > 0 && <Typography variant="caption" color="error.main" fontWeight={700}>{nombre_transactions_en_retard} en retard</Typography>}
+      </Box> : null}>
         <Box sx={{ mb: 3 }}>
           <Typography
             variant="subtitle1"
@@ -307,8 +263,7 @@ function FinancialInsights({
             </Grid>
           </Box>
         )}
-      </AccordionDetails>
-    </Accordion>
+    </ExpandableDetails>
   );
 }
 
