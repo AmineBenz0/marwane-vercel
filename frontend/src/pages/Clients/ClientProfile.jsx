@@ -690,8 +690,6 @@ function ClientProfile() {
         </Tabs>
       </Card>
 
-      <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} />
-
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Depuis le début</Typography>
       {/* Cartes statistiques */}
@@ -908,7 +906,7 @@ function ClientProfile() {
       </Box>
 
       <Box sx={{ display: activeTab === 'produits' ? 'block' : 'none' }}>
-      <Alert severity="info" sx={{ mb: 2 }}>Les quantités achetées incluent les livraisons différées. Consultez leur suivi pour distinguer les œufs couverts de ceux restant à fournir.</Alert>
+      <Alert severity="info" sx={{ mb: 2 }}>Les quantités achetées incluent les livraisons différées. Pour voir les quantités réservées et restant à produire, ouvrez l’onglet Transactions.</Alert>
       {/* Section Produits Achetés */}
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
@@ -978,6 +976,7 @@ function ClientProfile() {
       </Box>
 
       <Box sx={{ display: activeTab === 'transactions' ? 'block' : 'none' }}>
+        {activeTab === 'transactions' && <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} />}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: { xs: 1.5, sm: 2 } }}>
           <Button
             variant="outlined"
