@@ -578,7 +578,18 @@ function TransactionsList() {
    */
   const handleExportExcel = async () => {
     try {
-      const columnsForExport = columns.filter((col) => col.id !== 'est_actif');
+      const hasPromises = rowsForExport.some(row => row.est_promesse);
+      const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), ...(hasPromises ? [
+        { id: 'quantite_completee', label: 'Quantité complétée' },
+        { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
+        { id: 'quantite_en_attente', label: 'Reste à fournir' },
+        { id: 'quantite_a_produire', label: 'À produire' },
+        { id: 'quantite_annulee', label: 'Reste clôturé' },
+      ] : [])];
+      const promiseRows = rowsForExport.map(row => ({
+        ...row,
+        quantite_a_produire: Math.max(0, Number(row.quantite_en_attente || 0) - Number(row.quantite_reservee || 0)),
+      }));
       const totalMontant = rowsForExport.reduce(
         (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
         0
@@ -610,7 +621,7 @@ function TransactionsList() {
         totalRow[totalLabelColumnId] = 'Total :';
       }
 
-      const dataForExcel = [...rowsForExport, spacerRow, totalRow];
+      const dataForExcel = [...promiseRows, spacerRow, totalRow];
 
       // Utiliser des formatters personnalisés pour l'export
       const customFormatters = {
@@ -687,7 +698,18 @@ function TransactionsList() {
    */
   const handleExportPDF = () => {
     try {
-      const columnsForExport = columns.filter((col) => col.id !== 'est_actif');
+      const hasPromises = rowsForExport.some(row => row.est_promesse);
+      const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), ...(hasPromises ? [
+        { id: 'quantite_completee', label: 'Quantité complétée' },
+        { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
+        { id: 'quantite_en_attente', label: 'Reste à fournir' },
+        { id: 'quantite_a_produire', label: 'À produire' },
+        { id: 'quantite_annulee', label: 'Reste clôturé' },
+      ] : [])];
+      const promiseRows = rowsForExport.map(row => ({
+        ...row,
+        quantite_a_produire: Math.max(0, Number(row.quantite_en_attente || 0) - Number(row.quantite_reservee || 0)),
+      }));
       const totalMontant = rowsForExport.reduce(
         (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
         0
@@ -755,7 +777,7 @@ function TransactionsList() {
       };
 
       exportToPDF(
-        rowsForExport,
+        promiseRows,
         columnsForExport,
         'Rapport des Transactions',
         'rapport_transactions',
@@ -1188,13 +1210,10 @@ function TransactionsList() {
         aria-labelledby="delete-dialog-title"
         aria-describedby="delete-dialog-description"
       >
-        <DialogTitle id="delete-dialog-title">Confirmer la suppression</DialogTitle>
+        <DialogTitle id="delete-dialog-title">{transactionToDelete?.est_promesse ? 'Annuler cette vente ?' : 'Confirmer la suppression'}</DialogTitle>
         <DialogContent>
           <DialogContentText id="delete-dialog-description">
-            Retirer cette transaction du registre actif ?
-            <br />
-            <br />
-            Elle restera dans l'historique et pourra être réactivée plus tard.
+            {transactionToDelete?.est_promesse ? <>La vente sera retirée du registre actif. Les paiements associés seront annulés et conservés dans l’historique. Si vous réactivez la vente plus tard, ils ne seront pas réactivés automatiquement.</> : <>Retirer cette transaction du registre actif ?<br /><br />Elle restera dans l'historique et pourra être réactivée plus tard.</>}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -1202,7 +1221,7 @@ function TransactionsList() {
             Annuler
           </Button>
           <Button onClick={handleDeleteConfirm} disabled={deleteLoading} color="error" variant="contained">
-            {deleteLoading ? 'Suppression...' : 'Supprimer'}
+            {deleteLoading ? 'Annulation...' : transactionToDelete?.est_promesse ? 'Annuler la vente' : 'Supprimer'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1707,7 +1726,7 @@ function TransactionExcelRow({
         {transaction.est_promesse ? <Stack spacing={0.75} alignItems="flex-start">
           <DeferredSaleStatusBadge sale={transaction} />
           {transaction.date_livraison_prevue && <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>}
-          {!inactive && Number(transaction.quantite_en_attente) > 0 && <Typography variant="caption">{Number(transaction.quantite_couverte) > 0 ? `${formatNumberValue(transaction.quantite_couverte)} œufs réservés · ` : ''}{formatNumberValue(transaction.quantite_en_attente)} à produire</Typography>}
+          {!inactive && Number(transaction.quantite_en_attente) > 0 && <Typography variant="caption">{Number(transaction.quantite_completee) > 0 ? `${formatNumberValue(transaction.quantite_completee)} complétés · ` : ''}{Number(transaction.quantite_reservee) > 0 ? `${formatNumberValue(transaction.quantite_reservee)} prêts · ` : ''}{formatNumberValue(Math.max(0, Number(transaction.quantite_en_attente) - Number(transaction.quantite_reservee || 0)))} à produire</Typography>}
         </Stack> : '—'}
       </TableCell>
       <TableCell align="right" sx={stickyActionBodySx}>

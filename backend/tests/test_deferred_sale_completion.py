@@ -12,7 +12,7 @@ from app.models.paiement import Paiement
 from app.models.caisse import Caisse
 from app.models.inventory import MouvementStock
 from app.models.audit import TransactionAudit
-from app.routers.transactions import create_transaction, create_transactions_with_payments_batch, update_transaction, delete_transaction
+from app.routers.transactions import create_transaction, create_transactions_with_payments_batch, update_transaction, delete_transaction, reactivate_transaction
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.schemas.transaction_payment import TransactionPaymentBatchCreate
 from app.services.egg_sales import sale_sources
@@ -234,6 +234,132 @@ def test_discovery_tracks_paid_sale_partial_completion_and_history(client, db_se
     assert db_session.query(Paiement).count() == 1
 
 
+def test_reschedule_and_cancel_remainder_preserve_sale_and_record_history(client, db_session, deferred_sale, test_user):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    before = (tx.id_transaction, tx.quantite, tx.montant_total)
+    db_session.add(Paiement(id_transaction=tx.id_transaction, date_paiement=date.today(),
+                           montant=Decimal('1500'), type_paiement='cash', statut='valide'))
+    db_session.commit()
+    new_date = (payload.date_livraison_prevue + timedelta(days=2)).isoformat()
+    response = client.patch(f'/api/v1/transactions/{tx.id_transaction}/delivery-date',
+                            json={'date_livraison_prevue': new_date})
+    assert response.status_code == 200, response.text
+    response = client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder')
+    assert response.status_code == 200, response.text
+    assert response.json()['quantite_couverte'] == 600
+    assert response.json()['quantite_en_attente'] == 0
+    assert response.json()['quantite_annulee'] == 400
+    history = client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history').json()
+    assert [event['type'] for event in history] == ['reschedule', 'cancel_remainder']
+    assert db_session.query(Transaction).count() == 1
+    assert (tx.id_transaction, tx.quantite, tx.montant_total) == before
+    assert tx.montant_paye == Decimal('1500')
+    assert tx.date_livraison_prevue.isoformat() == new_date
+    app.dependency_overrides.pop(get_current_active_user, None)
+
+
+def test_historical_stock_keeps_promise_remainder_until_its_cancellation_date(client, db_session, deferred_sale, test_user):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, source, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    historical_date = source.date_production.isoformat()
+
+    response = client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder')
+    assert response.status_code == 200, response.text
+    snapshot = client.get('/api/v1/productions/stock', params={'date_stock': historical_date}).json()['totals']
+    assert snapshot['promised_pending_eggs'] == 400
+    assert snapshot['balance_after_promises'] == -400
+    current = client.get('/api/v1/productions/stock').json()['totals']
+    assert current['promised_pending_eggs'] == 0
+    assert current['balance_after_promises'] == 0
+    app.dependency_overrides.pop(get_current_active_user, None)
+
+
+def test_whole_cancel_and_reactivation_preserve_completed_stock_and_void_payments(db_session, deferred_sale, test_user):
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    payment = Paiement(id_transaction=tx.id_transaction, date_paiement=payload.date_transaction,
+                       montant=Decimal('1500'), type_paiement='cash', statut='valide')
+    db_session.add(payment)
+    db_session.commit()
+
+    delete_transaction(tx.id_transaction, 'Correction du client', db_session, test_user)
+    assert tx.est_actif is False
+    assert payment.statut == 'annule'
+    reactivate_transaction(tx.id_transaction, db_session, test_user)
+    db_session.refresh(tx)
+
+    assert tx.est_actif is True
+    assert (tx.quantite_completee, tx.quantite_en_attente) == (600, 400)
+    assert [(allocation.quantite, allocation.quantite_livree) for allocation in tx.allocations] == [(600, 600)]
+    assert payment.statut == 'annule'
+    assert db_session.query(Paiement).filter(Paiement.id_transaction == tx.id_transaction).count() == 1
+
+
+def test_closing_remainder_releases_reserved_stock_to_next_promise(client, db_session, deferred_sale, test_user, monkeypatch):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    from app.services.egg_sales import assign_pending_promises, deferred_sale_reservations
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    building, _, _, payload = deferred_sale
+    oldest = create_transaction(payload, db_session, test_user)
+    next_sale = create_transaction(payload.model_copy(update={
+        'quantite': 500, 'montant_total': Decimal('750'),
+        'date_livraison_prevue': payload.date_livraison_prevue + timedelta(days=1),
+    }), db_session, test_user)
+    enter_production(db_session, building.id_batiment, 300)
+    assign_pending_promises(db_session, building_id=building.id_batiment, current_user=test_user)
+    db_session.commit()
+    assert (oldest.quantite_completee, oldest.quantite_en_attente) == (600, 400)
+    assert deferred_sale_reservations(db_session)[oldest.id_transaction] == 300
+    response = client.post(f'/api/v1/transactions/{oldest.id_transaction}/cancel-remainder')
+    assert response.status_code == 200, response.text
+    db_session.expire_all()
+    assert (oldest.quantite_completee, oldest.quantite_en_attente, oldest.quantite_annulee) == (600, 0, 400)
+    assert oldest.quantite_couverte == 600
+    assert next_sale.quantite_couverte == 300
+    assert next_sale.quantite_en_attente == 500
+    app.dependency_overrides.pop(get_current_active_user, None)
+
+
+def test_thursday_sale_friday_stock_saturday_completion_keeps_single_financial_sale(client, db_session, deferred_sale, monkeypatch):
+    building, _, original_source, payload = deferred_sale
+    today = date.today()
+    days_since_thursday = (today.weekday() - 3) % 7 or 7
+    thursday = today - timedelta(days=days_since_thursday)
+    friday, saturday = thursday + timedelta(days=1), thursday + timedelta(days=2)
+    monkeypatch.setattr('app.services.egg_sales.business_date', lambda: saturday)
+    original_source.date_production = thursday
+    db_session.commit()
+    transaction = create_transaction(payload.model_copy(update={
+        'date_transaction': thursday,
+        'date_livraison_prevue': saturday,
+    }), db_session, None)
+    enter_production(db_session, building.id_batiment, 400, day=friday)
+    first = proposal(client, transaction.id_transaction)
+    assert first['quantite_proposee'] == 400
+    assert client.post(f'/api/v1/transactions/{transaction.id_transaction}/completion',
+                       json=confirmation(first, 300)).status_code == 200
+    second = proposal(client, transaction.id_transaction)
+    assert second['quantite_proposee'] == 100
+    assert client.post(f'/api/v1/transactions/{transaction.id_transaction}/completion',
+                       json=confirmation(second, 100)).status_code == 200
+    db_session.expire_all()
+    history = client.get(f'/api/v1/transactions/{transaction.id_transaction}/completion-history').json()
+    assert [sum(source['quantite'] for source in event['repartition_stock']) for event in history] == [300, 100]
+    assert all(source['date_production'] == friday.isoformat() for event in history for source in event['repartition_stock'])
+    assert transaction.date_transaction == thursday
+    assert transaction.quantite == 1000
+    assert db_session.query(Transaction).count() == 1
+    assert db_session.query(Paiement).count() == 0
+
+
 def test_discovery_respects_priority_excludes_future_stock_and_cancelled_sales(client, db_session, deferred_sale):
     building, _, _, payload = deferred_sale
     first = create_transaction(payload, db_session, None)
@@ -271,13 +397,15 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(clien
         quantites={'normal': 300},
         grammage=Decimal('55'),
     ), db_session, test_user)
-    assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (900, 100)
+    assert (oldest.quantite_couverte, oldest.quantite_completee, oldest.quantite_en_attente) == (900, 600, 400)
     assert (later.quantite_couverte, later.quantite_en_attente) == (0, 300)
     assert daily['reservations_stock'] == [dict(id_transaction=oldest.id_transaction, quantite=300)]
     stock = client.get('/api/v1/productions/stock').json()
     assert stock['totals']['reserved_eggs'] == 900
     assert stock['totals']['physical_eggs'] == 900
     assert stock['totals']['available_eggs'] == 0
+    assert stock['totals']['promised_pending_eggs'] == 700
+    assert stock['totals']['balance_after_promises'] == -400
     assert stock['batiments'][0]['categories'][0]['reserved_eggs'] == 900
     assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=today)) == 0
 
@@ -289,14 +417,15 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(clien
         versions=daily['versions'],
         charge_versions=daily['charge_versions'],
     ), db_session, test_user)
-    assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (1000, 0)
-    assert (later.quantite_couverte, later.quantite_en_attente) == (100, 200)
+    assert (oldest.quantite_couverte, oldest.quantite_completee, oldest.quantite_en_attente) == (1000, 600, 400)
+    assert (later.quantite_couverte, later.quantite_completee, later.quantite_en_attente) == (100, 0, 300)
     assert daily['reservations_stock'] == [
         dict(id_transaction=oldest.id_transaction, quantite=100),
         dict(id_transaction=later.id_transaction, quantite=100),
     ]
     stock = client.get('/api/v1/productions/stock').json()['totals']
     assert (stock['available_eggs'], stock['reserved_eggs'], stock['physical_eggs']) == (0, 1100, 1100)
+    assert (stock['promised_pending_eggs'], stock['balance_after_promises']) == (700, -200)
 
     daily = update_daily_production(ProductionDailyInput(
         id_batiment=building.id_batiment,
@@ -306,8 +435,8 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(clien
         versions=daily['versions'],
         charge_versions=daily['charge_versions'],
     ), db_session, test_user)
-    assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (1000, 0)
-    assert (later.quantite_couverte, later.quantite_en_attente) == (100, 200)
+    assert (oldest.quantite_couverte, oldest.quantite_completee, oldest.quantite_en_attente) == (1000, 600, 400)
+    assert (later.quantite_couverte, later.quantite_completee, later.quantite_en_attente) == (100, 0, 300)
     assert daily['reservations_stock'] == []
     editing_oldest = sale_sources(db_session, building.id_batiment,
         exclude_transaction_id=oldest.id_transaction, through_date=today)

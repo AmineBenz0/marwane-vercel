@@ -49,8 +49,9 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose }) 
         </Box>
         <Stack spacing={1} divider={<Divider />}>
           <Row label="Œufs vendus" value={number(sale.quantite)} />
-          <Row label="Réservés" value={number(sale.quantite_couverte)} />
-          <Row label="À produire" value={number(sale.quantite_en_attente)} />
+          <Row label="Complétés" value={number(sale.quantite_completee)} />
+          {Number(sale.quantite_reservee || 0) > 0 && <Row label="Prêts à compléter" value={number(sale.quantite_reservee)} />}
+          <Row label="À produire" value={number(Math.max(0, Number(sale.quantite_en_attente || 0) - Number(sale.quantite_reservee || 0)))} />
         </Stack>
         <Box component="section" aria-label="Paiement de la vente">
           <Typography component="h3" variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Paiement</Typography>

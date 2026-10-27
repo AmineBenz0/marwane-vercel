@@ -16,11 +16,11 @@ vi.mock('../../utils/exportToPDF', () => ({ exportToPDF: vi.fn() }));
 const paid = {
   id_transaction: 7, id_client: 1, id_fournisseur: null, id_produit: 1, id_batiment: 1,
   est_actif: true, est_promesse: true, allocation_automatique: true,
-  quantite: 1000, quantite_couverte: 600, quantite_en_attente: 400, quantite_reservee: 600,
+  quantite: 1000, quantite_couverte: 900, quantite_completee: 600, quantite_en_attente: 400, quantite_reservee: 300,
   prix_unitaire: 1.5, montant_total: 1500, montant_paye: 1500, montant_restant: 0,
   statut_paiement: 'paye', date_transaction: '2026-10-24', paiements: [],
 };
-const waiting = { ...paid, id_transaction: 8, id_client: 2, quantite_couverte: 0, quantite_reservee: 0 };
+const waiting = { ...paid, id_transaction: 8, id_client: 2, quantite_couverte: 0, quantite_completee: 0, quantite_reservee: 0 };
 const closed = { ...paid, id_transaction: 9, id_client: 3, quantite_couverte: 1000, quantite_en_attente: 0, quantite_reservee: 1000 };
 let sales;
 const summary = row => ({ ...row, nom_client: `Client ${row.id_client}`, nom_produit: 'Œufs moyens', nom_batiment: 'Bâtiment A', date_livraison_prevue: '2026-10-25' });
@@ -54,19 +54,19 @@ describe('deferred sale stock reservations', () => {
     expect(screen.getByText('Tout est réglé')).toBeVisible();
   });
 
-  it('summarizes all pending sales without listing their details', async () => {
+  it('shows actionable promises with the client and reserved quantity', async () => {
     renderAt(<DeferredSalesCard />);
-    expect(await screen.findByText('2 ventes · 800 œufs à produire')).toBeVisible();
-    expect(screen.queryByText(/Client 1/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Client 2/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
+    expect(await screen.findByText('Client 1 · Vente #7')).toBeVisible();
+    expect(screen.getByText('300 œufs prêts à compléter')).toBeVisible();
+    expect(screen.getByText('Client 2 · Vente #8')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'À traiter maintenant' })).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('opens pending sales including unreserved sales and excludes completed and canceled sales', async () => {
     sales.push({ ...paid, id_transaction: 99, id_client: 3, est_actif: false });
     renderAt(<DeferredSalesCard />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Voir les livraisons' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Toutes les livraisons' }));
     expect(await screen.findByText('Client 1')).toBeVisible();
     expect(screen.getByText('Client 2')).toBeVisible();
     expect(screen.queryByText('Client 3')).not.toBeInTheDocument();
@@ -89,14 +89,14 @@ describe('deferred sale stock reservations', () => {
     get.mockRejectedValueOnce(new Error('Connexion interrompue'));
     renderAt(<DeferredSalesCard />);
     fireEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
-    expect(await screen.findByText('2 ventes · 800 œufs à produire')).toBeVisible();
+    expect(await screen.findByText('Client 1 · Vente #7')).toBeVisible();
   });
 
   it('hides the card when there are no pending deliveries', async () => {
     get.mockResolvedValueOnce([]);
     renderAt(<DeferredSalesCard />);
     await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/deferred-sales'));
-    expect(screen.queryByRole('region', { name: 'Livraisons différées' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'À traiter maintenant' })).not.toBeInTheDocument();
     expect(screen.queryByText(/0 avec du stock réservé|Aucune livraison différée en attente/)).not.toBeInTheDocument();
   });
 
@@ -104,13 +104,13 @@ describe('deferred sale stock reservations', () => {
     get.mockResolvedValueOnce([summary(closed), summary({ ...waiting, est_actif: false })]);
     renderAt(<DeferredSalesCard />);
     await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/deferred-sales'));
-    expect(screen.queryByRole('region', { name: 'Livraisons différées' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'À traiter maintenant' })).not.toBeInTheDocument();
   });
 });
 
 it('preserves the source-building filter when opening stock-reserved sales', async () => {
   render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=reserved&building=1']}><TransactionsList /></MemoryRouter>);
-  await screen.findByText('600 œufs réservés · 400 à produire');
+  await screen.findByText('600 complétés · 300 prêts · 100 à produire');
   await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions', expect.objectContaining({ params: expect.objectContaining({ est_promesse: true, id_batiment: 1 }) })));
   expect(screen.getByText('Bâtiment : Bâtiment A')).toBeVisible();
   expect(screen.getByText('Client 3')).toBeVisible();

@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
   Divider,
   Stack,
   useTheme,
@@ -44,7 +45,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { get, post, put, del } from '../../services/api';
+import { get, post, put, patch, del } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
@@ -96,6 +97,15 @@ function TransactionDetail() {
   const [deletePaiementDialogOpen, setDeletePaiementDialogOpen] = useState(false);
   const [paiementToDelete, setPaiementToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [promiseActionLoading, setPromiseActionLoading] = useState(false);
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionPreview, setCompletionPreview] = useState(null);
+  const [completionQuantity, setCompletionQuantity] = useState('');
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [newDeliveryDate, setNewDeliveryDate] = useState('');
+  const [cancelRemainderDialogOpen, setCancelRemainderDialogOpen] = useState(false);
+  const [cancelTransactionDialogOpen, setCancelTransactionDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Annulation demandée depuis le détail de la vente');
 
   /**
    * Crée des maps de lookup pour produits, clients et fournisseurs.
@@ -197,6 +207,79 @@ function TransactionDetail() {
       fetchPaiements(),
       fetchStatutPaiement(),
     ]);
+  };
+
+  const openCompletion = async () => {
+    setPromiseActionLoading(true);
+    try {
+      const proposal = await get(`/transactions/${id}/completion`);
+      setCompletionPreview(proposal);
+      setCompletionQuantity(String(proposal.quantite_proposee || ''));
+      setCompletionDialogOpen(true);
+    } catch (err) {
+      notification.error(err?.message || 'Le stock disponible ne peut pas être chargé.');
+    } finally { setPromiseActionLoading(false); }
+  };
+
+  const submitCompletion = async () => {
+    const quantity = Number(completionQuantity);
+    if (!completionPreview || !Number.isInteger(quantity) || quantity < 1 || quantity > completionPreview.quantite_proposee) return;
+    setPromiseActionLoading(true);
+    try {
+      await post(`/transactions/${id}/completion`, {
+        quantite: quantity,
+        quantite_couverte_attendue: completionPreview.quantite_couverte,
+        empreinte_stock: completionPreview.empreinte_stock,
+      });
+      setCompletionDialogOpen(false);
+      await fetchTransaction();
+      notification.success('La quantité disponible a été ajoutée à la vente.');
+    } catch (err) {
+      notification.error(err?.message || 'La livraison n’a pas pu être complétée. Rechargez la proposition.');
+    } finally { setPromiseActionLoading(false); }
+  };
+
+  const submitReschedule = async () => {
+    setPromiseActionLoading(true);
+    try {
+      await patch(`/transactions/${id}/delivery-date`, { date_livraison_prevue: newDeliveryDate });
+      setRescheduleDialogOpen(false);
+      await fetchTransaction();
+      notification.success('La date prévue a été mise à jour.');
+    } catch (err) { notification.error(err?.message || 'La date n’a pas pu être modifiée.'); }
+    finally { setPromiseActionLoading(false); }
+  };
+
+  const submitCancelRemainder = async () => {
+    setPromiseActionLoading(true);
+    try {
+      await post(`/transactions/${id}/cancel-remainder`);
+      setCancelRemainderDialogOpen(false);
+      await fetchTransaction();
+      notification.success('Le reste à fournir a été clôturé.');
+    } catch (err) { notification.error(err?.message || 'Le reste n’a pas pu être clôturé.'); }
+    finally { setPromiseActionLoading(false); }
+  };
+
+  const submitCancelTransaction = async () => {
+    setPromiseActionLoading(true);
+    try {
+      await del(`/transactions/${id}?raison=${encodeURIComponent(cancelReason)}`);
+      setCancelTransactionDialogOpen(false);
+      await Promise.all([fetchTransaction(), refreshPaiements()]);
+      notification.success('La vente et ses paiements ont été annulés et conservés dans l’historique.');
+    } catch (err) { notification.error(err?.message || 'La vente n’a pas pu être annulée.'); }
+    finally { setPromiseActionLoading(false); }
+  };
+
+  const reactivateTransaction = async () => {
+    setPromiseActionLoading(true);
+    try {
+      await patch(`/transactions/${id}/reactivate`, {});
+      await Promise.all([fetchTransaction(), refreshPaiements()]);
+      notification.success('La vente est réactivée. Les paiements annulés ne sont pas réactivés automatiquement.');
+    } catch (err) { notification.error(err?.message || 'La vente n’a pas pu être réactivée.'); }
+    finally { setPromiseActionLoading(false); }
   };
 
 
@@ -533,6 +616,18 @@ function TransactionDetail() {
         </Box>
       </Box>
 
+      {transaction.est_promesse && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
+        {transaction.est_actif && Number(transaction.quantite_en_attente) > 0 && <>
+          <Button variant="contained" onClick={openCompletion} disabled={promiseActionLoading || Number(transaction.quantite_reservee || 0) < 1}>
+            Compléter {Number(transaction.quantite_reservee || 0) > 0 ? `(${Number(transaction.quantite_reservee).toLocaleString('fr-FR')} disponibles)` : ''}
+          </Button>
+          <Button variant="outlined" onClick={() => { setNewDeliveryDate(transaction.date_livraison_prevue || ''); setRescheduleDialogOpen(true); }} disabled={promiseActionLoading}>Changer la date</Button>
+          <Button color="inherit" onClick={() => setCancelRemainderDialogOpen(true)} disabled={promiseActionLoading}>Clôturer le reste</Button>
+        </>}
+        {transaction.est_actif && <Button color="error" onClick={() => setCancelTransactionDialogOpen(true)} disabled={promiseActionLoading}>Annuler la vente</Button>}
+        {transaction.est_actif === false && <Button variant="outlined" onClick={reactivateTransaction} disabled={promiseActionLoading}>Réactiver la vente</Button>}
+      </Stack>}
+
       {/* Informations principales */}
       {!transaction.est_promesse && <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <Grid item xs={12} md={6}>
@@ -749,9 +844,40 @@ function TransactionDetail() {
 
       {transaction.est_promesse && <Box sx={{ mb: 3 }}>
         <ExpandableDetails label="Historique des réservations" icon={<HistoryOutlined />}>
-          <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={transaction.quantite_couverte} embedded />
+          <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={`${transaction.quantite_couverte}-${transaction.quantite_annulee}-${transaction.date_livraison_prevue}-${transaction.est_actif}`} embedded />
         </ExpandableDetails>
       </Box>}
+
+      <Dialog open={completionDialogOpen} onClose={() => !promiseActionLoading && setCompletionDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Compléter la livraison</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">Stock réservé pour cette vente, par date de production :</Typography>
+            {completionPreview?.repartition_stock?.map(source => <Stack key={source.id_production} direction="row" justifyContent="space-between"><Typography variant="body2">Production du {formatShortDate(source.date_production)}</Typography><Typography variant="body2" fontWeight={700}>{Number(source.quantite).toLocaleString('fr-FR')} œufs</Typography></Stack>)}
+            <TextField label="Quantité à compléter" type="number" value={completionQuantity} onChange={event => setCompletionQuantity(event.target.value)} inputProps={{ min: 1, max: completionPreview?.quantite_proposee || 1, step: 1 }} helperText={`Maximum disponible : ${Number(completionPreview?.quantite_proposee || 0).toLocaleString('fr-FR')} œufs`} />
+            <Alert severity="info">Cette action rattache le stock à la vente existante. Elle ne crée ni nouvelle vente ni nouveau paiement.</Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setCompletionDialogOpen(false)} disabled={promiseActionLoading}>Retour</Button><Button variant="contained" onClick={submitCompletion} disabled={promiseActionLoading || !Number(completionQuantity) || Number(completionQuantity) > Number(completionPreview?.quantite_proposee)}>Confirmer</Button></DialogActions>
+      </Dialog>
+      <Dialog open={rescheduleDialogOpen} onClose={() => setRescheduleDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Changer la date prévue</DialogTitle>
+        <DialogContent><TextField fullWidth type="date" label="Nouvelle date" value={newDeliveryDate} onChange={event => setNewDeliveryDate(event.target.value)} InputLabelProps={{ shrink: true }} sx={{ mt: 1 }} /></DialogContent>
+        <DialogActions><Button onClick={() => setRescheduleDialogOpen(false)}>Annuler</Button><Button variant="contained" onClick={submitReschedule} disabled={promiseActionLoading || !newDeliveryDate}>Enregistrer</Button></DialogActions>
+      </Dialog>
+      <Dialog open={cancelRemainderDialogOpen} onClose={() => setCancelRemainderDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Clôturer le reste à fournir ?</DialogTitle>
+        <DialogContent><Typography>Les {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} œufs non complétés seront clôturés. Le stock réservé qui n’est plus nécessaire sera libéré pour les autres ventes. Le montant de la vente et ses paiements restent inchangés ; cette action ne crée pas de remboursement.</Typography></DialogContent>
+        <DialogActions><Button onClick={() => setCancelRemainderDialogOpen(false)}>Retour</Button><Button color="warning" variant="contained" onClick={submitCancelRemainder} disabled={promiseActionLoading}>Clôturer</Button></DialogActions>
+      </Dialog>
+      <Dialog open={cancelTransactionDialogOpen} onClose={() => setCancelTransactionDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Annuler la vente entière ?</DialogTitle>
+        <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
+          <Alert severity="warning">La vente sera retirée du registre actif. Ses paiements seront annulés et conservés dans l’historique. Une réactivation ultérieure ne réactive pas les paiements.</Alert>
+          <TextField label="Motif" value={cancelReason} onChange={event => setCancelReason(event.target.value)} required inputProps={{ maxLength: 1000 }} />
+        </Stack></DialogContent>
+        <DialogActions><Button onClick={() => setCancelTransactionDialogOpen(false)}>Retour</Button><Button color="error" variant="contained" onClick={submitCancelTransaction} disabled={promiseActionLoading || cancelReason.trim().length < 3}>Annuler la vente</Button></DialogActions>
+      </Dialog>
 
       {/* Modal d'ajout/édition de paiement */}
       <Dialog

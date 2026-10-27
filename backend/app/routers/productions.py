@@ -11,7 +11,7 @@ from app.models.production import Production
 from app.models.batiment import Batiment
 from app.models.cycle_production import CycleProduction
 from app.utils.business_date import business_date
-from app.services.deferred_reporting import completion_events, covered_quantity
+from app.services.deferred_reporting import completion_events, covered_quantity, canceled_quantity
 from app.services.egg_sales import protect_production_source, reserved_stock_by_category, assign_pending_promises
 from app.models.transaction import Transaction
 from app.models.produit import Produit
@@ -740,6 +740,13 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             # Deferred allocations exclude eggs from resale, but are stock
             # reserved for the client; allocation does not record a delivery.
             category['allocated_deferred_eggs'] = category.get('allocated_deferred_eggs', 0) + quantity
+            if target_date >= business_date():
+                allocated_pending = sum(
+                    max(0, allocation.quantite - (allocation.quantite_livree or 0))
+                    for allocation in transaction.allocations
+                    if allocation.production and allocation.production.date_production <= target_date
+                )
+                category['allocated_pending_eggs'] = category.get('allocated_pending_eggs', 0) + allocated_pending
         add_movement({
             "time": transaction.date_creation.strftime("%H:%M") if transaction.date_creation else None,
             "type": "sale",
@@ -755,14 +762,21 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         promises = sorted((tx for tx, _, _ in sales_rows if tx.est_promesse),
                           key=lambda tx: (tx.date_livraison_prevue or tx.date_transaction, tx.date_transaction, tx.id_transaction))
         for tx in promises:
+            if tx.date_transaction > target_date:
+                continue
             building = stock_by_batiment.get(tx.id_batiment)
             category_key = sale_categories[tx.id_transaction]
             category = building['categories'].get(category_key) if building else None
             if not category:
                 continue
-            pending = max(0, tx.quantite - covered_quantity(tx, events.get(tx.id_transaction, []), target_date, True))
-            free = max(0, category['produced_eggs'] - category['sold_eggs'] - category.get('reserved_eggs', 0))
-            category['reserved_eggs'] = category.get('reserved_eggs', 0) + min(pending, free)
+            promise_events = events.get(tx.id_transaction, [])
+            pending = max(0, tx.quantite - covered_quantity(tx, promise_events, target_date, True)
+                          - canceled_quantity(tx, promise_events, target_date, True))
+            category['promised_pending_eggs'] = category.get('promised_pending_eggs', 0) + pending
+            allocated_pending = category.get('allocated_pending_eggs', 0)
+            free = max(0, category['produced_eggs'] - category['sold_eggs']
+                       - category.get('reserved_eggs', 0) - allocated_pending)
+            category['reserved_eggs'] = category.get('reserved_eggs', 0) + min(max(0, pending - allocated_pending), free)
 
     if cumulative and target_date >= business_date():
         reserved_by_category = reserved_stock_by_category(db, target_date)
@@ -779,8 +793,9 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
     for building in stock_by_batiment.values():
         unallocated_reserved = sum(category.get("reserved_eggs", 0) for category in building["categories"].values())
         allocated_reserved = sum(category.get("allocated_deferred_eggs", 0) for category in building["categories"].values())
-        reserved = unallocated_reserved + allocated_reserved
-        available = building["produced_eggs"] - building["sold_eggs"] - unallocated_reserved
+        allocated_pending_reserved = sum(category.get("allocated_pending_eggs", 0) for category in building["categories"].values())
+        reserved = unallocated_reserved + allocated_reserved + allocated_pending_reserved
+        available = building["produced_eggs"] - building["sold_eggs"] - unallocated_reserved - allocated_pending_reserved
         status_value = _stock_status(0 if cumulative else building["produced_eggs"], available, building["entries_count"])
         if status_value == "missing":
             missing_count += 1
@@ -791,9 +806,13 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             allocated = category.pop('allocated_deferred_eggs', 0)
             categories.append({
                 **category,
-                "available_eggs": category_available,
-                "reserved_eggs": category.get("reserved_eggs", 0) + allocated,
-                "physical_eggs": category["produced_eggs"] - category["sold_eggs"] + allocated,
+                "available_eggs": category_available - category.get('allocated_pending_eggs', 0),
+                "reserved_eggs": category.get("reserved_eggs", 0) + allocated + category.get('allocated_pending_eggs', 0),
+                "physical_eggs": category["produced_eggs"] - category["sold_eggs"] + allocated + category.get('allocated_pending_eggs', 0),
+                "promised_pending_eggs": category.get("promised_pending_eggs", 0),
+                "balance_after_promises": (category_available - category.get('allocated_pending_eggs', 0)
+                    - max(0, category.get("promised_pending_eggs", 0)
+                          - category.get('allocated_pending_eggs', 0) - category.get("reserved_eggs", 0))),
             })
 
         building_payload.append({
@@ -805,7 +824,13 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             "lost_eggs": building["lost_eggs"],
             "available_eggs": available,
             "reserved_eggs": reserved,
-            "physical_eggs": building["produced_eggs"] - building["sold_eggs"] + allocated_reserved,
+            "physical_eggs": building["produced_eggs"] - building["sold_eggs"] + allocated_reserved + allocated_pending_reserved,
+            "promised_pending_eggs": sum(category.get("promised_pending_eggs", 0) for category in categories),
+            "balance_after_promises": available - sum(
+                max(0, category.get("promised_pending_eggs", 0)
+                    - category.get('allocated_pending_eggs', 0) - category.get('reserved_eggs', 0))
+                for category in building["categories"].values()
+            ),
             "cycle": building["cycle"],
             "mortalite": building["mortalite"],
             "consommation_aliment_kg": building["consommation_aliment_kg"],
@@ -825,18 +850,22 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             key = (category["type_oeuf"], category["calibre"])
             total = global_categories.setdefault(key, {
                 "type_oeuf": key[0], "calibre": key[1], "label": category["label"],
-                "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0, "available_eggs": 0, "reserved_eggs": 0, "physical_eggs": 0,
+                "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0, "available_eggs": 0, "reserved_eggs": 0, "physical_eggs": 0, "promised_pending_eggs": 0,
+                "balance_after_promises": 0,
             })
-            for field in ("produced_eggs", "sold_eggs", "lost_eggs", "available_eggs", "reserved_eggs", "physical_eggs"):
+            for field in ("produced_eggs", "sold_eggs", "lost_eggs", "available_eggs", "reserved_eggs", "physical_eggs", "promised_pending_eggs"):
                 total[field] += category[field]
+            total["balance_after_promises"] += category["balance_after_promises"]
     for key, quantity in unassigned_by_category.items():
         total = global_categories.setdefault(key, {
             "type_oeuf": key[0], "calibre": key[1], "label": _category_label(*key),
-            "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0, "available_eggs": 0, "reserved_eggs": 0, "physical_eggs": 0,
+            "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0, "available_eggs": 0, "reserved_eggs": 0, "physical_eggs": 0, "promised_pending_eggs": 0,
+            "balance_after_promises": 0,
         })
         total["sold_eggs"] += quantity
         total["available_eggs"] -= quantity
         total["physical_eggs"] -= quantity
+        total["balance_after_promises"] -= quantity
 
     movements.sort(key=lambda item: item["time"] or "", reverse=True)
 
@@ -849,6 +878,8 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             "available_eggs": sum(b['available_eggs'] for b in building_payload) - unassigned_sold_eggs,
             "reserved_eggs": sum(b["reserved_eggs"] for b in building_payload),
             "physical_eggs": sum(b['physical_eggs'] for b in building_payload) - unassigned_sold_eggs,
+            "promised_pending_eggs": sum(b['promised_pending_eggs'] for b in building_payload),
+            "balance_after_promises": sum(b['balance_after_promises'] for b in building_payload) - unassigned_sold_eggs,
             "unassigned_sold_eggs": unassigned_sold_eggs,
             "buildings_count": len(batiments),
             "missing_buildings_count": missing_count,

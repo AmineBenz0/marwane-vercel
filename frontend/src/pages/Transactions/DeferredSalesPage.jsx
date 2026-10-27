@@ -18,7 +18,7 @@ export default function DeferredSalesPage() {
   const pending = useMemo(() => sales.filter(sale => sale.est_actif !== false && Number(sale.quantite_en_attente) > 0)
     .sort((a, b) => (a.date_livraison_prevue || '9999').localeCompare(b.date_livraison_prevue || '9999') || a.id_transaction - b.id_transaction), [sales]);
   const visible = pending.filter(sale => normalize(sale.nom_client).includes(normalize(search.trim())));
-  const remaining = pending.reduce((total, sale) => total + Number(sale.quantite_en_attente), 0);
+  const remaining = pending.reduce((total, sale) => total + Math.max(0, Number(sale.quantite_en_attente) - Number(sale.quantite_reservee || 0)), 0);
   const selectedId = /^\d+$/.test(params.get('vente') || '') ? Number(params.get('vente')) : null;
   const selected = sales.find(sale => sale.id_transaction === selectedId);
   const today = todayInMorocco();
@@ -51,7 +51,7 @@ export default function DeferredSalesPage() {
                   </Stack>
                   <Typography component="h2" variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{sale.nom_client}</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, overflowWrap: 'anywhere' }}>{sale.nom_produit}{sale.nom_batiment ? ` · ${sale.nom_batiment}` : ''}</Typography>
-                  <Typography fontWeight={700}>{number(sale.quantite_couverte)} / {number(sale.quantite ?? (Number(sale.quantite_couverte || 0) + Number(sale.quantite_en_attente || 0)))} réservés · {number(sale.quantite_en_attente)} à produire</Typography>
+                  <Typography fontWeight={700}>{number(sale.quantite_completee)} / {number(sale.quantite)} complétés{Number(sale.quantite_reservee) > 0 ? ` · ${number(sale.quantite_reservee)} prêts` : ''} · {number(Math.max(0, Number(sale.quantite_en_attente || 0) - Number(sale.quantite_reservee || 0)))} à produire</Typography>
                   {expected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Prévue le {formatShortDate(expected)}</Typography>}
                 </CardContent>
               </CardActionArea>

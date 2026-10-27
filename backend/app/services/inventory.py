@@ -148,6 +148,12 @@ def record_transaction_movement(
         preserve_allocations=preserve_egg_allocations,
         skip_promise_audit=is_new_transaction,
     )
+    if is_new_transaction and transaction.est_promesse:
+        # Stock available at sale creation is covered immediately. Stock added
+        # by later production stays only reserved until the user confirms it.
+        for allocation in transaction.allocations:
+            allocation.quantite_livree = allocation.quantite
+        db.flush()
     # Lock the product row while checking and writing its ledger impact. This
     # serializes concurrent sales of the same product on PostgreSQL and
     # prevents two requests from consuming the same available stock.

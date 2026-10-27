@@ -49,6 +49,7 @@ class Transaction(Base):
     allocation_automatique = Column(Boolean, nullable=False, default=False, server_default="false")
     est_promesse = Column(Boolean, nullable=False, default=False, server_default="false")
     date_livraison_prevue = Column(Date, nullable=True, index=True)
+    quantite_annulee = Column(Integer, nullable=False, default=0, server_default="0")
     allocations = relationship("EggAllocation", cascade="all, delete-orphan", lazy="selectin")
     id_production = Column(Integer, ForeignKey("productions.id_production", ondelete="RESTRICT"), nullable=True, index=True)
     id_cycle = Column(Integer, ForeignKey("cycles_production.id_cycle"), nullable=True, index=True)
@@ -66,6 +67,7 @@ class Transaction(Base):
         CheckConstraint('montant_total > 0', name='check_montant_positif'),
         CheckConstraint('quantite > 0', name='check_quantite_positive'),
         CheckConstraint('prix_unitaire > 0', name='check_prix_unitaire_positive'),
+        CheckConstraint('quantite_annulee >= 0 AND quantite_annulee <= quantite', name='check_quantite_annulee_bounded'),
         CheckConstraint(
             '(id_client IS NOT NULL AND id_fournisseur IS NULL) OR (id_fournisseur IS NOT NULL AND id_client IS NULL)',
             name='check_client_ou_fournisseur'
@@ -82,6 +84,7 @@ class Transaction(Base):
     @property
     def repartition_stock(self):
         return [dict(id_production=a.id_production, quantite=a.quantite,
+                     quantite_livree=(a.quantite_livree or 0) if self.est_promesse else a.quantite,
                      date_production=a.production.date_production, id_cycle=a.production.id_cycle)
                 for a in self.allocations]
 
@@ -93,7 +96,13 @@ class Transaction(Base):
 
     @property
     def quantite_en_attente(self):
-        return max(0, self.quantite - self.quantite_couverte) if self.est_promesse else 0
+        return max(0, self.quantite - self.quantite_completee - (self.quantite_annulee or 0)) if self.est_promesse else 0
+
+    @property
+    def quantite_completee(self):
+        if not self.est_promesse:
+            return self.quantite
+        return sum(allocation.quantite_livree or 0 for allocation in self.allocations)
 
     @property
     def date_production(self):

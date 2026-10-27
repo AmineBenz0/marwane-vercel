@@ -13,9 +13,9 @@ it('shows initial and automatic stock reservations with immediately visible orig
     { id: 2, type: 'completion', date: '2026-10-26', quantite: 100, quantite_couverte: 1000, id_utilisateur: 4, repartition_stock: [] },
   ]);
   render(<DeferredSaleHistory transactionId={7} refreshKey={1000} />);
-  expect(await screen.findByText('Réservé à la création')).toBeVisible();
-  expect(screen.getByText('Réservé automatiquement')).toBeVisible();
-  expect(screen.getByText('Stock ajouté manuellement')).toBeVisible();
+  expect(await screen.findByText('Complété à la création')).toBeVisible();
+  expect(screen.getByText('Stock réservé automatiquement')).toBeVisible();
+  expect(screen.getByText('Livraison complétée')).toBeVisible();
   expect(screen.getAllByText('600 œufs')).toHaveLength(2);
   expect(screen.getAllByText('300 œufs')).toHaveLength(2);
   expect(screen.queryByText(/après ce complément/)).not.toBeInTheDocument();

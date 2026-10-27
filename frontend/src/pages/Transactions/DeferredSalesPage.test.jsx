@@ -4,9 +4,9 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DeferredSalesPage from './DeferredSalesPage';
 import { get } from '../../services/api';
 vi.mock('../../services/api', () => ({ get: vi.fn() }));
-const sale = { id_transaction: 7, id_client: 1, id_produit: 1, est_promesse: true, est_actif: true, quantite: 70, quantite_couverte: 65, quantite_en_attente: 5, date_transaction: '2026-10-24', date_livraison_prevue: '2026-10-25', montant_total: 105, montant_paye: 105, montant_restant: 0, repartition_stock: [{ id_production: 1, date_production: '2026-10-24', quantite: 65 }] };
+const sale = { id_transaction: 7, id_client: 1, id_produit: 1, est_promesse: true, est_actif: true, quantite: 70, quantite_couverte: 65, quantite_completee: 65, quantite_en_attente: 5, quantite_reservee: 0, date_transaction: '2026-10-24', date_livraison_prevue: '2026-10-25', montant_total: 105, montant_paye: 105, montant_restant: 0, repartition_stock: [{ id_production: 1, date_production: '2026-10-24', quantite: 65 }] };
 const summary = { ...sale, nom_client: 'Marché Central', nom_produit: 'Œufs démarrage', nom_batiment: 'Bâtiment A' };
-const later = { ...summary, id_transaction: 8, nom_client: 'Épicerie', quantite: undefined, quantite_couverte: 0, quantite_en_attente: 50, date_livraison_prevue: '2030-01-01' };
+const later = { ...summary, id_transaction: 8, nom_client: 'Épicerie', quantite: 50, quantite_couverte: 0, quantite_completee: 0, quantite_en_attente: 50, date_livraison_prevue: '2030-01-01' };
 const show = (url = '/livraisons-a-suivre') => render(<MemoryRouter initialEntries={[url]}><Routes><Route path="/livraisons-a-suivre" element={<DeferredSalesPage />} /><Route path="/dashboard" element={<h1>Accueil quotidien</h1>} /><Route path="/transactions/:id" element={<h1>Vente et paiements</h1>} /></Routes></MemoryRouter>);
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,7 +24,7 @@ it('orders pending sales by expected date, searches clients without accents and 
   expect(cards).toHaveLength(2);
   expect(cards[0]).toHaveAccessibleName(/#7/);
   expect(cards[1]).toHaveAccessibleName(/#8/);
-  expect(screen.getByText('0 / 50 réservés · 50 à produire')).toBeVisible();
+  expect(screen.getByText('0 / 50 complétés · 50 à produire')).toBeVisible();
   fireEvent.change(screen.getByRole('textbox', { name: 'Rechercher un client' }), { target: { value: 'EPICERIE' } });
   expect(screen.queryByText('Marché Central')).not.toBeInTheDocument();
   expect(screen.getByText('Épicerie')).toBeVisible();

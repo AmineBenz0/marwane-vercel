@@ -8,15 +8,22 @@ export default function DeferredSaleStockSummary({ sale, showStatus = true }) {
   const covered = Number(sale.quantite_couverte ?? Math.max(
     0, quantity - Number(sale.quantite_en_attente || 0),
   ));
-  const reservedPercent = quantity > 0 ? Math.min(100, (covered / quantity) * 100) : 0;
+  const completed = Number(sale.quantite_completee ?? covered);
+  const ready = Math.min(Number(sale.quantite_reservee || 0), Number(sale.quantite_en_attente || 0));
+  const toProduce = Math.max(0, Number(sale.quantite_en_attente || 0) - ready);
+  const reservedPercent = quantity > 0 ? Math.min(100, (completed / quantity) * 100) : 0;
   return <Stack spacing={1.5}>
     {showStatus && <Box><DeferredSaleStatusBadge sale={sale} /></Box>}
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
-      <Box><Typography variant="body2" color="text.secondary">Stock réservé</Typography>
-        <Typography fontWeight={700}>{number(covered)} / {number(quantity)} œufs</Typography>
+      <Box><Typography variant="body2" color="text.secondary">Complété</Typography>
+        <Typography fontWeight={700}>{number(completed)} / {number(quantity)} œufs</Typography>
       </Box>
-      <Typography fontWeight={700} color={complete ? 'success.main' : 'text.primary'}>{complete ? 'Tout le stock est réservé' : `${number(sale.quantite_en_attente)} œufs à produire`}</Typography>
+      <Stack alignItems={{ xs: 'flex-start', sm: 'flex-end' }}>
+        {ready > 0 && <Typography fontWeight={700} color="success.main">{number(ready)} prêts à compléter</Typography>}
+        {toProduce > 0 && <Typography fontWeight={700}>{number(toProduce)} à produire</Typography>}
+        {complete && <Typography fontWeight={700} color="success.main">{Number(sale.quantite_annulee || 0) > 0 ? 'Reste clôturé' : 'Promesse complétée'}</Typography>}
+      </Stack>
     </Stack>
-    <LinearProgress variant="determinate" value={reservedPercent} aria-label={`${number(covered)} œufs réservés sur ${number(quantity)}`} sx={{ height: 6, borderRadius: 3 }} />
+    <LinearProgress variant="determinate" value={reservedPercent} aria-label={`${number(completed)} œufs complétés sur ${number(quantity)}`} sx={{ height: 6, borderRadius: 3 }} />
   </Stack>;
 }

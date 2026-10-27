@@ -260,10 +260,11 @@ function GlobalOverviewPage() {
       const cycleIds = selected.cycles.map((cycle) => Number(cycle.id_cycle));
       const startDate = selected.cycles.map((cycle) => isoDate(cycle.date_debut)).sort()[0];
       const endDate = selected.cycles.map((cycle) => isoDate(cycle.date_fin_reelle) || new Date().toISOString().slice(0, 10)).sort().at(-1);
-      const [performances, charges, transactions, products] = await Promise.all([
+      const [performances, charges, transactions, promiseTransactions, products] = await Promise.all([
         Promise.all(selected.cycles.map((cycle) => productionService.getPerformance(cycle.id_cycle))),
         loadPages('/charges', { date_debut: startDate, date_fin: endDate }),
         loadPages('/transactions', { date_debut: startDate, date_fin: endDate, est_actif: true }),
+        loadPages('/transactions', { est_promesse: true, est_actif: true }),
         loadPages('/produits'),
       ]);
       const buildingIds = selected.cycles.map((cycle) => Number(cycle.id_batiment));
@@ -280,7 +281,11 @@ function GlobalOverviewPage() {
         cycles: selected.cycles,
         rows,
         charges: relevantCharges,
-        transactions: transactions || [],
+        transactions: [
+          ...(transactions || []),
+          ...(promiseTransactions || []).filter((promise) => promise.id_transaction != null
+            && !(transactions || []).some((transaction) => transaction.id_transaction === promise.id_transaction)),
+        ],
         products: products || [],
       });
     } catch (err) {
@@ -371,7 +376,7 @@ function GlobalOverviewPage() {
     const buildingSet = new Set(buildingIds);
     const relevantTransactions = data.transactions.flatMap(transaction => {
       if (!transaction.repartition_stock?.length) return [transaction];
-      const quantity = transaction.repartition_stock.filter(a => cycleIds.has(Number(a.id_cycle))).reduce((sum, a) => sum + a.quantite, 0);
+      const quantity = transaction.repartition_stock.filter(a => cycleIds.has(Number(a.id_cycle))).reduce((sum, a) => sum + Number(a.quantite_livree ?? a.quantite), 0);
       return quantity ? [{ ...transaction, id_cycle: null, quantite: quantity, montant_total: Number(transaction.montant_total) * quantity / transaction.quantite }] : [];
     }).filter((transaction) => {
       if (transaction.est_actif === false) return false;

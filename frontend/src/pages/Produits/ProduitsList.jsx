@@ -89,6 +89,9 @@ function ProduitsList() {
           suppliers: new Set(),
           purchases: 0,
           quantity: 0,
+          promiseCompleted: 0,
+          promiseReady: 0,
+          promisePending: 0,
           total: 0,
           lastPurchase: null,
         };
@@ -98,6 +101,11 @@ function ProduitsList() {
           ? transaction.id_client : transaction.id_fournisseur);
         current.purchases += 1;
         current.quantity += Number(transaction.quantite || 0);
+        if (transaction.est_promesse) {
+          current.promiseCompleted += Number(transaction.quantite_completee || 0);
+          current.promiseReady += Number(transaction.quantite_reservee || 0);
+          current.promisePending += Math.max(0, Number(transaction.quantite_en_attente || 0) - Number(transaction.quantite_reservee || 0));
+        }
         current.total += Number(transaction.montant_total || 0);
 
         if (
@@ -219,6 +227,9 @@ function ProduitsList() {
           dernier_prix: lastPurchase?.prix_unitaire || '',
           dernier_achat: lastPurchase?.date_transaction || '',
           quantite_totale: insight?.quantity || 0,
+          promesses_completees: insight?.promiseCompleted || 0,
+          stock_reserve_pret: insight?.promiseReady || 0,
+          promesses_a_fournir: insight?.promisePending || 0,
           montant_total: insight?.total || 0,
         };
       });
@@ -233,6 +244,9 @@ function ProduitsList() {
           { id: 'dernier_prix', label: 'Dernier prix' },
           { id: 'dernier_achat', label: 'Dernière transaction' },
           { id: 'quantite_totale', label: 'Quantité totale' },
+          { id: 'promesses_completees', label: 'Quantité complétée' },
+          { id: 'stock_reserve_pret', label: 'Stock prêt à compléter' },
+          { id: 'promesses_a_fournir', label: 'Promesses à fournir' },
           { id: 'montant_total', label: 'Montant total' },
         ],
         `produits_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,

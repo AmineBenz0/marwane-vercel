@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload, selectinload
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import json
 
 from app.database import get_db
 from app.models.production import Production
@@ -27,6 +28,7 @@ from app.schemas.transaction import (
     DeferredSaleCompletion,
     DeferredSalePreview,
     DeferredSaleSummary,
+    DeferredSaleReschedule,
     TransactionAuditRead
 )
 from app.schemas.paiement import PaiementCreate
@@ -677,6 +679,95 @@ def complete_transaction(
         raise
 
 
+@router.patch("/{id}/delivery-date", response_model=TransactionRead)
+def reschedule_deferred_sale(
+    id: int, payload: DeferredSaleReschedule, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == id).with_for_update().first()
+    if not transaction:
+        raise HTTPException(404, "Transaction introuvable.")
+    if not transaction.est_promesse or not transaction.est_actif:
+        raise HTTPException(409, "Seule une livraison différée active peut être replanifiée.")
+    if payload.date_livraison_prevue < transaction.date_transaction:
+        raise HTTPException(400, "La date prévue ne peut pas précéder la vente.")
+    before = transaction.date_livraison_prevue
+    if before == payload.date_livraison_prevue:
+        return TransactionRead.model_validate(transaction)
+    transaction.date_livraison_prevue = payload.date_livraison_prevue
+    transaction.date_modification = datetime.now(timezone.utc)
+    transaction.id_utilisateur_modification = current_user.id_utilisateur
+    db.add(TransactionAudit(
+        id_transaction=id, id_utilisateur=current_user.id_utilisateur,
+        champ_modifie="replanification_livraison_differee",
+        ancienne_valeur=json.dumps({"date": before.isoformat() if before else None}),
+        nouvelle_valeur=json.dumps({"date": payload.date_livraison_prevue.isoformat()}),
+    ))
+    db.commit()
+    db.refresh(transaction)
+    return TransactionRead.model_validate(transaction)
+
+
+@router.post("/{id}/cancel-remainder", response_model=TransactionRead)
+def cancel_deferred_sale_remainder(
+    id: int, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    snapshot = db.get(Transaction, id)
+    if not snapshot:
+        raise HTTPException(404, "Transaction introuvable.")
+    # Follow stock writers' lock order: building, product, then transaction.
+    db.query(Batiment).filter(Batiment.id_batiment == snapshot.id_batiment).with_for_update().one()
+    db.query(Produit).filter(Produit.id_produit == snapshot.id_produit).with_for_update().one()
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == id).populate_existing().with_for_update().one()
+    if not transaction.est_promesse or not transaction.est_actif:
+        raise HTTPException(409, "Seule une livraison différée active peut être clôturée.")
+    pending = transaction.quantite_en_attente
+    if pending <= 0:
+        raise HTTPException(409, "Cette livraison n’a plus de quantité à fournir.")
+    transaction.quantite_annulee = (transaction.quantite_annulee or 0) + pending
+    completed = transaction.quantite_completee
+    allocated = sum(allocation.quantite for allocation in transaction.allocations)
+    allowed_allocation = completed + transaction.quantite_en_attente
+    excess_allocation = max(0, allocated - allowed_allocation)
+    released_sources = []
+    for allocation in sorted(
+        list(transaction.allocations),
+        key=lambda item: (item.production.date_production, item.id_production),
+        reverse=True,
+    ):
+        removable = max(0, allocation.quantite - (allocation.quantite_livree or 0))
+        released = min(excess_allocation, removable)
+        if released:
+            allocation.quantite -= released
+            excess_allocation -= released
+            released_sources.append({
+                "id_production": allocation.id_production,
+                "date_production": allocation.production.date_production.isoformat(),
+                "quantite": released,
+                "id_cycle": allocation.production.id_cycle,
+            })
+            if allocation.quantite == 0:
+                transaction.allocations.remove(allocation)
+                db.delete(allocation)
+    transaction.date_modification = datetime.now(timezone.utc)
+    transaction.id_utilisateur_modification = current_user.id_utilisateur
+    db.add(TransactionAudit(
+        id_transaction=id, id_utilisateur=current_user.id_utilisateur,
+        champ_modifie="annulation_reste_livraison_differee",
+        ancienne_valeur="0",
+        nouvelle_valeur=json.dumps({"date": business_date().isoformat(),
+                                   "quantite_annulee": pending,
+                                   "quantite_couverte": transaction.quantite_couverte,
+                                   "quantite_totale": transaction.quantite,
+                                   "repartition_stock_libere": released_sources}),
+    ))
+    assign_pending_promises(db, building_id=transaction.id_batiment, current_user=current_user)
+    db.commit()
+    db.refresh(transaction)
+    return TransactionRead.model_validate(transaction).model_copy(update={"quantite_reservee": deferred_sale_reservations(db).get(id, 0)})
+
+
 @router.get("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def get_transaction(
     id: int,
@@ -796,6 +887,12 @@ def update_transaction(
                 "Annulez-la puis créez une nouvelle livraison corrigée."
             ),
         )
+    if (transaction.est_promesse and "date_livraison_prevue" in update_data
+            and update_data["date_livraison_prevue"] != transaction.date_livraison_prevue):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Modifiez la date prévue depuis l’action Replanifier pour conserver son historique.",
+        )
     if (
         "est_promesse" in update_data and update_data["est_promesse"] != transaction.est_promesse
         or "allocation_automatique" in update_data
@@ -807,7 +904,7 @@ def update_transaction(
         )
     if (
         transaction.est_promesse and "quantite" in update_data
-        and update_data["quantite"] < transaction.quantite_couverte
+        and update_data["quantite"] < transaction.quantite_couverte + (transaction.quantite_annulee or 0)
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1075,6 +1172,13 @@ def delete_transaction(
     # Enregistrer l'utilisateur qui a modifié (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
+        if transaction.est_promesse:
+            db.add(TransactionAudit(
+                id_transaction=id, id_utilisateur=current_user.id_utilisateur,
+                champ_modifie="annulation_transaction_differee", ancienne_valeur="active",
+                nouvelle_valeur=json.dumps({"date": business_date().isoformat(), "raison": reason,
+                                           "paiements_annules": payment_ids}),
+            ))
 
     record_correction(
         db,
@@ -1156,12 +1260,21 @@ def reactivate_transaction(
                 ),
             )
     transaction.est_actif = True
-    record_transaction_movement(db, transaction, current_user)
+    record_transaction_movement(
+        db, transaction, current_user,
+        preserve_egg_allocations=bool(transaction.est_promesse),
+    )
     if transaction.id_client is not None:
         assign_pending_promises(db, building_id=transaction.id_batiment, current_user=current_user)
     # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
+        if transaction.est_promesse:
+            db.add(TransactionAudit(
+                id_transaction=id, id_utilisateur=current_user.id_utilisateur,
+                champ_modifie="reactivation_transaction_differee", ancienne_valeur="inactive",
+                nouvelle_valeur=json.dumps({"date": business_date().isoformat()}),
+            ))
 
     record_correction(
         db,

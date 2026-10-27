@@ -323,6 +323,9 @@ function ClientProfile() {
     { id: 'date_livraison_prevue', label: 'Livraison prévue' },
     { id: 'quantite_couverte', label: 'Quantité couverte' },
     { id: 'quantite_en_attente', label: 'Quantité restante à fournir' },
+    { id: 'quantite_completee', label: 'Quantité complétée' },
+    { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
+    { id: 'quantite_annulee', label: 'Quantité clôturée sans livraison' },
     {
       id: 'date_transaction',
       label: 'Date',

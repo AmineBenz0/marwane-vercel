@@ -45,6 +45,22 @@ describe('Suivi global release checks',()=>{
   expect(financeDay.oeufs).toBeNull();expect(financeDay.sales).toBe(200);
   expect(financeDay.effectif_fin).toBe(998);
  });
+ it('attributes only completed promise quantities to production lots and keeps their original sale value proportional',async()=>{
+  const previous=mocks.get.getMockImplementation();
+  const promise={id_transaction:25,id_cycle:null,id_batiment:1,id_client:3,id_produit:1,est_promesse:true,est_actif:true,date_transaction:'2026-10-02',quantite:1000,montant_total:2000,repartition_stock:[{id_production:12,id_cycle:1,quantite:1000,quantite_livree:600,date_production:'2026-10-02'}]};
+  mocks.get.mockImplementation(async(path,options)=>{
+   if(path==='/transactions'&&options?.params?.est_promesse)return [promise];
+   if(path==='/transactions')return [];
+   return previous(path,options);
+  });
+  render(<GlobalOverviewPage/>);await screen.findByText('01/10/2026');
+  await select('Choisir une période','Toute la période');
+  await select('Regrouper les lignes','Par mois');
+  const exported=await exportRows();
+  const october=exported.find(row=>row.date==='Total mois · octobre 2026');
+  expect(october.sold).toBe(600);
+  expect(october.sales).toBe(1200);
+ });
  it('does not report missing feed prices as zero costs or a positive margin',async()=>{
   const previous=mocks.get.getMockImplementation();
   mocks.get.mockImplementation(async(path)=>path==='/transactions' ? [] : previous(path));

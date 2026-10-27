@@ -41,4 +41,17 @@ describe('AlertCenter', () => {
     await waitFor(() => expect(patch).toHaveBeenCalledWith('/alerts/3/read'));
     expect(screen.getByText('Paiement en retard')).toBeVisible();
   });
+
+  it('offers due promise notifications and lets users open the matching sale', async () => {
+    get.mockImplementation((url) => {
+      if (url === '/alerts') return Promise.resolve([]);
+      if (url === '/alerts/summary') return Promise.resolve({ unread_count: 0 });
+      return Promise.resolve([{ id_transaction: 42, nom_client: 'Client B', quantite_reservee: 120, quantite_en_attente: 300, date_livraison_prevue: '2026-10-26' }]);
+    });
+    render(<AlertCenter />);
+    fireEvent.click(await screen.findByLabelText('Ouvrir les alertes'));
+    const link = await screen.findByRole('link', { name: 'Stock prêt à compléter' });
+    expect(link).toHaveAttribute('href', '/transactions/42?from=deliveries');
+    expect(screen.getByText('Client B · Vente #42 · 120 œufs')).toBeVisible();
+  });
 });
