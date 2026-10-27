@@ -101,7 +101,7 @@ const NAV_SECTIONS = [
 
 const isNavItemActive = (pathname, itemPath) => {
   if (pathname === itemPath) return true;
-  if (itemPath === '/dashboard') return false;
+  if (itemPath === '/dashboard') return pathname === '/livraisons-a-suivre';
   if (itemPath === '/production') return pathname === '/production' || pathname === '/production/dashboard';
   return pathname.startsWith(`${itemPath}/`);
 };
