@@ -4,7 +4,7 @@ import TransactionDetail from './TransactionDetail';
 import { get } from '../../services/api';
 
 vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: '7' }), useNavigate: () => vi.fn() }));
+vi.mock('react-router-dom', () => ({ useParams: () => ({ id: '7' }), useLocation: () => ({ search: '' }), useNavigate: () => vi.fn() }));
 vi.mock('../../hooks/useNotification', () => ({ default: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock('../../components/PaiementForm', () => ({ default: () => null }));
 vi.mock('../../components/PaiementForm/MultiPaiementForm', () => ({ default: () => null }));
