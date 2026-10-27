@@ -44,6 +44,7 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose }) 
         <Box>
           <Typography variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{summary?.nom_client || `Client #${sale.id_client}`}</Typography>
           <Typography variant="body2" color="text.secondary">{summary?.nom_produit || `Produit #${sale.id_produit}`}{summary?.nom_batiment || sale.nom_batiment_source ? ` · ${summary?.nom_batiment || sale.nom_batiment_source}` : ''}</Typography>
+          {sale.date_livraison_prevue && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Livraison prévue le {formatShortDate(sale.date_livraison_prevue)}</Typography>}
           <Box sx={{ mt: 1.5 }}><DeferredSaleStatusBadge sale={sale} /></Box>
         </Box>
         <Stack spacing={1} divider={<Divider />}>
@@ -51,18 +52,10 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose }) 
           <Row label="Réservés" value={number(sale.quantite_couverte)} />
           <Row label="À produire" value={number(sale.quantite_en_attente)} />
         </Stack>
-        <Box component="section" aria-label="Production utilisée">
-          <Typography component="h3" variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Production utilisée</Typography>
-          {sale.repartition_stock?.length ? <Stack spacing={1}>{[...sale.repartition_stock].sort((a, b) => a.date_production.localeCompare(b.date_production)).map(source => <Row key={source.id_production} label={formatShortDate(source.date_production)} value={`${number(source.quantite)} œufs`} />)}</Stack> : <Typography variant="body2" color="text.secondary">{Number(sale.quantite_couverte) === 0 ? 'Aucun stock réservé pour le moment.' : 'Répartition par date indisponible.'}</Typography>}
-        </Box>
-        <Stack spacing={1}>
-          <Row label="Date de vente" value={formatShortDate(sale.date_transaction)} />
-          <Row label="Livraison prévue" value={formatShortDate(sale.date_livraison_prevue)} />
-        </Stack>
         <Box component="section" aria-label="Paiement de la vente">
           <Typography component="h3" variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Paiement</Typography>
           <Stack spacing={1}><Row label="Total" value={money(sale.montant_total)} /><Row label="Payé" value={money(sale.montant_paye)} /><Row label="Reste à encaisser" value={money(sale.montant_restant)} /></Stack>
-          <Button variant="outlined" onClick={() => navigate(`/transactions/${transactionId}?from=deliveries`)} sx={{ mt: 2 }}>Ouvrir la vente et ses paiements</Button>
+          <Button variant="outlined" onClick={() => navigate(`/transactions/${transactionId}?from=deliveries`)} sx={{ mt: 2 }}>Voir la vente</Button>
         </Box>
         <ExpandableDetails label="Historique des réservations" icon={<HistoryOutlined />}><DeferredSaleHistory transactionId={transactionId} refreshKey={revision} embedded /></ExpandableDetails>
       </Stack>}

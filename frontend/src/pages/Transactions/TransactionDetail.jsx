@@ -56,7 +56,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
-import { LayersOutlined, ReceiptLongOutlined } from '@mui/icons-material';
+import { HistoryOutlined, LayersOutlined, ReceiptLongOutlined } from '@mui/icons-material';
 import ExpandableDetails from '../../components/ExpandableDetails';
 
 /**
@@ -519,17 +519,22 @@ function TransactionDetail() {
         >
           {fromDeliveries ? 'Retour aux livraisons' : 'Retour'}
         </Button>
-        <Typography 
-          variant="h4" 
-          component="h1"
-          sx={{ fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}
-        >
-          Transaction #{transaction.id_transaction}
-        </Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' }, overflowWrap: 'anywhere' }}
+          >
+            {transaction.est_promesse ? `Vente #${transaction.id_transaction}` : `Transaction #${transaction.id_transaction}`}
+          </Typography>
+          {transaction.est_promesse && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+            {getClientOuFournisseur()} · Vendue le {formatShortDate(transaction.date_transaction)}
+          </Typography>}
+        </Box>
       </Box>
 
       {/* Informations principales */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
+      {!transaction.est_promesse && <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
@@ -559,7 +564,7 @@ function TransactionDetail() {
           </Card>
         </Grid>
 
-      </Grid>
+      </Grid>}
 
       {/* Détails de la transaction */}
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
@@ -569,19 +574,16 @@ function TransactionDetail() {
             gutterBottom
             sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
           >
-            Détails de la Transaction
+            {transaction.est_promesse ? 'Commande' : 'Détails de la Transaction'}
           </Typography>
           <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-            {transaction.est_promesse ? <Grid item xs={12}>
-              <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <Typography component="h2" variant="h6" fontWeight={700}>Livraison différée</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-                  {[transaction.nom_batiment_source, transaction.date_livraison_prevue ? `Prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : null].filter(Boolean).join(' · ')}
-                </Typography>
-                <DeferredSaleStockSummary sale={transaction} />
-              </Box>
-            </Grid> : transaction.id_production ? <Grid item xs={12}>
+            {transaction.est_promesse && <Grid item xs={12}>
+              <Typography variant="body2" color="text.secondary">
+                Livraison {transaction.nom_batiment_source ? `depuis ${transaction.nom_batiment_source}` : 'différée'}{transaction.date_livraison_prevue ? ` · prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : ''}
+              </Typography>
+            </Grid>}
+            {!transaction.est_promesse && transaction.id_production ? <Grid item xs={12}>
               <Typography variant="body2">Origine : {transaction.nom_batiment_source}</Typography>
               <ExpandableDetails label="Origine du stock" icon={<LayersOutlined />} sx={{ mt: 1.5 }}>
                 {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
@@ -630,12 +632,13 @@ function TransactionDetail() {
               </Box>
             </Grid>
           </Grid>
+          {transaction.est_promesse && <>
+            <Divider sx={{ my: 2 }} />
+            <DeferredSaleStockSummary sale={transaction} showStatus={false} />
+          </>}
         </CardContent>
       </Card>
 
-      {transaction.est_promesse && <Card sx={{ mb: 3 }}><CardContent>
-        <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={transaction.quantite_couverte} />
-      </CardContent></Card>}
       {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
           <Typography component="h2" variant="h6" fontWeight={700}>Paiement</Typography>
@@ -651,8 +654,8 @@ function TransactionDetail() {
         </Stack>}
       </CardContent></Card>}
 
-      {statutPaiement && <Box sx={{ mb: 3 }}>
-        <ExpandableDetails label="Détail des règlements" icon={<ReceiptLongOutlined />} meta={paiements?.length ? `${paiements.length} paiement${paiements.length > 1 ? 's' : ''}` : null}>
+      {statutPaiement && paiements?.length > 0 && <Box sx={{ mb: 3 }}>
+        <ExpandableDetails label="Paiements enregistrés" icon={<ReceiptLongOutlined />} meta={`${paiements.length} paiement${paiements.length > 1 ? 's' : ''}`}>
             {loadingPaiements ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                 <CircularProgress size={30} />
@@ -741,6 +744,12 @@ function TransactionDetail() {
 
               </Box>
             )}
+        </ExpandableDetails>
+      </Box>}
+
+      {transaction.est_promesse && <Box sx={{ mb: 3 }}>
+        <ExpandableDetails label="Historique des réservations" icon={<HistoryOutlined />}>
+          <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={transaction.quantite_couverte} embedded />
         </ExpandableDetails>
       </Box>}
 

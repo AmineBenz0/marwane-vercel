@@ -32,9 +32,13 @@ afterEach(cleanup);
 
 it('shows reserved stock on a paid deferred sale without presenting it as delivered', async () => {
   render(<TransactionDetail />);
-  expect(await screen.findByText('Stock partiellement réservé')).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'Vente #7' })).toBeVisible();
+  expect(screen.getByText('Client payé · Vendue le 25/10/26')).toBeVisible();
+  expect(screen.getByText('Stock réservé')).toBeVisible();
   expect(screen.getByText('900 / 1 000 œufs')).toBeVisible();
   expect(screen.getByText('100 œufs à produire')).toBeVisible();
+  expect(screen.queryByText('Stock partiellement réservé')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Historique des réservations/i })).toBeVisible();
   expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog', { name: /compléter/i })).not.toBeInTheDocument();
 });
