@@ -30,7 +30,7 @@ it('shows a partial reservation for a paid deferred sale without a manual comple
 it('labels a fully reserved sale as reserved and keeps it in reservation history', async () => {
   sales = [{ ...base, quantite_couverte: 1000, quantite_en_attente: 0, quantite_reservee: 1000 }];
   renderSales();
-  fireEvent.click(await screen.findByRole('button', { name: 'Voir les réservations complètes (1)' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Réservations complètes' }));
   expect(await screen.findByText('Réservation complète')).toBeVisible();
   expect(screen.getByText('1 000 œufs réservés')).toBeVisible();
   expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();

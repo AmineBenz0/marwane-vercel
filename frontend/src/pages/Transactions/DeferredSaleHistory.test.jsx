@@ -1,10 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import DeferredSaleHistory from './DeferredSaleHistory';
 import { get } from '../../services/api';
 vi.mock('../../services/api', () => ({ get: vi.fn() }));
 afterEach(cleanup);
-it('shows initial and automatic stock reservations with origins on demand', async () => {
+it('shows initial and automatic stock reservations with immediately visible origins', async () => {
   get.mockResolvedValue([
     { id: 'initial', type: 'initial', date: '2026-10-23', quantite: 600, id_utilisateur: 4,
       repartition_stock: [{ id_production: 1, date_production: '2026-10-23', quantite: 600 }] },
@@ -16,13 +16,21 @@ it('shows initial and automatic stock reservations with origins on demand', asyn
   expect(await screen.findByText('Réservé à la création')).toBeVisible();
   expect(screen.getByText('Réservé automatiquement')).toBeVisible();
   expect(screen.getByText('Stock ajouté manuellement')).toBeVisible();
-  expect(screen.getByText('600 œufs')).toBeVisible();
-  expect(screen.getByText('300 œufs')).toBeVisible();
+  expect(screen.getAllByText('600 œufs')).toHaveLength(2);
+  expect(screen.getAllByText('300 œufs')).toHaveLength(2);
   expect(screen.queryByText(/après ce complément/)).not.toBeInTheDocument();
-  expect(screen.queryByText(/Production du/)).not.toBeInTheDocument();
-  fireEvent.click(screen.getAllByRole('button', { name: 'Origine du stock' })[1]);
-  expect(await screen.findByText('Production du 24/10/26')).toBeVisible();
-  fireEvent.click(screen.getAllByRole('button', { name: 'Origine du stock' })[2]);
-  expect(await screen.findByText(/cet ancien ajout/)).toBeVisible();
+  expect(screen.getByText('Production du 23/10/26')).toBeVisible();
+  expect(screen.getByText('Production du 24/10/26')).toBeVisible();
+  expect(screen.getByText(/cet ancien ajout/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Origine du stock' })).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/transactions/7/completion-history', { params: { include_initial: true } });
+});
+
+it('embeds the history without a duplicate heading and keeps operator attribution', async () => {
+  get.mockResolvedValue([{ id: 'initial', type: 'initial', date: '2026-10-23', quantite: 24,
+    operateur: 'Admin', repartition_stock: [{ id_production: 1, date_production: '2026-10-12', quantite: 24 }] }]);
+  render(<DeferredSaleHistory transactionId={7} embedded />);
+  expect(await screen.findByText('Enregistré par Admin')).toBeVisible();
+  expect(screen.getByText('Production du 12/10/26')).toBeVisible();
+  expect(screen.queryByRole('heading')).not.toBeInTheDocument();
 });

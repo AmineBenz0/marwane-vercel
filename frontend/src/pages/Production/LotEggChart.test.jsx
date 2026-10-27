@@ -10,7 +10,7 @@ vi.mock('../../services/productionService', () => ({ lotProductionService: { get
 vi.mock('@mui/icons-material', () => ({
   EditOutlined: () => null, History: () => null, StopCircleOutlined: () => null,
   ExpandLessRounded: () => null, ExpandMoreRounded: () => null, InfoOutlined: () => null,
-  TableChartOutlined: () => null, TuneRounded: () => null,
+  ExpandMore: () => null, TableChartOutlined: () => null, TuneRounded: () => null,
 }));
 vi.stubGlobal('ResizeObserver', class {
   constructor(callback) { this.callback = callback; }
@@ -73,7 +73,7 @@ describe('Lot egg chart', () => {
     expect(normal).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(normal);
     expect(normal).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chiffres par semaine' }));
     expect(screen.getByRole('table', { name: "Quantités d'œufs par semaine" })).toBeVisible();
     expect(screen.getByText('350', { selector: 'td' })).toBeVisible();
     expect(screen.getAllByText('—', { selector: 'td' })).toHaveLength(4);
@@ -138,7 +138,7 @@ describe('Lot egg chart', () => {
     expect(normal).toHaveTextContent('Échelle linéaire');
     fireEvent.click(screen.getByRole('button', { name: 'Tout le lot' }));
     expect(screen.getByRole('figure').textContent.replace(/\s/g, '')).toContain('0–300000');
-    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chiffres par semaine' }));
     expect(screen.getByText('12', { selector: 'td' })).toBeVisible();
     expect(screen.getByText((text, element) => element.tagName === 'TD' && text.replace(/\s/g, '') === '240000')).toBeVisible();
   });
@@ -160,7 +160,7 @@ describe('Lot egg chart', () => {
     await screen.findByText('Aucune production enregistrée pour ce lot.');
     fireEvent.click(screen.getByRole('button', { name: 'Voir un exemple' }));
     expect(screen.getByText('Lot fictif · Données de démonstration')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chiffres par semaine' }));
     expect(screen.getAllByRole('row')).toHaveLength(21);
     const missing = screen.getByRole('row', { name: /^S\. 5 / });
     expect(within(missing).getAllByText('—', { selector: 'td' })).toHaveLength(4);
@@ -186,11 +186,11 @@ describe('Lot egg chart', () => {
     const normal = screen.getByRole('button', { name: /^Normaux/ });
     fireEvent.click(normal);
     expect(normal).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chiffres par semaine' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Exemple à visualiser' }), { target: { value: 'long' } });
     expect(screen.getByRole('button', { name: /^Normaux/ })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Voir les chiffres' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chiffres par semaine' }));
     expect(screen.getAllByRole('row')).toHaveLength(105);
     finishRequest(data);
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());

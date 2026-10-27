@@ -107,7 +107,7 @@ export function CycleWeeklyInsights({ cycleId, refreshKey }) {
               </TableRow>
               <TableRow><TableCell colSpan={7} sx={{ py: 0 }}>
                 <Collapse in={expandedWeek === week.semaine} unmountOnExit>
-                  <Box id={'week-detail-' + cycleId + '-' + week.semaine} sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 2, py: 2 }}>
+                  <Box id={'week-detail-' + cycleId + '-' + week.semaine} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2, p: 2, my: 1, bgcolor: 'grey.50', borderRadius: 1.5 }}>
                     <Fact label="Période" value={formatShortDate(week.date_debut) + ' – ' + formatShortDate(week.date_fin)} />
                     <Fact label="Formule utilisée" value={(week.formules || []).join(', ') || '—'} />
                     <Fact label="Ponte moyenne (%)" value={number(week.ponte_pct)} />

@@ -56,6 +56,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
+import { LayersOutlined, ReceiptLongOutlined } from '@mui/icons-material';
 import ExpandableDetails from '../../components/ExpandableDetails';
 
 /**
@@ -582,9 +583,9 @@ function TransactionDetail() {
               </Box>
             </Grid> : transaction.id_production ? <Grid item xs={12}>
               <Typography variant="body2">Origine : {transaction.nom_batiment_source}</Typography>
-              <ExpandableDetails label="Origine du stock">
+              <ExpandableDetails label="Origine du stock" icon={<LayersOutlined />} sx={{ mt: 1.5 }}>
                 {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
-                  <Typography variant="body2" key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Typography> )
+                  <Stack direction="row" spacing={2} justifyContent="space-between" key={source.id_production} sx={{ py: 0.75 }}><Typography variant="body2" color="text.secondary">Production du {formatShortDate(source.date_production)}</Typography><Typography variant="body2" fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{source.quantite.toLocaleString('fr-FR')} œufs</Typography></Stack> )
                   : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
               </ExpandableDetails>
             </Grid> : null}
@@ -650,8 +651,8 @@ function TransactionDetail() {
         </Stack>}
       </CardContent></Card>}
 
-      {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
-        <ExpandableDetails label="Détail des règlements">
+      {statutPaiement && <Box sx={{ mb: 3 }}>
+        <ExpandableDetails label="Détail des règlements" icon={<ReceiptLongOutlined />} meta={paiements?.length ? `${paiements.length} paiement${paiements.length > 1 ? 's' : ''}` : null}>
             {loadingPaiements ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                 <CircularProgress size={30} />
@@ -741,7 +742,7 @@ function TransactionDetail() {
               </Box>
             )}
         </ExpandableDetails>
-      </CardContent></Card>}
+      </Box>}
 
       {/* Modal d'ajout/édition de paiement */}
       <Dialog

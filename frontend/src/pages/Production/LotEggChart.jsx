@@ -10,6 +10,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { createLotEggDemo, LOT_EGG_DEMO_SCENARIOS } from './lotEggDemo';
 import { axisEggValue, eggAxis, plotEggValue } from './lotEggChartScale';
 import { ExpandLessRounded, ExpandMoreRounded, InfoOutlined, TableChartOutlined, TuneRounded } from '@mui/icons-material';
+import ExpandableDetails from '../../components/ExpandableDetails';
 import MuiTooltip from '@mui/material/Tooltip';
 
 const SERIES = [
@@ -196,12 +197,9 @@ export default function LotEggChart({ lotId, refreshKey }) {
         {incomplete && <Typography variant="caption" color="warning.dark" sx={{ display: 'block', mt: 1 }}>
           Données incomplètes · les semaines sans saisie restent vides.
         </Typography>}
-        <Button size="small" variant="outlined" startIcon={<TableChartOutlined />} endIcon={details ? <ExpandLessRounded /> : <ExpandMoreRounded />}
-          onClick={() => setDetails((old) => !old)} aria-expanded={details} sx={{ mt: 1.5 }}>
-          {details ? 'Masquer les chiffres' : 'Voir les chiffres'}
-        </Button>
-        <Collapse in={details} unmountOnExit>
-          <TableContainer sx={{ mt: 1, maxHeight: 360 }}>
+        <ExpandableDetails label="Chiffres par semaine" icon={<TableChartOutlined />} meta={`${weeks.length} semaines`}
+          expanded={details} onChange={(_, next) => setDetails(next)} sx={{ mt: 2 }} contentSx={{ p: 0 }}>
+          <TableContainer sx={{ maxHeight: 360 }}>
             <Table size="small" stickyHeader aria-label="Quantités d'œufs par semaine">
               <TableHead><TableRow><TableCell>Semaine / dates</TableCell>{SERIES.map(({ key }) => <TableCell key={key} align="right">{EGG_TYPE_LABELS[key]}</TableCell>)}<TableCell>Saisies</TableCell></TableRow></TableHead>
               <TableBody>{weeks.map((week) => <TableRow key={week.semaine}>
@@ -211,7 +209,7 @@ export default function LotEggChart({ lotId, refreshKey }) {
               </TableRow>)}</TableBody>
             </Table>
           </TableContainer>
-        </Collapse>
+        </ExpandableDetails>
       </>}
   </Box>;
 }

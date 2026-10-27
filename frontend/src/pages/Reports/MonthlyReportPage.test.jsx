@@ -68,7 +68,7 @@ it('keeps current balances separate from month-end amounts and explains accounti
   expect(screen.getByText(deferredSaleExplanation)).not.toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Calcul des livraisons différées' }));
   expect(await screen.findByText(deferredSaleExplanation)).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois · Au 30/09/26' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois' }));
   expect(await screen.findByText(/25,00/)).toBeVisible();
   expect(screen.getAllByText('Ventes', { exact: true })).toHaveLength(1);
 });
