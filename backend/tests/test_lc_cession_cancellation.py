@@ -72,8 +72,9 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     assert original_cash_movement.montant == lc.montant
     cash_response = client.get("/api/v1/caisse/mouvements", headers=auth_headers)
     assert cash_response.status_code == 200, cash_response.text
-    cash_row = next(row for row in cash_response.json() if row["id_cession"] == original_cession_1.id_cession)
-    assert cash_row["numero_reference_lc"] == lc.numero_reference
+    assert all(row["id_cession"] is None for row in cash_response.json())
+    # Preserve the LC audit trail while keeping non-cash transfers out of cash totals/exports.
+    assert original_cash_movement.numero_reference_lc == lc.numero_reference
 
     first_cancel = cancel(1)
     assert first_cancel.status_code == 200, first_cancel.text
