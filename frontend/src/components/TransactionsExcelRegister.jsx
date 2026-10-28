@@ -1,13 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Box,
-  Button,
   Card,
   CardContent,
+  CardActionArea,
   Chip,
-  IconButton,
-  Menu,
-  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -15,17 +12,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import {
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  MoreVert as MoreVertIcon,
-  Restore as RestoreIcon,
-} from '@mui/icons-material';
+import { ChevronRight as ChevronRightIcon } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import PaymentStatusBadge from './PaymentStatusBadge';
@@ -157,9 +148,6 @@ function TransactionsExcelRegister({
   getClientOuFournisseur,
   formatMontant,
   onView,
-  onEdit,
-  onDelete,
-  onReactivate,
   title = 'Registre type Excel',
   description = 'Les ventes et achats sont groupés par jour avec un total visible directement dans le tableau.',
   emptyTitle = 'Aucune transaction trouvée',
@@ -248,7 +236,7 @@ function TransactionsExcelRegister({
           <Table
             size="small"
             sx={{
-              minWidth: 980,
+              minWidth: 900,
               width: '100%',
               tableLayout: 'fixed',
               '& th': {
@@ -275,13 +263,12 @@ function TransactionsExcelRegister({
             }}
           >
             <colgroup>
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '29%' }} />
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '16%' }} />
               <col style={{ width: '10%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '32%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '17%' }} />
             </colgroup>
             <TableHead>
               <TableRow>
@@ -291,19 +278,18 @@ function TransactionsExcelRegister({
                 <TableCell align="right">Montant</TableCell>
                 <TableCell align="right">Reste</TableCell>
                 <TableCell>Statut</TableCell>
-                <TableCell align="center" sx={stickyActionHeaderSx}>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" role="status" sx={{ py: 5 }}>
+                  <TableCell colSpan={6} align="center" role="status" sx={{ py: 5 }}>
                     Chargement des transactions...
                   </TableCell>
                 </TableRow>
               ) : groupedRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 5 }}>
                     <Typography fontWeight={800}>{emptyTitle}</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       {emptyDescription}
@@ -315,7 +301,7 @@ function TransactionsExcelRegister({
                   <React.Fragment key={group.dateKey}>
                     <TableRow>
                       <TableCell sx={stickyDateGroupSx}>{group.label}</TableCell>
-                      <TableCell colSpan={6} sx={groupRowSx}>
+                      <TableCell colSpan={5} sx={groupRowSx}>
                         {group.rows.length} opération{group.rows.length > 1 ? 's' : ''}
                       </TableCell>
                     </TableRow>
@@ -327,9 +313,6 @@ function TransactionsExcelRegister({
                         getClientOuFournisseur={getClientOuFournisseur}
                         formatMontant={formatAmount}
                         onView={onView}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                        onReactivate={onReactivate}
                       />
                     ))}
 
@@ -354,6 +337,10 @@ function TransactionMobileCard({ transaction, partnerName, formatMontant, onView
 
   return (
     <Card variant="outlined" sx={{ borderRadius: 3 }}>
+      <CardActionArea component={onView ? 'a' : 'div'} href={onView ? `/transactions/${transaction.id_transaction}` : undefined}
+        onClick={onView ? event => {
+          if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onView(transaction); }
+        } : undefined} aria-label={`Consulter la transaction n° ${transaction.id_transaction} · ${partnerName}`}>
       <CardContent sx={{ p: 1.75, '&:last-child': { pb: 1.75 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
           <Box sx={{ minWidth: 0 }}>
@@ -380,10 +367,9 @@ function TransactionMobileCard({ transaction, partnerName, formatMontant, onView
           </Box>
         </Stack>
 
-        {onView && <Button fullWidth size="small" variant="outlined" onClick={() => onView(transaction)} sx={{ mt: 1.5 }}>
-          Voir le détail
-        </Button>}
+        {onView && <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}><ChevronRightIcon aria-hidden="true" color="action" /></Box>}
       </CardContent>
+      </CardActionArea>
     </Card>
   );
 }
@@ -393,9 +379,6 @@ function TransactionExcelRow({
   getClientOuFournisseur,
   formatMontant,
   onView,
-  onEdit,
-  onDelete,
-  onReactivate,
 }) {
   const isSale = isClientTransaction(transaction);
   const paymentStatus = getPaymentStatus(transaction);
@@ -405,29 +388,16 @@ function TransactionExcelRow({
   const stockSummary = getDeferredStockSummary(transaction);
   const inactive = transaction.est_actif === false;
   const rowBackground = inactive ? 'grey.50' : 'background.paper';
-  const [actionMenuAnchor, setActionMenuAnchor] = useState(null);
-  const actionMenuOpen = Boolean(actionMenuAnchor);
-  const hasMenuActions = Boolean((onEdit && !inactive) || (inactive && onReactivate) || (!inactive && onDelete));
-
-  const handleOpenActionMenu = (event) => {
-    setActionMenuAnchor(event.currentTarget);
-  };
-
-  const handleCloseActionMenu = () => {
-    setActionMenuAnchor(null);
-  };
-
-  const handleMenuAction = (action) => {
-    handleCloseActionMenu();
-    action(transaction);
-  };
-
   return (
     <TableRow
-      hover={!inactive}
+      hover={Boolean(onView)}
+      onClick={onView ? () => onView(transaction) : undefined}
       sx={{
         opacity: inactive ? 0.72 : 1,
+        cursor: onView ? 'pointer' : 'default',
         '& td': { bgcolor: rowBackground },
+        '&:hover td, &:focus-within td': { bgcolor: onView ? 'action.hover' : rowBackground },
+        '&:focus-within': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
       }}
     >
       <TableCell sx={{ ...stickyDateBodySx, bgcolor: rowBackground }}>
@@ -446,10 +416,22 @@ function TransactionExcelRow({
       </TableCell>
       <TableCell>
         <Typography
+          component={onView ? 'a' : 'span'}
+          href={onView ? `/transactions/${transaction.id_transaction}` : undefined}
+          onClick={onView ? event => {
+            event.stopPropagation();
+            if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+              event.preventDefault();
+              onView(transaction);
+            }
+          } : undefined}
+          aria-label={onView ? `Consulter la transaction n° ${transaction.id_transaction} · ${partnerName}` : undefined}
           fontWeight={850}
           title={partnerName}
           sx={{
             display: 'block',
+            color: 'inherit',
+            textDecoration: 'none',
             maxWidth: '100%',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -470,61 +452,14 @@ function TransactionExcelRow({
         </Typography>
       </TableCell>
       <TableCell>
-        <Stack spacing={0.5} alignItems="flex-start">
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+        <Stack spacing={0.5} alignItems="flex-start" sx={{ minWidth: 0 }}>
           {inactive
             ? <Chip size="small" color="default" label={isSale ? 'Vente annulée' : 'Achat annulé'} />
             : <PaymentStatusBadge statut={paymentStatus} />}
-          {stockSummary && <Typography variant="caption" color="text.secondary">{stockSummary}</Typography>}
+          {stockSummary && <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{stockSummary}</Typography>}
         </Stack>
-      </TableCell>
-      <TableCell align="right" sx={stickyActionBodySx}>
-        <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center" sx={{ minWidth: 28 }}>
-          {onView && <Button size="small" onClick={() => onView(transaction)} sx={{ minWidth: 0, px: 1 }}>Détails</Button>}
-          {hasMenuActions && (
-            <>
-              <Box
-                sx={{
-                  width: 28,
-                  height: 28,
-                  display: 'grid',
-                  placeItems: 'center',
-                  borderRadius: 1,
-                  bgcolor: rowBackground,
-                }}
-              >
-                <Tooltip title="Actions">
-                  <IconButton size="small" onClick={handleOpenActionMenu} sx={{ width: 26, height: 26, p: 0.25 }}>
-                    <MoreVertIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Menu
-                anchorEl={actionMenuAnchor}
-                open={actionMenuOpen}
-                onClose={handleCloseActionMenu}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              >
-                {onEdit && !inactive && (
-                  <MenuItem onClick={() => handleMenuAction(onEdit)}>
-                    <EditIcon fontSize="small" sx={{ mr: 1 }} />
-                    Modifier
-                  </MenuItem>
-                )}
-                {inactive && onReactivate ? (
-                  <MenuItem onClick={() => handleMenuAction(onReactivate)}>
-                    <RestoreIcon fontSize="small" sx={{ mr: 1 }} />
-                    Réactiver
-                  </MenuItem>
-                ) : onDelete ? (
-                  <MenuItem onClick={() => handleMenuAction(onDelete)} sx={{ color: 'error.main' }}>
-                    <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                    Désactiver
-                  </MenuItem>
-                ) : null}
-              </Menu>
-            </>
-          )}
+        {onView && <ChevronRightIcon aria-hidden="true" sx={{ color: 'text.secondary', flexShrink: 0, fontSize: 20 }} />}
         </Stack>
       </TableCell>
     </TableRow>
@@ -553,22 +488,6 @@ const stickyDateGroupSx = {
   fontWeight: 950,
 };
 
-const stickyActionHeaderSx = {
-  position: 'sticky',
-  right: 0,
-  zIndex: 4,
-  p: '0 !important',
-  backgroundColor: 'transparent !important',
-};
-
-const stickyActionBodySx = {
-  position: 'sticky',
-  right: 0,
-  zIndex: 2,
-  p: '0 !important',
-  backgroundColor: 'transparent !important',
-};
-
 const groupRowSx = {
   bgcolor: '#e8f2fa',
   color: '#254c6d',
@@ -576,4 +495,5 @@ const groupRowSx = {
 };
 
 export default TransactionsExcelRegister;
+
 

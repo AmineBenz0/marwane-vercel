@@ -1,5 +1,5 @@
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TransactionsExcelRegister from './TransactionsExcelRegister';
 
@@ -51,12 +51,13 @@ describe('TransactionsExcelRegister responsive layout', () => {
     renderRegister();
 
     const table = screen.getByRole('table');
-    expect(within(table).getAllByRole('columnheader')).toHaveLength(7);
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(6);
     expect(screen.getByText('Ferme du Nord')).toBeVisible();
     expect(screen.getByText('+100 MAD')).toBeVisible();
     expect(screen.getByText('70 MAD')).toBeVisible();
     expect(screen.getByText('Partiel')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Détails' })).toBeVisible();
+    expect(screen.getByRole('link', { name: /Consulter la transaction n° 25/ })).toHaveAttribute('href', '/transactions/25');
+    expect(screen.queryByRole('columnheader', { name: 'Action' })).not.toBeInTheDocument();
     expect(screen.queryByText('Produit')).not.toBeInTheDocument();
   });
 
@@ -69,7 +70,7 @@ describe('TransactionsExcelRegister responsive layout', () => {
     expect(screen.getByText('+100 MAD')).toBeVisible();
     expect(screen.getByText('70 MAD')).toBeVisible();
     expect(screen.getByText('Partiel')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Voir le détail' })).toBeVisible();
+    expect(screen.getByRole('link', { name: /Consulter la transaction n° 25/ })).toHaveAttribute('href', '/transactions/25');
   });
 
   it('shows a loading message instead of empty zero counts while fetching', () => {
@@ -79,4 +80,25 @@ describe('TransactionsExcelRegister responsive layout', () => {
     expect(screen.getByText('Chargement…')).toBeVisible();
     expect(screen.queryByText('0 opérations')).not.toBeInTheDocument();
   });
+});
+
+
+it('opens a row or its accessible link once, but never a date group', () => {
+  const onView = vi.fn();
+  renderRegister({ onView, rows: [{ ...transaction, est_actif: false }] });
+  fireEvent.click(screen.getByText('+100 MAD'));
+  expect(onView).toHaveBeenCalledTimes(1);
+  expect(onView).toHaveBeenLastCalledWith(expect.objectContaining({ id_transaction: 25 }));
+  fireEvent.click(screen.getByRole('link', { name: /Consulter la transaction/ }));
+  expect(onView).toHaveBeenCalledTimes(2);
+  fireEvent.click(within(screen.getByRole('table')).getByText('1 opération'));
+  expect(onView).toHaveBeenCalledTimes(2);
+});
+
+it('opens a mobile card by tapping its amount', () => {
+  useMediaQueryMock.mockReturnValue(true);
+  const onView = vi.fn();
+  renderRegister({ onView });
+  fireEvent.click(screen.getByText('+100 MAD'));
+  expect(onView).toHaveBeenCalledExactlyOnceWith(transaction);
 });

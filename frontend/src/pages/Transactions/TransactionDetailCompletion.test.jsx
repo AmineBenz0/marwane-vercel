@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import TransactionDetail from './TransactionDetail';
-import { get, post } from '../../services/api';
+import { get, post, del, patch } from '../../services/api';
 
 vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: '7' }), useLocation: () => ({ search: '' }), useNavigate: () => vi.fn() }));
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
+vi.mock('react-router-dom', () => ({ useParams: () => ({ id: '7' }), useLocation: () => ({ search: '' }), useNavigate: () => navigateMock }));
 vi.mock('../../hooks/useNotification', () => ({ default: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock('../../components/PaiementForm', () => ({ default: () => null }));
 vi.mock('../../components/PaiementForm/MultiPaiementForm', () => ({ default: () => null }));
@@ -87,7 +88,7 @@ it('shows a purchase and outstanding balance without sale stock controls', async
   expect(screen.getByText('Reste à payer')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Ajouter un paiement' })).toBeVisible();
   expect(screen.queryByRole('heading', { name: 'Quantités à fournir' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Autres actions' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Autres actions' })).toBeVisible();
 });
 
 it('preserves server proposal and concurrency guards when completing reserved stock', async () => {
@@ -131,4 +132,34 @@ it('keeps a closed remainder distinct from quantities actually supplied', async 
   expect(screen.getByText('Quantité annulée : 400 œufs')).toBeVisible();
   expect(screen.queryByText('Quantité entièrement fournie')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Compléter avec le stock disponible/i })).not.toBeInTheDocument();
+});
+
+it('opens the existing transaction editor from the details menu', async () => {
+  render(<TransactionDetail />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Autres actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Modifier la transaction' }));
+  expect(navigateMock).toHaveBeenCalledWith('/transactions', { state: { editTransactionId: 7 } });
+});
+
+it('requires confirmation before removing an ordinary transaction', async () => {
+  const original = get.getMockImplementation();
+  get.mockImplementation(path => path === '/transactions/7' ? Promise.resolve({ ...sale, est_promesse: false }) : original(path));
+  del.mockResolvedValue({});
+  render(<TransactionDetail />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Autres actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Retirer du registre' }));
+  expect(del).not.toHaveBeenCalled();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Retirer du registre' })));
+  expect(del).toHaveBeenCalledExactlyOnceWith('/transactions/7');
+});
+
+it('offers reactivation for an inactive purchase', async () => {
+  const original = get.getMockImplementation();
+  get.mockImplementation(path => path === '/transactions/7' ? Promise.resolve({ ...sale, est_actif: false, id_client: null, id_fournisseur: 2, est_promesse: false }) : original(path));
+  patch.mockResolvedValue({});
+  render(<TransactionDetail />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Autres actions' }));
+  expect(screen.queryByRole('menuitem', { name: 'Modifier la transaction' })).not.toBeInTheDocument();
+  await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Réactiver l’achat' })));
+  expect(patch).toHaveBeenCalledExactlyOnceWith('/transactions/7/reactivate', {});
 });

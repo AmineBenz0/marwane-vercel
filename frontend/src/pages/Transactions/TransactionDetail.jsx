@@ -256,11 +256,11 @@ function TransactionDetail() {
   const submitCancelTransaction = async () => {
     setPromiseActionLoading(true);
     try {
-      await del(`/transactions/${id}?raison=${encodeURIComponent(cancelReason)}`);
+      await del(transaction.est_promesse ? `/transactions/${id}?raison=${encodeURIComponent(cancelReason)}` : `/transactions/${id}`);
       setCancelTransactionDialogOpen(false);
       await Promise.all([fetchTransaction(), refreshPaiements()]);
-      notification.success('La vente et ses paiements ont été annulés et conservés dans l’historique.');
-    } catch (err) { notification.error(err?.message || 'La vente n’a pas pu être annulée.'); }
+      notification.success(transaction.est_promesse ? 'La vente et ses paiements ont été annulés et conservés dans l’historique.' : 'La transaction a été retirée du registre actif.');
+    } catch (err) { notification.error(err?.message || 'La transaction n’a pas pu être annulée.'); }
     finally { setPromiseActionLoading(false); }
   };
 
@@ -269,8 +269,8 @@ function TransactionDetail() {
     try {
       await patch(`/transactions/${id}/reactivate`, {});
       await Promise.all([fetchTransaction(), refreshPaiements()]);
-      notification.success('La vente est réactivée. Les paiements annulés ne sont pas réactivés automatiquement.');
-    } catch (err) { notification.error(err?.message || 'La vente n’a pas pu être réactivée.'); }
+      notification.success(transaction.est_promesse ? 'La vente est réactivée. Les paiements annulés ne sont pas réactivés automatiquement.' : 'La transaction est réactivée.');
+    } catch (err) { notification.error(err?.message || 'La transaction n’a pas pu être réactivée.'); }
     finally { setPromiseActionLoading(false); }
   };
 
@@ -576,7 +576,7 @@ function TransactionDetail() {
     );
   }
 
-  const canceledSale = Boolean(transaction.id_client) && transaction.est_actif === false;
+  const inactiveTransaction = transaction.est_actif === false;
 
   const isSale = Boolean(transaction.id_client);
   const operationName = isSale ? 'Vente' : transaction.id_fournisseur ? 'Achat' : 'Transaction';
@@ -602,25 +602,29 @@ function TransactionDetail() {
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(returnPath)} color="inherit">
           {fromDeliveries ? 'Retour aux livraisons' : 'Ventes et achats'}
         </Button>
-        {transaction.est_promesse && <>
+        <>
           <Button endIcon={<MoreVertIcon />} color="inherit" onClick={event => setActionsAnchor(event.currentTarget)}
             aria-haspopup="menu" aria-expanded={Boolean(actionsAnchor)} aria-controls={actionsAnchor ? 'transaction-actions' : undefined}
             disabled={promiseActionLoading}>Autres actions</Button>
           <Menu id="transaction-actions" anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={() => setActionsAnchor(null)}>
-            {transaction.est_actif && pendingQuantity > 0 && <MenuItem onClick={() => {
+            {transaction.est_actif !== false && <MenuItem onClick={() => {
+              setActionsAnchor(null);
+              navigate('/transactions', { state: { editTransactionId: transaction.id_transaction } });
+            }}>Modifier la transaction</MenuItem>}
+            {transaction.est_promesse && transaction.est_actif !== false && pendingQuantity > 0 && <MenuItem onClick={() => {
               setActionsAnchor(null); setNewDeliveryDate(transaction.date_livraison_prevue || ''); setRescheduleDialogOpen(true);
             }}>Changer la date prévue</MenuItem>}
-            {transaction.est_actif && pendingQuantity > 0 && <MenuItem onClick={() => {
+            {transaction.est_promesse && transaction.est_actif !== false && pendingQuantity > 0 && <MenuItem onClick={() => {
               setActionsAnchor(null); setCancelRemainderDialogOpen(true);
             }}>Clôturer le reste à fournir</MenuItem>}
-            {transaction.est_actif && <MenuItem sx={{ color: 'error.main' }} onClick={() => {
+            {transaction.est_actif !== false && <MenuItem sx={{ color: 'error.main' }} onClick={() => {
               setActionsAnchor(null); setCancelTransactionDialogOpen(true);
-            }}>Annuler la vente</MenuItem>}
+            }}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</MenuItem>}
             {transaction.est_actif === false && <MenuItem onClick={() => {
               setActionsAnchor(null); reactivateTransaction();
-            }}>Réactiver la vente</MenuItem>}
+            }}>{isSale ? 'Réactiver la vente' : 'Réactiver l’achat'}</MenuItem>}
           </Menu>
-        </>}
+        </>
       </Stack>
       <Typography component="h1" variant="h4" sx={{ fontSize: { xs: '1.4rem', md: '1.85rem' }, overflowWrap: 'anywhere', fontWeight: 700 }}>
         {operationName} n° {transaction.id_transaction} · {getClientOuFournisseur()}
@@ -630,8 +634,8 @@ function TransactionDetail() {
         {transaction.nom_batiment_source && ` · ${transaction.nom_batiment_source}`}
       </Typography>
 
-      {canceledSale && <Alert severity="error" sx={{ mb: 2.5 }}>
-        <Typography fontWeight={700}>Vente annulée</Typography>
+      {inactiveTransaction && <Alert severity="error" sx={{ mb: 2.5 }}>
+        <Typography fontWeight={700}>{isSale ? 'Vente annulée' : 'Achat annulé'}</Typography>
         Les montants et paiements restent consultables dans l’historique.
       </Alert>}
 
@@ -662,7 +666,7 @@ function TransactionDetail() {
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
               {transaction.date_livraison_prevue ? `Date prévue : ${formatDate(transaction.date_livraison_prevue)}` : 'Date prévue non renseignée'}
             </Typography>
-            {!canceledSale && transaction.est_actif && pendingQuantity > 0 && <Box sx={{ mt: 2 }}>
+            {!inactiveTransaction && transaction.est_actif && pendingQuantity > 0 && <Box sx={{ mt: 2 }}>
               <Button variant="contained" fullWidth onClick={openCompletion} disabled={promiseActionLoading || reservedQuantity < 1}>
                 Compléter avec le stock disponible
               </Button>
@@ -676,7 +680,7 @@ function TransactionDetail() {
         <Card variant="outlined" sx={{ ...cardSx, order: { xs: 1, md: 2 } }}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mb: 2 }}>
             <Typography component="h2" variant="h6">Paiement</Typography>
-            {statutPaiement && !canceledSale && <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />}
+            {statutPaiement && !inactiveTransaction && <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />}
           </Stack>
           <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
             <Typography color="text.secondary">{isSale ? 'Total de la vente' : 'Total de l’achat'}</Typography>
@@ -684,17 +688,17 @@ function TransactionDetail() {
           </Stack>
           {statutPaiement ? <>
             <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', rowGap: 0.5 }}>
-              <Typography color="text.secondary">{canceledSale ? 'Réglé (historique)' : 'Déjà réglé'}</Typography>
+              <Typography color="text.secondary">{inactiveTransaction ? 'Réglé (historique)' : 'Déjà réglé'}</Typography>
               <Typography fontWeight={700} sx={moneySx}>{formatMontant(statutPaiement.montant_paye)}</Typography>
             </Stack>
             <Box sx={{ mt: 2, p: 2, borderRadius: 1.5, bgcolor: 'action.hover' }}>
-              <Typography variant="body2" color="text.secondary">{canceledSale ? 'Solde (historique)' : isSale ? 'Reste à encaisser' : 'Reste à payer'}</Typography>
+              <Typography variant="body2" color="text.secondary">{inactiveTransaction ? 'Solde (historique)' : isSale ? 'Reste à encaisser' : 'Reste à payer'}</Typography>
               <Typography variant="h5" fontWeight={700} sx={{ ...moneySx, mt: 0.5 }}>{formatMontant(statutPaiement.montant_restant)}</Typography>
-              {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard && !canceledSale ? 'error.main' : 'text.secondary'} sx={{ mt: 1 }}>
+              {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard && !inactiveTransaction ? 'error.main' : 'text.secondary'} sx={{ mt: 1 }}>
                 Échéance : {formatDate(transaction.date_echeance)}
               </Typography>}
             </Box>
-            {!canceledSale && Number(statutPaiement.montant_restant) > 0 && <Button variant="contained" fullWidth startIcon={<AddIcon />} onClick={handleAddPaiement} sx={{ mt: 2 }}>
+            {!inactiveTransaction && Number(statutPaiement.montant_restant) > 0 && <Button variant="contained" fullWidth startIcon={<AddIcon />} onClick={handleAddPaiement} sx={{ mt: 2 }}>
               Ajouter un paiement
             </Button>}
           </> : <Alert severity="warning" sx={{ mt: 2 }} action={<Button onClick={fetchStatutPaiement}>Réessayer</Button>}>
@@ -718,7 +722,7 @@ function TransactionDetail() {
               </Box>
               <Stack alignItems="flex-end" spacing={0.5} sx={{ minWidth: 0, maxWidth: '100%', ml: 'auto' }}>
                 <Typography fontWeight={700} sx={moneySx}>{formatMontant(paiement.montant)}</Typography>
-                {!canceledSale && paiement.statut !== 'annule' && <Stack direction="row" spacing={0.5}>
+                {!inactiveTransaction && paiement.statut !== 'annule' && <Stack direction="row" spacing={0.5}>
                   <Tooltip title="Modifier le paiement"><IconButton aria-label="Modifier le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} onClick={() => handleEditPaiement(paiement)}><EditIcon fontSize="small" /></IconButton></Tooltip>
                   <Tooltip title="Supprimer le paiement"><IconButton aria-label="Supprimer le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} color="error" onClick={() => handleDeletePaiementClick(paiement)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
                 </Stack>}
@@ -760,12 +764,12 @@ function TransactionDetail() {
         <DialogActions><Button onClick={() => setCancelRemainderDialogOpen(false)}>Retour</Button><Button color="warning" variant="contained" onClick={submitCancelRemainder} disabled={promiseActionLoading}>Clôturer</Button></DialogActions>
       </Dialog>
       <Dialog open={cancelTransactionDialogOpen} onClose={() => setCancelTransactionDialogOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Annuler la vente entière ?</DialogTitle>
+        <DialogTitle>{transaction.est_promesse ? 'Annuler la vente entière ?' : 'Retirer cette transaction du registre actif ?'}</DialogTitle>
         <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
-          <Alert severity="warning">La vente sera retirée du registre actif. Ses paiements seront annulés et conservés dans l’historique. Une réactivation ultérieure ne réactive pas les paiements.</Alert>
-          <TextField label="Motif" value={cancelReason} onChange={event => setCancelReason(event.target.value)} required inputProps={{ maxLength: 1000 }} />
+          <Alert severity="warning">{transaction.est_promesse ? <>La vente sera retirée du registre actif. Ses paiements seront annulés et conservés dans l’historique. Une réactivation ultérieure ne réactive pas les paiements.</> : <>Elle restera consultable dans l’historique et pourra être réactivée plus tard.</>}</Alert>
+          {transaction.est_promesse && <TextField label="Motif" value={cancelReason} onChange={event => setCancelReason(event.target.value)} required inputProps={{ maxLength: 1000 }} />}
         </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setCancelTransactionDialogOpen(false)}>Retour</Button><Button color="error" variant="contained" onClick={submitCancelTransaction} disabled={promiseActionLoading || cancelReason.trim().length < 3}>Annuler la vente</Button></DialogActions>
+        <DialogActions><Button onClick={() => setCancelTransactionDialogOpen(false)}>Retour</Button><Button color="error" variant="contained" onClick={submitCancelTransaction} disabled={promiseActionLoading || (transaction.est_promesse && cancelReason.trim().length < 3)}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</Button></DialogActions>
       </Dialog>
 
       {/* Modal d'ajout/édition de paiement */}
@@ -892,4 +896,5 @@ function TransactionDetail() {
 }
 
 export default TransactionDetail;
+
 

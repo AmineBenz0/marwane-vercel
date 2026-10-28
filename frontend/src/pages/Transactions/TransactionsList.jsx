@@ -20,11 +20,6 @@ import {
   Grid,
   Typography,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
   Chip,
   Stack,
 } from '@mui/material';
@@ -44,7 +39,7 @@ import { countTransactionQuickFilters, filterTransactions, summarizeTransactions
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
-import { get, post, put, patch, del } from '../../services/api';
+import { get, post, put } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -80,11 +75,6 @@ function TransactionsList() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [prefillBatimentId, setPrefillBatimentId] = useState(null);
-
-  // ðtat pour la confirmation de suppression
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [transactionToDelete, setTransactionToDelete] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // ðtat pour les filtres (objet unique)
   const [filters, setFilters] = useState({
@@ -398,6 +388,15 @@ function TransactionsList() {
     }
   };
 
+  useEffect(() => {
+    const editTransactionId = location.state?.editTransactionId;
+    if (!editTransactionId) return;
+    handleEdit({ id_transaction: editTransactionId });
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+    // Consume each edit request once when navigation state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.editTransactionId]);
+
   /**
    * Gère la soumission du formulaire (création ou édition).
    */
@@ -485,71 +484,6 @@ function TransactionsList() {
       setEditingTransaction(null);
       setPrefillBatimentId(null);
       setFormError(null);
-    }
-  };
-
-  /**
-   * Gère le clic sur le bouton de suppression.
-   */
-  const handleDeleteClick = (transaction) => {
-    setTransactionToDelete(transaction);
-    setDeleteDialogOpen(true);
-  };
-
-  /**
-   * Gère la confirmation de suppression.
-   */
-  const handleDeleteConfirm = async () => {
-    if (!transactionToDelete) return;
-
-    setDeleteLoading(true);
-
-    try {
-      // Appeler l'API pour supprimer (soft delete)
-      await del(`/transactions/${transactionToDelete.id_transaction}`);
-
-      // Fermer le dialogue et rafraîchir la liste
-      setDeleteDialogOpen(false);
-      setTransactionToDelete(null);
-      await fetchTransactions();
-    } catch (err) {
-      console.error('Erreur lors de la suppression:', err);
-      setError(
-        err?.message || 'Une erreur est survenue lors de la suppression'
-      );
-      setDeleteDialogOpen(false);
-      setTransactionToDelete(null);
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  /**
-   * Gère l'annulation de la suppression.
-   */
-  const handleDeleteCancel = () => {
-    setDeleteDialogOpen(false);
-    setTransactionToDelete(null);
-  };
-
-  /**
-   * Gère la réactivation d'une transaction.
-   */
-  const handleReactivate = async (transaction) => {
-    try {
-      // Appeler l'API pour réactiver (PATCH)
-      await patch(`/transactions/${transaction.id_transaction}/reactivate`, {});
-      
-      // Rafraîchir la liste
-      await fetchTransactions();
-      
-      // Notification de succès
-      notification.success('Transaction réactivée avec succès');
-    } catch (err) {
-      console.error('Erreur lors de la réactivation:', err);
-      setError(
-        err?.message || 'Une erreur est survenue lors de la réactivation'
-      );
     }
   };
 
@@ -1149,9 +1083,6 @@ function TransactionsList() {
         getClientOuFournisseur={getClientOuFournisseur}
         formatMontant={formatMontant}
         onView={handleViewDetails}
-        onEdit={handleEdit}
-        onDelete={handleDeleteClick}
-        onReactivate={handleReactivate}
         title="Résultat filtré"
         description=""
       />
@@ -1166,27 +1097,7 @@ function TransactionsList() {
         prefillBatimentId={prefillBatimentId}
       />
 
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={handleDeleteCancel}
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-description"
-      >
-        <DialogTitle id="delete-dialog-title">{transactionToDelete?.est_promesse ? 'Annuler cette vente ?' : 'Confirmer la suppression'}</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-dialog-description">
-            {transactionToDelete?.est_promesse ? <>La vente sera retirée du registre actif. Les paiements associés seront annulés et conservés dans l’historique. Si vous réactivez la vente plus tard, ils ne seront pas réactivés automatiquement.</> : <>Retirer cette transaction du registre actif ?<br /><br />Elle restera dans l'historique et pourra être réactivée plus tard.</>}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDeleteCancel} disabled={deleteLoading} color="inherit">
-            Annuler
-          </Button>
-          <Button onClick={handleDeleteConfirm} disabled={deleteLoading} color="error" variant="contained">
-            {deleteLoading ? 'Annulation...' : transactionToDelete?.est_promesse ? 'Annuler la vente' : 'Supprimer'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+
     </Box>
   );
 
@@ -1234,3 +1145,4 @@ function TransactionMetric({ label, value, helper, icon, color, loading = false 
 }
 
 export default TransactionsList;
+
