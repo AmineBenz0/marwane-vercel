@@ -876,7 +876,13 @@ def update_transaction(
             detail=f"Transaction avec l'ID {id} introuvable"
         )
     
-    update_data = transaction_data.model_dump(exclude_unset=True)
+    # Full edit forms may resend existing values. Only actual changes can
+    # rewrite financial identity or require inventory movements.
+    update_data = {
+        field: value
+        for field, value in transaction_data.model_dump(exclude_unset=True).items()
+        if value != getattr(transaction, field)
+    }
     original_building_id = transaction.id_batiment
 
     promise_identity_fields = {
@@ -969,7 +975,11 @@ def update_transaction(
             detail="La date de transaction ne peut pas être postérieure à un paiement existant",
         )
 
-    if (transaction.id_production is not None or update_data.get("id_production") is not None) and not transaction.est_promesse:
+    source_changed = any(field in update_data for field in {
+        "id_production", "id_batiment", "id_cycle", "date_transaction",
+        "id_produit", "quantite", "id_client", "id_fournisseur",
+    })
+    if source_changed and (transaction.id_production is not None or update_data.get("id_production") is not None) and not transaction.est_promesse:
         if "id_production" in update_data and update_data["id_production"] is None:
             raise HTTPException(400, "Une vente liée à une saisie doit conserver son origine.")
         final = TransactionCreate(**{
@@ -1043,20 +1053,22 @@ def update_transaction(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Le produit '{final_produit.nom_produit}' ne peut pas être utilisé pour les transactions fournisseurs",
         )
-    _validate_source_batiment(
-        id_batiment=final_id_batiment,
-        id_client=final_id_client,
-        produit=final_produit,
-        db=db,
-    )
-    resolved_cycle_id = _resolve_transaction_cycle(
-        id_cycle=final_id_cycle,
-        id_batiment=final_id_batiment,
-        id_client=final_id_client,
-        date_transaction=(db.get(Production, update_data.get("id_production", transaction.id_production)).date_production if update_data.get("id_production", transaction.id_production) else final_date_transaction),
-        produit=final_produit,
-        db=db,
-    )
+    resolved_cycle_id = transaction.id_cycle
+    if inventory_changed:
+        _validate_source_batiment(
+            id_batiment=final_id_batiment,
+            id_client=final_id_client,
+            produit=final_produit,
+            db=db,
+        )
+        resolved_cycle_id = _resolve_transaction_cycle(
+            id_cycle=final_id_cycle,
+            id_batiment=final_id_batiment,
+            id_client=final_id_client,
+            date_transaction=(db.get(Production, update_data.get("id_production", transaction.id_production)).date_production if update_data.get("id_production", transaction.id_production) else final_date_transaction),
+            produit=final_produit,
+            db=db,
+        )
     
     stock_fields = ('quantite', 'id_produit', 'id_batiment', 'id_production',
                     'date_transaction', 'id_client', 'id_fournisseur', 'est_promesse',
@@ -1296,3 +1308,4 @@ def reactivate_transaction(
     db.refresh(transaction)
     
     return _transaction_read(db, transaction)
+

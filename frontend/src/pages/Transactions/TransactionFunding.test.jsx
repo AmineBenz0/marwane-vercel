@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import TransactionForm from './TransactionForm';
 import { get, getProduitsParType } from '../../services/api';
 
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('../../services/api', () => ({ get: vi.fn(), getProduitsParType: vi.fn() }));
 
 const transaction = {
@@ -53,9 +54,11 @@ describe('Supplier funding while editing a transaction', () => {
       id_paiement: 7, date_paiement: '2026-10-22', montant: 100,
       type_paiement: 'cash', source_reglement: 'caisse', id_compte: null,
     }];
-    render(<TransactionForm open initialValues={transaction} onClose={vi.fn()} onSubmit={vi.fn()} />);
-    expect(await screen.findByText(/Source débitée : caisse/)).toBeVisible();
-    expect(screen.getByRole('combobox', { name: 'Mode de paiement' })).toHaveTextContent('Espèces');
+    render(<TransactionForm open initialValues={{ ...transaction, montant_total: 100, paiements: existingPayments }} onClose={vi.fn()} onSubmit={vi.fn()} />);
+    expect(screen.getByText(/Seule la date d’échéance peut être modifiée ici/)).toBeVisible();
+    expect(screen.getByRole('spinbutton', { name: /^Prix unitaire/ })).toHaveAttribute('readonly');
+    expect(screen.queryByRole('combobox', { name: 'Mode de paiement' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /Compte bancaire/ })).not.toBeInTheDocument();
   });
 });
+

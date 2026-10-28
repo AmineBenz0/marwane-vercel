@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import TransactionForm from './TransactionForm';
 import { get, getProduitsParType } from '../../services/api';
 
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('../../services/api', () => ({ get: vi.fn(), getProduitsParType: vi.fn() }));
 const sources = [
   { id_production: 11, date_production: '2026-10-20', type_oeuf: 'normal', calibre: 'moyen', grammage: 55, nombre_oeufs: 100, disponible: 60, vendable: true },
@@ -38,10 +39,11 @@ describe('sale entry preserves user input', () => {
       date_transaction: '2026-10-21', date_livraison_prevue: '2099-10-29',
       quantite: 50, prix_unitaire: 1.5, est_promesse: true, allocation_automatique: true,
     }} />);
-    await screen.findByText('Stock et prélèvements prévus');
-    expect(screen.getByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
-    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
-    expect(quantity()).toHaveValue(50);
+    expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: /^Quantité/ })).toHaveValue(50);
+    expect(screen.getByRole('button', { name: 'Ouvrir le détail et les actions' })).toBeVisible();
+    expect(get).not.toHaveBeenCalledWith('/transactions/production-sources', expect.anything());
   });
 
   it('clears a new deferred sale when its quantity fits stock and requires acceptance again if increased', async () => {
@@ -100,41 +102,26 @@ describe('sale entry preserves user input', () => {
       date_transaction: '2026-10-21', date_livraison_prevue: '2099-10-29',
       quantite: 1000, prix_unitaire: 1.5, est_promesse: true, allocation_automatique: true,
     }} />);
-    expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
-    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
-    await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/production-sources', expect.objectContaining({ params: expect.objectContaining({ through_date: new Date().toISOString().slice(0, 10), exclude_transaction_id: 31 }) })));
+    expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
     fireEvent.change(price(), { target: { value: '1.6' } });
-    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
-    await waitFor(() => expect(save).toBeEnabled());
-    fireEvent.click(save);
-    await waitFor(() => expect(submit).toHaveBeenCalled());
-    expect(submit.mock.calls[0][0]).toMatchObject({
-      est_promesse: true, date_livraison_prevue: '2099-10-29', prix_unitaire: 1.6,
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledExactlyOnceWith({ prix_unitaire: 1.6 }));
+    expect(submit.mock.calls[0][0]).not.toHaveProperty('est_promesse');
+    expect(submit.mock.calls[0][0]).not.toHaveProperty('date_livraison_prevue');
   });
 
-  it('saves the delivery date of a paid sale without resubmitting unchanged financial fields', async () => {
+  it('saves the due date of a paid sale without resubmitting financial values or payments', async () => {
     const submit = vi.fn();
-    const originalGet = get.getMockImplementation();
-    get.mockImplementation(async (path, options) => path === '/paiements' ? [{
-      id_paiement: 8, date_paiement: '2026-10-21', montant: '1500.00', type_paiement: 'cash',
-    }] : originalGet(path, options));
     render(<TransactionForm {...props} onSubmit={submit} initialValues={{
       id_transaction: 31, id_client: 1, id_fournisseur: null, id_produit: 7, id_batiment: 1,
       date_transaction: '2026-10-21', date_livraison_prevue: '2099-10-29',
-      quantite: 1000, prix_unitaire: '1.50', est_promesse: true, allocation_automatique: true,
+      quantite: 1000, prix_unitaire: '1.50', montant_total: 1500, est_promesse: true,
+      paiements: [{ id_paiement: 8, montant: 1500, type_paiement: 'cash', statut: 'valide' }],
     }} />);
-    const expectedDate = await screen.findByLabelText(/Date prévue de livraison/);
-    fireEvent.change(expectedDate, { target: { value: '2099-10-30' } });
-    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
-    await waitFor(() => expect(save).toBeEnabled());
-    fireEvent.click(save);
-    await waitFor(() => expect(submit).toHaveBeenCalled());
-    const sent = submit.mock.calls[0][0];
-    expect(sent.date_livraison_prevue).toBe('2099-10-30');
-    for (const key of ['date_transaction', 'id_production', 'id_batiment', 'id_produit', 'quantite', 'prix_unitaire', 'id_client', 'id_fournisseur']) expect(sent).not.toHaveProperty(key);
-    expect(sent.paiements).toEqual([expect.objectContaining({ id_paiement: 8, montant: 1500 })]);
+    fireEvent.change(screen.getByLabelText('Date d’échéance du paiement (optionnel)'), { target: { value: '30/10/26' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledExactlyOnceWith({ date_echeance: '2026-10-30' }));
+    expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
   });
 
   it.each([600, 0])('submits deferred delivery with %i eggs available and blocks an unaccepted shortage', async (available) => {
@@ -195,3 +182,4 @@ describe('sale entry preserves user input', () => {
     expect(price()).toHaveValue(2.5);
   });
 });
+

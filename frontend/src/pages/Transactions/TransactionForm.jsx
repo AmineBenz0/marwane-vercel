@@ -1,6 +1,7 @@
 import DateField from '../../utils/DateField';
 import ProductionSourcePicker from './ProductionSourcePicker';
 import SaleSummary from './SaleSummary';
+import TransactionEditForm from './TransactionEditForm';
 import { saleStockSummary } from './saleStockSummary';
 /**
  * Composant TransactionForm.
@@ -294,7 +295,7 @@ const isEggProduct = (produit) => (
 /**
  * Composant TransactionForm.
  */
-function TransactionForm({
+function UnpaidTransactionForm({
   open = false,
   onClose,
   onSubmit,
@@ -568,7 +569,7 @@ function TransactionForm({
           id_fournisseur: data.type_entite === 'fournisseur' ? data.id_fournisseur : null,
           ...(data.type_entite === 'client'
             ? { id_production: data.lignes[0].id_production ? Number(data.lignes[0].id_production) : null,
-              id_produit: Number(data.lignes[0].id_produit), allocation_automatique: true,
+              id_produit: Number(data.lignes[0].id_produit), allocation_automatique: initialValues.allocation_automatique ?? true,
               est_promesse: !!data.lignes[0].est_promesse,
               date_livraison_prevue: data.lignes[0].est_promesse ? data.lignes[0].date_livraison_prevue : null }
             : { id_produit: Number(data.lignes[0].id_produit) }),
@@ -1772,4 +1773,11 @@ function TransactionForm({
   );
 }
 
-export default TransactionForm;
+export default function TransactionForm(props) {
+  const transaction = props.initialValues;
+  if (transaction?.id_transaction && (transaction.est_promesse || transaction.paiements?.length || transaction.est_actif === false)) {
+    return <TransactionEditForm {...props} />;
+  }
+  return <UnpaidTransactionForm {...props} />;
+}
+
