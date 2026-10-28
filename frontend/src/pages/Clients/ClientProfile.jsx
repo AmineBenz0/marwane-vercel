@@ -284,30 +284,6 @@ function ClientProfile() {
       .sort((a, b) => new Date(b.date_transaction) - new Date(a.date_transaction));
   }, [balancePeriod, transactions]);
 
-  const getPaymentLabel = (transaction) => {
-    const paiement = transaction.paiements?.[0];
-    if (!paiement) return 'Non réglé';
-
-    const labels = {
-      cash: 'Espèces',
-      cheque: 'Chèque',
-      virement: 'Virement',
-      carte: 'Carte',
-      lc: 'LC',
-      compensation: 'Compensation',
-      autre: 'Autre',
-    };
-
-    const reference = paiement.reference_virement
-      || paiement.numero_cheque
-      || paiement.numero_reference_lc
-      || (paiement.id_lc ? `LC #${paiement.id_lc}` : null);
-
-    return reference
-      ? `${labels[paiement.type_paiement] || paiement.type_paiement} - ${reference}`
-      : labels[paiement.type_paiement] || paiement.type_paiement;
-  };
-
   /**
    * Colonnes exportées dans le même ordre que le registre visible.
    */
