@@ -77,7 +77,12 @@ const dateFromDisplay = (value) => {
   const date = match[3] + '-' + match[2] + '-' + match[1];
   return isValidIsoDate(date) ? date : '';
 };
-const parseRowDate = (row) => dateFromDisplay(row.date);
+// Labels are localized; row identity and period filtering use the source date.
+const parseRowDate = (row) => isValidIsoDate(row.date_production) ? row.date_production : dateFromDisplay(row.date);
+const sumPresent = (rows, key) => {
+  const values = rows.map(row => row[key]).filter(value => value != null && value !== '' && Number.isFinite(Number(value)));
+  return values.length ? values.reduce((total, value) => total + Number(value), 0) : null;
+};
 const weekStart = (value) => {
   const date = dateAtNoon(value);
   if (!date) return '';
@@ -125,10 +130,10 @@ const groupCycles = (cycles) => {
 function aggregateDays(dayRows, label, rowType = 'summary') {
   if (!dayRows.length) return null;
   const sum = (key) => dayRows.reduce((total, row) => total + Number(row[key] || 0), 0);
-  const eggs = sum('oeufs');
-  const deaths = sum('mort');
+  const eggs = sumPresent(dayRows, 'oeufs');
+  const deaths = sumPresent(dayRows, 'mort');
   const birdDays = sum('effectif_debut');
-  const feed = sum('aliment_kg');
+  const feed = sumPresent(dayRows, 'aliment_kg');
   const cost = dayRows.every((row) => row._dailyTotal != null) ? sum('_dailyTotal') : null;
   const sales = sum('_dailySales');
   const sold = sum('_dailySold');
@@ -138,7 +143,7 @@ function aggregateDays(dayRows, label, rowType = 'summary') {
   const otherItems = dayRows.flatMap((row) => row._otherItems || []);
   const totalOther = otherItems.reduce((total, item) => total + Number(item.amount || 0), 0);
   const typeSummary = ['normal', 'double', 'white', 'broken', 'lost'].reduce((result, key) => {
-    result[key] = sum(key);
+    result[key] = sumPresent(dayRows, key);
     return result;
   }, {});
   return {
@@ -152,13 +157,13 @@ function aggregateDays(dayRows, label, rowType = 'summary') {
     mort_pct: birdDays ? (deaths / birdDays * 100).toFixed(2) : null,
     oeufs: eggs,
     oeufs_cum: last.oeufs_cum,
-    weekCumEggs: sum('oeufs'),
+    weekCumEggs: eggs,
     ponte_pct: birdDays ? (eggs / birdDays * 100).toFixed(2) : null,
     formule: formulas.join(', ') || '—',
     aliment_kg: feed,
     prix_aliment: feed && cost != null ? sum('_feedCost') / feed : null,
-    g_poule: birdDays ? (feed * 1000 / birdDays).toFixed(1) : null,
-    g_oeuf: eggs ? (feed * 1000 / eggs).toFixed(1) : null,
+    g_poule: birdDays && feed != null ? (feed * 1000 / birdDays).toFixed(1) : null,
+    g_oeuf: eggs && feed != null ? (feed * 1000 / eggs).toFixed(1) : null,
     poidsOeuf: eggs && hasWeights ? dayRows.reduce((total, row) => total + Number(row.poidsOeuf || 0) * Number(row.oeufs || 0), 0) / eggs : null,
     autres: fmtDh(totalOther),
     autresQuantite: otherItems.length ? otherItems.reduce((total, item) => total + Number(item.quantity || 0), 0) : null,
@@ -412,6 +417,7 @@ function GlobalOverviewPage() {
     let cumulativeEggs = 0;
     let cumulativeMort = 0;
     let cumulativeSpend = 0;
+    let hasProduction = false;
 
     const remainingByCycle = new Map(allowedCycles.map((cycle) => [Number(cycle.id_cycle), Number(cycle.effectif_initial || 0)]));
     const weeklyEggs = new Map();
@@ -419,14 +425,15 @@ function GlobalOverviewPage() {
     return [...groupedByDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([dateIso, dayRows]) => {
       const key = weekStart(dateIso);
 
-      const sum = (prop) => dayRows.reduce((total, row) => total + Number(row[prop] || 0), 0);
+      const sum = (prop) => sumPresent(dayRows, prop);
       const eggs = sum('oeufs');
       const deaths = sum('mort');
       const feed = sum('aliment_kg');
       const opening = sum('effectif_debut');
-      dayRows.forEach((row) => remainingByCycle.set(Number(row.id_cycle), Number(row.effectif_fin)));
+      dayRows.filter(row => row.effectif_fin != null).forEach((row) => remainingByCycle.set(Number(row.id_cycle), Number(row.effectif_fin)));
       const remaining = [...remainingByCycle.values()].reduce((total, birds) => total + birds, 0);
-      weeklyEggs.set(key, (weeklyEggs.get(key) || 0) + eggs);
+      if (eggs != null) weeklyEggs.set(key, (weeklyEggs.get(key) || 0) + eggs);
+      hasProduction ||= eggs != null;
       const hasWeight = eggs > 0 && dayRows.every((row) => !Number(row.oeufs) || (Number.isFinite(Number(row.poids_oeuf)) && Number(row.poids_oeuf) > 0));
       const weightSum = hasWeight ? dayRows.reduce((total, row) => total + Number(row.poids_oeuf || 0) * Number(row.oeufs || 0), 0) : 0;
       const weight = hasWeight ? weightSum / eggs : null;
@@ -436,7 +443,7 @@ function GlobalOverviewPage() {
       const weekCharges = chargesByWeek.get(key) || { total: 0, other: 0, vaccine: 0, labor: 0, salary: 0, electricity: 0 };
       const feedPurchase = feedPurchasesByWeek.get(key);
       const feedPrice = feedPurchase?.quantity ? feedPurchase.amount / feedPurchase.quantity : null;
-      const feedCost = feed === 0 ? 0 : feedPrice == null ? null : feed * feedPrice;
+      const feedCost = !dayRows.length || feed === 0 ? 0 : feed == null || feedPrice == null ? null : feed * feedPrice;
       const dailyCharges = charges.reduce((total, charge) => total + parseMoney(charge), 0);
       const dailyTotal = feedCost == null ? null : dailyCharges + feedCost;
       cumulativeSpend = cumulativeSpend == null || dailyTotal == null ? null : cumulativeSpend + dailyTotal;
@@ -461,13 +468,13 @@ function GlobalOverviewPage() {
         mort: dayRows.length ? deaths : null,
         mort_pct: percent == null ? null : percent.toFixed(2),
         oeufs: dayRows.length ? eggs : null,
-        oeufs_cum: weeklyEggs.get(key),
+        oeufs_cum: weeklyEggs.get(key) ?? null,
         ponte_pct: opening ? (eggs / opening * 100).toFixed(2) : null,
         formule: [...new Set(dayRows.map((row) => row.formule).filter(Boolean))].join(', ') || '—',
         aliment_kg: feed,
         prix_aliment: feedPrice,
-        g_poule: opening ? (feed * 1000 / opening).toFixed(1) : null,
-        g_oeuf: eggs ? (feed * 1000 / eggs).toFixed(1) : null,
+        g_poule: opening && feed != null ? (feed * 1000 / opening).toFixed(1) : null,
+        g_oeuf: eggs && feed != null ? (feed * 1000 / eggs).toFixed(1) : null,
         poidsOeuf: weight,
         autres: otherText || '—',
         autresQuantite: otherItems.length ? otherItems.reduce((total, item) => total + item.quantity, 0) : null,
@@ -487,16 +494,16 @@ function GlobalOverviewPage() {
         effectif_debut: opening,
         effectif_fin: remaining,
         birds: remaining,
-        cumDead: cumulativeMort,
-        cumDeadRate: initial ? (cumulativeMort / initial * 100) : null,
+        cumDead: hasProduction ? cumulativeMort : null,
+        cumDeadRate: initial && hasProduction ? (cumulativeMort / initial * 100) : null,
         normal: typeCounts.normal,
         double: typeCounts.double,
         white: typeCounts.white,
         broken: typeCounts.broken,
         lost: typeCounts.lost,
-        cumEggs: cumulativeEggs,
+        cumEggs: hasProduction ? cumulativeEggs : null,
         eggMass: eggs && weight ? eggs * weight / 1000 : null,
-        fcr: eggs && weight ? feed / (eggs * weight / 1000) : null,
+        fcr: eggs && weight && feed != null ? feed / (eggs * weight / 1000) : null,
         feedcost: feedCost,
         cost: dailyTotal,
         costPerEgg: eggs && dailyTotal != null ? dailyTotal / eggs : null,
@@ -574,7 +581,7 @@ function GlobalOverviewPage() {
   }, [filteredDays, groupBy, monthSummaries, weekSummaries]);
 
   const displayRows = groupedRows;
-  const totalEggs = filteredDays.reduce((total, row) => total + Number(row.oeufs || 0), 0);
+  const totalEggs = sumPresent(filteredDays, 'oeufs');
   const totalBirdDays = filteredDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0);
   const layingRate = totalBirdDays ? totalEggs / totalBirdDays * 100 : null;
   const totalCost = periodSummary?.cost ?? null;
@@ -583,7 +590,7 @@ function GlobalOverviewPage() {
     const allowed = buildingId === 'all' || Number(row.id_batiment) === Number(buildingId);
     const day = parseRowDate(row);
     const inPeriod = effectivePeriod === 'all' || weekStart(day) === effectivePeriod;
-    return allowed && inPeriod;
+    return allowed && Boolean(day) && inPeriod;
   }).map((row) => Number(row.id_batiment) + ':' + parseRowDate(row)) || []).size;
   const cycleStart = isoDate(selectedLot?.cycle.date_debut);
   const cycleEnd = isoDate(selectedLot?.cycle.date_fin_reelle) || new Date().toISOString().slice(0, 10);

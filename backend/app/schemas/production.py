@@ -183,6 +183,7 @@ class ProductionPerformanceRow(BaseModel):
     id: str
     rowType: str
     date: str
+    date_production: Optional[date] = None
     mort: Optional[int] = None
     mort_pct: Optional[Decimal | str] = None
     oeufs: Optional[int] = None

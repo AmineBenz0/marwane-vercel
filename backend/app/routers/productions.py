@@ -1050,6 +1050,7 @@ def get_cycle_performance(
             "id": f"day-{day_date.isoformat()}",
             "rowType": "day",
             "date": day_date.strftime(DISPLAY_DATE_FORMAT),
+            "date_production": day_date,
             "mort": day["mort"],
             "mort_pct": _ratio_percent(day["mort"], effectif_debut) if effectif_debut else "-",
             "oeufs": day["oeufs"],
