@@ -8,12 +8,18 @@ from app.models.batiment import Batiment
 from app.models.client import Client
 from app.models.production import Production
 from app.models.transaction import Transaction
-from app.routers.transactions import create_transaction, create_transactions_batch, update_transaction, delete_transaction
+from app.routers.transactions import create_transaction as create_transaction_response, create_transactions_batch, update_transaction, delete_transaction
 from app.routers.productions import _stock_report, delete_production, update_production
 from app.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionRead
 from app.schemas.production import ProductionUpdate
 from app.services.egg_sales import sale_sources, protect_production_source
 from app.utils.egg_product_sync import ensure_sellable_egg_product
+
+
+def create_transaction(payload, db, user):
+    """Inspect persisted state after writes; API responses are immutable snapshots."""
+    response = create_transaction_response(payload, db, user)
+    return db.get(Transaction, response.id_transaction)
 
 
 @pytest.fixture

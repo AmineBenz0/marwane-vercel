@@ -702,7 +702,7 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             continue
 
         quantity = covered_quantity(transaction, events.get(transaction.id_transaction, []), target_date, cumulative)
-        if quantity <= 0:
+        if quantity <= 0 and not (cumulative and transaction.est_promesse):
             continue
         if transaction.id_batiment is None:
             unassigned_sold_eggs += quantity
@@ -746,6 +746,8 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
                     if allocation.production and allocation.production.date_production <= target_date
                 )
                 category['allocated_pending_eggs'] = category.get('allocated_pending_eggs', 0) + allocated_pending
+        if quantity <= 0:
+            continue
         add_movement({
             "time": transaction.date_creation.strftime("%H:%M") if transaction.date_creation else None,
             "type": "sale",

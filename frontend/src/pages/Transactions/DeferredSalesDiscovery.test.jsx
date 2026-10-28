@@ -57,7 +57,7 @@ describe('deferred sale stock reservations', () => {
   it('shows actionable promises with the client and reserved quantity', async () => {
     renderAt(<DeferredSalesCard />);
     expect(await screen.findByText('Client 1 · Vente #7')).toBeVisible();
-    expect(screen.getByText('300 œufs prêts à compléter')).toBeVisible();
+    expect(screen.getByText('300 prêts à compléter · 100 à produire')).toBeVisible();
     expect(screen.getByText('Client 2 · Vente #8')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'À traiter maintenant' })).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

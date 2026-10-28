@@ -52,6 +52,6 @@ describe('AlertCenter', () => {
     fireEvent.click(await screen.findByLabelText('Ouvrir les alertes'));
     const link = await screen.findByRole('link', { name: 'Stock prêt à compléter' });
     expect(link).toHaveAttribute('href', '/transactions/42?from=deliveries');
-    expect(screen.getByText('Client B · Vente #42 · 120 œufs')).toBeVisible();
+    expect(screen.getByText('Client B · Vente #42 · 120 prêts · 180 à produire')).toBeVisible();
   });
 });

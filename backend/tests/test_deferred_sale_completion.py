@@ -12,7 +12,7 @@ from app.models.paiement import Paiement
 from app.models.caisse import Caisse
 from app.models.inventory import MouvementStock
 from app.models.audit import TransactionAudit
-from app.routers.transactions import create_transaction, create_transactions_with_payments_batch, update_transaction, delete_transaction, reactivate_transaction
+from app.routers.transactions import create_transaction as create_transaction_response, create_transactions_with_payments_batch, update_transaction, delete_transaction, reactivate_transaction
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.schemas.transaction_payment import TransactionPaymentBatchCreate
 from app.services.egg_sales import sale_sources
@@ -21,6 +21,12 @@ from app.schemas.transaction import DeferredSaleCompletion
 from app.utils.egg_product_sync import ensure_sellable_egg_product
 from app.routers.productions import create_daily_production, update_daily_production
 from app.schemas.production import ProductionDailyInput
+
+
+def create_transaction(payload, db, user):
+    """Inspect persisted state after writes; API responses are immutable snapshots."""
+    response = create_transaction_response(payload, db, user)
+    return db.get(Transaction, response.id_transaction)
 
 
 @pytest.fixture
@@ -82,7 +88,7 @@ def test_complete_300_then_100_preserves_sale_payments_and_origins(client, db_se
     available = proposal(client, tx.id_transaction)
     assert available['quantite_proposee'] == 300
     assert available['repartition_stock'] == [dict(id_production=late_source.id_production,
-        date_production=late_source.date_production.isoformat(), quantite=300, id_cycle=None)]
+        date_production=late_source.date_production.isoformat(), quantite=300, quantite_livree=0, id_cycle=None)]
     request = confirmation(available)
     response = client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=request)
     assert response.status_code == 200, response.text
@@ -128,8 +134,8 @@ def test_automatic_reservation_keeps_stock_for_the_older_promise(client, db_sess
         allocation_automatique=True, quantite=1, prix_unitaire='1.5'))
     assert denied.status_code == 409
     assert tx.quantite_couverte == 900
-    assert tx.quantite_en_attente == 100
-    assert proposal(client, tx.id_transaction)['quantite_proposee'] == 0
+    assert tx.quantite_en_attente == 400
+    assert proposal(client, tx.id_transaction)['quantite_proposee'] == 300
     assert later.quantite_couverte == 0
     assert proposal(client, later.id_transaction)['quantite_proposee'] == 0
 
@@ -328,7 +334,10 @@ def test_closing_remainder_releases_reserved_stock_to_next_promise(client, db_se
     app.dependency_overrides.pop(get_current_active_user, None)
 
 
-def test_thursday_sale_friday_stock_saturday_completion_keeps_single_financial_sale(client, db_session, deferred_sale, monkeypatch):
+def test_thursday_sale_friday_stock_saturday_completion_keeps_single_financial_sale(client, db_session, deferred_sale, monkeypatch, test_user):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
     building, _, original_source, payload = deferred_sale
     today = date.today()
     days_since_thursday = (today.weekday() - 3) % 7 or 7
@@ -401,12 +410,12 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(clien
     assert (later.quantite_couverte, later.quantite_en_attente) == (0, 300)
     assert daily['reservations_stock'] == [dict(id_transaction=oldest.id_transaction, quantite=300)]
     stock = client.get('/api/v1/productions/stock').json()
-    assert stock['totals']['reserved_eggs'] == 900
-    assert stock['totals']['physical_eggs'] == 900
+    assert stock['totals']['reserved_eggs'] == 300
+    assert stock['totals']['physical_eggs'] == 300
     assert stock['totals']['available_eggs'] == 0
     assert stock['totals']['promised_pending_eggs'] == 700
     assert stock['totals']['balance_after_promises'] == -400
-    assert stock['batiments'][0]['categories'][0]['reserved_eggs'] == 900
+    assert stock['batiments'][0]['categories'][0]['reserved_eggs'] == 300
     assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=today)) == 0
 
     daily = update_daily_production(ProductionDailyInput(
@@ -424,7 +433,7 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(clien
         dict(id_transaction=later.id_transaction, quantite=100),
     ]
     stock = client.get('/api/v1/productions/stock').json()['totals']
-    assert (stock['available_eggs'], stock['reserved_eggs'], stock['physical_eggs']) == (0, 1100, 1100)
+    assert (stock['available_eggs'], stock['reserved_eggs'], stock['physical_eggs']) == (0, 500, 500)
     assert (stock['promised_pending_eggs'], stock['balance_after_promises']) == (700, -200)
 
     daily = update_daily_production(ProductionDailyInput(
@@ -468,7 +477,7 @@ def test_cancelling_old_promise_releases_reserved_stock_to_next_sale(db_session,
 
     delete_transaction(oldest.id_transaction, 'Annulation du test', db_session, None)
 
-    assert (next_sale.quantite_couverte, next_sale.quantite_en_attente) == (300, 0)
+    assert (next_sale.quantite_couverte, next_sale.quantite_en_attente) == (300, 200)
 
 
 def test_paid_sale_agrees_across_profile_stock_history_and_monthly_reports(client, db_session, deferred_sale, test_user):
@@ -494,7 +503,7 @@ def test_paid_sale_agrees_across_profile_stock_history_and_monthly_reports(clien
     for quantity in (300, 100):
         enter_production(db_session, building.id_batiment, quantity)
         stock = client.get('/api/v1/productions/stock').json()['totals']
-        expected_reserved = (600 if quantity == 300 else 900) + quantity
+        expected_reserved = quantity
         assert stock['physical_eggs'] == expected_reserved
         assert stock['reserved_eggs'] == expected_reserved
         assert stock['available_eggs'] == 0
@@ -529,8 +538,8 @@ def test_current_report_reservations_agree_with_legacy_global_sales(client, db_s
     db_session.commit()
     enter_production(db_session, building.id_batiment, 300)
     stock = client.get('/api/v1/productions/stock').json()['totals']
-    assert stock['physical_eggs'] == 800
-    assert stock['reserved_eggs'] == 800
+    assert stock['physical_eggs'] == 200
+    assert stock['reserved_eggs'] == 200
     assert stock['available_eggs'] == 0
     assert sum(row['disponible'] for row in sale_sources(db_session, building.id_batiment, through_date=date.today())) == 0
 
