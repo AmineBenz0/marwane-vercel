@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 13824)
+Total output lines: 753
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Box, Button, Checkbox, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, Menu, MenuItem, Paper, Popover, Select,
@@ -8,6 +11,23 @@ import { get } from '../../services/api';
 import { cycleProductionService, productionService } from '../../services/productionService';
 import { exportOverview } from './globalOverviewExport';
 import { DEMO_LOTS, buildDemoDays } from './globalOverviewDemo';
+import {
+  aggregateDays,
+  aggregateDemoDays,
+  chargeBucket,
+  dateLabel,
+  fmt,
+  fmtDh,
+  groupCycles,
+  isMatch,
+  isoDate,
+  parseMoney,
+  parseRowDate,
+  sumPresent,
+  weekEnd,
+  weekLabel,
+  weekStart,
+} from './globalOverviewCalculations';
 
 const COLUMN_GROUPS = [
   { key: 'effectif', label: 'Effectif & mortalité', fill: ['#eaf0fc', '#283958'], edge: ['#b8c8ec', '#536d9d'] },
@@ -54,58 +74,6 @@ const renderRowLabel = (row) => {
   return <Box sx={wrappedTextSx}>{title}{subtitle.length > 0 && <Box component="span" sx={{ display: 'block', fontSize: 11, fontWeight: 500 }}>{subtitle.join(' · ')}</Box>}</Box>;
 };
 
-const fmt = (value, digits = 0) => value == null || value === '' || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('fr-FR', { maximumFractionDigits: digits });
-const fmtDh = (value, digits = 2) => value == null || !Number.isFinite(Number(value)) ? '—' : fmt(value, digits) + ' DH';
-const isValidIsoDate = (value) => {
-  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return false;
-  const [, year, month, day] = match.map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-};
-const dateAtNoon = (value) => isValidIsoDate(value) ? new Date(value + 'T12:00:00') : null;
-const isoDate = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return '';
-  const dateOnly = date.toISOString().slice(0, 10);
-  return isValidIsoDate(dateOnly) ? dateOnly : '';
-};
-const dateFromDisplay = (value) => {
-  const match = String(value || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!match) return '';
-  const date = match[3] + '-' + match[2] + '-' + match[1];
-  return isValidIsoDate(date) ? date : '';
-};
-// Labels are localized; row identity and period filtering use the source date.
-const parseRowDate = (row) => isValidIsoDate(row.date_production) ? row.date_production : dateFromDisplay(row.date);
-const sumPresent = (rows, key) => {
-  const values = rows.map(row => row[key]).filter(value => value != null && value !== '' && Number.isFinite(Number(value)));
-  return values.length ? values.reduce((total, value) => total + Number(value), 0) : null;
-};
-const weekStart = (value) => {
-  const date = dateAtNoon(value);
-  if (!date) return '';
-  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-  return date.toISOString().slice(0, 10);
-};
-const weekEnd = (value) => {
-  const date = dateAtNoon(value);
-  if (!date) return '';
-  date.setDate(date.getDate() + 6);
-  return date.toISOString().slice(0, 10);
-};
-const dateLabel = (value) => dateAtNoon(value)?.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) || '—';
-const weekLabel = (value) => dateLabel(value) + ' – ' + dateLabel(weekEnd(value));
-const isMatch = (value, pattern) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replaceAll('œ', 'oe').includes(pattern);
-const chargeBucket = (charge) => {
-  const text = [charge.libelle, charge.categorie].filter(Boolean).join(' ').toLowerCase().replace(/[-']/g, ' ');
-  if (charge.source_journaliere || charge.id_vaccin || isMatch(text, 'vaccin')) return 'vaccine';
-  if (isMatch(text, 'main d oeuvre') || isMatch(text, 'main oeuvre') || isMatch(text, 'cnss')) return 'labor';
-  if (isMatch(text, 'salaire')) return 'salary';
-  if (isMatch(text, 'electricite') || isMatch(text, 'electric')) return 'electricity';
-  return 'other';
-};
 const loadPages = async (path, params = {}) => {
   const items = [];
   for (let skip = 0; skip < 50000; skip += 500) {
@@ -115,102 +83,6 @@ const loadPages = async (path, params = {}) => {
   }
   return items;
 };
-const parseMoney = (charge) => Number(charge.montant || 0);
-const lotKey = (cycle) => String(cycle.id_lot || 'cycle-' + cycle.id_cycle);
-const groupCycles = (cycles) => {
-  const grouped = new Map();
-  cycles.forEach((cycle) => {
-    const key = lotKey(cycle);
-    if (!grouped.has(key)) grouped.set(key, { key, cycles: [] });
-    grouped.get(key).cycles.push(cycle);
-  });
-  return [...grouped.values()].map((group) => ({ ...group, cycle: group.cycles[0] }));
-};
-
-function aggregateDays(dayRows, label, rowType = 'summary') {
-  if (!dayRows.length) return null;
-  const sum = (key) => dayRows.reduce((total, row) => total + Number(row[key] || 0), 0);
-  const eggs = sumPresent(dayRows, 'oeufs');
-  const deaths = sumPresent(dayRows, 'mort');
-  const birdDays = sum('effectif_debut');
-  const feed = sumPresent(dayRows, 'aliment_kg');
-  const cost = dayRows.every((row) => row._dailyTotal != null) ? sum('_dailyTotal') : null;
-  const sales = sum('_dailySales');
-  const sold = sum('_dailySold');
-  const hasWeights = dayRows.every((row) => !Number(row.oeufs) || row.eggMass != null);
-  const last = dayRows[dayRows.length - 1];
-  const formulas = [...new Set(dayRows.map((row) => row.formule).filter((value) => value && value !== '—' && value !== '-'))];
-  const otherItems = dayRows.flatMap((row) => row._otherItems || []);
-  const totalOther = otherItems.reduce((total, item) => total + Number(item.amount || 0), 0);
-  const typeSummary = ['normal', 'double', 'white', 'broken', 'lost'].reduce((result, key) => {
-    result[key] = sumPresent(dayRows, key);
-    return result;
-  }, {});
-  return {
-    ...last,
-    ...typeSummary,
-    id: rowType + '-' + dayRows[0].dateIso + '-' + label,
-    rowType,
-    _weekSpan: new Set(dayRows.map((row) => row._weekKey)).size,
-    date: label,
-    mort: deaths,
-    mort_pct: birdDays ? (deaths / birdDays * 100).toFixed(2) : null,
-    oeufs: eggs,
-    oeufs_cum: last.oeufs_cum,
-    weekCumEggs: eggs,
-    ponte_pct: birdDays ? (eggs / birdDays * 100).toFixed(2) : null,
-    formule: formulas.join(', ') || '—',
-    aliment_kg: feed,
-    prix_aliment: feed && cost != null ? sum('_feedCost') / feed : null,
-    g_poule: birdDays && feed != null ? (feed * 1000 / birdDays).toFixed(1) : null,
-    g_oeuf: eggs && feed != null ? (feed * 1000 / eggs).toFixed(1) : null,
-    poidsOeuf: eggs && hasWeights ? dayRows.reduce((total, row) => total + Number(row.poidsOeuf || 0) * Number(row.oeufs || 0), 0) / eggs : null,
-    autres: fmtDh(totalOther),
-    autresQuantite: otherItems.length ? otherItems.reduce((total, item) => total + Number(item.quantity || 0), 0) : null,
-    autresPrix: sum('autresQuantite') > 0 ? totalOther / sum('autresQuantite') : null,
-    _labor: sum('_labor'),
-    _salary: sum('_salary'),
-    _electricity: sum('_electricity'),
-    _feedCost: cost == null ? null : sum('_feedCost'),
-    _dailyTotal: cost,
-    depensesSemaine: cost,
-    totalDepenses: last.totalDepenses,
-    ventesSemaine: sales,
-    _sales: sales,
-    _sold: sold,
-    prixOeuf: sold ? sales / sold : null,
-    birds: last.effectif_fin,
-    cumDead: last.cumDead,
-    cumDeadRate: last.cumDeadRate,
-    cumEggs: last.cumEggs,
-    eggMass: eggs && hasWeights ? dayRows.reduce((total, row) => total + Number(row.poidsOeuf || 0) * Number(row.oeufs || 0), 0) / 1000 : null,
-    fcr: hasWeights && sum('eggMass') > 0 ? feed / sum('eggMass') : null,
-    cost: cost,
-    feedcost: cost == null ? null : sum('_feedCost'),
-    costPerEgg: eggs && cost != null ? cost / eggs : null,
-    sold,
-    sales,
-    margin: cost == null ? null : sales - cost,
-    weeklyEggPrice: sold ? sales / sold : null,
-    expected: dayRows.reduce((total, row) => total + Number(row._expectedBuildings || 0), 0),
-  };
-}
-
-function aggregateDemoDays(dayRows, label, rowType = 'summary') {
-  const row = aggregateDays(dayRows, label, rowType);
-  if (!row) return null;
-  const sum = (key) => dayRows.reduce((total, day) => total + Number(day[key] || 0), 0);
-  const cost = sum('_dailyTotal');
-  const sales = sum('_dailySales');
-  const sold = sum('_dailySold');
-  return {
-    ...row, id: 'demo-' + rowType + '-' + dayRows[0].dateIso + '-' + label,
-    cost, _dailyTotal: cost, depensesSemaine: cost, costPerEgg: row.oeufs ? cost / row.oeufs : null,
-    sales, _sales: sales, ventesSemaine: sales, sold, _sold: sold, margin: cost == null ? null : sales - cost,
-    prixOeuf: sold ? sales / sold : null, weeklyEggPrice: sold ? sales / sold : null,
-    fcr: row.eggMass ? row.aliment_kg / row.eggMass : null,
-  };
-}
 
 function GlobalOverviewPage() {
   const demosEnabled = ['preview', 'development'].includes(import.meta.env.VITE_DEPLOYMENT_ENV);
@@ -448,247 +320,7 @@ function GlobalOverviewPage() {
       const dailyTotal = feedCost == null ? null : dailyCharges + feedCost;
       cumulativeSpend = cumulativeSpend == null || dailyTotal == null ? null : cumulativeSpend + dailyTotal;
       const otherLines = charges.filter((charge) => ['other', 'vaccine'].includes(charge._bucket));
-      const typeCounts = { normal: sum('normal'), double: sum('double'), white: sum('white'), broken: sum('broken'), lost: sum('lost') };
-      const otherItems = otherLines.map((charge) => ({
-        label: charge.libelle,
-        quantity: Number(charge.quantite ?? 1),
-        amount: parseMoney(charge),
-        price: Number(charge.prix_unitaire ?? charge.montant ?? 0),
-      }));
-      const otherText = otherItems.map((item) => item.label + ': ' + fmt(item.quantity, 2) + ' × ' + fmtDh(item.price)).join(' · ');
-      const sales = salesByDate.get(dateIso) || { value: 0, quantity: 0 };
-      const percent = opening ? deaths / opening * 100 : null;
-      const result = {
-        id: 'day-' + dateIso,
-        rowType: 'day',
-        date: dateLabel(dateIso),
-        dateIso,
-        _weekKey: key,
-        _expectedBuildings: allowedCycles.length,
-        mort: dayRows.length ? deaths : null,
-        mort_pct: percent == null ? null : percent.toFixed(2),
-        oeufs: dayRows.length ? eggs : null,
-        oeufs_cum: weeklyEggs.get(key) ?? null,
-        ponte_pct: opening ? (eggs / opening * 100).toFixed(2) : null,
-        formule: [...new Set(dayRows.map((row) => row.formule).filter(Boolean))].join(', ') || '—',
-        aliment_kg: feed,
-        prix_aliment: feedPrice,
-        g_poule: opening && feed != null ? (feed * 1000 / opening).toFixed(1) : null,
-        g_oeuf: eggs && feed != null ? (feed * 1000 / eggs).toFixed(1) : null,
-        poidsOeuf: weight,
-        autres: otherText || '—',
-        autresQuantite: otherItems.length ? otherItems.reduce((total, item) => total + item.quantity, 0) : null,
-        autresPrix: otherItems.length ? otherItems.reduce((total, item) => total + item.amount, 0) / Math.max(1, otherItems.reduce((total, item) => total + item.quantity, 0)) : null,
-        _otherItems: otherItems,
-        _labor: charges.filter((charge) => charge._bucket === 'labor').reduce((total, charge) => total + parseMoney(charge), 0),
-        _salary: charges.filter((charge) => charge._bucket === 'salary').reduce((total, charge) => total + parseMoney(charge), 0),
-        _electricity: charges.filter((charge) => charge._bucket === 'electricity').reduce((total, charge) => total + parseMoney(charge), 0),
-        _feedCost: feedCost,
-        _dailyTotal: dailyTotal,
-        _weekCharges: weekCharges,
-        _weekSales: sales,
-        depensesSemaine: dailyTotal,
-        totalDepenses: cumulativeSpend,
-        ventesSemaine: null,
-        prixOeuf: null,
-        effectif_debut: opening,
-        effectif_fin: remaining,
-        birds: remaining,
-        cumDead: hasProduction ? cumulativeMort : null,
-        cumDeadRate: initial && hasProduction ? (cumulativeMort / initial * 100) : null,
-        normal: typeCounts.normal,
-        double: typeCounts.double,
-        white: typeCounts.white,
-        broken: typeCounts.broken,
-        lost: typeCounts.lost,
-        cumEggs: hasProduction ? cumulativeEggs : null,
-        eggMass: eggs && weight ? eggs * weight / 1000 : null,
-        fcr: eggs && weight && feed != null ? feed / (eggs * weight / 1000) : null,
-        feedcost: feedCost,
-        cost: dailyTotal,
-        costPerEgg: eggs && dailyTotal != null ? dailyTotal / eggs : null,
-        _dailySales: sales.value, _dailySold: sales.quantity,
-        sold: sales.quantity,
-        sales: sales.value,
-        margin: dailyTotal == null ? null : sales.value - dailyTotal,
-        weeklyEggPrice: null,
-      };
-      return result;
-    });
-  }, [data, buildingId]);
-
-  const demoMode = demosEnabled && (showExample || (!loading && !data && !error));
-  const demoProfile = DEMO_LOTS[demoLot] || DEMO_LOTS.active;
-  const demoDays = useMemo(() => demoMode ? buildDemoDays(demoLot, demoBuilding) : [], [demoMode, demoLot, demoBuilding]);
-
-  const sourceDays = demoMode ? demoDays : dailyRows;
-  const weeks = useMemo(() => [...new Set(sourceDays.map((row) => row._weekKey))].sort(), [sourceDays]);
-  const effectivePeriod = period === 'latest' ? (demoMode ? 'all' : weeks[weeks.length - 1] || 'all') : period;
-  const filteredDays = useMemo(() => effectivePeriod === 'all' ? sourceDays : sourceDays.filter((row) => row._weekKey === effectivePeriod), [sourceDays, effectivePeriod]);
-  const periods = useMemo(() => [{ key: 'all', label: 'Toute la période' }, ...weeks.map((week) => ({ key: week, label: weekLabel(week) }))], [weeks]);
-
-  const weekSummaries = useMemo(() => {
-    const grouped = new Map();
-    filteredDays.forEach((row) => {
-      const list = grouped.get(row._weekKey) || [];
-      list.push(row);
-      grouped.set(row._weekKey, list);
-    });
-    return [...grouped.entries()].map(([key, days]) => {
-      const row = demoMode ? aggregateDemoDays(days, 'Total semaine', 'summary') : aggregateDays(days, 'Total semaine', 'summary');
-      row._weekKey = key;
-      row.date = 'Total semaine · ' + weekLabel(key);
-      return row;
-    });
-  }, [demoMode, filteredDays]);
-
-  const monthSummaries = useMemo(() => {
-    const groups = new Map();
-    filteredDays.forEach((row) => {
-      const month = row.dateIso.slice(0, 7);
-      const list = groups.get(month) || [];
-      list.push(row);
-      groups.set(month, list);
-    });
-    return [...groups.entries()].map(([month, days]) => {
-      const label = 'Total mois · ' + new Date(month + '-15T12:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-      return demoMode ? aggregateDemoDays(days, label, 'summary') : aggregateDays(days, label, 'summary');
-    });
-  }, [filteredDays, demoMode]);
-
-  const periodSummary = useMemo(() => demoMode ? aggregateDemoDays(filteredDays, 'Total période', 'summary') : aggregateDays(filteredDays, 'Total période', 'summary'), [filteredDays, demoMode]);
-  const selectedColumns = useMemo(() => {
-    const keys = new Set(customColumns || COLUMN_PRESETS[view] || COLUMN_PRESETS.register);
-    return columns.filter((column) => keys.has(column.key)).map((column, index, chosen) => ({
-      ...column, groupStart: index === 0 || chosen[index - 1].group !== column.group,
-    }));
-  }, [columns, view, customColumns]);
-  const selectedKeys = useMemo(() => new Set(selectedColumns.map((column) => column.key)), [selectedColumns]);
-
-  const groupedRows = useMemo(() => {
-    if (groupBy === 'week') return weekSummaries;
-    if (groupBy === 'month') return monthSummaries;
-    const result = [];
-    filteredDays.forEach((day, index) => {
-      result.push(day);
-      const next = filteredDays[index + 1];
-      if (!next || next._weekKey !== day._weekKey) {
-        const summary = weekSummaries.find((row) => row._weekKey === day._weekKey);
-        if (summary) result.push(summary);
-      }
-    });
-    return result;
-  }, [filteredDays, groupBy, monthSummaries, weekSummaries]);
-
-  const displayRows = groupedRows;
-  const totalEggs = sumPresent(filteredDays, 'oeufs');
-  const totalBirdDays = filteredDays.reduce((total, row) => total + Number(row.effectif_debut || 0), 0);
-  const layingRate = totalBirdDays ? totalEggs / totalBirdDays * 100 : null;
-  const totalCost = periodSummary?.cost ?? null;
-  const totalSales = Number(periodSummary?.sales || 0);
-  const actualBuildingDays = demoMode ? filteredDays.reduce((total, row) => total + Number(row._actualBuildings || 0), 0) : new Set(data?.rows.filter((row) => {
-    const allowed = buildingId === 'all' || Number(row.id_batiment) === Number(buildingId);
-    const day = parseRowDate(row);
-    const inPeriod = effectivePeriod === 'all' || weekStart(day) === effectivePeriod;
-    return allowed && Boolean(day) && inPeriod;
-  }).map((row) => Number(row.id_batiment) + ':' + parseRowDate(row)) || []).size;
-  const cycleStart = isoDate(selectedLot?.cycle.date_debut);
-  const cycleEnd = isoDate(selectedLot?.cycle.date_fin_reelle) || new Date().toISOString().slice(0, 10);
-  const coverageStart = effectivePeriod === 'all' ? cycleStart : (effectivePeriod < cycleStart ? cycleStart : effectivePeriod);
-  const selectedWeekEnd = effectivePeriod === 'all' ? cycleEnd : weekEnd(effectivePeriod);
-  const coverageEnd = selectedWeekEnd > cycleEnd ? cycleEnd : selectedWeekEnd;
-  const coverageDays = coverageStart && coverageEnd ? Math.max(0, Math.floor((new Date(coverageEnd + 'T12:00:00') - new Date(coverageStart + 'T12:00:00')) / 86400000) + 1) : 0;
-  const selectedBuildings = selectedCycles.filter((cycle) => buildingId === 'all' || Number(cycle.id_batiment) === Number(buildingId));
-  const expectedBuildingDays = demoMode ? filteredDays.reduce((total, row) => total + Number(row._expectedBuildings || 0), 0) : coverageDays * selectedBuildings.length;
-  const statusName = (selectedLot?.cycle.statut || '').toLowerCase();
-  const lotStatus = ['termine', 'terminé', 'cloture', 'clôturé'].includes(statusName) ? 'terminé' : 'en cours';
-  const lotName = selectedLot?.cycle.nom_cycle || selectedLot?.cycle.souche || ('Lot #' + (selectedLot?.cycle.id_lot || selectedLot?.cycle.id_cycle));
-  const detail = (demoMode ? demoDays : dailyRows).find((row) => row.id === detailId);
-
-  const columnGroups = useMemo(() => COLUMN_GROUPS.map((group) => ({
-    ...group, count: selectedColumns.filter((column) => column.group === group.key).length,
-  })).filter((group) => group.count), [selectedColumns]);
-
-  const applyPreset = (key) => {
-    setView(key);
-    setCustomColumns(null);
-    tableRef.current?.scrollTo({ left: 0 });
-  };
-  const toggleColumn = (key) => {
-    setCustomColumns((current) => {
-      const keys = new Set(current || COLUMN_PRESETS[view]);
-      if (keys.has(key)) { if (keys.size > 1) keys.delete(key); }
-      else keys.add(key);
-      return [...keys];
-    });
-  };
-  const toggleGroup = (key) => {
-    setCustomColumns((current) => {
-      const keys = new Set(current || COLUMN_PRESETS[view]);
-      const groupKeys = columns.filter((column) => column.group === key).map((column) => column.key);
-      const allSelected = groupKeys.every((columnKey) => keys.has(columnKey));
-      groupKeys.forEach((columnKey) => { if (allSelected) { if (keys.size > 1) keys.delete(columnKey); } else keys.add(columnKey); });
-      return [...keys];
-    });
-  };
-  const jumpToGroup = (key) => {
-    const container = tableRef.current;
-    const header = groupRefs.current[key];
-    if (!container || !header) return;
-    const frozenWidth = container.querySelector('thead th')?.getBoundingClientRect().width || LABEL_WIDTH + 32;
-    const left = container.scrollLeft + header.getBoundingClientRect().left - container.getBoundingClientRect().left - frozenWidth;
-    container.scrollTo({ left: Math.max(0, left), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  };
-  const cellStyle = (column) => (theme) => ({
-    borderLeft: column.groupStart ? '3px solid ' + groupColor(theme, column.group, 'edge') : undefined,
-  });
-
-  const handleExport = async (format) => {
-    setExportAnchor(null);
-    setExporting(true);
-    setError('');
-    try {
-      await exportOverview(format, [...groupedRows, ...(periodSummary ? [periodSummary] : [])],
-        [{ key: 'date', label: groupBy === 'day' ? 'Date' : groupBy === 'week' ? 'Semaine' : 'Mois', value: (row) => row.date }, ...selectedColumns],
-        { demo: demoMode, lot: demoMode ? demoProfile.name : (selectedLot?.cycle.nom_cycle || selectedLot?.cycle.souche || 'Lot'),
-          period: periods.find((item) => item.key === effectivePeriod)?.label,
-          building: (demoMode ? demoBuilding : buildingId) === 'all' ? 'Tous les bâtiments' : 'Bâtiment ' + (demoMode ? demoBuilding : buildingId) });
-    } catch {
-      setError("Impossible de générer le fichier. Veuillez réessayer.");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  return (
-    <Box sx={{ pb: 4, minWidth: 0 }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={1.25} sx={{ mb: 1.5 }}>
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={800}>Suivi global</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>Registre de production et de coûts</Typography>
-        </Box>
-        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-          <Button size="small" sx={{ display: { xs: demosEnabled ? 'inline-flex' : 'none', sm: 'none' } }} aria-expanded={actionsOpen} aria-controls="overview-actions" onClick={() => setActionsOpen((open) => !open)}>Options</Button>
-          <Box id="overview-actions" sx={{ display: { xs: actionsOpen ? 'block' : 'none', sm: 'block' }, order: { xs: 3, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
-            <Stack direction="row" gap={0.75} flexWrap="wrap">
-              {demosEnabled && <Button size="small" onClick={() => setShowExample((value) => !value)} disabled={!data && !showExample}>{demoMode ? 'Données exemple' : 'Voir un exemple'}</Button>}
-            </Stack>
-          </Box>
-          <Button size="small" variant="contained" onClick={(event) => setExportAnchor(event.currentTarget)} disabled={!displayRows.length || exporting || (loading && !demoMode)} aria-haspopup="menu" aria-expanded={Boolean(exportAnchor)} aria-controls={exportAnchor ? 'overview-export-menu' : undefined} sx={{ ml: { xs: 'auto', sm: 0 } }}>{exporting ? 'Export en cours…' : 'Exporter'}</Button>
-          <Menu id="overview-export-menu" anchorEl={exportAnchor} open={Boolean(exportAnchor)} onClose={() => setExportAnchor(null)}>
-            <MenuItem onClick={() => handleExport('excel')}>Excel (.xlsx)</MenuItem>
-            <MenuItem onClick={() => handleExport('pdf')}>PDF (.pdf)</MenuItem>
-          </Menu>
-        </Stack>
-      </Stack>
-      <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ px: 1.5, py: 1 }}>
-          <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}>
-            <Typography variant="body2" fontWeight={700} sx={{ ...wrappedTextSx, flex: '0 1 auto' }}>{demoMode ? (demoProfile.name + ' · ' + (demoBuilding === 'all' ? demoProfile.buildings.length + ' bâtiments' : 'Bâtiment ' + demoBuilding) + ' · ' + (demoProfile.startAge + demoProfile.weeks - 1) + ' semaines · ' + demoProfile.status) : lotName + ' · ' + (buildingId === 'all' ? selectedCycles.length + ' bâtiments' : selectedCycles.find((cycle) => Number(cycle.id_batiment) === Number(buildingId))?.nom_batiment || 'Bâtiment ' + buildingId) + ' · ' + (selectedLot?.cycle.age_semaines || selectedLot?.cycle.semaine_cycle || '—') + ' semaines · ' + lotStatus}</Typography>
-            <Typography variant="caption" sx={{ ml: 'auto', textAlign: 'right' }} color={demoMode || actualBuildingDays >= expectedBuildingDays ? 'success.main' : 'warning.main'}>{actualBuildingDays + '/' + expectedBuildingDays} journées bâtiment renseignées</Typography>
-            {isMobile && <Typography variant="caption" sx={{ display: 'block', flexBasis: '100%' }}>{periods.find((item) => item.key === effectivePeriod)?.label}</Typography>}
-          </Box>
-          <Button size="small" variant="outlined" sx={{ display: { xs: 'inline-flex', sm: 'none' }, flexShrink: 0 }} aria-expanded={filtersOpen} aria-controls="overview-filters" onClick={() => setFiltersOpen((open) => !open)}>{filtersOpen ? 'Masquer' : 'Filtres'}</Button>
+      const typeCounts = { normal: sum('normal'), double: sum('double'), white: sum('white'), broken: s…3824 tokens truncated…r' : 'Filtres'}</Button>
         </Stack>
         <Collapse id="overview-filters" in={!isMobile || filtersOpen}>
       {demoMode ? (
