@@ -130,7 +130,7 @@ def test_all_valid_methods_reduce_customer_and_supplier_debt(db_session, test_pr
     assert financial_position_as_of(db_session, date(2026, 1, 31)) == {"receivables": Decimal(75), "payables": Decimal(75)}
 
 
-def test_cancelled_expenses_and_lc_cessions_do_not_change_cash(db_session, balances):
+def test_cancelled_expenses_and_lc_cessions_do_not_change_cash(client, db_session, balances):
     from app.models.charge import Charge
     from app.models.cession_lc import CessionLC
     from app.models.lettre_credit import LettreDeCredit
@@ -160,6 +160,12 @@ def test_cancelled_expenses_and_lc_cessions_do_not_change_cash(db_session, balan
     db_session.commit()
     assert cash_ledger_as_of(db_session, cutoff)["balance"] == 175
     assert bank_ledgers_as_of(db_session, cutoff)[account.id_compte] == 5375
+    response = client.get('/api/v1/caisse/mouvements', params={'date_fin': cutoff.isoformat()})
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert len(rows) == 3  # Two effective client payments and one valid cash expense.
+    assert all(row['id_cession'] is None for row in rows)
+    assert sum(Decimal(row['montant']) * (1 if row['type_mouvement'] == 'ENTREE' else -1) for row in rows) == 175
 
 
 @pytest.mark.parametrize("opening", ["1234.56", "-1234.56"])

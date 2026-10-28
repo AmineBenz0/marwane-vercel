@@ -183,23 +183,10 @@ def financial_position_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
     }
 
 
-def cash_ledger_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
-    """Return cash movements through a date, excluding non-cash LC cessions.
-
-    Cash has a zero opening balance in the current schema. Bank opening
-    balances are represented by a single `initial` bank movement and are
-    included by `bank_ledgers_as_of`; the stored balance is never added again.
-    Historical snapshots are reference points and are not added to movements.
-    """
+def cash_movements_as_of(db: Session, as_of: date):
+    """Shared valid cash rows for balances, the register, and its exports."""
     transaction_id = func.coalesce(Caisse.id_transaction, Paiement.id_transaction)
-    query = db.query(
-        func.coalesce(func.sum(case(
-            (Caisse.type_mouvement == "ENTREE", Caisse.montant), else_=literal(Decimal("0")),
-        )), literal(Decimal("0"))).label("inflows"),
-        func.coalesce(func.sum(case(
-            (Caisse.type_mouvement == "SORTIE", Caisse.montant), else_=literal(Decimal("0")),
-        )), literal(Decimal("0"))).label("outflows"),
-    ).outerjoin(
+    return db.query(Caisse).outerjoin(
         Paiement, Paiement.id_paiement == Caisse.id_paiement,
     ).outerjoin(
         Transaction, Transaction.id_transaction == transaction_id,
@@ -215,6 +202,24 @@ def cash_ledger_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
             and_(_effective_payment_predicate(), _effective_payment_date_expression() <= as_of),
         ),
         or_(Caisse.id_charge.is_(None), Charge.statut == "active"),
+    )
+
+
+def cash_ledger_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
+    """Return cash movements through a date, excluding non-cash LC cessions.
+
+    Cash has a zero opening balance in the current schema. Bank opening
+    balances are represented by a single `initial` bank movement and are
+    included by `bank_ledgers_as_of`; the stored balance is never added again.
+    Historical snapshots are reference points and are not added to movements.
+    """
+    query = cash_movements_as_of(db, as_of).with_entities(
+        func.coalesce(func.sum(case(
+            (Caisse.type_mouvement == "ENTREE", Caisse.montant), else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("inflows"),
+        func.coalesce(func.sum(case(
+            (Caisse.type_mouvement == "SORTIE", Caisse.montant), else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("outflows"),
     ).one()
     inflows = Decimal(str(query.inflows or 0))
     outflows = Decimal(str(query.outflows or 0))
