@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Literal
 
 class CompteBancaireBase(BaseModel):
@@ -34,6 +34,7 @@ class CompteBancaireRead(BaseModel):
     nom_banque: str
     numero_compte: str
     solde_actuel: Decimal
+    date_soldes: Optional[date] = None
     date_modification: datetime
 
     model_config = ConfigDict(from_attributes=True)

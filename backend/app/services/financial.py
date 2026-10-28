@@ -18,6 +18,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
+from app.models.caisse import Caisse
+from app.models.charge import Charge
+from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
@@ -69,7 +72,7 @@ def payment_total_as_of(transaction: Transaction, as_of: date) -> Decimal:
         (
             Decimal(str(payment.montant))
             for payment in transaction.paiements
-            if payment.date_paiement <= as_of and payment.est_effectif
+            if _payment_date(payment) <= as_of and payment.est_effectif
         ),
         Decimal("0"),
     )
@@ -80,6 +83,20 @@ def remaining_amount_as_of(transaction: Transaction, as_of: date) -> Decimal:
     return Decimal(str(transaction.montant_total)) - payment_total_as_of(transaction, as_of)
 
 
+def _payment_date(payment: Paiement) -> date:
+    """Use the settlement date for cleared checks and the posted date otherwise."""
+    if payment.type_paiement == "cheque":
+        return payment.date_encaissement_effective or payment.date_paiement
+    return payment.date_paiement
+
+
+def _effective_payment_date_expression():
+    return case(
+        (Paiement.type_paiement == "cheque", func.coalesce(Paiement.date_encaissement_effective, Paiement.date_paiement)),
+        else_=Paiement.date_paiement,
+    )
+
+
 def _effective_payment_predicate():
     """Return the canonical SQL predicate for payments affecting balances."""
     return and_(
@@ -88,20 +105,24 @@ def _effective_payment_predicate():
     )
 
 
-def _payment_totals_subquery(db: Session):
+def _payment_totals_subquery(db: Session, as_of: Optional[date] = None):
     """Aggregate effective payments once so collection queries stay set-based."""
+    query = db.query(
+        Paiement.id_transaction.label("id_transaction"),
+        func.sum(Paiement.montant).label("montant_paye"),
+    ).filter(_effective_payment_predicate())
+    if as_of is not None:
+        query = query.filter(_effective_payment_date_expression() <= as_of)
     return (
-        db.query(
-            Paiement.id_transaction.label("id_transaction"),
-            func.sum(Paiement.montant).label("montant_paye"),
-        )
-        .filter(_effective_payment_predicate())
+        query
         .group_by(Paiement.id_transaction)
         .subquery("effective_payment_totals")
     )
 
 
-def contact_balances(db: Session, *, direction: str, contact_ids: list[int]) -> dict[int, Decimal]:
+def contact_balances(
+    db: Session, *, direction: str, contact_ids: list[int], as_of: Optional[date] = None,
+) -> dict[int, Decimal]:
     """Return net balances for one contact page in a single aggregate query.
 
     IDs come from the already filtered/paginated contact list. A successful
@@ -115,21 +136,151 @@ def contact_balances(db: Session, *, direction: str, contact_ids: list[int]) -> 
         return {}
 
     contact_id = columns[direction]
-    payment_totals = _payment_totals_subquery(db)
+    payment_totals = _payment_totals_subquery(db, as_of)
     paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0")))
-    rows = (
+    query = (
         db.query(
             contact_id.label("contact_id"),
             func.sum(Transaction.montant_total - paid).label("balance"),
         )
         .outerjoin(payment_totals, payment_totals.c.id_transaction == Transaction.id_transaction)
         .filter(Transaction.est_actif.is_(True), contact_id.in_(contact_ids))
-        .group_by(contact_id)
-        .all()
     )
+    if as_of is not None:
+        query = query.filter(Transaction.date_transaction <= as_of)
+    rows = query.group_by(contact_id).all()
     balances = dict.fromkeys(contact_ids, Decimal("0"))
     balances.update({row.contact_id: Decimal(str(row.balance)) for row in rows})
     return balances
+
+
+def financial_position_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
+    """Return receivables and payables from active transactions at a date.
+
+    All payment methods share the same effective-payment predicate. Cleared
+    checks count from their settlement date; only transactions and payments
+    dated on or before the requested cutoff contribute.
+    """
+    payment_totals = _payment_totals_subquery(db, as_of)
+    paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0")))
+    rows = db.query(
+        func.coalesce(func.sum(case(
+            (Transaction.id_client.isnot(None), Transaction.montant_total - paid),
+            else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("receivables"),
+        func.coalesce(func.sum(case(
+            (Transaction.id_fournisseur.isnot(None), Transaction.montant_total - paid),
+            else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("payables"),
+    ).outerjoin(
+        payment_totals, payment_totals.c.id_transaction == Transaction.id_transaction,
+    ).filter(
+        Transaction.est_actif.is_(True), Transaction.date_transaction <= as_of,
+    ).one()
+    return {
+        "receivables": Decimal(str(rows.receivables or 0)),
+        "payables": Decimal(str(rows.payables or 0)),
+    }
+
+
+def cash_ledger_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
+    """Return cash movements through a date, excluding non-cash LC cessions.
+
+    Cash has a zero opening balance in the current schema. Bank opening
+    balances are represented by a single `initial` bank movement and are
+    included by `bank_ledgers_as_of`; the stored balance is never added again.
+    Historical snapshots are reference points and are not added to movements.
+    """
+    transaction_id = func.coalesce(Caisse.id_transaction, Paiement.id_transaction)
+    query = db.query(
+        func.coalesce(func.sum(case(
+            (Caisse.type_mouvement == "ENTREE", Caisse.montant), else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("inflows"),
+        func.coalesce(func.sum(case(
+            (Caisse.type_mouvement == "SORTIE", Caisse.montant), else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("outflows"),
+    ).outerjoin(
+        Paiement, Paiement.id_paiement == Caisse.id_paiement,
+    ).outerjoin(
+        Transaction, Transaction.id_transaction == transaction_id,
+    ).outerjoin(
+        Charge, Charge.id_charge == Caisse.id_charge,
+    ).filter(
+        Caisse.statut == "active",
+        Caisse.id_cession.is_(None),
+        func.date(Caisse.date_mouvement) <= as_of,
+        or_(transaction_id.is_(None), Transaction.est_actif.is_(True)),
+        or_(
+            Caisse.id_paiement.is_(None),
+            and_(_effective_payment_predicate(), _effective_payment_date_expression() <= as_of),
+        ),
+        or_(Caisse.id_charge.is_(None), Charge.statut == "active"),
+    ).one()
+    inflows = Decimal(str(query.inflows or 0))
+    outflows = Decimal(str(query.outflows or 0))
+    return {"inflows": inflows, "outflows": outflows, "balance": inflows - outflows}
+
+
+def bank_ledgers_as_of(db: Session, as_of: date) -> dict[int, Decimal]:
+    """Return each account's opening balance plus valid bank movements once."""
+    rows = db.query(
+        MouvementBancaire.id_compte,
+        func.sum(case(
+            (MouvementBancaire.type_mouvement == "ENTREE", MouvementBancaire.montant),
+            else_=-MouvementBancaire.montant,
+        )).label("balance"),
+    ).outerjoin(
+        Paiement, Paiement.id_paiement == MouvementBancaire.id_paiement,
+    ).outerjoin(
+        Transaction, Transaction.id_transaction == Paiement.id_transaction,
+    ).outerjoin(
+        Charge, Charge.id_charge == MouvementBancaire.id_charge,
+    ).filter(
+        MouvementBancaire.statut == "active",
+        func.date(MouvementBancaire.date_mouvement) <= as_of,
+        or_(
+            MouvementBancaire.id_paiement.is_(None),
+            and_(_effective_payment_predicate(), _effective_payment_date_expression() <= as_of,
+                 Transaction.est_actif.is_(True)),
+        ),
+        or_(MouvementBancaire.id_charge.is_(None), Charge.statut == "active"),
+    ).group_by(MouvementBancaire.id_compte).all()
+    balances = {account.id_compte: Decimal("0") for account in db.query(CompteBancaire.id_compte).all()}
+    balances.update({row.id_compte: Decimal(str(row.balance or 0)) for row in rows})
+    return balances
+
+
+def bank_activity_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
+    """Return cumulative valid bank inflows/outflows through an explicit date."""
+    rows = db.query(
+        func.coalesce(func.sum(case(
+            (MouvementBancaire.type_mouvement == "ENTREE", MouvementBancaire.montant),
+            else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("inflows"),
+        func.coalesce(func.sum(case(
+            (MouvementBancaire.type_mouvement == "SORTIE", MouvementBancaire.montant),
+            else_=literal(Decimal("0")),
+        )), literal(Decimal("0"))).label("outflows"),
+    ).outerjoin(
+        Paiement, Paiement.id_paiement == MouvementBancaire.id_paiement,
+    ).outerjoin(
+        Transaction, Transaction.id_transaction == Paiement.id_transaction,
+    ).outerjoin(
+        Charge, Charge.id_charge == MouvementBancaire.id_charge,
+    ).filter(
+        MouvementBancaire.statut == "active",
+        func.date(MouvementBancaire.date_mouvement) <= as_of,
+        or_(
+            MouvementBancaire.id_paiement.is_(None),
+            and_(_effective_payment_predicate(), _effective_payment_date_expression() <= as_of,
+                 Transaction.est_actif.is_(True)),
+        ),
+        or_(MouvementBancaire.id_charge.is_(None), Charge.statut == "active"),
+    ).one()
+    return {
+        "inflows": Decimal(str(rows.inflows or 0)),
+        "outflows": Decimal(str(rows.outflows or 0)),
+    }
 
 
 def _payment_expressions(payment_totals, today: date):

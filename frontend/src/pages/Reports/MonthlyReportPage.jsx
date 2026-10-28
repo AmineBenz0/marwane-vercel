@@ -51,6 +51,8 @@ function MonthlyReportPage() {
     historical: [
       { indicateur: 'À encaisser', valeur: report.creances, type: 'money' },
       { indicateur: 'À payer aux fournisseurs', valeur: report.dettes, type: 'money' },
+      { indicateur: 'Solde caisse', valeur: report.solde_caisse_historique, type: 'money' },
+      ...(report.soldes_bancaires_historiques || []).map(account => ({ indicateur: `Solde ${account.nom_banque}`, valeur: account.solde, type: 'money' })),
     ],
     current: [
       { indicateur: 'À encaisser', valeur: report.creances_actuelles, type: 'money' },
@@ -63,7 +65,7 @@ function MonthlyReportPage() {
       { indicateur: 'Variation nette stock', valeur: report.inventory_quantity_delta, type: 'quantity' },
     ],
   } : null, [report]);
-  const historicalDate = formatShortDate(report?.date_fin);
+  const historicalDate = formatShortDate(report?.date_soldes_historiques || report?.date_fin);
   const currentDate = formatShortDate(report?.date_soldes_actuels);
   const exportRows = useMemo(() => groups ? [
     { indicateur: 'Période', valeur: `${formatShortDate(report.date_debut)} – ${formatShortDate(report.date_fin)}` },

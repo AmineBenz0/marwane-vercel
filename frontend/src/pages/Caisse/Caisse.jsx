@@ -164,8 +164,8 @@ function Caisse() {
   }, [lettresCreditDisponibles]);
 
   const stats = useMemo(() => {
-    const totalDisponible = toNumber(soldeComplet?.solde_reel ?? soldeComplet?.solde_theorique);
-    const cashEnCaisse = totalDisponible - lcDisponiblesTotal;
+    const cashEnCaisse = toNumber(soldeComplet?.solde_caisse ?? soldeComplet?.solde_reel ?? 0);
+    const totalDisponible = cashEnCaisse + lcDisponiblesTotal;
     const aEncaisser = Math.max(0, toNumber(soldeComplet?.creances_clients));
     const aPayer = Math.max(0, toNumber(soldeComplet?.dettes_fournisseurs));
 

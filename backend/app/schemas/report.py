@@ -22,6 +22,7 @@ class MonthlyReport(BaseModel):
     date_debut: date
     date_fin: date
     date_soldes_actuels: Optional[date] = None
+    date_soldes_historiques: date
     creances_actuelles: Optional[Decimal] = None
     dettes_actuelles: Optional[Decimal] = None
     ventes: Decimal
@@ -30,9 +31,11 @@ class MonthlyReport(BaseModel):
     caisse_entrees: Decimal
     caisse_sorties: Decimal
     solde_caisse: Decimal
+    solde_caisse_historique: Decimal
     banques_entrees: Decimal
     banques_sorties: Decimal
     soldes_bancaires: List[BankBalance]
+    soldes_bancaires_historiques: List[BankBalance]
     creances: Decimal
     dettes: Decimal
     top_clients: List[RankedTotal]

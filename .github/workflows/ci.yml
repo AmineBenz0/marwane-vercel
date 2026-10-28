@@ -113,6 +113,13 @@ jobs:
           ENVIRONMENT: testing
           SECRET_KEY: ci-only-secret
 
+      - name: Verify financial balances and cash views on PostgreSQL
+        run: python -m pytest --override-ini addopts='' tests/test_financial_position.py tests/test_contact_balances.py tests/test_vue_solde_caisse.py -q
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          SECRET_KEY: ci-only-secret
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 from typing import List
 from decimal import Decimal
+from datetime import date
 
 from app.database import get_db
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.utils.dependencies import get_current_active_user
 from app.services.financial_ledger import record_bank_movement, validate_bank_idempotency
+from app.services.financial import bank_ledgers_as_of
+from app.utils.business_date import business_date
 from app.models.user import Utilisateur
 from app.schemas.compte_bancaire import (
     CompteBancaireCreate,
@@ -15,18 +18,29 @@ from app.schemas.compte_bancaire import (
     MouvementBancaireRead,
 )
 
-from sqlalchemy import func, case
 from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/comptes-bancaires", tags=["Comptes Bancaires"])
 
 @router.get("", response_model=List[CompteBancaireRead])
 def get_comptes(
+    date_as_of: date | None = Query(None),
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Récupère la liste de tous les comptes bancaires."""
-    return db.query(CompteBancaire).all()
+    as_of = date_as_of or business_date()
+    balances = bank_ledgers_as_of(db, as_of)
+    accounts = db.query(CompteBancaire).all()
+    return [
+        CompteBancaireRead.model_validate(account).model_copy(
+            update={
+                "solde_actuel": balances.get(account.id_compte, Decimal("0")),
+                "date_soldes": as_of,
+            }
+        )
+        for account in accounts
+    ]
 
 @router.get("/{id}/mouvements", response_model=List[MouvementBancaireRead])
 def get_mouvements(
@@ -45,6 +59,7 @@ def get_mouvements(
 @router.get("/{id}/solde-calcule")
 def get_solde_calcule(
     id: int,
+    date_as_of: date | None = Query(None),
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -57,20 +72,15 @@ def get_solde_calcule(
     if not compte:
         raise HTTPException(status_code=404, detail="Compte bancaire introuvable")
         
-    solde_calcule = db.query(
-        func.sum(
-            case(
-                (MouvementBancaire.type_mouvement == 'ENTREE', MouvementBancaire.montant),
-                else_=-MouvementBancaire.montant
-            )
-        )
-    ).filter(MouvementBancaire.id_compte == id, MouvementBancaire.statut == "active").scalar() or Decimal('0.00')
+    as_of = date_as_of or business_date()
+    solde_calcule = bank_ledgers_as_of(db, as_of).get(id, Decimal("0.00"))
     
     return {
         "id_compte": id,
         "nom_banque": compte.nom_banque,
         "solde_stocke": compte.solde_actuel,
         "solde_calcule": solde_calcule,
+        "date_soldes": as_of,
         "ecart": Decimal(str(compte.solde_actuel)) - solde_calcule
     }
 

@@ -3,7 +3,7 @@ Schémas Pydantic pour la validation des données caisse.
 """
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Literal
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 
 
@@ -114,8 +114,9 @@ class SoldeCaisseCompletRead(BaseModel):
     # Solde Réel (basé sur les paiements)
     solde_reel: Decimal = Field(
         ..., 
-        description="Solde réel basé sur les paiements effectivement encaissés"
+        description="Solde de caisse: solde initial plus mouvements espèces valides"
     )
+    solde_caisse: Decimal = Field(..., description="Solde de caisse à la date indiquée")
     entrees_reelles: Decimal = Field(
         ..., 
         description="Total des entrées réelles (paiements clients encaissés)"
@@ -128,7 +129,7 @@ class SoldeCaisseCompletRead(BaseModel):
     # Écart entre théorique et réel
     ecart: Decimal = Field(
         ..., 
-        description="Écart entre le solde théorique et le solde réel (créances non encaissées)"
+        description="Créances clients moins dettes fournisseurs, calculées depuis les ventes et paiements valides"
     )
     
     # Détails de l'écart
@@ -140,6 +141,7 @@ class SoldeCaisseCompletRead(BaseModel):
         ..., 
         description="Montant des dettes fournisseurs (transactions fournisseurs non payées)"
     )
+    date_soldes: date = Field(..., description="Date de calcul des soldes historiques")
     
     # Métadonnées
     derniere_maj_transaction: datetime | None = Field(

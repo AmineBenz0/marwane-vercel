@@ -23,15 +23,17 @@ from app.schemas.caisse import (
 from app.utils.dependencies import get_current_active_user
 from app.utils.business_date import business_date
 from app.models.user import Utilisateur
+from app.services.financial import financial_position_as_of, cash_ledger_as_of
 
 router = APIRouter(prefix="/caisse", tags=["Caisse"])
 
 
-def _get_lc_disponibles_total(db: Session) -> Decimal:
+def _get_lc_disponibles_total(db: Session, as_of: Optional[date] = None) -> Decimal:
     """Valeur des LC actives et utilisables aujourd'hui, comptees comme caisse."""
+    as_of = as_of or business_date()
     total = db.query(func.coalesce(func.sum(LettreDeCredit.montant), 0)).filter(
         LettreDeCredit.statut == 'active',
-        LettreDeCredit.date_disponibilite <= business_date()
+        LettreDeCredit.date_disponibilite <= as_of
     ).scalar() or Decimal('0.00')
     return Decimal(str(total))
 
@@ -104,17 +106,14 @@ def get_mouvements(
 
 @router.get("/solde", response_model=SoldeCaisseRead, status_code=status.HTTP_200_OK)
 def get_solde(
+    date_as_of: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
     Récupère le solde actuel de la caisse calculé en temps réel (THÉORIQUE).
     
-    ⚠️ ATTENTION : Ce solde est basé sur les TRANSACTIONS, pas sur les paiements réels.
-    Pour avoir le solde réel basé sur les encaissements, utilisez /solde/complet
-    
-    Le solde est calculé comme la différence entre les entrées et les sorties :
-    solde = somme(ENTREE) - somme(SORTIE)
+    Renvoie le solde espèces calculé depuis les mouvements de caisse valides.
     
     Args:
         db: Session de base de données
@@ -123,55 +122,33 @@ def get_solde(
     Returns:
         Solde actuel de la caisse avec la date du dernier mouvement (SoldeCaisseRead)
     """
-    # Calculer le solde théorique : somme des transactions clients - somme des transactions fournisseurs
-    entrees = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
-        Transaction.id_client.isnot(None),
-        Transaction.est_actif
-    ).scalar() or Decimal('0.00')
-    
-    sorties = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
-        Transaction.id_fournisseur.isnot(None),
-        Transaction.est_actif
-    ).scalar() or Decimal('0.00')
-    
-    lc_disponibles = _get_lc_disponibles_total(db)
-
-    # Calculer le solde théorique avec les LC disponibles comptées directement.
-    solde_theorique = Decimal(str(entrees)) - Decimal(str(sorties)) + lc_disponibles
-    
-    # Récupérer la date de la dernière transaction active
-    derniere_maj = db.query(func.max(Transaction.date_transaction)).filter(
-        Transaction.est_actif
+    as_of = date_as_of or business_date()
+    solde_caisse = cash_ledger_as_of(db, as_of)["balance"]
+    derniere_maj = db.query(func.max(Caisse.date_mouvement)).filter(
+        Caisse.statut == "active",
+        Caisse.id_cession.is_(None),
+        func.date(Caisse.date_mouvement) <= as_of,
     ).scalar()
     
     if not derniere_maj:
         derniere_maj = datetime.now(timezone.utc)
     
     return SoldeCaisseRead(
-        solde_actuel=solde_theorique,
+        solde_actuel=solde_caisse,
         derniere_maj=derniere_maj
     )
 
 
 @router.get("/solde/complet", response_model=SoldeCaisseCompletRead, status_code=status.HTTP_200_OK)
 def get_solde_complet(
+    date_as_of: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """
-    Récupère une vision complète de la caisse avec deux perspectives :
-    
-    1. 💰 SOLDE THÉORIQUE (Expected) : Basé sur les transactions enregistrées
-       - Représente ce qui est "dû" (créances) et ce qui est "à payer" (dettes)
-       - Calculé à partir des mouvements de caisse liés aux transactions
-    
-    2. 💵 SOLDE RÉEL (Actual) : Basé sur les paiements effectivement encaissés
-       - Représente l'argent réellement entré/sorti de la caisse
-       - Calculé à partir des paiements validés et des chèques encaissés
-    
-    3. 📊 ÉCART : Différence entre théorique et réel
-       - Créances clients non encaissées
-       - Dettes fournisseurs non payées
+    Les créances et dettes viennent des transactions et paiements valides,
+    quel que soit le moyen de paiement. Le solde espèces vient uniquement des
+    mouvements de caisse; les soldes bancaires sont calculés séparément.
     
     Args:
         db: Session de base de données
@@ -181,67 +158,50 @@ def get_solde_complet(
         Vue complète du solde de la caisse (SoldeCaisseCompletRead)
     """
     
-    # ==================== SOLDE THÉORIQUE ====================
-    # Basé directement sur les transactions (Chiffre d'affaires attendu)
+    as_of = date_as_of or business_date()
+
+    # ==================== POSITION FINANCIÈRE ====================
+    # Créances/dettes nettes des paiements valides, tous moyens confondus.
     
     entrees_theoriques = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
         Transaction.id_client.isnot(None),
-        Transaction.est_actif
+        Transaction.est_actif,
+        Transaction.date_transaction <= as_of,
     ).scalar() or Decimal('0.00')
     
     sorties_theoriques = db.query(func.coalesce(func.sum(Transaction.montant_total), 0)).filter(
         Transaction.id_fournisseur.isnot(None),
-        Transaction.est_actif
+        Transaction.est_actif,
+        Transaction.date_transaction <= as_of,
     ).scalar() or Decimal('0.00')
     
-    lc_disponibles = _get_lc_disponibles_total(db)
+    lc_disponibles = _get_lc_disponibles_total(db, as_of)
     entrees_theoriques = Decimal(str(entrees_theoriques)) + lc_disponibles
     sorties_theoriques = Decimal(str(sorties_theoriques))
     solde_theorique = entrees_theoriques - sorties_theoriques
     
     # Date du dernier mouvement (transaction)
     derniere_maj_transaction = db.query(func.max(Transaction.date_transaction)).filter(
-        Transaction.est_actif
+        Transaction.est_actif,
+        Transaction.date_transaction <= as_of,
     ).scalar()
     
-    # ==================== SOLDE RÉEL ====================
-    # Basé sur les mouvements de caisse enregistrés (Paiements effectifs)
-    
-    entrees_reelles_mouvements = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
-        Caisse.type_mouvement == 'ENTREE',
-        Caisse.statut == 'active',
-        Transaction.est_actif
-    ).scalar() or Decimal('0.00')
-    
-    sorties_reelles = db.query(func.coalesce(func.sum(Caisse.montant), 0)).outerjoin(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
-        Caisse.type_mouvement == 'SORTIE',
-        Caisse.statut == 'active',
-        Caisse.id_cession.is_(None),
-        or_(
-            Transaction.est_actif,
-            Caisse.id_transaction.is_(None)
-        )
-    ).scalar() or Decimal('0.00')
-    
-    entrees_reelles = Decimal(str(entrees_reelles_mouvements)) + lc_disponibles
-    solde_reel = entrees_reelles - Decimal(str(sorties_reelles))
+    # ==================== SOLDES DE CAISSE ====================
+    # Caisse snapshots are not added to the ledger; LC cessions are not cash.
+    cash = cash_ledger_as_of(db, as_of)
+    solde_reel = cash["balance"]
     
     # Date du dernier paiement/mouvement
-    derniere_maj_paiement = db.query(func.max(Caisse.date_mouvement)).scalar()
+    derniere_maj_paiement = db.query(func.max(Caisse.date_mouvement)).filter(
+        Caisse.statut == "active",
+        Caisse.id_cession.is_(None),
+        func.date(Caisse.date_mouvement) <= as_of,
+    ).scalar()
     
     # ==================== ÉCART ET DÉTAILS ====================
     
-    ecart = solde_theorique - solde_reel
-    
-    # Créances clients = Transactions clients - Paiements clients
-    creances_clients = entrees_theoriques - entrees_reelles
-
-    # Dettes fournisseurs = Transactions fournisseurs - Paiements fournisseurs
-    dettes_fournisseurs = sorties_theoriques - Decimal(str(sorties_reelles))
+    position = financial_position_as_of(db, as_of)
+    ecart = position["receivables"] - position["payables"]
     
     return SoldeCaisseCompletRead(
         # Solde théorique
@@ -251,13 +211,15 @@ def get_solde_complet(
         
         # Solde réel
         solde_reel=solde_reel,
-        entrees_reelles=Decimal(str(entrees_reelles)),
-        sorties_reelles=Decimal(str(sorties_reelles)),
+        solde_caisse=solde_reel,
+        entrees_reelles=cash["inflows"],
+        sorties_reelles=cash["outflows"],
         
         # Écart
         ecart=ecart,
-        creances_clients=creances_clients,
-        dettes_fournisseurs=dettes_fournisseurs,
+        creances_clients=position["receivables"],
+        dettes_fournisseurs=position["payables"],
+        date_soldes=as_of,
         
         # Métadonnées
         derniere_maj_transaction=derniere_maj_transaction,

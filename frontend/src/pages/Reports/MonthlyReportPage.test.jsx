@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MonthlyReportPage from './MonthlyReportPage';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
+import { exportToPDF } from '../../utils/exportToPDF';
 
 vi.mock('../../services/api', () => ({ get: vi.fn() }));
 vi.mock('../../utils/exportToExcel', () => ({ exportToExcelAdvanced: vi.fn() }));
@@ -23,9 +24,12 @@ describe('MonthlyReportPage', () => {
       caisse_entrees: '80.00',
       caisse_sorties: '30.00',
       solde_caisse: '250.00',
+      solde_caisse_historique: '100.00',
+      date_soldes_historiques: '2026-09-30',
       banques_entrees: '20.00',
       banques_sorties: '5.00',
       soldes_bancaires: [{ id_compte: 1, nom_banque: 'Banque Test', numero_compte: '123', solde: '500.00' }],
+      soldes_bancaires_historiques: [{ id_compte: 1, nom_banque: 'Banque Test', numero_compte: '123', solde: '300.00' }],
       inventory_movements: 3,
       inventory_quantity_delta: '7.500',
       top_clients: [],
@@ -56,6 +60,24 @@ describe('MonthlyReportPage', () => {
       'rapport_mensuel_2026-09',
       'Synthèse',
     ));
+  });
+
+  it('exports the displayed historical and current balances with dates in Excel and PDF', async () => {
+    render(<MonthlyReportPage />);
+    await screen.findByRole('region', { name: 'Situation actuelle' });
+    fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois' }));
+    expect(await screen.findByText(/300,00/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(value);
+    const expected = [
+      { indicateur: 'Solde caisse au 30/09/26', valeur: money(100) },
+      { indicateur: 'Solde Banque Test au 30/09/26', valeur: money(300) },
+      { indicateur: 'Solde caisse actuel au 25/10/26', valeur: money(250) },
+      { indicateur: 'Solde Banque Test actuel au 25/10/26', valeur: money(500) },
+    ];
+    expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining(expected));
+    expect(exportToPDF.mock.calls[0][0]).toEqual(exportToExcelAdvanced.mock.calls[0][0]);
   });
 });
 

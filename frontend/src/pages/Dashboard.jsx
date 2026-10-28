@@ -173,7 +173,7 @@ function Dashboard() {
         const ventes = transactionsMois.filter((t) => t.id_client !== null);
         const achats = transactionsMois.filter((t) => t.id_fournisseur !== null);
 
-        setSoldeCaisse(parseFloat(soldeResponse.solde_reel ?? soldeResponse.solde_theorique ?? 0));
+        setSoldeCaisse(parseFloat(soldeResponse.solde_caisse ?? soldeResponse.solde_reel ?? soldeResponse.solde_theorique ?? 0));
         setNbTransactionsMois(transactionsMois.length);
         setTotalVentes(ventes.reduce((sum, t) => sum + parseFloat(t.montant_total || 0), 0));
         setTotalAchats(achats.reduce((sum, t) => sum + parseFloat(t.montant_total || 0), 0));
