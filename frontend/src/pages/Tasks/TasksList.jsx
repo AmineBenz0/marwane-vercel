@@ -19,7 +19,7 @@ import {
   Edit as EditIcon,
   TaskAlt as TaskAltIcon,
 } from '@mui/icons-material';
-import { isSameDay, parseISO, startOfDay } from 'date-fns';
+import { getTaskDate, groupTasks, isTaskDone } from './taskListModel';
 import { formatShortDate, formatShortDateTime } from '../../utils/dateFormatting';
 import TaskModal from '../../components/Tasks/TaskModal';
 import taskService from '../../services/taskService';
@@ -46,23 +46,12 @@ const FILTERS = [
   { key: 'terminees', label: 'Terminees' },
 ];
 
-const getTaskDate = (task) => {
-  if (!task?.date_debut) return null;
-  try {
-    return typeof task.date_debut === 'string' ? parseISO(task.date_debut) : new Date(task.date_debut);
-  } catch {
-    return null;
-  }
-};
-
 const formatTaskDate = (task) => {
   const date = getTaskDate(task);
   if (!date) return 'Date non definie';
   if (task.est_toute_la_journee) return formatShortDate(date);
   return formatShortDateTime(date);
 };
-
-const isTaskDone = (task) => task.statut === 'complete' || task.statut === 'annule';
 
 function TasksList() {
   const [tasks, setTasks] = useState([]);
@@ -126,36 +115,10 @@ function TasksList() {
     }
   };
 
-  const today = startOfDay(new Date());
-
-  const sortedTasks = useMemo(() => (
-    [...tasks].sort((a, b) => {
-      const dateA = getTaskDate(a);
-      const dateB = getTaskDate(b);
-      if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateA - dateB;
-    })
-  ), [tasks]);
-
-  const todayTasks = useMemo(() => (
-    sortedTasks.filter((task) => {
-      const date = getTaskDate(task);
-      return date && isSameDay(date, today) && !isTaskDone(task);
-    })
-  ), [sortedTasks, today]);
-
-  const upcomingTasks = useMemo(() => (
-    sortedTasks.filter((task) => {
-      const date = getTaskDate(task);
-      return date && startOfDay(date) > today && !isTaskDone(task);
-    })
-  ), [sortedTasks, today]);
-
-  const completedTasks = useMemo(() => (
-    sortedTasks.filter(isTaskDone).slice(-4).reverse()
-  ), [sortedTasks]);
+  const taskGroups = groupTasks(tasks, new Date());
+  const { sortedTasks, overdue: overdueTasks, today: todayTasks, upcoming: upcomingTasks,
+    unscheduled: unscheduledTasks, completed: completedTasks, allInActionOrder: allTasksInActionOrder,
+    counts: taskCounts } = taskGroups;
 
   const filteredTasks = useMemo(() => {
     switch (activeFilter) {
@@ -168,33 +131,20 @@ function TasksList() {
       case 'terminees':
         return sortedTasks.filter(isTaskDone);
       default:
-        return sortedTasks;
+        return allTasksInActionOrder;
     }
-  }, [activeFilter, sortedTasks, todayTasks]);
+  }, [activeFilter, sortedTasks, todayTasks, allTasksInActionOrder]);
 
   const stats = [
-    { label: "Aujourd'hui", value: todayTasks.length, helper: 'A traiter dans la journee' },
-    { label: 'En attente', value: tasks.filter((task) => task.statut === 'en_attente').length, helper: 'Encore ouvertes' },
-    { label: 'Urgentes', value: tasks.filter((task) => task.priorite === 'haute' && !isTaskDone(task)).length, helper: 'A regarder en premier' },
-    { label: 'Terminees', value: tasks.filter(isTaskDone).length, helper: 'Archivees ou annulees' },
+    { label: "Aujourd'hui", value: taskCounts.aujourdhui, helper: 'A traiter dans la journee' },
+    { label: 'En attente', value: taskCounts.en_attente, helper: 'Encore ouvertes' },
+    { label: 'Urgentes', value: taskCounts.urgentes, helper: 'A regarder en premier' },
+    { label: 'Terminees', value: taskCounts.terminees, helper: 'Archivees ou annulees' },
   ];
 
   const filterOptions = FILTERS.map((filter) => ({
     ...filter,
-    count: (() => {
-      switch (filter.key) {
-        case 'aujourdhui':
-          return todayTasks.length;
-        case 'en_attente':
-          return tasks.filter((task) => task.statut === 'en_attente').length;
-        case 'urgentes':
-          return tasks.filter((task) => task.priorite === 'haute' && !isTaskDone(task)).length;
-        case 'terminees':
-          return tasks.filter(isTaskDone).length;
-        default:
-          return tasks.length;
-      }
-    })(),
+    count: taskCounts[filter.key] ?? taskCounts.toutes,
   }));
 
   return (
@@ -325,37 +275,53 @@ function TasksList() {
       </Card>
 
       {activeFilter === 'toutes' ? (
-        <>
-          <Grid container spacing={3}>
-            <Grid item xs={12} lg={6}>
-              <TaskPanel
-                title="A faire aujourd'hui"
-                subtitle="Les actions qui comptent maintenant."
-                tasks={todayTasks}
-                emptyText="Aucune tache aujourd'hui."
-                onCreate={handleCreate}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <TaskPanel
-                title="Prochaines taches"
-                subtitle="Seulement ce qui arrive bientot."
-                tasks={upcomingTasks}
-                emptyText="Aucune prochaine tache prevue."
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            </Grid>
-          </Grid>
-
-          <Grid container spacing={3} sx={{ mt: 0 }}>
-            <Grid item xs={12}>
-              <RecentCompleted tasks={completedTasks} onEdit={handleEdit} />
-            </Grid>
-          </Grid>
-        </>
+        <Stack spacing={2.5}>
+          {overdueTasks.length > 0 && <TaskPanel
+            title="En retard"
+            subtitle="À traiter en priorité."
+            tasks={overdueTasks}
+            emptyText="Aucune tâche en retard."
+            onCreate={handleCreate}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />}
+          {todayTasks.length > 0 && <TaskPanel
+            title="À faire aujourd'hui"
+            subtitle="Les actions prévues pour aujourd'hui."
+            tasks={todayTasks}
+            emptyText="Aucune tâche aujourd'hui."
+            onCreate={overdueTasks.length === 0 ? handleCreate : undefined}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />}
+          {upcomingTasks.length > 0 && <TaskPanel
+            title="Prochaines tâches"
+            subtitle="Ce qui est prévu ensuite."
+            tasks={upcomingTasks}
+            emptyText="Aucune prochaine tâche prévue."
+            onCreate={overdueTasks.length === 0 && todayTasks.length === 0 ? handleCreate : undefined}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />}
+          {unscheduledTasks.length > 0 && <TaskPanel
+            title="Sans date prévue"
+            subtitle="Les tâches ouvertes sans échéance."
+            tasks={unscheduledTasks}
+            emptyText="Aucune tâche sans date prévue."
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />}
+          {completedTasks.length > 0 && <RecentCompleted tasks={completedTasks} onEdit={handleEdit} />}
+          {tasks.length === 0 && <TaskPanel
+            title="Toutes les tâches"
+            subtitle="0 tâche trouvée."
+            tasks={[]}
+            emptyText="Aucune tâche pour le moment."
+            onCreate={handleCreate}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />}
+        </Stack>
       ) : (
         <TaskPanel
           title={FILTERS.find((filter) => filter.key === activeFilter)?.label || 'Taches'}
@@ -505,10 +471,10 @@ function RecentCompleted({ tasks, onEdit }) {
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
           <Box>
             <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.15rem' }}>
-              Terminees recemment
+              Tâches terminées
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Les dernieres taches fermees.
+              Tâches terminées ou annulées.
             </Typography>
           </Box>
           <TaskAltIcon sx={{ color: '#1D6F50' }} />
