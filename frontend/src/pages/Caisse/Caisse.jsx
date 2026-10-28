@@ -275,10 +275,10 @@ function Caisse() {
             Actualiser
           </Button>
           <Button variant="outlined" startIcon={!isMobile && <DownloadIcon />} onClick={handleExportExcel} disabled={visibleMovements.length === 0}>
-            Excel
+            Exporter en Excel
           </Button>
           <Button variant="contained" onClick={handleExportPDF} disabled={visibleMovements.length === 0}>
-            PDF
+            Exporter en PDF
           </Button>
         </Stack>
       </Stack>
@@ -417,7 +417,7 @@ function Caisse() {
               </Stack>
             ) : (
               <TableContainer sx={{ overflowX: 'auto' }}>
-                <Table sx={{ minWidth: 760 }}>
+                <Table sx={{ minWidth: 640, width: '100%', tableLayout: 'fixed' }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>Date</TableCell>

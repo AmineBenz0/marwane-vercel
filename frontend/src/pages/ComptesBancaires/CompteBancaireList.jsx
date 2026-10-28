@@ -15,6 +15,7 @@ import {
   InputAdornment,
   MenuItem,
   Stack,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -135,8 +136,6 @@ function CompteBancaireList() {
       return accountMatches && searchMatches;
     });
   }, [accountFilter, comptesMap, search, sortedMovements]);
-
-  const latestMovement = sortedMovements[0] || null;
 
   const fetchData = async () => {
     setLoading(true);
@@ -308,25 +307,19 @@ function CompteBancaireList() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1.4fr 1fr 1fr' },
+          gridTemplateColumns: { xs: '1fr', md: '1.4fr 1fr' },
           gap: 2,
           mb: 2.5,
         }}
       >
-        <BigBalanceCard value={totalSolde} comptesCount={comptes.length} />
+        <BigBalanceCard value={totalSolde} comptesCount={comptes.length} loading={loading} />
         <SummaryCard
           label="Comptes actifs"
           value={comptes.length}
           helper={comptes.length === 0 ? 'Aucun compte enregistré' : comptes.map((compte) => compte.nom_banque).join(', ')}
           icon={<BankIcon />}
           tone="info"
-        />
-        <SummaryCard
-          label="Dernier mouvement"
-          value={latestMovement ? formatSignedAmount(latestMovement) : '-'}
-          helper={latestMovement ? `${latestMovement.compte_nom || '-'} · ${formatDate(latestMovement.date_mouvement)}` : 'Aucun mouvement'}
-          icon={latestMovement?.type_mouvement === 'SORTIE' ? <TrendingDownIcon /> : <TrendingUpIcon />}
-          tone={latestMovement?.type_mouvement === 'SORTIE' ? 'error' : 'success'}
+          loading={loading}
         />
       </Box>
 
@@ -340,7 +333,7 @@ function CompteBancaireList() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 0.9fr) minmax(0, 1.35fr)' },
+            gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 0.85fr) minmax(0, 1.55fr)' },
             gap: 2,
             alignItems: 'start',
           }}
@@ -350,7 +343,6 @@ function CompteBancaireList() {
               <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
                 <Box>
                   <Typography variant="h6" fontWeight={900}>Mes comptes</Typography>
-                  <Typography color="text.secondary">Le solde de chaque banque reste visible.</Typography>
                 </Box>
               </Stack>
 
@@ -429,15 +421,15 @@ function CompteBancaireList() {
                   ))}
                 </Stack>
               ) : (
-                <TableContainer sx={{ overflowX: 'auto' }}>
-                  <Table sx={{ minWidth: 820 }}>
+                <TableContainer sx={{ overflowX: 'hidden', width: '100%' }}>
+                  <Table sx={{ minWidth: 0, tableLayout: 'fixed', '& td, & th': { px: 1, whiteSpace: 'normal' } }}>
                     <TableHead>
                       <TableRow>
                         <TableCell>Date</TableCell>
-                        <TableCell>Compte</TableCell>
+                        <TableCell sx={{ width: '22%' }}>Compte</TableCell>
                         <TableCell>Opération</TableCell>
-                        <TableCell>Référence</TableCell>
-                        <TableCell align="right">Montant</TableCell>
+                        <TableCell sx={{ display: { md: 'none', xl: 'table-cell' }, width: '16%' }}>Référence</TableCell>
+                        <TableCell align="right" sx={{ width: '22%' }}>Montant</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -495,7 +487,7 @@ function getInitialMovementForm(idCompte = '') {
   };
 }
 
-function BigBalanceCard({ value, comptesCount }) {
+function BigBalanceCard({ value, comptesCount, loading }) {
   const amount = parseAmount(value);
   const formattedAmount = new Intl.NumberFormat('fr-FR', {
     maximumFractionDigits: 0,
@@ -540,7 +532,7 @@ function BigBalanceCard({ value, comptesCount }) {
               textShadow: '0 8px 22px rgba(0, 0, 0, 0.16)',
             }}
           >
-            {formattedAmount}
+            {loading ? <Skeleton width={140} sx={{ bgcolor: 'rgba(255,255,255,0.25)' }} /> : formattedAmount}
           </Typography>
           <Typography
             component="span"
@@ -552,18 +544,18 @@ function BigBalanceCard({ value, comptesCount }) {
               color: 'rgba(255,255,255,0.92)',
             }}
           >
-            MAD
+          {!loading && 'MAD'}
           </Typography>
         </Stack>
         <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, maxWidth: 420 }}>
-          {helper}
+          {loading ? <Skeleton width="85%" sx={{ bgcolor: 'rgba(255,255,255,0.22)' }} /> : helper}
         </Typography>
       </CardContent>
     </Card>
   );
 }
 
-function SummaryCard({ label, value, helper, icon, tone }) {
+function SummaryCard({ label, value, helper, icon, tone, loading = false }) {
   const colors = {
     info: { bg: '#eff6ff', color: '#2563eb' },
     success: { bg: '#ecfdf3', color: '#047857' },
@@ -579,10 +571,10 @@ function SummaryCard({ label, value, helper, icon, tone }) {
               {label}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 950, mt: 1, letterSpacing: '-0.05em' }}>
-              {value}
+              {loading ? <Skeleton width={90} /> : value}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.75 }} noWrap>
-              {helper}
+              {loading ? <Skeleton width="90%" /> : helper}
             </Typography>
           </Box>
           <Box
@@ -668,7 +660,7 @@ function MovementRow({ movement }) {
           </Box>
         </Stack>
       </TableCell>
-      <TableCell>{movement.reference || '-'}</TableCell>
+      <TableCell sx={{ display: { md: 'none', xl: 'table-cell' } }}>{movement.reference || '-'}</TableCell>
       <TableCell align="right">
         <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>
           {formatSignedAmount(movement)}
@@ -883,7 +875,7 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
                   </MenuItem>
                   {availableLcs.map((lc) => (
                     <MenuItem key={lc.id_lc} value={lc.numero_reference}>
-                      {lc.numero_reference} ({formatMontant(parseAmount(lc.montant), { useCompactNotation: false, maximumFractionDigits: 0 })} MAD) {lc.detenteur_nom ? `· ${lc.detenteur_nom}` : ''}
+                      {lc.numero_reference} ({formatMontant(parseAmount(lc.montant), { useCompactNotation: false, maximumFractionDigits: 0 })}) {lc.detenteur_nom ? `· ${lc.detenteur_nom}` : ''}
                     </MenuItem>
                   ))}
                 </TextField>

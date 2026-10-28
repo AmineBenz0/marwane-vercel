@@ -977,10 +977,7 @@ function FournisseurProfile() {
           rows={transactions || []}
           loading={false}
           getClientOuFournisseur={() => fournisseur?.nom_fournisseur || 'Fournisseur'}
-          produitsMap={produitsMap}
-          batimentsMap={batimentsMap}
           formatMontant={(value) => formatMontant(value, { useCompactNotation: false })}
-          dailySummaryMode="exits"
           onView={handleViewTransaction}
           title="Historique des transactions"
           description="Achats, règlements et soldes de ce fournisseur."

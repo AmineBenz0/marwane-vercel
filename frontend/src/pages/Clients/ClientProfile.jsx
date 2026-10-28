@@ -996,10 +996,7 @@ function ClientProfile() {
           rows={transactions || []}
           loading={false}
           getClientOuFournisseur={() => client?.nom_client || 'Client'}
-          produitsMap={produitsMap}
-          batimentsMap={batimentsMap}
           formatMontant={(value) => formatMontant(value, { useCompactNotation: false })}
-          dailySummaryMode="entries"
           onView={handleViewTransaction}
           title="Historique des transactions"
           description=""

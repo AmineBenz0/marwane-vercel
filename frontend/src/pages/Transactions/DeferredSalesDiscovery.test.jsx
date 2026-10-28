@@ -48,10 +48,13 @@ describe('deferred sale stock reservations', () => {
   it('keeps canceled sales in the register without adding them to financial totals or follow-up', async () => {
     sales.push({ ...paid, id_transaction: 99, est_actif: false, montant_total: 999, montant_restant: 999, montant_paye: 0, statut_paiement: 'impaye' });
     render(<MemoryRouter initialEntries={['/transactions']}><TransactionsList /></MemoryRouter>);
-    expect(await screen.findByText('Annulée')).toBeVisible();
-    expect(screen.getAllByText('4 500 MAD')[0]).toBeVisible();
-    expect(screen.getByText(/Entrées 4\s500\sMAD \| Sorties 0\sMAD/)).toBeVisible();
-    expect(screen.getByText('Tout est réglé')).toBeVisible();
+    expect(await screen.findByText('Vente annulée')).toBeVisible();
+    const activeSalesTotal = screen.getAllByText((_, element) => (
+      element?.textContent?.replace(/[\s\u00a0\u202f]/g, '') === '4500MAD'
+    ))[0];
+    expect(activeSalesTotal).toBeVisible();
+    expect(screen.queryByText(/Entrées .*Sorties/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Total jour')).not.toBeInTheDocument();
   });
 
   it('shows actionable promises with the client and reserved quantity', async () => {
