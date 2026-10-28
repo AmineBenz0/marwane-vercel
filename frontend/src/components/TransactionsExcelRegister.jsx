@@ -237,7 +237,7 @@ function TransactionsExcelRegister({
           sx={{
             width: '100%',
             maxWidth: '100%',
-            overflowX: 'hidden',
+            overflowX: 'auto',
             WebkitOverflowScrolling: 'touch',
             border: '1px solid',
             borderColor: 'divider',
@@ -248,7 +248,7 @@ function TransactionsExcelRegister({
           <Table
             size="small"
             sx={{
-              minWidth: 0,
+              minWidth: 980,
               width: '100%',
               tableLayout: 'fixed',
               '& th': {
@@ -274,14 +274,23 @@ function TransactionsExcelRegister({
               },
             }}
           >
+            <colgroup>
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '29%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '10%' }} />
+            </colgroup>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ ...stickyDateHeaderSx, width: 94 }}>Date</TableCell>
-                <TableCell sx={{ width: 72 }}>Type</TableCell>
+                <TableCell sx={stickyDateHeaderSx}>Date</TableCell>
+                <TableCell>Type</TableCell>
                 <TableCell>Client / Fournisseur</TableCell>
-                <TableCell align="right" sx={{ width: 140 }}>Montant</TableCell>
-                <TableCell align="right" sx={{ width: 140 }}>Reste</TableCell>
-                <TableCell sx={{ width: 130 }}>Statut</TableCell>
+                <TableCell align="right">Montant</TableCell>
+                <TableCell align="right">Reste</TableCell>
+                <TableCell>Statut</TableCell>
                 <TableCell align="center" sx={stickyActionHeaderSx}>Action</TableCell>
               </TableRow>
             </TableHead>
@@ -436,7 +445,17 @@ function TransactionExcelRow({
         />
       </TableCell>
       <TableCell>
-        <Typography fontWeight={850} sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography
+          fontWeight={850}
+          title={partnerName}
+          sx={{
+            display: 'block',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {partnerName}
         </Typography>
       </TableCell>
@@ -538,9 +557,6 @@ const stickyActionHeaderSx = {
   position: 'sticky',
   right: 0,
   zIndex: 4,
-  width: 96,
-  minWidth: 96,
-  maxWidth: 96,
   p: '0 !important',
   backgroundColor: 'transparent !important',
 };
@@ -549,9 +565,6 @@ const stickyActionBodySx = {
   position: 'sticky',
   right: 0,
   zIndex: 2,
-  width: 96,
-  minWidth: 96,
-  maxWidth: 96,
   p: '0 !important',
   backgroundColor: 'transparent !important',
 };
@@ -563,3 +576,4 @@ const groupRowSx = {
 };
 
 export default TransactionsExcelRegister;
+
