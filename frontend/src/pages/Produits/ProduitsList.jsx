@@ -29,6 +29,7 @@ import ProduitForm from './ProduitForm';
 import { get, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { getProductUsage, productUsageLabels } from '../../utils/productUsage';
+import { deferredStockQuantities } from '../Transactions/deferredStockQuantities';
 
 const formatMoney = (value, maximumFractionDigits = 2) => {
   const amount = Number(value || 0);
@@ -104,7 +105,7 @@ function ProduitsList() {
         if (transaction.est_promesse) {
           current.promiseCompleted += Number(transaction.quantite_completee || 0);
           current.promiseReady += Number(transaction.quantite_reservee || 0);
-          current.promisePending += Math.max(0, Number(transaction.quantite_en_attente || 0) - Number(transaction.quantite_reservee || 0));
+          current.promisePending += deferredStockQuantities(transaction).toProduce;
         }
         current.total += Number(transaction.montant_total || 0);
 

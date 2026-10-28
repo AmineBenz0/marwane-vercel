@@ -414,8 +414,22 @@ def deferred_sale_reservations(db):
     ).options(selectinload(Transaction.allocations)).all()
     for tx in promises:
         allocated_but_not_completed = sum(max(0, a.quantite - (a.quantite_livree or 0)) for a in tx.allocations)
-        result[tx.id_transaction] = result.get(tx.id_transaction, 0) + allocated_but_not_completed
+        result[tx.id_transaction] = min(
+            max(0, tx.quantite_en_attente),
+            result.get(tx.id_transaction, 0) + allocated_but_not_completed,
+        )
     return result
+
+
+def deferred_stock_quantities(transaction, reserved=0):
+    """Return the shared per-sale stock breakdown used by every transaction view."""
+    pending = max(0, int(transaction.quantite_en_attente or 0)) if transaction.est_promesse else 0
+    reserved = min(pending, max(0, int(reserved or 0))) if transaction.est_actif else 0
+    return {
+        "quantite_completee": max(0, int(transaction.quantite_completee or 0)),
+        "quantite_reservee": reserved,
+        "quantite_a_produire": max(0, pending - reserved),
+    }
 
 
 def deferred_sales_overview(db):
@@ -433,10 +447,9 @@ def deferred_sales_overview(db):
                  date_livraison_prevue=tx.date_livraison_prevue,
                  quantite=tx.quantite,
                  quantite_couverte=tx.quantite_couverte,
-                 quantite_completee=tx.quantite_completee,
                  quantite_en_attente=tx.quantite_en_attente,
                  quantite_annulee=tx.quantite_annulee or 0,
-                 quantite_reservee=reservations.get(tx.id_transaction, 0))
+                 **deferred_stock_quantities(tx, reservations.get(tx.id_transaction, 0)))
             for tx in sales if tx.quantite_en_attente > 0]
 
 

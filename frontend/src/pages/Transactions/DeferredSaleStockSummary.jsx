@@ -1,16 +1,14 @@
 import { Box, LinearProgress, Stack, Typography } from '@mui/material';
 import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
+import { deferredStockQuantities } from './deferredStockQuantities';
 
 const number = value => Number(value || 0).toLocaleString('fr-FR');
 export default function DeferredSaleStockSummary({ sale, showStatus = true }) {
-  const quantity = Number(sale.quantite ?? (Number(sale.quantite_couverte || 0) + Number(sale.quantite_en_attente || 0)));
+  const deliveredFromSources = (sale.repartition_stock || []).reduce((total, allocation) => total + Number(allocation.quantite_livree || 0), 0);
+  const quantity = Number(sale.quantite ?? (Number(sale.quantite_completee || 0) + Number(sale.quantite_en_attente || 0)));
   const complete = Number(sale.quantite_en_attente) === 0;
-  const covered = Number(sale.quantite_couverte ?? Math.max(
-    0, quantity - Number(sale.quantite_en_attente || 0),
-  ));
-  const completed = Number(sale.quantite_completee ?? covered);
-  const ready = Math.min(Number(sale.quantite_reservee || 0), Number(sale.quantite_en_attente || 0));
-  const toProduce = Math.max(0, Number(sale.quantite_en_attente || 0) - ready);
+  const completed = Number(sale.quantite_completee ?? deliveredFromSources);
+  const { reserved: ready, toProduce } = deferredStockQuantities(sale);
   const reservedPercent = quantity > 0 ? Math.min(100, (completed / quantity) * 100) : 0;
   return <Stack spacing={1.5}>
     {showStatus && <Box><DeferredSaleStatusBadge sale={sale} /></Box>}

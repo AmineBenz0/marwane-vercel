@@ -20,7 +20,9 @@ from app.schemas.client import (
     ClientStatsMensuelles, ClientStatsMensuellesItem, ClientProduitsAchetes, ProduitAchete,
     ClientInsightsFinanciers, ClientScore
 )
+from app.schemas.transaction import TransactionRead
 from app.services.financial import contact_balances
+from app.services.egg_sales import deferred_sale_reservations, deferred_stock_quantities
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
@@ -162,12 +164,20 @@ def get_client_profile(
     ).order_by(
         Transaction.date_transaction.desc()
     ).offset(skip).limit(limit).all()
+
+    reservations = deferred_sale_reservations(db) if any(tx.est_promesse for tx in transactions) else {}
+    transaction_reads = [
+        TransactionRead.model_validate(tx).model_copy(update=deferred_stock_quantities(
+            tx, reservations.get(tx.id_transaction, 0),
+        ))
+        for tx in transactions
+    ]
     
     # Construire la réponse
     profile = ClientProfile(
         client=client,
         statistiques=statistiques,
-        transactions=transactions
+        transactions=transaction_reads
     )
     
     return profile

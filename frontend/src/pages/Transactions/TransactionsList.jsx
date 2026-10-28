@@ -54,6 +54,7 @@ import {
 } from '@mui/icons-material';
 import TransactionForm from './TransactionForm';
 import { deferredSaleStatus } from './deferredSaleStatus';
+import { deferredStockQuantities } from './deferredStockQuantities';
 import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
@@ -588,7 +589,7 @@ function TransactionsList() {
       ] : [])];
       const promiseRows = rowsForExport.map(row => ({
         ...row,
-        quantite_a_produire: Math.max(0, Number(row.quantite_en_attente || 0) - Number(row.quantite_reservee || 0)),
+        quantite_a_produire: deferredStockQuantities(row).toProduce,
       }));
       const totalMontant = rowsForExport.reduce(
         (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
@@ -708,7 +709,7 @@ function TransactionsList() {
       ] : [])];
       const promiseRows = rowsForExport.map(row => ({
         ...row,
-        quantite_a_produire: Math.max(0, Number(row.quantite_en_attente || 0) - Number(row.quantite_reservee || 0)),
+        quantite_a_produire: deferredStockQuantities(row).toProduce,
       }));
       const totalMontant = rowsForExport.reduce(
         (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
@@ -1653,6 +1654,7 @@ function TransactionExcelRow({
   const remainingAmount = Number(transaction.montant_restant || 0);
   const totalAmount = getSignedAmount(transaction);
   const inactive = transaction.est_actif === false;
+  const promiseStock = deferredStockQuantities(transaction);
   const rowBackground = inactive ? 'grey.50' : 'background.paper';
   const [actionMenuAnchor, setActionMenuAnchor] = useState(null);
   const actionMenuOpen = Boolean(actionMenuAnchor);
@@ -1726,7 +1728,7 @@ function TransactionExcelRow({
         {transaction.est_promesse ? <Stack spacing={0.75} alignItems="flex-start">
           <DeferredSaleStatusBadge sale={transaction} />
           {transaction.date_livraison_prevue && <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>}
-          {!inactive && Number(transaction.quantite_en_attente) > 0 && <Typography variant="caption">{Number(transaction.quantite_completee) > 0 ? `${formatNumberValue(transaction.quantite_completee)} complétés · ` : ''}{Number(transaction.quantite_reservee) > 0 ? `${formatNumberValue(transaction.quantite_reservee)} prêts · ` : ''}{formatNumberValue(Math.max(0, Number(transaction.quantite_en_attente) - Number(transaction.quantite_reservee || 0)))} à produire</Typography>}
+          {!inactive && Number(transaction.quantite_en_attente) > 0 && <Typography variant="caption">{promiseStock.completed > 0 ? `${formatNumberValue(promiseStock.completed)} complétés · ` : ''}{promiseStock.reserved > 0 ? `${formatNumberValue(promiseStock.reserved)} prêts · ` : ''}{formatNumberValue(promiseStock.toProduce)} à produire</Typography>}
         </Stack> : '—'}
       </TableCell>
       <TableCell align="right" sx={stickyActionBodySx}>

@@ -737,9 +737,8 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         building["sold_eggs"] += quantity
         category["sold_eggs"] += quantity
         if cumulative and transaction.est_promesse:
-            # Deferred allocations exclude eggs from resale, but are stock
-            # reserved for the client; allocation does not record a delivery.
-            category['allocated_deferred_eggs'] = category.get('allocated_deferred_eggs', 0) + quantity
+            # Completed eggs are already included in sold_eggs. Only the
+            # undelivered part of an allocation remains reserved stock.
             if target_date >= business_date():
                 allocated_pending = sum(
                     max(0, allocation.quantite - (allocation.quantite_livree or 0))
@@ -792,9 +791,8 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
 
     for building in stock_by_batiment.values():
         unallocated_reserved = sum(category.get("reserved_eggs", 0) for category in building["categories"].values())
-        allocated_reserved = sum(category.get("allocated_deferred_eggs", 0) for category in building["categories"].values())
         allocated_pending_reserved = sum(category.get("allocated_pending_eggs", 0) for category in building["categories"].values())
-        reserved = unallocated_reserved + allocated_reserved + allocated_pending_reserved
+        reserved = unallocated_reserved + allocated_pending_reserved
         available = building["produced_eggs"] - building["sold_eggs"] - unallocated_reserved - allocated_pending_reserved
         status_value = _stock_status(0 if cumulative else building["produced_eggs"], available, building["entries_count"])
         if status_value == "missing":
@@ -803,12 +801,11 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         categories = []
         for category in building["categories"].values():
             category_available = category["produced_eggs"] - category["sold_eggs"] - category.get("reserved_eggs", 0)
-            allocated = category.pop('allocated_deferred_eggs', 0)
             categories.append({
                 **category,
                 "available_eggs": category_available - category.get('allocated_pending_eggs', 0),
-                "reserved_eggs": category.get("reserved_eggs", 0) + allocated + category.get('allocated_pending_eggs', 0),
-                "physical_eggs": category["produced_eggs"] - category["sold_eggs"] + allocated + category.get('allocated_pending_eggs', 0),
+                "reserved_eggs": category.get("reserved_eggs", 0) + category.get('allocated_pending_eggs', 0),
+                "physical_eggs": category["produced_eggs"] - category["sold_eggs"],
                 "promised_pending_eggs": category.get("promised_pending_eggs", 0),
                 "balance_after_promises": (category_available - category.get('allocated_pending_eggs', 0)
                     - max(0, category.get("promised_pending_eggs", 0)
@@ -824,7 +821,7 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
             "lost_eggs": building["lost_eggs"],
             "available_eggs": available,
             "reserved_eggs": reserved,
-            "physical_eggs": building["produced_eggs"] - building["sold_eggs"] + allocated_reserved + allocated_pending_reserved,
+            "physical_eggs": building["produced_eggs"] - building["sold_eggs"],
             "promised_pending_eggs": sum(category.get("promised_pending_eggs", 0) for category in categories),
             "balance_after_promises": available - sum(
                 max(0, category.get("promised_pending_eggs", 0)

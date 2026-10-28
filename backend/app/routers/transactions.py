@@ -45,10 +45,17 @@ from app.services.financial import validate_payment_date, validate_payment_idemp
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.ledger import record_correction
-from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations, assign_pending_promises, source_balances
+from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations, deferred_stock_quantities, assign_pending_promises, source_balances
 from app.utils.business_date import business_date
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
+
+
+def _transaction_read(db, transaction):
+    reservations = deferred_sale_reservations(db) if transaction.est_promesse and transaction.est_actif else {}
+    return TransactionRead.model_validate(transaction).model_copy(update=deferred_stock_quantities(
+        transaction, reservations.get(transaction.id_transaction, 0),
+    ))
 
 
 @router.get("/production-sources")
@@ -565,7 +572,7 @@ def get_transactions(
     
     reservations = deferred_sale_reservations(db) if any(tx.est_promesse for tx in transactions) else {}
     return [TransactionRead.model_validate(tx).model_copy(update={
-        'quantite_reservee': reservations.get(tx.id_transaction, 0) if tx.est_actif else 0,
+        **deferred_stock_quantities(tx, reservations.get(tx.id_transaction, 0)),
     }) for tx in transactions]
 
 
@@ -673,7 +680,7 @@ def complete_transaction(
         db.commit()
         db.refresh(transaction)
         reserved = deferred_sale_reservations(db).get(id, 0) if transaction.quantite_en_attente > 0 else 0
-        return TransactionRead.model_validate(transaction).model_copy(update={'quantite_reservee': reserved})
+        return TransactionRead.model_validate(transaction).model_copy(update=deferred_stock_quantities(transaction, reserved))
     except Exception:
         db.rollback()
         raise
@@ -693,7 +700,7 @@ def reschedule_deferred_sale(
         raise HTTPException(400, "La date prévue ne peut pas précéder la vente.")
     before = transaction.date_livraison_prevue
     if before == payload.date_livraison_prevue:
-        return TransactionRead.model_validate(transaction)
+        return _transaction_read(db, transaction)
     transaction.date_livraison_prevue = payload.date_livraison_prevue
     transaction.date_modification = datetime.now(timezone.utc)
     transaction.id_utilisateur_modification = current_user.id_utilisateur
@@ -705,7 +712,7 @@ def reschedule_deferred_sale(
     ))
     db.commit()
     db.refresh(transaction)
-    return TransactionRead.model_validate(transaction)
+    return _transaction_read(db, transaction)
 
 
 @router.post("/{id}/cancel-remainder", response_model=TransactionRead)
@@ -765,7 +772,7 @@ def cancel_deferred_sale_remainder(
     assign_pending_promises(db, building_id=transaction.id_batiment, current_user=current_user)
     db.commit()
     db.refresh(transaction)
-    return TransactionRead.model_validate(transaction).model_copy(update={"quantite_reservee": deferred_sale_reservations(db).get(id, 0)})
+    return _transaction_read(db, transaction)
 
 
 @router.get("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
@@ -797,7 +804,7 @@ def get_transaction(
         )
     
     reserved = deferred_sale_reservations(db).get(id, 0) if transaction.est_promesse and transaction.est_actif and transaction.quantite_en_attente > 0 else 0
-    return TransactionRead.model_validate(transaction).model_copy(update={'quantite_reservee': reserved})
+    return TransactionRead.model_validate(transaction).model_copy(update=deferred_stock_quantities(transaction, reserved))
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
@@ -828,7 +835,7 @@ def create_transaction(
         transaction = _create_transaction_for_atomic_batch(transaction_data, db, current_user)
         db.commit()
         db.refresh(transaction)
-        return transaction
+        return _transaction_read(db, transaction)
     except Exception:
         db.rollback()
         raise
@@ -1092,7 +1099,7 @@ def update_transaction(
     db.commit()
     db.refresh(transaction)
     
-    return transaction
+    return _transaction_read(db, transaction)
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1288,4 +1295,4 @@ def reactivate_transaction(
     db.commit()
     db.refresh(transaction)
     
-    return transaction
+    return _transaction_read(db, transaction)

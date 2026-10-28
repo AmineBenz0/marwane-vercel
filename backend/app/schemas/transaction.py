@@ -2,7 +2,7 @@
 Schémas Pydantic pour la validation des données transactions.
 """
 from __future__ import annotations
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict, computed_field
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
@@ -313,6 +313,7 @@ class DeferredSaleSummary(BaseModel):
     quantite_en_attente: int
     quantite_annulee: int = 0
     quantite_reservee: int
+    quantite_a_produire: int = 0
 
 
 class TransactionRead(TransactionBase):
@@ -326,6 +327,13 @@ class TransactionRead(TransactionBase):
     quantite_completee: int = 0
     quantite_en_attente: int = 0
     quantite_annulee: int = 0
+
+    @computed_field
+    @property
+    def quantite_a_produire(self) -> int:
+        """The part of an open promise that has no stock reserved yet."""
+        return max(0, self.quantite_en_attente - self.quantite_reservee) if self.est_promesse and self.est_actif else 0
+
     date_production: Optional[date] = None
     nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")
