@@ -30,6 +30,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Chip,
+  Stack,
   useTheme,
   useMediaQuery,
   Divider,
@@ -64,6 +66,7 @@ import ClientDeferredSales from './ClientDeferredSales';
 import FinancialInsights from '../../components/FinancialInsights/FinancialInsights';
 import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
+import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import { get, put, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
@@ -280,17 +283,6 @@ function ClientProfile() {
       .filter((transaction) => new Date(transaction.date_transaction) >= periodStart)
       .sort((a, b) => new Date(b.date_transaction) - new Date(a.date_transaction));
   }, [balancePeriod, transactions]);
-
-  const clientCreanceSummary = useMemo(() => {
-    return clientCreanceRows.reduce(
-      (summary, transaction) => ({
-        total: summary.total + Math.abs(Number(transaction.montant_total || 0)),
-        encaisse: summary.encaisse + Math.abs(Number(transaction.montant_paye || 0)),
-        reste: summary.reste + Math.abs(Number(transaction.montant_restant || 0)),
-      }),
-      { total: 0, encaisse: 0, reste: 0 }
-    );
-  }, [clientCreanceRows]);
 
   const getPaymentLabel = (transaction) => {
     const paiement = transaction.paiements?.[0];
@@ -758,66 +750,127 @@ function ClientProfile() {
             </Box>
           </Box>
 
-          <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} sm={4}>
-              <MiniBalanceCard label="Montant vendu" value={clientCreanceSummary.total} color="primary.main" />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <MiniBalanceCard label="Déjà encaissé" value={clientCreanceSummary.encaisse} color="success.main" />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <MiniBalanceCard label="Reste à encaisser" value={clientCreanceSummary.reste} color="warning.main" />
-            </Grid>
-          </Grid>
+          {clientCreanceRows.length === 0 ? (
+            <Typography color="text.secondary" align="center" sx={{ py: 3 }}>
+              Aucune vente client sur cette période
+            </Typography>
+          ) : (
+            <>
+              <Stack spacing={1.25} sx={{ display: { xs: 'flex', md: 'none' } }}>
+                {clientCreanceRows.map((transaction) => {
+                  const cancelled = transaction.est_actif === false;
+                  const paymentStatus = transaction.est_en_retard
+                    ? 'en_retard'
+                    : (transaction.statut_paiement || 'impaye');
+                  const productName = produitsMap.get(transaction.id_produit)
+                    || `Produit #${transaction.id_produit || '-'}`;
+                  const remaining = Math.abs(Number(transaction.montant_restant || 0));
 
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 1080 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Produit</TableCell>
-                  <TableCell>Bâtiment</TableCell>
-                  <TableCell align="right">Quantité</TableCell>
-                  <TableCell align="right">Prix</TableCell>
-                  <TableCell align="right">Montant vendu</TableCell>
-                  <TableCell>Règlement</TableCell>
-                  <TableCell>Échéance</TableCell>
-                  <TableCell align="right">Encaissé</TableCell>
-                  <TableCell align="right">Reste</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {clientCreanceRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
-                      Aucune vente client sur cette période
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  clientCreanceRows.map((transaction) => (
-                    <TableRow key={transaction.id_transaction} hover>
-                      <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
-                      <TableCell>{produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}</TableCell>
-                      <TableCell>{transaction.id_batiment ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`) : '-'}</TableCell>
-                      <TableCell align="right">{transaction.quantite}</TableCell>
-                      <TableCell align="right">{formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 800 }}>
-                        {formatMontant(Math.abs(Number(transaction.montant_total || 0)), { useCompactNotation: false })}
-                      </TableCell>
-                      <TableCell>{getPaymentLabel(transaction)}</TableCell>
-                      <TableCell>{formatDate(transaction.date_echeance)}</TableCell>
-                      <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
-                        {formatMontant(Math.abs(Number(transaction.montant_paye || 0)), { useCompactNotation: false })}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
-                        {formatMontant(Math.abs(Number(transaction.montant_restant || 0)), { useCompactNotation: false })}
-                      </TableCell>
+                  return (
+                    <Card key={transaction.id_transaction} variant="outlined" sx={{ borderRadius: 2.5 }}>
+                      <CardContent sx={{ p: 1.75, '&:last-child': { pb: 1.75 } }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography fontWeight={700} noWrap>{productName}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDate(transaction.date_transaction)}
+                              {transaction.id_batiment
+                                ? ` · ${batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`}`
+                                : ''}
+                            </Typography>
+                          </Box>
+                          {cancelled
+                            ? <Chip label="Vente annulée" size="small" color="default" />
+                            : <PaymentStatusBadge statut={paymentStatus} />}
+                        </Stack>
+                        <Stack direction="row" justifyContent="space-between" gap={2} sx={{ mt: 1.5 }}>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">Montant</Typography>
+                            <Typography fontWeight={700}>
+                              {formatMontant(Math.abs(Number(transaction.montant_total || 0)), { useCompactNotation: false })}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ textAlign: 'right' }}>
+                            <Typography variant="caption" color="text.secondary">Reste</Typography>
+                            <Typography fontWeight={800} color={remaining > 0 ? 'warning.main' : 'success.main'}>
+                              {formatMontant(remaining, { useCompactNotation: false })}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                        <Button
+                          size="small"
+                          onClick={() => navigate(`/transactions/${transaction.id_transaction}`)}
+                          sx={{ mt: 1, px: 0, minWidth: 0, textTransform: 'none', fontWeight: 700 }}
+                        >
+                          Voir le détail
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </Stack>
+
+              <TableContainer sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'hidden' }}>
+                <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ width: 92 }}>Date</TableCell>
+                      <TableCell>Produit</TableCell>
+                      <TableCell align="right" sx={{ width: 130 }}>Montant</TableCell>
+                      <TableCell align="right" sx={{ width: 130 }}>Reste</TableCell>
+                      <TableCell sx={{ width: 125 }}>Statut</TableCell>
+                      <TableCell align="right" sx={{ width: 104 }}>Détail</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {clientCreanceRows.map((transaction) => {
+                      const cancelled = transaction.est_actif === false;
+                      const paymentStatus = transaction.est_en_retard
+                        ? 'en_retard'
+                        : (transaction.statut_paiement || 'impaye');
+                      const remaining = Math.abs(Number(transaction.montant_restant || 0));
+
+                      return (
+                        <TableRow key={transaction.id_transaction} hover>
+                          <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
+                          <TableCell sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" fontWeight={600} noWrap>
+                              {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {transaction.id_batiment
+                                ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`)
+                                : 'Sans bâtiment'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {formatMontant(Math.abs(Number(transaction.montant_total || 0)), { useCompactNotation: false })}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 800, color: remaining > 0 ? 'warning.main' : 'success.main', whiteSpace: 'nowrap' }}>
+                            {formatMontant(remaining, { useCompactNotation: false })}
+                          </TableCell>
+                          <TableCell>
+                            {cancelled
+                              ? <Chip label="Vente annulée" size="small" color="default" />
+                              : <PaymentStatusBadge statut={paymentStatus} />}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              onClick={() => navigate(`/transactions/${transaction.id_transaction}`)}
+                              sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0, px: 1 }}
+                            >
+                              Détails
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
         </CardContent>
       </Card>
       </Box>
@@ -1045,16 +1098,3 @@ function ClientProfile() {
 }
 
 export default ClientProfile;
-
-function MiniBalanceCard({ label, value, color }) {
-  return (
-    <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
-      <Typography variant="caption" color="text.secondary" fontWeight={800}>
-        {label}
-      </Typography>
-      <Typography sx={{ mt: 0.5, fontSize: '1.25rem', fontWeight: 900, color }}>
-        {formatMontant(value, { useCompactNotation: false })}
-      </Typography>
-    </Box>
-  );
-}
