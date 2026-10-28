@@ -897,11 +897,11 @@ function TransactionDetail() {
         <form noValidate onSubmit={handleSubmitPaiement(onSubmitPaiement)}>
           <DialogTitle>
             <Typography variant="h6" component="span">
-              {editingPaiement ? 'Modifier le paiement' : 'Ajouter un paiement'}
+              {editingPaiement ? 'Modifier le paiement' : (fields.length > 1 ? 'Ajouter des paiements' : 'Ajouter un paiement')}
             </Typography>
             {statutPaiement && !editingPaiement && (
               <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-                Transaction #{id} - Montant restant: {formatMontant(statutPaiement.montant_restant)}
+                Transaction n° {id} · Reste à régler : {formatMontant(statutPaiement.montant_restant)}
               </Typography>
             )}
             {editingPaiement && (
@@ -953,7 +953,7 @@ function TransactionDetail() {
               variant="contained"
               disabled={isPaiementSubmitting}
             >
-              {isPaiementSubmitting ? 'Enregistrement...' : (editingPaiement ? 'Modifier' : 'Enregistrer')}
+              {isPaiementSubmitting ? 'Enregistrement...' : (editingPaiement ? 'Modifier' : (fields.length > 1 ? 'Enregistrer les paiements' : 'Enregistrer le paiement'))}
             </Button>
           </DialogActions>
         </form>

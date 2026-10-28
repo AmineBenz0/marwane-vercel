@@ -30,13 +30,13 @@ import PropTypes from 'prop-types';
 import { get } from '../../services/api';
 
 const TYPES_PAIEMENT = [
-  { value: 'cash', label: '💵 Espèces' },
-  { value: 'cheque', label: '💳 Chèque' },
-  { value: 'virement', label: '🏦 Virement' },
-  { value: 'carte', label: '💳 Carte' },
-  { value: 'compensation', label: '↔️ Compensation' },
-  { value: 'lc', label: '📜 LC' },
-  { value: 'autre', label: '📄 Autre' },
+  { value: 'cash', label: 'Espèces' },
+  { value: 'cheque', label: 'Chèque' },
+  { value: 'virement', label: 'Virement' },
+  { value: 'carte', label: 'Carte bancaire' },
+  { value: 'compensation', label: 'Compensation' },
+  { value: 'lc', label: 'Lettre de crédit' },
+  { value: 'autre', label: 'Autre' },
 ];
 
 /**
@@ -118,10 +118,10 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
         </Alert>
       )}
       {accountError && <Alert severity="error" sx={{ mb: 2 }}>{accountError}</Alert>}
-      <Alert severity={difference < 0 ? "warning" : "info"} sx={{ mb: 3 }}>
+      <Alert icon={false} severity={difference < 0 ? "warning" : "info"} sx={{ mb: 3, '& .MuiAlert-message': { width: '100%' } }}>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={4}>
-            <Typography variant="caption" color="text.secondary">Total à régler</Typography>
+            <Typography variant="caption" color="text.secondary">À régler</Typography>
             <Typography variant="h6">{formatMontant(montantRestant)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -129,7 +129,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
             <Typography variant="h6" color="primary">{formatMontant(totalSaisi)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
-            <Typography variant="caption" color="text.secondary">Reste</Typography>
+            <Typography variant="caption" color="text.secondary">Reste à régler</Typography>
             <Typography variant="h6" color={difference < 0 ? "warning.main" : "text.primary"}>
               {formatMontant(difference)}
             </Typography>
@@ -143,7 +143,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
             <TableRow sx={{ bgcolor: 'grey.50' }}>
               <TableCell width="50"></TableCell>
               <TableCell>Date</TableCell>
-              <TableCell>Type</TableCell>
+              <TableCell>Mode de paiement</TableCell>
               <TableCell>Montant (MAD)</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -374,7 +374,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
               statut_cheque: 'a_encaisser'
             })}
           >
-            Ajouter une ligne de paiement
+            Ajouter un autre paiement
           </Button>
         </Box>
       </TableContainer>
