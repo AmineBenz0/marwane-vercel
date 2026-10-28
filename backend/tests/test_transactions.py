@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.models.transaction import Transaction
+from app.models.paiement import Paiement
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
@@ -195,3 +196,38 @@ class TestTransactionsEndpoints:
         
         db_session.refresh(tx)
         assert tx.est_actif is False
+
+    def test_cancelled_sale_rejects_payment_mutations_but_keeps_history(
+        self, client, test_user, db_session, test_client, test_produit, auth_headers
+    ):
+        transaction = Transaction(
+            date_transaction=date.today(), id_produit=test_produit.id_produit,
+            quantite=2, prix_unitaire=Decimal("10.00"), montant_total=Decimal("20.00"),
+            id_client=test_client.id_client, est_actif=False,
+            id_utilisateur_creation=test_user.id_utilisateur,
+        )
+        db_session.add(transaction)
+        db_session.flush()
+        payment = Paiement(
+            id_transaction=transaction.id_transaction, date_paiement=date.today(),
+            montant=Decimal("10.00"), type_paiement="cash", statut="annule",
+            id_utilisateur_creation=test_user.id_utilisateur,
+        )
+        db_session.add(payment)
+        db_session.commit()
+        db_session.refresh(payment)
+
+        create = client.post("/api/v1/paiements", headers=auth_headers, json={
+            "id_transaction": transaction.id_transaction,
+            "date_paiement": date.today().isoformat(), "montant": "5.00", "type_paiement": "cash",
+        })
+        update = client.put(f"/api/v1/paiements/{payment.id_paiement}", headers=auth_headers, json={"notes": "édition"})
+        delete = client.delete(f"/api/v1/paiements/{payment.id_paiement}", headers=auth_headers)
+        history = client.get("/api/v1/paiements", params={"id_transaction": transaction.id_transaction}, headers=auth_headers)
+
+        assert create.status_code == 409
+        assert update.status_code == 409
+        assert delete.status_code == 409
+        assert history.status_code == 200
+        assert len(history.json()) == 1
+        assert history.json()[0]["statut"] == "annule"

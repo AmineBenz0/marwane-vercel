@@ -584,6 +584,8 @@ function TransactionDetail() {
     );
   }
 
+  const canceledSale = Boolean(transaction.id_client) && transaction.est_actif === false;
+
   return (
     <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* En-tête avec bouton retour */}
@@ -615,6 +617,11 @@ function TransactionDetail() {
           </Typography>}
         </Box>
       </Box>
+
+      {canceledSale && <Alert severity="error" sx={{ mb: 2 }}>
+        <Typography fontWeight={700}>Vente annulée</Typography>
+        Les montants et paiements restent consultables dans l’historique.
+      </Alert>}
 
       {transaction.est_promesse && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
         {transaction.est_actif && Number(transaction.quantite_en_attente) > 0 && <>
@@ -743,7 +750,7 @@ function TransactionDetail() {
           <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
           {Number(statutPaiement.montant_restant) > 0 && <Box><Typography variant="body2" color="text.secondary">{transaction.id_client ? 'Reste à encaisser' : 'Reste à payer'}</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_restant)}</Typography></Box>}
         </Stack>
-        {Number(statutPaiement.montant_restant) > 0 && <Stack direction="row" spacing={2} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
+        {!canceledSale && Number(statutPaiement.montant_restant) > 0 && <Stack direction="row" spacing={2} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
           <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddPaiement}>Ajouter un paiement</Button>
           {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard ? 'error.main' : 'text.secondary'}>Échéance : {formatDate(transaction.date_echeance)}</Typography>}
         </Stack>}
@@ -765,7 +772,7 @@ function TransactionDetail() {
                       {!isMobile && <TableCell>Type</TableCell>}
                       {!isMobile && <TableCell>Référence</TableCell>}
                       <TableCell>Statut</TableCell>
-                      <TableCell align="center">Actions</TableCell>
+                      {!canceledSale && <TableCell align="center">Actions</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -804,7 +811,7 @@ function TransactionDetail() {
                             />
                           )}
                         </TableCell>
-                        <TableCell align="center">
+                        {!canceledSale && <TableCell align="center">
                           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                             <Tooltip title="Modifier">
                               <IconButton
@@ -825,7 +832,7 @@ function TransactionDetail() {
                               </IconButton>
                             </Tooltip>
                           </Box>
-                        </TableCell>
+                        </TableCell>}
                       </TableRow>
                     ))}
                   </TableBody>

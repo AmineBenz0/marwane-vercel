@@ -33,6 +33,11 @@ from app.utils.dependencies import get_current_active_user
 router = APIRouter(prefix="/paiements", tags=["Paiements"])
 
 
+def _require_active_transaction(transaction: Optional[Transaction]) -> None:
+    if transaction and transaction.est_actif is False:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une vente annulée est en lecture seule pour ses paiements")
+
+
 def _release_lc_if_unused(
     db: Session,
     id_lc: Optional[int],
@@ -217,6 +222,8 @@ def create_paiement(
             detail=f"Transaction avec l'ID {paiement_data.id_transaction} introuvable"
         )
 
+    _require_active_transaction(transaction)
+
     validate_payment_date(transaction, paiement_data.date_paiement)
     funding = resolve_payment_funding(db, paiement_data, transaction)
     
@@ -318,10 +325,11 @@ def update_paiement(
             detail=f"Paiement avec l'ID {id} introuvable"
         )
 
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
+    _require_active_transaction(transaction)
+
     if paiement.statut == "annule":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un paiement annulé est immuable")
-    
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
     old_lc_id = paiement.id_lc
     update_data = paiement_data.model_dump(exclude_unset=True)
     if "type_paiement" in update_data and update_data["type_paiement"]:
@@ -432,6 +440,9 @@ def delete_paiement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Paiement avec l'ID {id} introuvable"
         )
+
+    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
+    _require_active_transaction(transaction)
 
     void_payment(db, paiement, current_user=current_user, reason=raison.strip())
     db.commit()
@@ -559,6 +570,8 @@ def create_paiements_batch(
             transaction = db.query(Transaction).filter(Transaction.id_transaction == p_data.id_transaction).first()
             if not transaction:
                 raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
+
+            _require_active_transaction(transaction)
 
             validate_payment_date(transaction, p_data.date_paiement)
             funding = resolve_payment_funding(db, p_data, transaction)

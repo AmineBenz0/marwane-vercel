@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import TransactionDetail from './TransactionDetail';
 import { get } from '../../services/api';
 
@@ -42,4 +42,24 @@ it('shows reserved stock on a paid deferred sale without presenting it as delive
   expect(screen.getByRole('button', { name: /Historique des réservations/i })).toBeVisible();
   expect(screen.getByRole('button', { name: /Compléter \(300 disponibles\)/i })).toBeVisible();
   expect(screen.queryByRole('dialog', { name: /Compléter la livraison/i })).not.toBeInTheDocument();
+});
+
+it('keeps canceled sale payments visible as read-only history', async () => {
+  get.mockImplementation(async path => {
+    if (path === '/transactions/7') return { ...sale, est_actif: false, est_promesse: false };
+    if (path === '/paiements/transaction/7/statut') return sale;
+    if (path === '/produits') return [{ id_produit: 1, nom_produit: 'Oeufs - Moyen' }];
+    if (path === '/clients') return [{ id_client: 1, nom_client: 'Client payé' }];
+    if (path === '/paiements') return [{ id_paiement: 15, id_transaction: 7, date_paiement: '2026-10-25', montant: 1500, type_paiement: 'cash', statut: 'annule' }];
+    return [];
+  });
+
+  render(<TransactionDetail />);
+
+  expect(await screen.findByText('Vente annulée')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /Paiements enregistrés/i }));
+  expect(await screen.findByText('annule')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Ajouter un paiement' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Modifier' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Supprimer' })).not.toBeInTheDocument();
 });
