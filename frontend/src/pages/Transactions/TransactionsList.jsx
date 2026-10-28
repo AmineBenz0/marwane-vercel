@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 15198)
-Total output lines: 1829
-
 /**
  * Page Liste Transactions.
  * 
@@ -758,7 +755,391 @@ function TransactionsList() {
           );
         },
         montant_paye: (value) => {
-        …3198 tokens truncated…navigate({ pathname: location.pathname, search: params.toString() });
+          if (value === null || value === undefined) return '-';
+          return (
+            new Intl.NumberFormat('fr-FR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+              .format(value)
+              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
+          );
+        },
+        montant_restant: (value) => {
+          if (value === null || value === undefined) return '-';
+          return (
+            new Intl.NumberFormat('fr-FR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+              .format(value)
+              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
+          );
+        },
+      };
+
+      exportToPDF(
+        promiseRows,
+        columnsForExport,
+        'Rapport des Transactions',
+        'rapport_transactions',
+        { 
+          customFormatters,
+          colorByType: (rowIndex) => {
+            // Retourne true si c'est une entrée (client), false si sortie (fournisseur)
+            const transaction = rowsForExport[rowIndex];
+            if (!transaction) return null;
+            return transaction.id_client !== null;
+          },
+          footerTotals: {
+            label: 'Total :',
+            value: totalMontantFormatted,
+            columnId: 'montant_total',
+          },
+        }
+      );
+    } catch (error) {
+      console.error('Erreur lors de l\'export PDF:', error);
+      setError('Une erreur est survenue lors de l\'export PDF');
+    }
+  };
+
+  /**
+   * Obtient le nom du client ou fournisseur pour une transaction.
+   */
+  const getClientOuFournisseur = (transaction) => {
+    if (transaction.id_client) {
+      return clientsMap.get(transaction.id_client) || `Client #${transaction.id_client}`;
+    } else if (transaction.id_fournisseur) {
+      return fournisseursMap.get(transaction.id_fournisseur) || `Fournisseur #${transaction.id_fournisseur}`;
+    }
+    return '-';
+  };
+
+  /**
+   * Configuration des colonnes utilisées pour les exports.
+   * Ordre : ID, Date, Client/Fournisseur, Produit, Bâtiment, Quantité, montants, règlement, statut.
+   * mobilePriority: true pour les colonnes à afficher en priorité sur mobile
+   */
+  const columns = [
+    {
+      id: 'id_transaction',
+      label: 'ID',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+      mobilePriority: false,
+    },
+    {
+      id: 'date_transaction',
+      label: 'Date',
+      sortable: true,
+      filterable: false,
+      mobilePriority: true,
+      format: (value) => {
+        if (!value) return '-';
+        try {
+    return formatShortDate(value, String(value));
+        } catch {
+          return value;
+        }
+      },
+    },
+    {
+      id: 'client_ou_fournisseur',
+      label: 'Client / Fournisseur',
+      sortable: false,
+      filterable: false,
+      mobilePriority: true,
+      format: (value, row) => {
+        const isClient = row.id_client !== null;
+        const name = getClientOuFournisseur(row);
+        
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: isClient ? 'success.main' : 'error.main',
+                flexShrink: 0,
+              }}
+            />
+            <Typography variant="body2">{name}</Typography>
+          </Box>
+        );
+      },
+    },
+    {
+      id: 'produit',
+      label: 'Produit vendu / acheté',
+      sortable: false,
+      filterable: false,
+      mobilePriority: false,
+      format: (value, row) => {
+        return produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`;
+      },
+    },
+    {
+      id: 'batiment',
+      label: 'Bâtiment',
+      sortable: false,
+      filterable: false,
+      mobilePriority: false,
+      format: (value, row) => {
+        return row.id_batiment
+          ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
+          : '-';
+      },
+    },
+    {
+      id: 'quantite',
+      label: 'Quantité',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+      mobilePriority: false,
+    },
+    {
+      id: 'montant_total',
+      label: 'Montant total',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+      mobilePriority: true,
+      format: (value, row) => {
+        // Vert pour les entrées d'argent (transactions clients)
+        // Rouge pour les sorties d'argent (transactions fournisseurs)
+        const isEntree = row.id_client !== null;
+        const color = isEntree ? 'success.main' : 'error.main';
+        
+        const formatted = formatMontant(value);
+        return (
+          <Typography
+            component="span"
+            variant="body2"
+            fontWeight="bold"
+            sx={{
+              color,
+              display: 'inline-flex',
+              alignItems: 'center',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {formatted}
+          </Typography>
+        );
+      },
+    },
+    {
+      id: 'montant_paye',
+      label: 'Payé',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+      mobilePriority: false,
+      format: (value) => formatMontant(value || 0),
+    },
+    {
+      id: 'montant_restant',
+      label: 'Reste',
+      sortable: true,
+      filterable: false,
+      align: 'right',
+      mobilePriority: false,
+      format: (value) => formatMontant(value || 0),
+    },
+    {
+      id: 'reglement',
+      label: 'Règlement',
+      sortable: false,
+      filterable: false,
+      mobilePriority: false,
+      format: (value, row) => getPaymentReglementSummary(row),
+    },
+    {
+      id: 'statut_paiement',
+      label: 'Paiement',
+      sortable: false,
+      filterable: false,
+      mobilePriority: false,
+      format: (value, row) => {
+        // Déterminer le statut : si en retard, afficher "en_retard", sinon le statut normal
+        const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
+        return <PaymentStatusBadge statut={statut} />;
+      },
+    },
+    { id: 'etat_stock', label: 'Stock' },
+    { id: 'date_livraison_prevue', label: 'Livraison prévue' },
+  ];
+
+  // Préparer les données pour le registre
+  const transactionsForGrid = useMemo(() => {
+    return transactions.map((transaction) => ({
+      ...transaction,
+      client_ou_fournisseur: getClientOuFournisseur(transaction),
+      etat_stock: deferredSaleStatus(transaction)?.label || '—',
+      id: transaction.id_transaction, // ID pour React key
+    }));
+  }, [transactions, clientsMap, fournisseursMap, produitsMap]);
+
+  const quickFilterCounts = useMemo(() => {
+    return countTransactionQuickFilters(transactionsForGrid);
+  }, [transactionsForGrid]);
+
+  const quickFilterOptions = useMemo(() => [
+    { id: 'all', label: 'Tout', count: quickFilterCounts.all },
+    { id: 'ventes', label: 'Ventes', count: quickFilterCounts.ventes },
+    { id: 'achats', label: 'Achats', count: quickFilterCounts.achats },
+    { id: 'non_payees', label: 'Non payées', count: quickFilterCounts.non_payees },
+    { id: 'deferred', label: 'Livraisons différées', count: quickFilterCounts.deferred },
+  ], [quickFilterCounts]);
+
+  const displayedTransactions = useMemo(() => {
+    return filterTransactions(transactionsForGrid, quickFilter, stockFilter);
+  }, [quickFilter, stockFilter, transactionsForGrid]);
+
+  const transactionSummary = useMemo(() => summarizeTransactions(displayedTransactions), [displayedTransactions]);
+
+  /**
+   * Lignes actuellement affichées dans le registre, utilisées pour les exports.
+   */
+  const rowsForExport = displayedTransactions;
+
+  return (
+    <Box sx={{ maxWidth: 1480, mx: 'auto', overflowX: 'hidden' }}>
+      <Box
+        sx={{
+          p: { xs: 2, md: 3 },
+          mb: 3,
+          borderRadius: 4,
+          border: '1px solid',
+          borderColor: 'divider',
+          background:
+            'linear-gradient(135deg, rgba(240,253,250,0.92), rgba(255,251,235,0.82)), #fff',
+        }}
+      >
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'stretch', md: 'flex-start' }}
+          spacing={2}
+        >
+          <Box>
+            <Typography
+              component="h1"
+              sx={{
+                fontSize: { xs: '1.8rem', md: '2.45rem' },
+                fontWeight: 900,
+                letterSpacing: 0,
+                color: '#17211D',
+              }}
+            >
+              Ventes & achats
+            </Typography>
+          </Box>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+            <Button
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportExcel}
+              disabled={loading || rowsForExport.length === 0}
+            >
+              Export Excel
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<PictureAsPdfIcon />}
+              onClick={handleExportPDF}
+              disabled={loading || rowsForExport.length === 0}
+            >
+              Export PDF
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+              Nouvelle transaction
+            </Button>
+          </Stack>
+        </Stack>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      <Grid container spacing={2} sx={{ mb: 2.5 }}>
+        <Grid item xs={12} sm={6} lg={3}>
+          <TransactionMetric
+            label="Toutes les opérations"
+            value={transactionSummary.total}
+            helper="Dans le résultat actuel"
+            icon={<ReceiptLongIcon />}
+            color="#315F85"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <TransactionMetric
+            label="Ventes"
+            value={formatMontant(transactionSummary.totalVentes)}
+            helper={`${transactionSummary.ventes} transaction(s) client`}
+            icon={<TrendingUpIcon />}
+            color="#1D6F50"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <TransactionMetric
+            label="Achats"
+            value={formatMontant(transactionSummary.totalAchats)}
+            helper={`${transactionSummary.achats} transaction(s) fournisseur`}
+            icon={<TrendingDownIcon />}
+            color="#A84435"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <TransactionMetric
+            label="À suivre"
+            value={transactionSummary.nonPayees}
+            helper="Impayées, partielles ou en retard"
+            icon={<PaymentsIcon />}
+            color="#A96522"
+          />
+        </Grid>
+      </Grid>
+
+      <Card sx={{ mb: 2.5, borderRadius: 2 }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+              {quickFilterOptions.map((option) => (
+                <Button
+                  key={option.id}
+                  variant={quickFilter === option.id ? 'contained' : 'outlined'}
+                  size="small"
+                  onClick={() => selectQuickFilter(option.id)}
+                  sx={{ borderRadius: 999 }}
+                >
+                  {option.label}{option.count !== undefined ? ` (${option.count})` : ''}
+                </Button>
+              ))}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {sourceBuilding && <Chip sx={{ mb: 2 }} label={`Bâtiment : ${batimentsMap.get(Number(sourceBuilding)) || sourceBuilding}`} onDelete={() => {
+        const params = new URLSearchParams(location.search);
+        params.delete('building');
+        navigate({ pathname: location.pathname, search: params.toString() });
+      }} />}
+      {deferredOnly && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }} aria-label="Filtrer par état du stock">
+        {[['all', 'Tous les états du stock'], ['pending', 'À produire'], ['reserved', 'Avec du stock réservé'], ['ready', 'Stock partiellement réservé'], ['waiting', 'En attente de production'], ['complete', 'Réservation complète']].map(([value, label]) =>
+          <Button key={value} size="small" variant={stockFilter === value ? 'contained' : 'outlined'} aria-pressed={stockFilter === value} onClick={() => {
+            const params = new URLSearchParams(location.search);
+            params.set('stock', value);
+            navigate({ pathname: location.pathname, search: params.toString() });
           }}>{label}</Button>)}
       </Stack>}
 
