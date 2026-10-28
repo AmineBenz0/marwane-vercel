@@ -15,49 +15,39 @@ import {
   Button,
   Alert,
   CircularProgress,
-  Chip,
   Card,
   CardContent,
-  Grid,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  Divider,
   Stack,
+  Menu,
+  MenuItem,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Add as AddIcon,
+  MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
-  Tooltip,
-} from '@mui/material';
+import { IconButton, Tooltip } from '@mui/material';
 import { get, post, put, patch, del } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
-import PaymentTypeBadge from '../../components/PaymentTypeBadge';
 import PaiementForm from '../../components/PaiementForm';
 import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
-import DeferredSaleStockSummary from './DeferredSaleStockSummary';
-import { HistoryOutlined, LayersOutlined, ReceiptLongOutlined } from '@mui/icons-material';
+import TransactionQuantitySummary from './TransactionQuantitySummary';
+import { HistoryOutlined, LayersOutlined } from '@mui/icons-material';
 import ExpandableDetails from '../../components/ExpandableDetails';
 
 /**
@@ -81,6 +71,8 @@ function TransactionDetail() {
 
   // États pour les paiements
   const [paiements, setPaiements] = useState([]);
+  const [showAllPayments, setShowAllPayments] = useState(false);
+  const [actionsAnchor, setActionsAnchor] = useState(null);
   const [statutPaiement, setStatutPaiement] = useState(null);
   const [loadingPaiements, setLoadingPaiements] = useState(false);
 
@@ -301,7 +293,7 @@ function TransactionDetail() {
    * Formate le montant pour l'affichage (wrapper de l'utilitaire).
    */
   const formatMontant = (montant, options = {}) => {
-    return formatMontantUtil(montant, { useCompactNotation: false, ...options });
+    return formatMontantUtil(montant, { useCompactNotation: false, minimumFractionDigits: 2, ...options });
   };
 
   /**
@@ -586,271 +578,161 @@ function TransactionDetail() {
 
   const canceledSale = Boolean(transaction.id_client) && transaction.est_actif === false;
 
-  return (
-    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      {/* En-tête avec bouton retour */}
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: { xs: 'column', sm: 'row' },
-        alignItems: { xs: 'flex-start', sm: 'center' }, 
-        mb: { xs: 2, sm: 2.5, md: 3 }, 
-        gap: { xs: 1.5, sm: 2 } 
-      }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate(returnPath)}
-          variant="outlined"
-          size={isMobile ? 'small' : 'medium'}
-        >
-          {fromDeliveries ? 'Retour aux livraisons' : 'Retour'}
-        </Button>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography
-            variant="h4"
-            component="h1"
-            sx={{ fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' }, overflowWrap: 'anywhere' }}
-          >
-            {transaction.est_promesse ? `Vente #${transaction.id_transaction}` : `Transaction #${transaction.id_transaction}`}
-          </Typography>
-          {transaction.est_promesse && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
-            {getClientOuFournisseur()} · Vendue le {formatShortDate(transaction.date_transaction)}
-          </Typography>}
-        </Box>
-      </Box>
+  const isSale = Boolean(transaction.id_client);
+  const operationName = isSale ? 'Vente' : transaction.id_fournisseur ? 'Achat' : 'Transaction';
+  const pendingQuantity = Math.max(0, Number(transaction.quantite_en_attente || 0));
+  const reservedQuantity = Math.min(pendingQuantity, Math.max(0, Number(transaction.quantite_reservee || 0)));
+  const recentPayments = [...paiements].sort((a, b) =>
+    String(b.date_paiement).localeCompare(String(a.date_paiement)) || Number(b.id_paiement) - Number(a.id_paiement)
+  );
+  const visiblePayments = showAllPayments ? recentPayments : recentPayments.slice(0, 3);
+  const number = value => value === null || value === undefined ? '—' : Number(value).toLocaleString('fr-FR');
+  const paymentLabels = {
+    a_encaisser: 'À encaisser', encaisse: 'Encaissé', emis: 'Émis',
+    valide: 'Validé', annule: 'Annulé', rejete: 'Rejeté', en_attente: 'En attente',
+  };
+  const paymentTypeLabels = { cash: 'Espèces', cheque: 'Chèque', virement: 'Virement bancaire', carte: 'Carte bancaire', compensation: 'Compensation', lc: 'Lettre de crédit', autre: 'Autre' };
+  const readableStatus = value => paymentLabels[value] || (value ? String(value).replace(/_/g, ' ') : 'Statut non renseigné');
+  const cardSx = { borderRadius: 2, minWidth: 0, height: 'fit-content' };
+  const moneySx = { fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' };
 
-      {canceledSale && <Alert severity="error" sx={{ mb: 2 }}>
+  return (
+    <Box sx={{ maxWidth: 1120, mx: 'auto', minWidth: 0 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(returnPath)} color="inherit">
+          {fromDeliveries ? 'Retour aux livraisons' : 'Ventes et achats'}
+        </Button>
+        {transaction.est_promesse && <>
+          <Button endIcon={<MoreVertIcon />} color="inherit" onClick={event => setActionsAnchor(event.currentTarget)}
+            aria-haspopup="menu" aria-expanded={Boolean(actionsAnchor)} aria-controls={actionsAnchor ? 'transaction-actions' : undefined}
+            disabled={promiseActionLoading}>Autres actions</Button>
+          <Menu id="transaction-actions" anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={() => setActionsAnchor(null)}>
+            {transaction.est_actif && pendingQuantity > 0 && <MenuItem onClick={() => {
+              setActionsAnchor(null); setNewDeliveryDate(transaction.date_livraison_prevue || ''); setRescheduleDialogOpen(true);
+            }}>Changer la date prévue</MenuItem>}
+            {transaction.est_actif && pendingQuantity > 0 && <MenuItem onClick={() => {
+              setActionsAnchor(null); setCancelRemainderDialogOpen(true);
+            }}>Clôturer le reste à fournir</MenuItem>}
+            {transaction.est_actif && <MenuItem sx={{ color: 'error.main' }} onClick={() => {
+              setActionsAnchor(null); setCancelTransactionDialogOpen(true);
+            }}>Annuler la vente</MenuItem>}
+            {transaction.est_actif === false && <MenuItem onClick={() => {
+              setActionsAnchor(null); reactivateTransaction();
+            }}>Réactiver la vente</MenuItem>}
+          </Menu>
+        </>}
+      </Stack>
+      <Typography component="h1" variant="h4" sx={{ fontSize: { xs: '1.4rem', md: '1.85rem' }, overflowWrap: 'anywhere', fontWeight: 700 }}>
+        {operationName} n° {transaction.id_transaction} · {getClientOuFournisseur()}
+      </Typography>
+      <Typography color="text.secondary" variant="body2" sx={{ mt: 0.75, mb: 2.5 }}>
+        {isSale ? 'Vendue' : 'Acheté'} le {formatDate(transaction.date_transaction)}
+        {transaction.nom_batiment_source && ` · ${transaction.nom_batiment_source}`}
+      </Typography>
+
+      {canceledSale && <Alert severity="error" sx={{ mb: 2.5 }}>
         <Typography fontWeight={700}>Vente annulée</Typography>
         Les montants et paiements restent consultables dans l’historique.
       </Alert>}
 
-      {transaction.est_promesse && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
-        {transaction.est_actif && Number(transaction.quantite_en_attente) > 0 && <>
-          <Button variant="contained" onClick={openCompletion} disabled={promiseActionLoading || Number(transaction.quantite_reservee || 0) < 1}>
-            Compléter {Number(transaction.quantite_reservee || 0) > 0 ? `(${Number(transaction.quantite_reservee).toLocaleString('fr-FR')} disponibles)` : ''}
-          </Button>
-          <Button variant="outlined" onClick={() => { setNewDeliveryDate(transaction.date_livraison_prevue || ''); setRescheduleDialogOpen(true); }} disabled={promiseActionLoading}>Changer la date</Button>
-          <Button color="inherit" onClick={() => setCancelRemainderDialogOpen(true)} disabled={promiseActionLoading}>Clôturer le reste</Button>
-        </>}
-        {transaction.est_actif && <Button color="error" onClick={() => setCancelTransactionDialogOpen(true)} disabled={promiseActionLoading}>Annuler la vente</Button>}
-        {transaction.est_actif === false && <Button variant="outlined" onClick={reactivateTransaction} disabled={promiseActionLoading}>Réactiver la vente</Button>}
-      </Stack>}
-
-      {/* Informations principales */}
-      {!transaction.est_promesse && <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-              <Typography 
-                variant="h6" 
-                gutterBottom
-                sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-              >
-                Informations Générales
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.4fr) minmax(0, 1fr)' }, gap: 2.5, alignItems: 'start' }}>
+        <Stack spacing={2.5} sx={{ minWidth: 0, order: { xs: 2, md: 1 } }}>
+          <Card variant="outlined" sx={cardSx}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Typography component="h2" variant="h6" sx={{ mb: 2 }}>{isSale ? 'La vente' : 'L’achat'}</Typography>
+            <Typography fontWeight={700}>{getProduitName()}</Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mt: 1 }}>
+              <Typography color="text.secondary">
+                {number(transaction.quantite)}{transaction.id_production || transaction.est_promesse ? ' œufs' : ''}
+                {' × '}{formatMontant(transaction.prix_unitaire)}
               </Typography>
-              <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
-              <Stack spacing={1.5}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Date de transaction
-                  </Typography>
-                  <Typography variant="body1">{formatDate(transaction.date_transaction)}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Client / Fournisseur
-                  </Typography>
-                  <Typography variant="body1">{getClientOuFournisseur()}</Typography>
-                </Box>
+              <Typography fontWeight={700} sx={moneySx}>{formatMontant(transaction.montant_total)}</Typography>
+            </Stack>
+            {!transaction.est_promesse && transaction.id_production && <ExpandableDetails label="Voir l’origine du stock" icon={<LayersOutlined />} sx={{ mt: 2 }}>
+              {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" key={source.id_production} sx={{ py: 0.75 }}>
+                  <Typography variant="body2" color="text.secondary">Production du {formatDate(source.date_production)}</Typography>
+                  <Typography variant="body2" fontWeight={700}>{number(source.quantite)} œufs</Typography>
+                </Stack>) : <Typography variant="body2">Production du {formatDate(transaction.date_production)}</Typography>}
+            </ExpandableDetails>}
+          </CardContent></Card>
+
+          {transaction.est_promesse && <Card variant="outlined" sx={cardSx}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Typography component="h2" variant="h6" sx={{ mb: 2 }}>Quantités à fournir</Typography>
+            <TransactionQuantitySummary sale={transaction} />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              {transaction.date_livraison_prevue ? `Date prévue : ${formatDate(transaction.date_livraison_prevue)}` : 'Date prévue non renseignée'}
+            </Typography>
+            {!canceledSale && transaction.est_actif && pendingQuantity > 0 && <Box sx={{ mt: 2 }}>
+              <Button variant="contained" fullWidth onClick={openCompletion} disabled={promiseActionLoading || reservedQuantity < 1}>
+                Compléter avec le stock disponible
+              </Button>
+              {reservedQuantity < 1 && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Aucun stock réservé disponible pour compléter cette vente.
+              </Typography>}
+            </Box>}
+          </CardContent></Card>}
+        </Stack>
+
+        <Card variant="outlined" sx={{ ...cardSx, order: { xs: 1, md: 2 } }}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mb: 2 }}>
+            <Typography component="h2" variant="h6">Paiement</Typography>
+            {statutPaiement && !canceledSale && <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />}
+          </Stack>
+          <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Typography color="text.secondary">{isSale ? 'Total de la vente' : 'Total de l’achat'}</Typography>
+            <Typography fontWeight={700} sx={moneySx}>{formatMontant(transaction.montant_total)}</Typography>
+          </Stack>
+          {statutPaiement ? <>
+            <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', rowGap: 0.5 }}>
+              <Typography color="text.secondary">{canceledSale ? 'Réglé (historique)' : 'Déjà réglé'}</Typography>
+              <Typography fontWeight={700} sx={moneySx}>{formatMontant(statutPaiement.montant_paye)}</Typography>
+            </Stack>
+            <Box sx={{ mt: 2, p: 2, borderRadius: 1.5, bgcolor: 'action.hover' }}>
+              <Typography variant="body2" color="text.secondary">{canceledSale ? 'Solde (historique)' : isSale ? 'Reste à encaisser' : 'Reste à payer'}</Typography>
+              <Typography variant="h5" fontWeight={700} sx={{ ...moneySx, mt: 0.5 }}>{formatMontant(statutPaiement.montant_restant)}</Typography>
+              {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard && !canceledSale ? 'error.main' : 'text.secondary'} sx={{ mt: 1 }}>
+                Échéance : {formatDate(transaction.date_echeance)}
+              </Typography>}
+            </Box>
+            {!canceledSale && Number(statutPaiement.montant_restant) > 0 && <Button variant="contained" fullWidth startIcon={<AddIcon />} onClick={handleAddPaiement} sx={{ mt: 2 }}>
+              Ajouter un paiement
+            </Button>}
+          </> : <Alert severity="warning" sx={{ mt: 2 }} action={<Button onClick={fetchStatutPaiement}>Réessayer</Button>}>
+            Le solde du paiement est indisponible.
+          </Alert>}
+        </CardContent></Card>
+      </Box>
+
+      <Card variant="outlined" sx={{ ...cardSx, mt: 2.5 }}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Typography component="h2" variant="h6" sx={{ mb: 1 }}>Paiements enregistrés</Typography>
+        {loadingPaiements ? <CircularProgress size={24} aria-label="Chargement des paiements" /> : visiblePayments.length ? <>
+          {visiblePayments.map(paiement => {
+            const status = paiement.type_paiement === 'cheque' && paiement.statut_cheque && paiement.statut !== 'annule' ? paiement.statut_cheque : paiement.statut;
+            const reference = paiement.numero_cheque || paiement.reference_virement || paiement.numero_reference_lc || (paiement.id_lc ? `LC n° ${paiement.id_lc}` : null);
+            return <Box component="article" aria-label={`Paiement du ${formatDate(paiement.date_paiement)}`} key={paiement.id_paiement}
+              sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1.5, py: 2, '& + &': { borderTop: '1px solid', borderColor: 'divider' } }}>
+              <Box sx={{ minWidth: 0, flex: '1 1 180px' }}>
+                <Typography variant="body2" fontWeight={700}>{paymentTypeLabels[paiement.type_paiement] || 'Autre'}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>{formatDate(paiement.date_paiement)} · {readableStatus(status)}</Typography>
+                {reference && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere', mt: 0.5 }}>Référence : {reference}</Typography>}
+              </Box>
+              <Stack alignItems="flex-end" spacing={0.5} sx={{ minWidth: 0, maxWidth: '100%', ml: 'auto' }}>
+                <Typography fontWeight={700} sx={moneySx}>{formatMontant(paiement.montant)}</Typography>
+                {!canceledSale && paiement.statut !== 'annule' && <Stack direction="row" spacing={0.5}>
+                  <Tooltip title="Modifier le paiement"><IconButton aria-label="Modifier le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} onClick={() => handleEditPaiement(paiement)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="Supprimer le paiement"><IconButton aria-label="Supprimer le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} color="error" onClick={() => handleDeletePaiementClick(paiement)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                </Stack>}
               </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Box>;
+          })}
+          {recentPayments.length > 3 && <Button onClick={() => setShowAllPayments(value => !value)} sx={{ mt: 1 }} aria-expanded={showAllPayments}>
+            {showAllPayments ? 'Voir les 3 derniers paiements' : `Voir tous les paiements (${recentPayments.length})`}
+          </Button>}
+        </> : <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>Aucun paiement enregistré pour cette transaction.</Typography>}
+      </CardContent></Card>
 
-      </Grid>}
-
-      {/* Détails de la transaction */}
-      <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-          <Typography 
-            variant="h6" 
-            gutterBottom
-            sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-          >
-            {transaction.est_promesse ? 'Commande' : 'Détails de la Transaction'}
-          </Typography>
-          <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
-          <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-            {transaction.est_promesse && <Grid item xs={12}>
-              <Typography variant="body2" color="text.secondary">
-                Livraison {transaction.nom_batiment_source ? `depuis ${transaction.nom_batiment_source}` : 'différée'}{transaction.date_livraison_prevue ? ` · prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : ''}
-              </Typography>
-            </Grid>}
-            {!transaction.est_promesse && transaction.id_production ? <Grid item xs={12}>
-              <Typography variant="body2">Origine : {transaction.nom_batiment_source}</Typography>
-              <ExpandableDetails label="Origine du stock" icon={<LayersOutlined />} sx={{ mt: 1.5 }}>
-                {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
-                  <Stack direction="row" spacing={2} justifyContent="space-between" key={source.id_production} sx={{ py: 0.75 }}><Typography variant="body2" color="text.secondary">Production du {formatShortDate(source.date_production)}</Typography><Typography variant="body2" fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{source.quantite.toLocaleString('fr-FR')} œufs</Typography></Stack> )
-                  : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
-              </ExpandableDetails>
-            </Grid> : null}
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {transaction.id_production ? 'Type d’œufs' : 'Produit'}
-                </Typography>
-                <Typography variant="body1" fontWeight="medium">
-                  {getProduitName()}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Quantité
-                </Typography>
-                <Typography variant="body1" fontWeight="medium">
-                  {transaction.quantite || '-'}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Prix unitaire
-                </Typography>
-                <Typography variant="body1" fontWeight="medium">
-                  {transaction.prix_unitaire ? formatMontant(transaction.prix_unitaire) : '-'}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Montant total
-                </Typography>
-                <Typography variant="h6" color="primary" fontWeight="bold">
-                  {formatMontant(transaction.montant_total)}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-          {transaction.est_promesse && <>
-            <Divider sx={{ my: 2 }} />
-            <DeferredSaleStockSummary sale={transaction} showStatus={false} />
-          </>}
-        </CardContent>
-      </Card>
-
-      {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
-          <Typography component="h2" variant="h6" fontWeight={700}>Paiement</Typography>
-          <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />
-        </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="space-between">
-          <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
-          {Number(statutPaiement.montant_restant) > 0 && <Box><Typography variant="body2" color="text.secondary">{transaction.id_client ? 'Reste à encaisser' : 'Reste à payer'}</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_restant)}</Typography></Box>}
-        </Stack>
-        {!canceledSale && Number(statutPaiement.montant_restant) > 0 && <Stack direction="row" spacing={2} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddPaiement}>Ajouter un paiement</Button>
-          {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard ? 'error.main' : 'text.secondary'}>Échéance : {formatDate(transaction.date_echeance)}</Typography>}
-        </Stack>}
-      </CardContent></Card>}
-
-      {statutPaiement && paiements?.length > 0 && <Box sx={{ mb: 3 }}>
-        <ExpandableDetails label="Paiements enregistrés" icon={<ReceiptLongOutlined />} meta={`${paiements.length} paiement${paiements.length > 1 ? 's' : ''}`}>
-            {loadingPaiements ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                <CircularProgress size={30} />
-              </Box>
-            ) : paiements && paiements.length > 0 ? (
-              <TableContainer>
-                  <Table size={isMobile ? 'small' : 'medium'}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell align="right">Montant</TableCell>
-                      {!isMobile && <TableCell>Type</TableCell>}
-                      {!isMobile && <TableCell>Référence</TableCell>}
-                      <TableCell>Statut</TableCell>
-                      {!canceledSale && <TableCell align="center">Actions</TableCell>}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {paiements.map((paiement) => (
-                      <TableRow key={paiement.id_paiement}>
-                        <TableCell>{formatDate(paiement.date_paiement)}</TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="medium" color="success.main">
-                            {formatMontant(paiement.montant)}
-                          </Typography>
-                        </TableCell>
-                        {!isMobile && (
-                          <TableCell>
-                            <PaymentTypeBadge type={paiement.type_paiement} />
-                          </TableCell>
-                        )}
-                        {!isMobile && (
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                              {paiement.numero_cheque || paiement.reference_virement || paiement.numero_reference_lc || (paiement.id_lc ? `LC #${paiement.id_lc}` : '-')}
-                            </Typography>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          {paiement.type_paiement === 'cheque' && paiement.statut_cheque ? (
-                            <Chip 
-                              label={paiement.statut_cheque}
-                              size="small"
-                              color={paiement.statut_cheque === 'encaisse' ? 'success' : 'default'}
-                            />
-                          ) : (
-                            <Chip 
-                              label={paiement.statut}
-                              size="small"
-                              color={paiement.statut === 'valide' ? 'success' : 'default'}
-                            />
-                          )}
-                        </TableCell>
-                        {!canceledSale && <TableCell align="center">
-                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                            <Tooltip title="Modifier">
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => handleEditPaiement(paiement)}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Supprimer">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleDeletePaiementClick(paiement)}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            ) : (
-              <Box sx={{ textAlign: 'center', py: 3 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Aucun paiement enregistré pour cette transaction
-                </Typography>
-
-              </Box>
-            )}
-        </ExpandableDetails>
-      </Box>}
-
-      {transaction.est_promesse && <Box sx={{ mb: 3 }}>
-        <ExpandableDetails label="Historique des réservations" icon={<HistoryOutlined />}>
+      {transaction.est_promesse && <Box sx={{ mt: 2.5 }}>
+        <ExpandableDetails label="Historique du stock et des modifications" icon={<HistoryOutlined />}>
           <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={`${transaction.quantite_couverte}-${transaction.quantite_annulee}-${transaction.date_livraison_prevue}-${transaction.est_actif}`} embedded />
         </ExpandableDetails>
       </Box>}
@@ -1010,3 +892,4 @@ function TransactionDetail() {
 }
 
 export default TransactionDetail;
+
