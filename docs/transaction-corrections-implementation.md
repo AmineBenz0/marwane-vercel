@@ -383,3 +383,40 @@ cheques and letters of credit remain intentionally gated.
   Staging's actual PostgreSQL payment guard accepted the normalized bank-to-cash
   authorization and captured its linked revision under the runtime role. This
   check ran in a rolled-back transaction; no test payment or operation remained.
+
+## Phase 4 implementation — stock correction adapters
+
+Phase 3 was closed by the owner. The shared command now accepts transaction
+quantity/product/source/building/date corrections and explicit egg allocations.
+Financial payments keep their IDs and amounts when a sale or purchase changes.
+
+- General inventory is validated as a complete dated final state. Corrections
+  append an inverse at the original business date and a replacement at the new
+  date. A valid reduction of an already consumed purchase succeeds without the
+  transient-negative-stock failure of full reversal helpers. Negative historical
+  balances are rejected. Current receipt costs are recalculated; recorded
+  transformation cost snapshots are retained and listed in the preview.
+- Egg plans retain delivered quantities and closed remainders. Undelivered
+  reservations can shrink; released stock goes to pending orders in their
+  original creation order. Explicit origin plans must respect category,
+  building, production date, lot and other customers' reservations. Ordinary
+  sales require complete coverage. Unlinked historical sales require explicit
+  origins; missing general-stock provenance requires reconciliation.
+- Preview is read-only. Stock rows, production, allocations, lots, products,
+  affected transactions and delivery audit state enter the dependency hash.
+  Apply locks buildings, products and transactions in stable order before
+  revalidation. Manual adjustment/reversal writers use the product locks too.
+- `stock_revision` makes allocation-only changes advance the parent revision;
+  affected orders receive linked revision and allocation audit records. The
+  operation stores before/after stock plans. SQL migration, Alembic wrapper,
+  model and fresh bootstrap include the additive marker.
+- Staging migration `20261029220023_stock_correction_revisions` was applied.
+  The runtime role passed revision/history and dated stock replacement checks
+  inside a rolled-back transaction. The broader suite passed 211 tests, with
+  one optional disposable PostgreSQL fixture skipped before deployment.
+
+This is the backend adapter release for review, not Phase 4 closure or the owner
+UI release. Delivered-stock reductions, explicit physical returns, changes to
+recorded delivery dates, direct edits of used production rows and historical
+transformation revaluation remain protected. Owner forms are Phase 5; advanced
+resolution flows and indirect-view acceptance remain in their planned phases.

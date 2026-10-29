@@ -347,7 +347,7 @@ def test_paid_sale_price_correction_recalculates_total_without_changing_payment(
     assert sale.montant_restant == Decimal("17.50")
 
 
-def test_purchase_price_correction_waits_for_stock_cost_adapter(db_session, correction_transaction):
+def test_legacy_purchase_without_stock_movement_requires_reconciliation(db_session, correction_transaction):
     command = CorrectionCommand(
         operation_id=uuid4(), reason="Coût d’achat à corriger",
         target={"entity_type":"transaction","entity_id":correction_transaction.id_transaction,"expected_version":1},
@@ -356,7 +356,7 @@ def test_purchase_price_correction_waits_for_stock_cost_adapter(db_session, corr
     with pytest.raises(HTTPException) as error:
         preview_correction(db_session, command)
     assert error.value.status_code == 409
-    assert "valorisation du stock" in error.value.detail
+    assert "réconcilié" in error.value.detail
 
 
 @pytest.mark.parametrize(

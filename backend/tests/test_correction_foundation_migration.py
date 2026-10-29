@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / 'supabase_migrations' / '20261029111705_correction_history_foundation.sql'
 PAYMENT_MIGRATION = ROOT / 'supabase_migrations' / '20261029162302_audited_payment_corrections.sql'
 PHASE3_MIGRATION = ROOT / 'supabase_migrations' / '20261029210000_phase3_cash_bank_payment_corrections.sql'
+STOCK_MIGRATION = ROOT / 'supabase_migrations' / '20261029220023_stock_correction_revisions.sql'
 SQL = Path(__file__).parent / 'sql'
 
 
@@ -37,7 +38,7 @@ def test_correction_foundation_on_postgres():
         try:
             with connection.cursor() as cursor:
                 cursor.execute(f'CREATE SCHEMA {schema}')
-                for content in [(SQL / 'correction_foundation_fixture.sql').read_text(), MIGRATION.read_text(), MIGRATION.read_text(), PAYMENT_MIGRATION.read_text(), PHASE3_MIGRATION.read_text(), PHASE3_MIGRATION.read_text(), (SQL / 'correction_foundation_assertions.sql').read_text()]:
+                for content in [(SQL / 'correction_foundation_fixture.sql').read_text(), MIGRATION.read_text(), MIGRATION.read_text(), PAYMENT_MIGRATION.read_text(), PHASE3_MIGRATION.read_text(), PHASE3_MIGRATION.read_text(), STOCK_MIGRATION.read_text(), STOCK_MIGRATION.read_text(), (SQL / 'correction_foundation_assertions.sql').read_text()]:
                     cursor.execute(content.replace('public.', schema + '.').replace('SCHEMA public ', 'SCHEMA ' + schema + ' '))
         finally:
             connection.rollback()

@@ -38,6 +38,7 @@ class Transaction(Base):
     
     id_transaction = Column(Integer, primary_key=True, index=True)
     row_version = Column(BigInteger, nullable=False, server_default="1")
+    stock_revision = Column(BigInteger, nullable=False, server_default="0", default=0)
     date_transaction = Column(Date, nullable=False, index=True)
     id_produit = Column(Integer, ForeignKey("produits.id_produit"), nullable=False, index=True)
     quantite = Column(Integer, nullable=False)
@@ -65,6 +66,7 @@ class Transaction(Base):
     
     # Contraintes au niveau SQLAlchemy (seront aussi ajoutées via migrations)
     __table_args__ = (
+        CheckConstraint('stock_revision >= 0', name='check_stock_revision_nonnegative'),
         CheckConstraint('montant_total > 0', name='check_montant_positif'),
         CheckConstraint('quantite > 0', name='check_quantite_positive'),
         CheckConstraint('prix_unitaire > 0', name='check_prix_unitaire_positive'),

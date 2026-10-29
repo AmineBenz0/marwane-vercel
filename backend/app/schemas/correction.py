@@ -20,6 +20,12 @@ class CorrectionEnvelope(BaseModel):
     target: CorrectionTarget
 
 
+class StockAllocationChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id_production: int = Field(gt=0)
+    quantite: int = Field(gt=0, le=2147483647)
+
+
 class CorrectionChanges(BaseModel):
     """Validated fields currently supported by the shared correction command."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -34,6 +40,11 @@ class CorrectionChanges(BaseModel):
     id_compte: Optional[int] = Field(None, gt=0)
     source_reglement: Optional[Literal["caisse", "banque"]] = None
     notes: Optional[str] = Field(None, max_length=4000)
+    quantite: Optional[int] = Field(None, gt=0, le=2147483647)
+    id_produit: Optional[int] = Field(None, gt=0)
+    id_batiment: Optional[int] = Field(None, gt=0)
+    id_production: Optional[int] = Field(None, gt=0)
+    stock_allocations: Optional[list[StockAllocationChange]] = None
 
     @model_validator(mode="after")
     def require_one_field(self):

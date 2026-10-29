@@ -1,8 +1,7 @@
 """Atomic, revision-checked correction preview/apply command.
 
-Supports sale due-date/price/contact corrections, service transaction dates,
-and effective cash/bank payment amount/date/routing changes. Stock valuation,
-stock-linked transaction dates, cheques, and letters of credit remain gated.
+Supports audited transaction, stock and ordinary cash/bank corrections.
+Delivered-stock resolutions, terminal cheques and letters of credit remain gated.
 """
 from copy import deepcopy
 from datetime import date, datetime, time, timezone
@@ -32,6 +31,9 @@ from app.services.correction_contract import (
 )
 from app.services.financial import validate_payment_date
 from app.services.financial_ledger import sync_payment_cash_movement
+from app.services.stock_corrections import (
+    STOCK_FIELDS, lock_stock_scope, stock_dependencies, plan_stock_correction, apply_stock_plan,
+)
 
 
 _MODELS = {"transaction": Transaction, "paiement": Paiement}
@@ -71,6 +73,18 @@ def _field_value(name, value):
     if value is not None and name in {"prix_unitaire", "montant_total", "montant"}:
         return Decimal(value)
     return value
+
+
+def _stock_plan(db, command, record, changes):
+    if command.target.entity_type != 'transaction':
+        return None
+    relevant = STOCK_FIELDS - ({'prix_unitaire'} if record.id_client is not None else set())
+    changed = any(name in changes and getattr(record, name) != _field_value(name, changes[name]) for name in relevant)
+    explicit = command.changes.stock_allocations
+    if not changed and explicit is None:
+        return None
+    return plan_stock_correction(db, record, changes,
+        [a.model_dump() for a in explicit] if explicit is not None else None)
 
 
 def _dependencies(db, entity_type, record, transaction=None, *, lock=False, changes=None):
@@ -126,7 +140,7 @@ def _dependencies(db, entity_type, record, transaction=None, *, lock=False, chan
     def snapshot(row):
         return {column.name: _json_value(getattr(row, column.name)) for column in row.__table__.columns}
 
-    return {
+    result = {
         "transaction": _snapshot("transaction", transaction if transaction is not None else record),
         "payments": [snapshot(row) for row in payments],
         "cash": [snapshot(row) for row in cash],
@@ -135,17 +149,23 @@ def _dependencies(db, entity_type, record, transaction=None, *, lock=False, chan
         "clients": [snapshot(row) for row in clients],
         "suppliers": [snapshot(row) for row in suppliers],
     }
+    return result
 
 
 def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, transaction=None) -> dict:
     entity_type = command.target.entity_type
     requested = command.changes.model_dump(exclude_unset=True)
+    stock_allocations_supplied = 'stock_allocations' in requested
+    if stock_allocations_supplied:
+        if entity_type != 'transaction' or requested['stock_allocations'] is None:
+            raise HTTPException(422, 'La répartition de stock doit être une liste pour une transaction.')
+        requested.pop('stock_allocations')
     allowed = (
-        {"date_echeance", "date_transaction", "id_client", "id_fournisseur", "prix_unitaire"}
+        {"date_echeance", "date_transaction", "id_client", "id_fournisseur", "prix_unitaire", "quantite", "id_produit", "id_batiment", "id_production"}
         if entity_type == "transaction"
         else {"notes", "date_paiement", "montant", "type_paiement", "id_compte", "source_reglement"}
     )
-    if not requested or set(requested) - allowed:
+    if (not requested and not stock_allocations_supplied) or set(requested) - allowed:
         raise HTTPException(422, "Un ou plusieurs champs ne sont pas encore disponibles pour la correction.")
 
     final_transaction_date = (
@@ -160,15 +180,6 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
     if entity_type == "transaction" and "date_transaction" in requested:
         if requested["date_transaction"] is None:
             raise HTTPException(422, "La date de transaction doit être renseignée.")
-        product = db.query(Produit).filter(Produit.id_produit == record.id_produit).one_or_none()
-        if (
-            record.est_promesse or record.id_production is not None or record.allocations
-            or product is None or product.type_produit != "service"
-        ):
-            raise HTTPException(
-                409,
-                "La date de cette transaction modifie aussi le suivi du stock. Corrigez-la après l’adaptateur de stock.",
-            )
         final_due_date = requested.get("date_echeance", record.date_echeance)
         if final_due_date is not None and final_due_date < requested["date_transaction"]:
             raise HTTPException(409, "La date d’échéance deviendrait antérieure à la transaction. Corrigez les deux dates ensemble.")
@@ -211,15 +222,12 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
             if not product or product.usage != "achete":
                 raise HTTPException(409, "Ce produit n’est pas configuré pour un achat fournisseur.")
 
-    if entity_type == "transaction" and "prix_unitaire" in requested:
-        if requested["prix_unitaire"] is None:
+    if entity_type == "transaction" and ({"prix_unitaire", "quantite"} & requested.keys()):
+        if requested.get("prix_unitaire", record.prix_unitaire) is None or requested.get("quantite", record.quantite) is None:
             raise HTTPException(422, "Le prix unitaire doit être renseigné.")
-        if record.id_client is None:
-            raise HTTPException(
-                409,
-                "Le coût d’un achat ne peut pas encore être corrigé ici car il modifie la valorisation du stock.",
-            )
-        requested["montant_total"] = Decimal(str(record.quantite)) * requested["prix_unitaire"]
+        requested["montant_total"] = Decimal(str(requested.get("quantite", record.quantite))) * Decimal(str(requested.get("prix_unitaire", record.prix_unitaire)))
+        if requested['montant_total'] > Decimal('9999999999999.99'):
+            raise HTTPException(422, 'Le montant total dépasse la capacité de la transaction.')
 
     payment_financial_fields = {"date_paiement", "montant", "type_paiement", "id_compte", "source_reglement"}
     if entity_type == "paiement" and payment_financial_fields.intersection(requested):
@@ -352,7 +360,9 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
                 transaction, requested["date_paiement"],
             )
 
-    return {key: _json_value(value) for key, value in requested.items()}
+    normalized = {key: _json_value(value) for key, value in requested.items()}
+    stock_plan = _stock_plan(db, command, record, normalized)
+    return normalized
 
 
 def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: Session | None = None) -> dict:
@@ -364,8 +374,11 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
     if entity_type == "transaction":
         if "date_echeance" in changes:
             impact["overdue_follow_up"] = "recalculated from the corrected due date"
-        if "prix_unitaire" in changes:
-            impact["receivable"] = "recalculated from the corrected sale total"
+        if "prix_unitaire" in changes or "montant_total" in changes:
+            if record.id_client is not None:
+                impact["receivable"] = "recalculated from the corrected sale total"
+            else:
+                impact["payable"] = "recalculated from the corrected purchase total"
         if "date_transaction" in changes:
             impact["reporting_periods"] = {
                 "before": _json_value(record.date_transaction),
@@ -475,13 +488,20 @@ def preview_correction(db: Session, command: CorrectionCommand) -> dict:
             Transaction.id_transaction == record.id_transaction,
         ).populate_existing().one_or_none()
     changes = _normalize_and_validate(command, record, db=db, transaction=transaction)
+    stock_plan = _stock_plan(db, command, record, changes)
     before = _snapshot(command.target.entity_type, record)
     after = deepcopy(before)
     after.update(changes)
+    if stock_plan and stock_plan['kind'] == 'eggs':
+        after.update(id_production=stock_plan['source'], id_cycle=stock_plan['cycle'])
+    dependencies = _dependencies(db, command.target.entity_type, record, transaction, changes=changes)
+    if stock_plan:
+        dependencies['stock_plan'] = stock_plan
+        dependencies['stock'] = stock_dependencies(db)
     fingerprint = _dependency_fingerprint(
         command.target.entity_type, command.target.entity_id,
         command.target.expected_version, changes,
-        _dependencies(db, command.target.entity_type, record, transaction, changes=changes),
+        dependencies,
     )
     preview = CorrectionPreviewRead(
         operation_id=command.operation_id,
@@ -492,6 +512,8 @@ def preview_correction(db: Session, command: CorrectionCommand) -> dict:
         impact=_impact(command.target.entity_type, changes, record, transaction, db),
         dependency_fingerprint=fingerprint,
     ).model_dump(mode="json")
+    if stock_plan:
+        preview['impact']['stock'] = stock_plan
     return preview
 
 
@@ -504,6 +526,9 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
     previous = replay_result(db, command.operation_id, request_hash, actor_id)
     if previous is not None:
         return {**previous, "replayed": True}
+
+    if command.target.entity_type == 'transaction' and (STOCK_FIELDS.intersection(command.changes.model_fields_set) or 'stock_allocations' in command.changes.model_fields_set):
+        lock_stock_scope(db)
 
     transaction = None
     if command.target.entity_type == "paiement":
@@ -542,6 +567,10 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
     # Revalidate after locking the complete dependency set, including both
     # source and destination bank accounts.
     changes = _normalize_and_validate(command, record, db=db, transaction=transaction)
+    stock_plan = _stock_plan(db, command, record, changes)
+    if stock_plan:
+        dependencies['stock_plan'] = stock_plan
+        dependencies['stock'] = stock_dependencies(db)
     before = _snapshot(command.target.entity_type, record)
     fingerprint = _dependency_fingerprint(
         command.target.entity_type, command.target.entity_id,
@@ -549,12 +578,15 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
     )
     if getattr(command, "dependency_fingerprint", None) != fingerprint:
         raise HTTPException(409, "Les données liées à cette correction ont changé. Actualisez son aperçu avant de confirmer.")
+    if stock_plan and stock_plan['kind'] == 'eggs':
+        changes.update(id_production=stock_plan['source'], id_cycle=stock_plan['cycle'])
     actual_changes = {
         name: value
         for name, value in changes.items()
         if getattr(record, name) != _field_value(name, value)
     }
-    if not actual_changes:
+    allocation_changes = bool(stock_plan and stock_plan['kind']=='eggs' and stock_plan['before'] != stock_plan['after'])
+    if not actual_changes and not allocation_changes:
         return {
             "operation_id": str(command.operation_id),
             "replayed": False,
@@ -563,6 +595,9 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
             "impact": _impact(command.target.entity_type, changes, record, transaction, db),
             "no_op": True,
         }
+
+    if stock_plan:
+        actual_changes['stock_revision'] = record.stock_revision + 1
 
     expected_after_version = record.row_version + 1
     modified_at = datetime.now(timezone.utc)
@@ -578,6 +613,8 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
         },
         "impact": _impact(command.target.entity_type, actual_changes, record, transaction, db),
     }
+    if stock_plan:
+        result['impact']['stock'] = stock_plan
     # The guard authorizes the normalized write, including derived account
     # clears. Retain submitted fields separately; retry hashing continues to
     # use the original command, independently of this authorization payload.
@@ -614,6 +651,8 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
         setattr(record, name, _field_value(name, value))
     record.id_utilisateur_modification = actor_id
     record.date_modification = modified_at
+    if stock_plan:
+        apply_stock_plan(db, record, stock_plan, actor, command.operation_id, command.reason)
     if command.target.entity_type == "paiement" and {
         "date_paiement", "montant", "type_paiement", "id_compte", "source_reglement",
     }.intersection(actual_changes):

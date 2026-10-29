@@ -56,7 +56,7 @@ def reverse_stock_adjustment(
     movement = db.query(MouvementStock).filter(
         MouvementStock.id_mouvement_stock == id,
         MouvementStock.source_type == "manual",
-    ).with_for_update().first()
+    ).first()
     if not movement:
         raise HTTPException(status_code=404, detail="Ajustement de stock introuvable")
     reversals = reverse_source_movements(
@@ -71,3 +71,4 @@ def reverse_stock_adjustment(
     db.commit()
     db.refresh(reversals[0])
     return reversals[0]
+

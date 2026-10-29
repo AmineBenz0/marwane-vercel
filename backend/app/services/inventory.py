@@ -230,6 +230,11 @@ def reverse_source_movements(
     reason: str,
 ) -> list[MouvementStock]:
     """Append inverse movements for all active movements from a source."""
+    product_ids = [row[0] for row in db.query(MouvementStock.id_produit).filter(
+        MouvementStock.source_type == source_type, MouvementStock.source_id == source_id,
+        MouvementStock.id_mouvement_inverse.is_(None)).distinct().all()]
+    db.query(Produit).filter(Produit.id_produit.in_(product_ids)).order_by(
+        Produit.id_produit).populate_existing().with_for_update().all()
     originals = db.query(MouvementStock).filter(
         MouvementStock.source_type == source_type,
         MouvementStock.source_id == source_id,
@@ -349,7 +354,7 @@ def record_adjustment(
     cle_idempotence: Optional[str] = None,
 ) -> MouvementStock:
     """Record an explicit, auditable stock adjustment."""
-    produit = db.query(Produit).filter(Produit.id_produit == id_produit).first()
+    produit = db.query(Produit).filter(Produit.id_produit == id_produit).populate_existing().with_for_update().first()
     if not produit:
         raise HTTPException(status_code=404, detail="Produit introuvable")
     if not is_inventory_tracked(produit):
