@@ -124,7 +124,12 @@ def run_integrity_check(db: Session) -> list[dict]:
             issues.append(IntegrityIssue("ORPHAN_PAYMENT", "high", "paiement", payment.id_paiement, "Paiement sans transaction."))
             continue
 
-        if payment.date_paiement < transaction.date_transaction:
+        payment_business_date = (
+            payment.date_encaissement_effective or payment.date_paiement
+            if payment.type_paiement == "cheque"
+            else payment.date_paiement
+        )
+        if payment.statut != "annule" and payment_business_date < transaction.date_transaction:
             issues.append(IntegrityIssue("INVALID_PAYMENT_DATE", "medium", "paiement", payment.id_paiement, "La date du paiement est antérieure à la date de la transaction."))
 
         linked_movements = cash_by_payment.get(payment.id_paiement, []) + bank_by_payment.get(payment.id_paiement, [])
@@ -155,6 +160,42 @@ def run_integrity_check(db: Session) -> list[dict]:
                     "paiement",
                     payment.id_paiement,
                     "Le sens du mouvement financier ne correspond pas à la transaction.",
+                ))
+            expected_date = payment_business_date
+            if movement.date_mouvement.date() != expected_date:
+                issues.append(IntegrityIssue(
+                    "PAYMENT_MOVEMENT_DATE_MISMATCH",
+                    "high",
+                    "paiement",
+                    payment.id_paiement,
+                    "La date du mouvement financier ne correspond pas à la date effective du paiement.",
+                ))
+            expected_bank = (
+                transaction.id_fournisseur is not None and payment.source_reglement == "banque"
+            ) or (
+                payment.source_reglement is None
+                and payment.type_paiement == "virement" and payment.id_compte is not None
+            )
+            if expected_bank and (
+                not isinstance(movement, MouvementBancaire)
+                or movement.id_compte != payment.id_compte
+                or movement.source != payment.type_paiement
+                or movement.reference != (payment.reference_virement or payment.numero_cheque)
+            ):
+                issues.append(IntegrityIssue(
+                    "PAYMENT_BANK_ACCOUNT_MISMATCH",
+                    "high",
+                    "paiement",
+                    payment.id_paiement,
+                    "Le mouvement ne correspond pas au compte bancaire enregistré sur le paiement.",
+                ))
+            if not expected_bank and isinstance(movement, MouvementBancaire):
+                issues.append(IntegrityIssue(
+                    "PAYMENT_FUNDING_SOURCE_MISMATCH",
+                    "high",
+                    "paiement",
+                    payment.id_paiement,
+                    "Le paiement est enregistré en caisse mais son mouvement est bancaire.",
                 ))
 
     for charge in charges:
@@ -261,3 +302,4 @@ def run_integrity_check(db: Session) -> list[dict]:
             issues.append(IntegrityIssue("NEGATIVE_STOCK", "high", "produit", product.id_produit, f"Le stock calculé est négatif ({quantity})."))
 
     return [asdict(issue) for issue in issues]
+

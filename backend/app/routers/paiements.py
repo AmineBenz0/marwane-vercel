@@ -73,6 +73,16 @@ def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> Non
     if next_state is None:
         return
 
+    if (
+        current_state == "encaisse"
+        and "date_encaissement_effective" in update_data
+        and update_data["date_encaissement_effective"] != paiement.date_encaissement_effective
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La date d’encaissement d’un chèque déjà encaissé nécessite son parcours de correction dédié.",
+        )
+
     allowed_transitions = {
         None: {"emis", "a_encaisser", "encaisse", "rejete", "annule"},
         "emis": {"a_encaisser", "encaisse", "rejete", "annule"},

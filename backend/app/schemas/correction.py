@@ -24,9 +24,15 @@ class CorrectionChanges(BaseModel):
     """Validated fields currently supported by the shared correction command."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     date_echeance: Optional[date] = None
+    date_transaction: Optional[date] = None
+    id_client: Optional[int] = Field(None, gt=0)
+    id_fournisseur: Optional[int] = Field(None, gt=0)
     prix_unitaire: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     date_paiement: Optional[date] = None
     montant: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
+    type_paiement: Optional[Literal["cash", "virement", "carte", "compensation", "autre"]] = None
+    id_compte: Optional[int] = Field(None, gt=0)
+    source_reglement: Optional[Literal["caisse", "banque"]] = None
     notes: Optional[str] = Field(None, max_length=4000)
 
     @model_validator(mode="after")

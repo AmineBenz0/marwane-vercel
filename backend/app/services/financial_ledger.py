@@ -298,7 +298,14 @@ def sync_payment_cash_movement(
         return None
 
     movement_type = "ENTREE" if transaction.id_client is not None else "SORTIE"
-    expected_date = _source_datetime(payment.date_paiement)
+    # A cleared cheque affects the ledger on the encashment date. The issue
+    # date remains visible on the payment record but is not its cash/bank date.
+    effective_payment_date = (
+        payment.date_encaissement_effective or payment.date_paiement
+        if payment.type_paiement == "cheque"
+        else payment.date_paiement
+    )
+    expected_date = _source_datetime(effective_payment_date)
 
     # New supplier payments use their saved funding source, independently of
     # the method. Client/historical payments retain their previous routing.
@@ -324,6 +331,8 @@ def sync_payment_cash_movement(
             and _money(existing_bank.montant) == _money(payment.montant)
             and existing_bank.type_mouvement == movement_type
             and _same_datetime(existing_bank.date_mouvement, expected_date)
+            and existing_bank.source == payment.type_paiement
+            and existing_bank.reference == (payment.reference_virement or payment.numero_cheque)
         ):
             return None
         if existing_bank:

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 from app.models.correction_operation import CorrectionOperation
 from app.models.caisse import Caisse
 from app.models.client import Client
+from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.fournisseur import Fournisseur
 from app.models.paiement import Paiement
 from app.models.financial_correction import CorrectionFinanciere
@@ -494,3 +495,249 @@ def test_database_result_mismatch_rolls_back_the_operation(db_session, correctio
     assert db_session.query(CorrectionOperation).count() == 0
     assert db_session.get(Transaction,sale.id_transaction).date_echeance is None
     assert db_session.get(Transaction,sale.id_transaction).row_version == 1
+
+
+def test_supplier_payment_can_move_from_cashbox_to_bank_atomically(db_session, correction_transaction, test_user):
+    account = CompteBancaire(
+        nom_banque="Compte test", numero_compte="CORR-001", solde_actuel=Decimal("100.00"),
+    )
+    db_session.add(account)
+    db_session.flush()
+    db_session.add(MouvementBancaire(
+        id_compte=account.id_compte, montant=Decimal("100.00"), type_mouvement="ENTREE",
+        source="initial", statut="active",
+    ))
+    payment = Paiement(
+        id_transaction=correction_transaction.id_transaction,
+        date_paiement=correction_transaction.date_transaction,
+        montant=Decimal("5.00"), type_paiement="cash", source_reglement="caisse",
+        statut="valide", id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(payment)
+    db_session.flush()
+    original = Caisse(
+        montant=payment.montant, type_mouvement="SORTIE", statut="active",
+        id_transaction=correction_transaction.id_transaction, id_paiement=payment.id_paiement,
+        date_mouvement=datetime.combine(payment.date_paiement, datetime.min.time(), tzinfo=timezone.utc),
+    )
+    db_session.add(original)
+    db_session.commit()
+    revision_trigger(db_session, "paiements", "type_paiement,id_compte,source_reglement")
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Le règlement provenait du compte bancaire",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes={"source_reglement":"banque", "id_compte":account.id_compte},
+    )
+    preview = preview_correction(db_session, command)
+    assert preview["impact"]["cash"]["before"]["amount"] == "5.00"
+    assert preview["impact"]["cash"]["after"] is None
+    assert preview["impact"]["bank"]["after"]["account_id"] == account.id_compte
+    assert preview["impact"]["bank"]["account_balances"] == [
+        {"account_id":account.id_compte,"before":"100.00","after":"95.00"},
+    ]
+    result = apply_correction(db_session, prepared(db_session, command), test_user)
+
+    db_session.refresh(account)
+    db_session.refresh(payment)
+    assert payment.source_reglement == "banque"
+    assert payment.id_compte == account.id_compte
+    assert account.solde_actuel == Decimal("95.00")
+    assert db_session.query(Caisse).filter(
+        Caisse.id_paiement == payment.id_paiement, Caisse.statut == "active",
+    ).count() == 0
+    movements = db_session.query(MouvementBancaire).filter(
+        MouvementBancaire.id_paiement == payment.id_paiement, MouvementBancaire.statut == "active",
+    ).all()
+    assert len(movements) == 1
+    assert movements[0].id_compte == account.id_compte
+    assert movements[0].type_mouvement == "SORTIE"
+    assert result["record"]["row_version"] == 2
+    assert db_session.query(CorrectionFinanciere).filter(
+        CorrectionFinanciere.operation_id == command.operation_id,
+    ).count() >= 1
+
+
+def test_bank_balance_change_after_preview_requires_fresh_confirmation(db_session, correction_transaction, test_user):
+    account = CompteBancaire(
+        nom_banque="Compte aperçu", numero_compte="CORR-002", solde_actuel=Decimal("100.00"),
+    )
+    db_session.add(account)
+    db_session.flush()
+    db_session.add(MouvementBancaire(
+        id_compte=account.id_compte, montant=Decimal("100.00"), type_mouvement="ENTREE",
+        source="initial", statut="active",
+    ))
+    payment = Paiement(
+        id_transaction=correction_transaction.id_transaction,
+        date_paiement=correction_transaction.date_transaction,
+        montant=Decimal("5.00"), type_paiement="cash", source_reglement="caisse",
+        statut="valide", id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(payment)
+    db_session.flush()
+    db_session.add(Caisse(
+        montant=payment.montant, type_mouvement="SORTIE", statut="active",
+        id_transaction=correction_transaction.id_transaction, id_paiement=payment.id_paiement,
+        date_mouvement=datetime.combine(payment.date_paiement, datetime.min.time(), tzinfo=timezone.utc),
+    ))
+    db_session.commit()
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Affecter le règlement à la banque",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes={"source_reglement":"banque", "id_compte":account.id_compte},
+    )
+    preview = preview_correction(db_session, command)
+    db_session.query(CompteBancaire).filter(
+        CompteBancaire.id_compte == account.id_compte,
+    ).update({"solde_actuel":Decimal("110.00")}, synchronize_session=False)
+    db_session.add(MouvementBancaire(
+        id_compte=account.id_compte, montant=Decimal("10.00"), type_mouvement="ENTREE",
+        source="adjustment", statut="active",
+    ))
+    db_session.commit()
+    apply_command = CorrectionApplyCommand(
+        **command.model_dump(exclude_unset=True),
+        dependency_fingerprint=preview["dependency_fingerprint"],
+    )
+    with pytest.raises(HTTPException) as error:
+        apply_correction(db_session, apply_command, test_user)
+    assert error.value.status_code == 409
+    db_session.refresh(payment)
+    assert payment.source_reglement == "caisse"
+    assert db_session.query(MouvementBancaire).filter(
+        MouvementBancaire.id_paiement == payment.id_paiement, MouvementBancaire.statut == "active",
+    ).count() == 0
+    assert db_session.query(CorrectionOperation).filter(
+        CorrectionOperation.operation_id == command.operation_id,
+    ).count() == 0
+
+
+def test_supplier_payment_account_change_reconciles_both_accounts(db_session, correction_transaction, test_user):
+    old_account = CompteBancaire(
+        nom_banque="Ancienne banque", numero_compte="CORR-003", solde_actuel=Decimal("95.00"),
+    )
+    new_account = CompteBancaire(
+        nom_banque="Nouvelle banque", numero_compte="CORR-004", solde_actuel=Decimal("200.00"),
+    )
+    db_session.add_all([old_account, new_account])
+    db_session.flush()
+    payment = Paiement(
+        id_transaction=correction_transaction.id_transaction,
+        date_paiement=correction_transaction.date_transaction,
+        montant=Decimal("5.00"), type_paiement="virement", source_reglement="banque",
+        id_compte=old_account.id_compte, statut="valide",
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(payment)
+    db_session.flush()
+    db_session.add_all([
+        MouvementBancaire(id_compte=old_account.id_compte, montant=Decimal("100.00"), type_mouvement="ENTREE", source="initial", statut="active"),
+        MouvementBancaire(
+            id_compte=old_account.id_compte, montant=Decimal("5.00"), type_mouvement="SORTIE",
+            source="virement", statut="active", id_paiement=payment.id_paiement,
+            date_mouvement=datetime.combine(payment.date_paiement, datetime.min.time(), tzinfo=timezone.utc),
+        ),
+        MouvementBancaire(id_compte=new_account.id_compte, montant=Decimal("200.00"), type_mouvement="ENTREE", source="initial", statut="active"),
+    ])
+    db_session.commit()
+    revision_trigger(db_session, "paiements", "id_compte")
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Règlement rattaché au mauvais compte",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes={"id_compte":new_account.id_compte},
+    )
+    preview = preview_correction(db_session, command)
+    assert preview["impact"]["bank"]["account_balances"] == [
+        {"account_id":old_account.id_compte,"before":"95.00","after":"100.00"},
+        {"account_id":new_account.id_compte,"before":"200.00","after":"195.00"},
+    ]
+    apply_correction(db_session, prepared(db_session, command), test_user)
+    db_session.refresh(old_account)
+    db_session.refresh(new_account)
+    db_session.refresh(payment)
+    assert old_account.solde_actuel == Decimal("100.00")
+    assert new_account.solde_actuel == Decimal("195.00")
+    assert payment.id_compte == new_account.id_compte
+    active = db_session.query(MouvementBancaire).filter(
+        MouvementBancaire.id_paiement == payment.id_paiement,
+        MouvementBancaire.statut == "active",
+    ).one()
+    assert active.id_compte == new_account.id_compte
+
+
+def test_transaction_date_correction_is_limited_to_service_records(db_session, correction_sale, test_user):
+    stock_sale, _ = correction_sale
+    blocked = CorrectionCommand(
+        operation_id=uuid4(), reason="Date de vente corrigée",
+        target={"entity_type":"transaction","entity_id":stock_sale.id_transaction,"expected_version":1},
+        changes={"date_transaction":date.today() - timedelta(days=1)},
+    )
+    with pytest.raises(HTTPException) as error:
+        preview_correction(db_session, blocked)
+    assert error.value.status_code == 409
+
+    client = Client(nom_client="Client service correction")
+    service = Produit(nom_produit="Service de correction date", type_produit="service")
+    db_session.add_all([client, service])
+    db_session.flush()
+    transaction = Transaction(
+        date_transaction=date.today(), date_echeance=date.today() + timedelta(days=10),
+        id_client=client.id_client, id_produit=service.id_produit, quantite=1,
+        prix_unitaire=Decimal("20.00"), montant_total=Decimal("20.00"), est_actif=True,
+    )
+    db_session.add(transaction)
+    db_session.flush()
+    db_session.add(Paiement(
+        id_transaction=transaction.id_transaction,
+        date_paiement=date.today() - timedelta(days=5),
+        montant=Decimal("2.00"), type_paiement="cash", statut="annule",
+    ))
+    db_session.add(Paiement(
+        id_transaction=transaction.id_transaction,
+        date_paiement=date.today(),
+        montant=Decimal("3.00"), type_paiement="cash", statut="valide",
+    ))
+    db_session.commit()
+    revision_trigger(db_session, "transactions", "date_transaction")
+    later_than_payment = CorrectionCommand(
+        operation_id=uuid4(), reason="Date postérieure au paiement",
+        target={"entity_type":"transaction","entity_id":transaction.id_transaction,"expected_version":1},
+        changes={"date_transaction":date.today() + timedelta(days=1)},
+    )
+    with pytest.raises(HTTPException) as error:
+        preview_correction(db_session, later_than_payment)
+    assert error.value.status_code == 409
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Date de service saisie trop tard",
+        target={"entity_type":"transaction","entity_id":transaction.id_transaction,"expected_version":1},
+        changes={"date_transaction":date.today() - timedelta(days=2)},
+    )
+    preview = preview_correction(db_session, command)
+    assert preview["impact"]["reporting_periods"]["after"] == (date.today() - timedelta(days=2)).isoformat()
+    result = apply_correction(db_session, prepared(db_session, command), test_user)
+    db_session.refresh(transaction)
+    assert transaction.date_transaction == date.today() - timedelta(days=2)
+    assert result["record"]["row_version"] == 2
+
+
+def test_transaction_contact_correction_preserves_side_and_linked_payment(db_session, correction_sale, test_user):
+    sale, payment = correction_sale
+    replacement = Client(nom_client="Client de remplacement", est_actif=True)
+    db_session.add(replacement)
+    db_session.commit()
+    revision_trigger(db_session, "transactions", "id_client")
+    original_contact = sale.id_client
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Vente attribuée au mauvais client",
+        target={"entity_type":"transaction","entity_id":sale.id_transaction,"expected_version":1},
+        changes={"id_client":replacement.id_client},
+    )
+    preview = preview_correction(db_session, command)
+    assert preview["impact"]["contact_balance"] == {"from":original_contact,"to":replacement.id_client}
+    applied = apply_correction(db_session, prepared(db_session, command), test_user)
+    db_session.refresh(sale)
+    db_session.refresh(payment)
+    assert sale.id_client == replacement.id_client
+    assert payment.id_transaction == sale.id_transaction
+    assert payment.montant == Decimal("5.00")
+    assert applied["record"]["row_version"] == 2

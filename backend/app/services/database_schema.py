@@ -53,7 +53,7 @@ def schema_issues(connection: Connection, metadata: MetaData) -> list[str]:
         # Models alone cannot detect a missing trigger after an incomplete rollout.
         expected = {
             "transactions": {"trg_correction_version", "trg_correction_capture"},
-            "paiements": {"trg_correction_version", "trg_correction_capture"},
+            "paiements": {"trg_correction_version", "trg_correction_capture", "trg_protect_payment_identity"},
             **{name: {"trg_correction_history_immutable", "trg_correction_history_no_truncate"}
                for name in ("correction_operations", "entity_revisions", "transactions_audit")},
         }

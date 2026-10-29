@@ -272,11 +272,13 @@ def test_client_letter_of_credit_cannot_pay_supplier_transaction(client, auth_he
     assert "fournisseur" in payment.json()["detail"].lower()
 
 
-def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_headers):
+def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_headers, db_session):
     client_row = client.post("/api/v1/clients", json={"nom_client": "Client Chèque"}, headers=auth_headers).json()
     product = create_product(client, "Service Chèque", "service", True, False)
+    transaction_date = date.today() - timedelta(days=3)
+    payment_date = date.today() - timedelta(days=2)
     transaction = client.post("/api/v1/transactions", json={
-        "date_transaction": date.today().isoformat(),
+        "date_transaction": transaction_date.isoformat(),
         "date_echeance": date.today().isoformat(),
         "id_produit": product["id_produit"],
         "quantite": 1,
@@ -285,7 +287,7 @@ def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_header
     }, headers=auth_headers).json()
     cheque = client.post("/api/v1/paiements", json={
         "id_transaction": transaction["id_transaction"],
-        "date_paiement": date.today().isoformat(),
+        "date_paiement": payment_date.isoformat(),
         "montant": 100,
         "type_paiement": "cheque",
         "statut_cheque": "a_encaisser",
@@ -296,12 +298,28 @@ def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_header
 
     encashed = client.put(
         f"/api/v1/paiements/{cheque.json()['id_paiement']}",
-        json={"statut_cheque": "encaisse"},
+        json={"statut_cheque": "encaisse", "date_encaissement_effective": date.today().isoformat()},
         headers=auth_headers,
     )
     assert encashed.status_code == 200, encashed.text
     assert encashed.json()["statut"] == "valide"
+    movement = db_session.query(Caisse).filter(
+        Caisse.id_paiement == cheque.json()["id_paiement"], Caisse.statut == "active",
+    ).one()
+    assert movement.date_mouvement.date() == date.today()
     assert client.get(f"/api/v1/transactions/{transaction['id_transaction']}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "paye"
+    immutable_settlement_date = client.put(
+        f"/api/v1/paiements/{cheque.json()['id_paiement']}",
+        json={"statut_cheque": "encaisse", "date_encaissement_effective": (date.today() + timedelta(days=1)).isoformat()},
+        headers=auth_headers,
+    )
+    assert immutable_settlement_date.status_code == 409
+    immutable_settlement_date = client.put(
+        f"/api/v1/paiements/{cheque.json()['id_paiement']}",
+        json={"statut_cheque": "encaisse", "date_encaissement_effective": (date.today() + timedelta(days=1)).isoformat()},
+        headers=auth_headers,
+    )
+    assert immutable_settlement_date.status_code == 409
 
 
 def test_receivables_support_due_date_range(client, auth_headers):
@@ -1116,3 +1134,4 @@ def test_reconciliation_reports_legacy_product_flag_review(client, db_session, a
         and issue["entity_id"] == product["id_produit"]
         for issue in issues
     )
+

@@ -281,8 +281,9 @@ money/stock acceptance tests before editable financial fields are enabled.
 
 The apply contract is stricter; no existing frontend calls these command routes.
 At that checkpoint, native concurrent application/runtime-role tests and the
-authenticated staging walkthrough were pending; see the follow-up below. Bank/cheque/LC, stock and owner UI
-adapters retain their planned later-phase scope.
+authenticated staging walkthrough were pending; see the follow-up below. At
+that checkpoint bank routing, cheque/LC, stock and owner UI adapters remained
+later-phase scope; the Phase 3 follow-up below records bank-routing work.
 
 ## Phase 2 locking follow-up — 29 October 2026
 
@@ -318,3 +319,50 @@ limitation rather than a requirement for additional test infrastructure.
 Final focused suite after the locking changes: 86 passed, one optional native
 PostgreSQL migration fixture skipped. The runtime-role SQL checks above were
 performed separately against staging.
+
+## Phase 3 implementation — cash, bank, dates and contacts
+
+The shared correction command now supports:
+
+- Payment amount/date updates when the existing cash or bank movement matches
+  the payment; payment method and eligible cash/bank funding-account changes
+  replace ledger effects atomically, update old/new account balances, and
+  refresh cash snapshots. Involved accounts must reconcile with their active
+  ledger movements. Account balances and selected contacts are part of the
+  preview fingerprint and are locked in stable order during apply.
+- Same-side client or supplier reassignment for compatible products. The
+  transaction keeps its sale/purchase direction; LC-linked payment histories
+  remain blocked pending the LC adapter.
+- Transaction-date changes for service records without production or stock
+  allocations. Active/pending payment chronology and due-date ordering are
+  checked; canceled payments retain their historical dates without blocking.
+  Stock-linked dates remain blocked for Phase 4.
+- Cleared cheque ledger movements use the effective encashment date. Editing
+  the date of an already encashed cheque remains blocked for the advanced
+  cheque-correction flow. Reconciliation now checks payment movement dates,
+  routes, and bank-account attribution.
+
+The database payment guard now authorizes method/account/source edits only when
+the immutable operation request, actor, target revision, and saved result agree.
+The SQL-managed migration, backend migration copy, Alembic wrapper, and fresh
+bootstrap are aligned. The preview/apply command is available at the backend
+API; the owner-facing editing forms are still planned for Phase 5. Purchase
+valuation, sale-to-purchase conversion, stock-linked transaction dates,
+cheques and letters of credit remain intentionally gated.
+
+### Phase 3 verification before rollout
+
+- Focused regression suite: 91 passed, one optional native PostgreSQL migration
+  fixture skipped. Python compile checks passed. The skip is intentional because
+  that fixture needs a disposable PostgreSQL database; staging was not used for
+  its destructive schema setup.
+- Staging PostgreSQL 17.11 accepted the updated payment guard and a runtime-role
+  method correction in a transaction that was rolled back. The payment returned
+  to cash at revision 3, and the synthetic correction operation was absent after
+  rollback. This validates the guard contract, not the full authenticated API
+  request path.
+- Staging schema inspection confirmed the account table uses `solde_actuel`.
+  The migration only replaces the existing payment identity guard; it does not
+  edit business records or widen access grants.
+- Owner-facing correction forms and end-to-end browser saves are not part of this
+  phase. They remain a Phase 5 acceptance item.

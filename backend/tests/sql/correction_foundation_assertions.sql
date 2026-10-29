@@ -152,3 +152,38 @@ DO $$ BEGIN
 END $$;
 SELECT set_config('app.correction_operation_id','',true);
 RESET ROLE;
+
+-- Phase 3: method and funding-route fields remain protected by the same
+-- operation/actor/revision/result contract as date and amount.
+SET LOCAL ROLE app_runtime;
+INSERT INTO public.correction_operations VALUES(
+ 'cccccccc-cccc-cccc-cccc-cccccccccccc',repeat('c',64),1,'Change payment funding route',
+ '{"target":{"entity_type":"paiement","entity_id":1,"expected_version":4},"changes":{"type_paiement":"virement","id_compte":9,"source_reglement":"banque"}}',
+ '{"record":{"date_paiement":"2026-10-05","montant":"7.00","type_paiement":"virement","id_compte":9,"source_reglement":"banque","row_version":5}}',now());
+SELECT set_config('app.correction_operation_id','cccccccc-cccc-cccc-cccc-cccccccccccc',true);
+UPDATE public.paiements SET type_paiement='virement',id_compte=9,source_reglement='banque',id_utilisateur_modification=1 WHERE id_paiement=1;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.paiements WHERE id_paiement=1 AND type_paiement='virement' AND id_compte=9 AND source_reglement='banque' AND row_version=5) THEN
+  RAISE EXCEPTION 'Audited payment route correction was not applied';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.entity_revisions WHERE entity_type='paiement' AND entity_id=1 AND revision=5
+    AND operation_id='cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid) THEN
+  RAISE EXCEPTION 'Payment route correction was not linked to history';
+ END IF;
+END $$;
+SELECT set_config('app.correction_operation_id','',true);
+INSERT INTO public.correction_operations VALUES(
+ 'dddddddd-dddd-dddd-dddd-dddddddddddd',repeat('d',64),1,'Mismatched bank account',
+ '{"target":{"entity_type":"paiement","entity_id":1,"expected_version":5},"changes":{"id_compte":10}}',
+ '{"record":{"date_paiement":"2026-10-05","montant":"7.00","type_paiement":"virement","id_compte":9,"source_reglement":"banque","row_version":6}}',now());
+SELECT set_config('app.correction_operation_id','dddddddd-dddd-dddd-dddd-dddddddddddd',true);
+DO $$ DECLARE blocked boolean:=false; BEGIN
+ BEGIN UPDATE public.paiements SET id_compte=10,id_utilisateur_modification=1 WHERE id_paiement=1;
+ EXCEPTION WHEN raise_exception THEN blocked:=true; END;
+ IF NOT blocked OR (SELECT id_compte FROM public.paiements WHERE id_paiement=1)<>9
+    OR (SELECT row_version FROM public.paiements WHERE id_paiement=1)<>5 THEN
+  RAISE EXCEPTION 'Mismatched bank-account correction was accepted or partially applied';
+ END IF;
+END $$;
+SELECT set_config('app.correction_operation_id','',true);
+RESET ROLE;
