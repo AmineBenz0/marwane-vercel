@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Transactions.
 """
-from sqlalchemy import Column, Integer, Date, Numeric, Boolean, DateTime, ForeignKey, CheckConstraint, Text
+from sqlalchemy import Column, Integer, BigInteger, Date, Numeric, Boolean, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from decimal import Decimal
@@ -37,6 +37,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
     
     id_transaction = Column(Integer, primary_key=True, index=True)
+    row_version = Column(BigInteger, nullable=False, server_default="1")
     date_transaction = Column(Date, nullable=False, index=True)
     id_produit = Column(Integer, ForeignKey("produits.id_produit"), nullable=False, index=True)
     quantite = Column(Integer, nullable=False)
@@ -216,3 +217,4 @@ class Transaction(Base):
             return 0.0
         
         return float((self.montant_paye / Decimal(str(self.montant_total))) * 100)
+

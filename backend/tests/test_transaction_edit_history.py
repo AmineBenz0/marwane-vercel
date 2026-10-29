@@ -40,6 +40,21 @@ def add_payment(db, transaction, state):
     return payment
 
 
+def test_correction_contract_rejects_stale_revision_without_changes(db_session, purchase):
+    from fastapi import HTTPException
+    from sqlalchemy import update
+    from app.schemas.correction import CorrectionTarget
+    from app.services.correction_contract import lock_expected_revision
+    target = CorrectionTarget(entity_type="transaction",entity_id=purchase.id_transaction,expected_version=1)
+    assert lock_expected_revision(db_session,target).id_transaction==purchase.id_transaction
+    db_session.execute(update(Transaction).where(Transaction.id_transaction==purchase.id_transaction).values(row_version=2),execution_options={"synchronize_session":False})
+    # A previously loaded object must not hide the new database revision.
+    with pytest.raises(HTTPException) as error:
+        lock_expected_revision(db_session,target)
+    assert error.value.status_code == 409
+    assert not db_session.dirty
+
+
 @pytest.mark.parametrize("state", ["valide", "annule"])
 def test_unchanged_financial_fields_allow_due_date_without_stock_or_payment_writes(client, db_session, purchase, state, monkeypatch):
     payment = add_payment(db_session, purchase, state)

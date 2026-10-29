@@ -1,6 +1,6 @@
 """Read-only compatibility checks between deployed models and the database."""
 
-from sqlalchemy import MetaData, inspect, select
+from sqlalchemy import MetaData, inspect, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -49,4 +49,35 @@ def schema_issues(connection: Connection, metadata: MetaData) -> list[str]:
                 for key in foreign_keys
             ):
                 issues.append("Missing reversal foreign key: cessions_lc.id_cession_origine")
+    if connection.dialect.name == "postgresql" and "entity_revisions" in metadata.tables:
+        # Models alone cannot detect a missing trigger after an incomplete rollout.
+        expected = {
+            "transactions": {"trg_correction_version", "trg_correction_capture"},
+            "paiements": {"trg_correction_version", "trg_correction_capture"},
+            **{name: {"trg_correction_history_immutable", "trg_correction_history_no_truncate"}
+               for name in ("correction_operations", "entity_revisions", "transactions_audit")},
+        }
+        installed = set(connection.execute(text("""
+            SELECT c.relname,t.tgname FROM pg_catalog.pg_trigger t
+            JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgenabled='O'
+        """)).tuples())
+        for table, triggers in expected.items():
+            issues.extend(f"Missing enabled trigger: {table}.{name}" for name in sorted(triggers)
+                          if (table, name) not in installed)
+        for table in ("correction_operations", "entity_revisions", "transactions_audit"):
+            state = connection.execute(text("""
+                SELECT c.relrowsecurity,
+                    CASE WHEN current_user='app_runtime' THEN
+                        has_table_privilege(current_user,c.oid,'SELECT')
+                        AND has_table_privilege(current_user,c.oid,'INSERT')
+                        AND NOT has_table_privilege(current_user,c.oid,'UPDATE,DELETE,TRUNCATE')
+                    ELSE true END
+                FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+                WHERE n.nspname='public' AND c.relname=:table
+            """), {"table": table}).first()
+            if state is not None and not all(state):
+                issues.append(f"Unsafe correction history permissions: {table}")
     return issues
+

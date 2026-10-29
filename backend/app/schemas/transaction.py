@@ -321,6 +321,7 @@ class TransactionRead(TransactionBase):
     Schéma pour lire une transaction.
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
+    row_version: int = Field(default=1, description="Révision pour détecter les modifications concurrentes")
     repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
     quantite_reservee: int = 0
     quantite_couverte: int = 0
@@ -381,3 +382,4 @@ class TransactionAuditRead(BaseModel):
     nouvelle_valeur: Optional[str] = Field(None, description="Valeur après modification")
 
     model_config = ConfigDict(from_attributes=True)
+

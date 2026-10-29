@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Paiements.
 """
-from sqlalchemy import Column, Integer, String, Date, Numeric, DateTime, ForeignKey, CheckConstraint, Text
+from sqlalchemy import Column, Integer, BigInteger, String, Date, Numeric, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -45,6 +45,7 @@ class Paiement(Base):
     
     # Identifiants
     id_paiement = Column(Integer, primary_key=True, index=True)
+    row_version = Column(BigInteger, nullable=False, server_default="1")
     id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=False, index=True)
     id_lc = Column(Integer, ForeignKey("lettres_credit.id_lc"), nullable=True, index=True)
     id_compte = Column(Integer, ForeignKey("comptes_bancaires.id_compte"), nullable=True, index=True)
@@ -138,4 +139,5 @@ class Paiement(Base):
         if self.lettre_credit:
             return self.lettre_credit.numero_reference
         return None
+
 

@@ -63,21 +63,77 @@ Exit codes: 0 = the listed aggregate checks passed; 2 = review required;
 role, concurrency, migration, production-source, or owner acceptance checks.
 Generated reports contain private aggregates and must never be committed.
 
-## Next implementation increment: correction foundation
+## Phase 1: correction-history foundation
 
-1. Capture actual trigger, constraint, grant and migration definitions as the
-   migration precondition. Retain both schema histories.
-2. Add operation/revision records and optimistic revision metadata without
-   unlocking paid transaction/payment edits yet.
-3. Retain cash/bank movement identity and append-only history protections.
-   Implement an audited, revision-checked payment correction contract.
-4. Include narrow legacy cash-view and audit/grant hardening in reviewed SQL.
-   Keep unresolved bank/source records out of automatic repair/backfill.
-5. Deliver replay-safe deployed-path SQL, Alembic equivalent and bootstrap
-   coverage; verify on disposable PostgreSQL with the actual runtime privileges.
-6. Apply the tested additive foundation to staging and rerun the baseline before
-   wiring preview/apply endpoints or enabling correction fields in the UI.
+Installed on staging on 29 October 2026. Deployed SQL is
+`supabase_migrations/20261029111705_correction_history_foundation.sql`; Supabase
+recorded the same migration name under version `20261029112941`. Its identical
+backend SQL copy is bundled for Alembic. The Alembic revision merges the three
+existing heads (`8e31a62c90bf`, `caisse_cession_trace`,
+`daily_vaccine_expenses`). Do not replay old Alembic revisions against staging's
+already SQL-migrated schema or stamp away the existing migration histories.
 
-The broad correction release remains gated on resolving or explicitly excluding
-the affected legacy cases. An additive history foundation can be developed while
-those records are reviewed.
+### Delivered behavior
+
+- Current transactions and payments keep stable IDs and gain database-managed
+  `row_version` values. Read responses expose this metadata for the future
+  correction contract; existing save endpoints do not yet check expected versions.
+- Existing records receive one baseline snapshot of their state at installation.
+  Inserts and meaningful updates automatically capture immutable full snapshots,
+  including writes from existing application screens. Timestamp-only writes do
+  not advance revisions. No earlier history is invented.
+- Operation records provide a UUID, request fingerprint, actor, reason and request/
+  result payloads for a future atomic command. The UUID is unique. Retry result
+  handling, expected-version conflicts and preview/apply endpoints belong to the
+  next increment; this migration alone does not implement them.
+- Shared validated correction envelopes require a reason and expected revision.
+  Contract helpers lock/refresh the current row, reject stale revisions, compute
+  exact-value request fingerprints and reject operation reuse by another actor or
+  payload. These helpers leave transaction boundaries to the next orchestrator.
+- Financial journal entries may link to an operation. The transaction-local
+  operation setting only correlates audit records and checks the record actor;
+  it never bypasses existing financial identity guards.
+- New operation/revision history and legacy transaction audit reject update,
+  delete and truncate. RLS is enabled, exposed roles lose history/allocation
+  grants, and the runtime retains history reads and inserts, including its
+  legacy audit sequence access.
+- The legacy cash view now excludes canceled movements and LC cessions, matching
+  the canonical active-cash calculation. Underlying ledger records are unchanged.
+- Schema checks detect missing columns, disabled/missing foundation triggers,
+  missing history RLS and unsafe runtime history table privileges.
+- Bootstrap includes the identical foundation block and the previously missing
+  cash-to-cession foreign-key column. This verifies foundation installation on an
+  empty database; it does not certify the historical bootstrap as equivalent to
+  every older Alembic/Supabase migration or its complete role provisioning.
+
+### Verification and limits
+
+- Backend regression, correction-contract and migration-copy tests: 28 passed. One native PostgreSQL
+  fixture test is available through `POSTGRES_MIGRATION_TEST_URL` and was skipped
+  locally because no disposable native server was configured.
+- The committed SQL fixture/assertions ran against PGlite PostgreSQL 18.6: replay,
+  baseline uniqueness, actual `SET ROLE app_runtime` writes, legacy audit inserts,
+  operation correlation, actor mismatch, failed-write rollback, no-op suppression,
+  immutable history, sequence grants, invalid snapshots and retained payment locks.
+  The empty-database bootstrap also passed with its required extensions and roles.
+- Actual staging PostgreSQL 17.11: migration applied; legacy transaction/payment
+  writes, full snapshots, no-op behavior and payment financial locks passed inside
+  an explicitly rolled-back transaction. Runtime grants, policies and enabled
+  triggers were inspected. Management SQL still cannot switch to `app_runtime`;
+  the actual-runtime path was exercised on the isolated PGlite fixture.
+- All existing transaction/payment fields (excluding new revision metadata), cash
+  and bank ledger records, and stored bank balances had identical before/after
+  fingerprints. The aggregate baseline retains the earlier bank/source review
+  cases; cash view parity is resolved. No new security advisor findings appeared.
+- Concurrent expected-version rejection and full retry semantics remain gates for
+  the next atomic command service. No paid financial fields are unlocked by this
+  increment. The unresolved bank discrepancy and missing historical production
+  origins remain outside automatic repair.
+
+## Next implementation increment: atomic correction contract
+
+Implement preview/apply schemas and the transaction/payment command service with
+row locks, expected versions, request-hash-aware retries and atomic operation/
+revision/financial-journal persistence. Add money/stock adapters before exposing
+any affected financial field. Verify stale previews, concurrent edits, retries,
+rollback and legacy exclusions before enabling the owner-facing editing workflow.

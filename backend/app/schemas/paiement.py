@@ -155,6 +155,7 @@ class PaiementRead(PaiementBase):
     Inclut les champs générés automatiquement (id, dates, statut, etc.).
     """
     id_paiement: int = Field(..., description="Identifiant unique du paiement")
+    row_version: int = Field(default=1, description="Révision pour détecter les modifications concurrentes")
     id_transaction: int = Field(..., description="ID de la transaction associée")
     date_encaissement_effective: Optional[date] = Field(None, description="Date effective d'encaissement")
     motif_rejet: Optional[str] = Field(None, description="Motif du rejet")
@@ -205,5 +206,6 @@ class PaiementBatchCreate(BaseModel):
     Schéma pour créer plusieurs paiements d'un coup.
     """
     paiements: list[PaiementCreate] = Field(..., min_length=1, description="Liste des paiements à créer")
+
 
 
