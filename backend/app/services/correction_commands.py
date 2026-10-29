@@ -63,6 +63,8 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
             raise HTTPException(422, "La date d’échéance ne peut pas précéder la date de transaction.")
 
     if entity_type == "transaction" and "prix_unitaire" in requested:
+        if requested["prix_unitaire"] is None:
+            raise HTTPException(422, "Le prix unitaire doit être renseigné.")
         if record.id_client is None:
             raise HTTPException(
                 409,
@@ -71,6 +73,10 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
         requested["montant_total"] = Decimal(str(record.quantite)) * requested["prix_unitaire"]
 
     if entity_type == "paiement" and {"date_paiement", "montant"}.intersection(requested):
+        if "date_paiement" in requested and requested["date_paiement"] is None:
+            raise HTTPException(422, "La date du paiement doit être renseignée.")
+        if "montant" in requested and requested["montant"] is None:
+            raise HTTPException(422, "Le montant du paiement doit être renseigné.")
         if record.statut == "annule":
             raise HTTPException(409, "Un paiement annulé ne peut plus changer de date ou de montant.")
         if record.type_paiement == "cheque":

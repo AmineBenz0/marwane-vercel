@@ -253,6 +253,28 @@ def test_purchase_price_correction_waits_for_stock_cost_adapter(db_session, corr
     assert "valorisation du stock" in error.value.detail
 
 
+@pytest.mark.parametrize(
+    ("entity_type", "changes"),
+    [
+        ("transaction", {"prix_unitaire": None}),
+        ("paiement", {"date_paiement": None}),
+        ("paiement", {"montant": None}),
+    ],
+)
+def test_required_correction_values_reject_null(db_session, correction_sale, entity_type, changes):
+    sale, payment = correction_sale
+    entity = sale if entity_type == "transaction" else payment
+    entity_id = entity.id_transaction if entity_type == "transaction" else entity.id_paiement
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Valeur obligatoire manquante",
+        target={"entity_type": entity_type, "entity_id": entity_id, "expected_version": 1},
+        changes=changes,
+    )
+    with pytest.raises(HTTPException) as error:
+        preview_correction(db_session, command)
+    assert error.value.status_code == 422
+
+
 def test_cash_payment_date_and_amount_correction_replaces_ledger_once(db_session, correction_sale, test_user):
     from sqlalchemy import text
     sale, payment = correction_sale
