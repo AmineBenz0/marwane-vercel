@@ -45,10 +45,48 @@ from app.services.financial import validate_payment_date, validate_payment_idemp
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.ledger import record_correction
+from app.services.financial_locking import lock_transaction
+from app.utils.egg_product_sync import build_sellable_egg_product_name
 from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations, deferred_stock_quantities, assign_pending_promises, source_balances
 from app.utils.business_date import business_date
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
+
+
+def _lock_transaction_for_write(db, transaction_id, changes=None):
+    """Preserve stock writers' building/product/transaction lock order."""
+    changes = changes or {}
+    snapshot = db.query(Transaction.id_batiment, Transaction.id_produit, Transaction.row_version).filter(
+        Transaction.id_transaction == transaction_id,
+    ).one_or_none()
+    if snapshot is None:
+        raise HTTPException(404, f"Transaction {transaction_id} introuvable")
+    buildings = {snapshot.id_batiment, changes.get("id_batiment")}
+    products = {snapshot.id_produit, changes.get("id_produit")}
+    source = db.get(Production, changes["id_production"]) if changes.get("id_production") else None
+    if source is not None:
+        buildings.add(source.id_batiment)
+    buildings.discard(None)
+    db.query(Batiment).filter(Batiment.id_batiment.in_(buildings)).order_by(
+        Batiment.id_batiment,
+    ).with_for_update().all()
+    if source is not None:
+        db.refresh(source)
+        if source.id_batiment not in buildings:
+            raise HTTPException(409, "La production a changé. Rechargez la transaction.")
+        product_id = db.query(Produit.id_produit).filter(
+            Produit.nom_produit == build_sellable_egg_product_name(source.type_oeuf, source.calibre),
+        ).scalar()
+        if product_id is not None:
+            products.add(product_id)
+    products.discard(None)
+    db.query(Produit).filter(Produit.id_produit.in_(products)).order_by(
+        Produit.id_produit,
+    ).with_for_update().all()
+    transaction = lock_transaction(db, transaction_id)
+    if transaction.row_version != snapshot.row_version:
+        raise HTTPException(409, "La transaction a changé. Rechargez-la avant de modifier.")
+    return transaction
 
 
 def _transaction_read(db, transaction):
@@ -868,14 +906,8 @@ def update_transaction(
         HTTPException 404: Si la transaction n'existe pas
         HTTPException 400: Si le client, le fournisseur ou le produit n'existe pas
     """
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == id).first()
-    
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction avec l'ID {id} introuvable"
-        )
-    
+    transaction = _lock_transaction_for_write(db, id, transaction_data.model_dump(exclude_unset=True))
+
     # Full edit forms may resend existing values. Only actual changes can
     # rewrite financial identity or require inventory movements.
     update_data = {
@@ -1141,14 +1173,8 @@ def delete_transaction(
         HTTPException 404: Si la transaction n'existe pas
         HTTPException 400: Si la transaction est déjà inactive
     """
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == id).first()
-    
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction avec l'ID {id} introuvable"
-        )
-    
+    transaction = _lock_transaction_for_write(db, id, None)
+
     # Vérifier si la transaction est déjà inactive
     if not transaction.est_actif:
         raise HTTPException(
@@ -1166,7 +1192,10 @@ def delete_transaction(
     # Void every payment first. This preserves the payment rows and removes
     # their active ledger impact before the transaction leaves the active set.
     payment_ids = []
-    for payment in list(transaction.paiements):
+    payments = db.query(Paiement).filter(
+        Paiement.id_transaction == id,
+    ).order_by(Paiement.id_paiement).populate_existing().with_for_update().all()
+    for payment in payments:
         if payment.statut != "annule":
             void_payment(
                 db,
@@ -1241,14 +1270,8 @@ def reactivate_transaction(
         HTTPException 404: Si la transaction n'existe pas
         HTTPException 400: Si la transaction est déjà active
     """
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == id).first()
-    
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction avec l'ID {id} introuvable"
-        )
-    
+    transaction = _lock_transaction_for_write(db, id, None)
+
     # Vérifier si la transaction est déjà active
     if transaction.est_actif:
         raise HTTPException(

@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
+from app.services.financial_locking import lock_payment, lock_transaction
 from app.services.ledger import record_correction
 from app.services.financial import payment_status, validate_payment_date, validate_payment_idempotency
 from app.services.financial_ledger import (
@@ -211,16 +212,7 @@ def create_paiement(
             response.status_code = status.HTTP_200_OK
             return existing
 
-    # Vérifier que la transaction existe
-    transaction = db.query(Transaction).filter(
-        Transaction.id_transaction == paiement_data.id_transaction
-    ).first()
-    
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction avec l'ID {paiement_data.id_transaction} introuvable"
-        )
+    transaction = lock_transaction(db, paiement_data.id_transaction)
 
     _require_active_transaction(transaction)
 
@@ -317,15 +309,7 @@ def update_paiement(
     Raises:
         HTTPException 404: Si le paiement n'existe pas
     """
-    paiement = db.query(Paiement).filter(Paiement.id_paiement == id).first()
-    
-    if not paiement:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Paiement avec l'ID {id} introuvable"
-        )
-
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
+    paiement, transaction = lock_payment(db, id)
     _require_active_transaction(transaction)
 
     if paiement.statut == "annule":
@@ -433,15 +417,7 @@ def delete_paiement(
     Raises:
         HTTPException 404: Si le paiement n'existe pas
     """
-    paiement = db.query(Paiement).filter(Paiement.id_paiement == id).first()
-    
-    if not paiement:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Paiement avec l'ID {id} introuvable"
-        )
-
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
+    paiement, transaction = lock_payment(db, id)
     _require_active_transaction(transaction)
 
     void_payment(db, paiement, current_user=current_user, reason=raison.strip())
@@ -558,6 +534,11 @@ def create_paiements_batch(
     created_paiements = []
     
     try:
+        # Acquire every parent before any child, in stable order across batches.
+        locked_transactions = {
+            transaction_id: lock_transaction(db, transaction_id)
+            for transaction_id in sorted({p.id_transaction for p in batch_data.paiements})
+        }
         for p_data in batch_data.paiements:
             if p_data.cle_idempotence:
                 existing = db.query(Paiement).filter(Paiement.cle_idempotence == p_data.cle_idempotence).first()
@@ -566,10 +547,7 @@ def create_paiements_batch(
                     created_paiements.append(existing)
                     continue
 
-            # Récupérer la transaction
-            transaction = db.query(Transaction).filter(Transaction.id_transaction == p_data.id_transaction).first()
-            if not transaction:
-                raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
+            transaction = locked_transactions[p_data.id_transaction]
 
             _require_active_transaction(transaction)
 
@@ -620,6 +598,7 @@ def create_paiements_batch(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 
 

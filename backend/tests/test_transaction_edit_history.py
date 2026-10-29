@@ -15,6 +15,62 @@ from app.models.transaction import Transaction
 from app.routers import transactions
 
 
+def test_payment_creation_refreshes_parent_before_active_check(db_session, purchase, test_user):
+    from fastapi import HTTPException, Response
+    from sqlalchemy import update
+    from app.routers.paiements import create_paiement
+    from app.schemas.paiement import PaiementCreate
+
+    db_session.execute(update(Transaction).where(
+        Transaction.id_transaction == purchase.id_transaction,
+    ).values(est_actif=False), execution_options={"synchronize_session": False})
+    assert purchase.est_actif is True
+    with pytest.raises(HTTPException) as error:
+        create_paiement(PaiementCreate(
+            id_transaction=purchase.id_transaction, date_paiement=purchase.date_transaction,
+            montant="1.00", type_paiement="cash",
+        ), Response(), db=db_session, current_user=test_user)
+    assert error.value.status_code == 409
+    assert db_session.query(Paiement).count() == 0
+
+
+def test_payment_void_refreshes_status_before_writing(db_session, purchase, test_user):
+    from fastapi import HTTPException
+    from sqlalchemy import update
+    from app.routers.paiements import delete_paiement
+
+    payment = add_payment(db_session, purchase, "valide")
+    db_session.execute(update(Paiement).where(
+        Paiement.id_paiement == payment.id_paiement,
+    ).values(statut="annule"), execution_options={"synchronize_session": False})
+    assert payment.statut == "valide"
+    with pytest.raises(HTTPException) as error:
+        delete_paiement(payment.id_paiement, raison="Annulation répétée",
+                        db=db_session, current_user=test_user)
+    assert error.value.status_code == 400
+    assert payment.statut == "annule"
+
+
+def test_transaction_edit_refreshes_preloaded_payment_history(db_session, purchase, test_user):
+    from fastapi import HTTPException
+    from sqlalchemy import insert
+    from app.schemas.transaction import TransactionUpdate
+
+    assert purchase.paiements == []
+    db_session.execute(insert(Paiement).values(
+        id_transaction=purchase.id_transaction, date_paiement=purchase.date_transaction,
+        montant=Decimal("5.00"), type_paiement="cash", statut="valide",
+    ))
+    assert purchase.paiements == []
+    with pytest.raises(HTTPException) as error:
+        transactions.update_transaction(
+            purchase.id_transaction, TransactionUpdate(prix_unitaire="3.00"),
+            db=db_session, current_user=test_user,
+        )
+    assert error.value.status_code == 409
+    assert purchase.prix_unitaire == Decimal("2.50")
+
+
 @pytest.fixture
 def purchase(db_session, test_user):
     supplier = Fournisseur(nom_fournisseur="Fournisseur édition", est_actif=True)

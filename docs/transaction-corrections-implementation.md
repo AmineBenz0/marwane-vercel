@@ -280,6 +280,41 @@ money/stock acceptance tests before editable financial fields are enabled.
   after ledger writes or an unexpected database-generated result.
 
 The apply contract is stricter; no existing frontend calls these command routes.
-Native concurrent application/runtime-role tests and the authenticated staging
-walkthrough remain Phase 2 acceptance gates. Bank/cheque/LC, stock and owner UI
+At that checkpoint, native concurrent application/runtime-role tests and the
+authenticated staging walkthrough were pending; see the follow-up below. Bank/cheque/LC, stock and owner UI
 adapters retain their planned later-phase scope.
+
+## Phase 2 locking follow-up — 29 October 2026
+
+Single and batch payment creation, payment updates and payment cancellation now
+lock and refresh their parent transaction before writing payment or ledger data.
+Batches acquire parent locks in ID order. Transaction edits, cancellation and
+reactivation acquire stock building/product locks before refreshing and locking
+the transaction; cancellation then locks its payments in ID order. A changed
+revision while acquiring stock locks returns a refresh conflict. Cached payment
+and allocation collections are expired before domain checks. No migration is
+required.
+
+Focused regressions cover a cached active parent that became inactive, a cached
+valid payment that was already canceled, and a cached empty payment collection
+that must no longer permit financial edits. Existing cash, correction and stock
+regressions are retained. SQLite tests verify refresh and mutation behavior, not
+PostgreSQL lock scheduling.
+
+Staging PostgreSQL runtime-role checks passed in rolled-back transactions:
+date-only and amount-only guarded edits, linked revisions, rejected missing
+operation tags, mismatched results/actors, immutable identities and revision
+metadata, unique operation IDs, append-only permissions and injected rollback.
+The temporary role-setting grant was rolled back; test operations/revisions were
+absent afterward and the selected payment/cash movement retained their values.
+The authenticated transaction screens were also checked. The correction API
+still awaits the planned owner UI adapter.
+
+For the expected 1–3 users, Phase 2 acceptance uses these focused checks and the
+consistent writer locks. Simultaneous application-request races were not
+reproduced with the available SQL executor; this remains an explicit test
+limitation rather than a requirement for additional test infrastructure.
+
+Final focused suite after the locking changes: 86 passed, one optional native
+PostgreSQL migration fixture skipped. The runtime-role SQL checks above were
+performed separately against staging.
