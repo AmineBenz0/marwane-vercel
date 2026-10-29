@@ -1,6 +1,6 @@
 """Read-only stock plans and append-only application of validated corrections."""
 from datetime import date, datetime, time, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import HTTPException
 
@@ -17,6 +17,7 @@ from app.services.inventory import is_inventory_tracked, get_average_unit_cost, 
 from app.services.egg_sales import source_balances, _stock_state
 from app.utils.business_date import business_date
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
+from app.utils.production_cycles import cycle_schedule
 
 
 STOCK_FIELDS = {'quantite', 'id_produit', 'id_batiment', 'id_production', 'date_transaction', 'prix_unitaire'}
@@ -111,6 +112,8 @@ def _inventory_plan(db, record, final, old_product, product):
         purchase = record.id_fournisseur is not None
         cost = Decimal(str(final['prix_unitaire'])) if purchase else (
             old.cout_unitaire if old and old.id_produit == product.id_produit else get_average_unit_cost(db, product.id_produit))
+        # Match PostgreSQL numeric(15, 4), including ties, before previewing.
+        cost = cost.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
         replacement = {'id_produit': product.id_produit,
             'quantite_delta': str(Decimal(final['quantite']) * (1 if purchase else -1)),
             'cout_unitaire': str(cost), 'type_mouvement': 'achat' if purchase else 'vente',
@@ -142,6 +145,20 @@ def _inventory_plan(db, record, final, old_product, product):
                 'date_mouvement': _utc(m.date_mouvement).isoformat()} if m else None
     return {'kind': 'inventory', 'before': snap(old), 'after': replacement,
             'final_quantities': balances, 'preserved_transformation_movements': sorted(downstream)}
+
+
+def _eligible_egg_source(db, source, building, cutoff, category):
+    if (source.id_batiment != building or source.date_production > cutoff
+            or (source.type_oeuf, source.calibre if source.type_oeuf == 'normal' else None) != category):
+        return False
+    if source.id_cycle is not None:
+        cycle = db.get(CycleProduction, source.id_cycle)
+        schedule = cycle_schedule(cycle) if cycle else None
+        if (not cycle or cycle.id_batiment != source.id_batiment
+                or source.date_production < schedule.date_debut
+                or schedule.date_fin_reelle and source.date_production > schedule.date_fin_reelle):
+            raise HTTPException(409, 'Le lot de cette origine de production doit être réconcilié.')
+    return True
 
 
 def _egg_plan(db, record, final, category, explicit):
@@ -201,17 +218,10 @@ def _egg_plan(db, record, final, category, explicit):
         if record.est_promesse and desired.get(pid, 0) < old['quantite_livree']:
             raise HTTPException(409, 'Une origine déjà livrée doit être conservée.')
     for pid, amount in desired.items():
-        if pid not in eligible_ids or amount > balances.get(pid, 0):
+        if (pid not in sources or amount > balances.get(pid, 0)
+                or not _eligible_egg_source(db, sources[pid], final['id_batiment'], cutoff, category)):
             raise HTTPException(409, 'Une origine est indisponible, réservée, incompatible ou postérieure à la vente.')
         balances[pid] -= amount
-        source = sources[pid]
-        if source.id_cycle is not None:
-            cycle = db.get(CycleProduction, source.id_cycle)
-            from app.utils.production_cycles import cycle_schedule
-            schedule = cycle_schedule(cycle) if cycle else None
-            if (not cycle or cycle.id_batiment != source.id_batiment or source.date_production < schedule.date_debut
-                    or schedule.date_fin_reelle and source.date_production > schedule.date_fin_reelle):
-                raise HTTPException(409, 'Le lot de cette origine de production doit être réconcilié.')
     if explicit is not None or final['id_production'] != record.id_production:
         _, free, reservations = _stock_state(db)
         for pid, amount in desired.items():
@@ -228,8 +238,9 @@ def _egg_plan(db, record, final, category, explicit):
     after = {record.id_transaction: desired}
     for tx in targets:
         target = tx.id_transaction == record.id_transaction
-        if target and explicit is not None:
-            continue
+        # An explicit source list stays exact. Its pending units still reserve
+        # available stock in creation order before any younger order is served.
+        reserve_only = target and explicit is not None
         alloc = desired if target else {a.id_production: a.quantite for a in tx.allocations}
         pending = (final['quantite'] - closed if target else tx.quantite - (tx.quantite_annulee or 0)) - sum(alloc.values())
         product = db.get(Produit, tx.id_produit) if not target else None
@@ -239,11 +250,10 @@ def _egg_plan(db, record, final, category, explicit):
         for p in rows:
             if pending <= 0:
                 break
-            if p.id_batiment != building or p.date_production > limit or (p.type_oeuf, p.calibre if p.type_oeuf == 'normal' else None) != cat:
-                continue
             used = min(pending, max(0, balances[p.id_production]))
-            if used:
-                alloc[p.id_production] = alloc.get(p.id_production, 0) + used
+            if used and _eligible_egg_source(db, p, building, limit, cat):
+                if not reserve_only:
+                    alloc[p.id_production] = alloc.get(p.id_production, 0) + used
                 balances[p.id_production] -= used
                 pending -= used
         if target and pending and not record.est_promesse:
@@ -310,3 +320,57 @@ def apply_stock_plan(db, record, plan, actor, operation_id, reason):
                     tx.stock_revision += 1
                     tx.id_utilisateur_modification = actor.id_utilisateur
                     tx.date_modification = datetime.now(timezone.utc)
+
+
+def stock_plan_matches(db, record, plan):
+    """Read stored values after flush; ORM assignments can hide DB rounding.
+
+    The immutable operation result must describe what will actually commit,
+    including related orders and the reversal of the original stock effect.
+    """
+    if plan['kind'] == 'eggs':
+        for tid, expected in plan['after'].items():
+            rows = db.query(EggAllocation.id_production, EggAllocation.quantite,
+                EggAllocation.quantite_livree).filter(
+                EggAllocation.id_transaction == int(tid)).order_by(EggAllocation.id_production).all()
+            actual = [{'id_production': row.id_production, 'quantite': row.quantite,
+                       'quantite_livree': row.quantite_livree or 0} for row in rows]
+            if actual != expected:
+                return False
+        return True
+
+    def matches(movement, expected):
+        return (movement is not None and movement.id_produit == expected['id_produit']
+                and movement.quantite_delta == Decimal(expected['quantite_delta'])
+                and movement.cout_unitaire == Decimal(expected['cout_unitaire'])
+                and _utc(movement.date_mouvement) == datetime.fromisoformat(expected['date_mouvement'])
+                and movement.source_type == 'transaction'
+                and movement.source_id == record.id_transaction)
+
+    movements = db.query(MouvementStock).filter(
+        MouvementStock.source_type == 'transaction',
+        MouvementStock.source_id == record.id_transaction).populate_existing().all()
+    active = [row for row in movements if row.id_mouvement_inverse is None]
+    expected = plan['after']
+    if expected:
+        if (len(active) != 1 or not matches(active[0], expected)
+                or active[0].type_mouvement != expected['type_mouvement']):
+            return False
+    elif active:
+        return False
+    if plan['before']:
+        before = plan['before']
+        original = next((row for row in movements if row.id_mouvement_stock == before['id']), None)
+        if not matches(original, before):
+            return False
+        inverse = next((row for row in movements if row.id_mouvement_stock == original.id_mouvement_inverse), None)
+        if (not matches(inverse, {**before, 'quantite_delta': str(-Decimal(before['quantite_delta']))})
+                or inverse.type_mouvement != 'reversal'
+                or inverse.id_mouvement_inverse != original.id_mouvement_stock):
+            return False
+    for product_id, quantity in plan['final_quantities'].items():
+        actual = sum((row.quantite_delta for row in db.query(MouvementStock.quantite_delta).filter(
+            MouvementStock.id_produit == int(product_id)).all()), Decimal('0'))
+        if actual != Decimal(quantity):
+            return False
+    return True

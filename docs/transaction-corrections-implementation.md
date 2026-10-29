@@ -420,3 +420,21 @@ UI release. Delivered-stock reductions, explicit physical returns, changes to
 recorded delivery dates, direct edits of used production rows and historical
 transformation revaluation remain protected. Owner forms are Phase 5; advanced
 resolution flows and indirect-view acceptance remain in their planned phases.
+
+### Phase 4 review fixes
+
+- Explicit egg origin lists remain exact, while their unallocated remainder
+  reserves available eggs at the order's original creation priority. Only the
+  excess can be allocated to newer orders; delivered quantities stay intact.
+- A shared eligibility check validates building, category, production date and
+  lot schedule for selected origins, including automatic allocations for related
+  orders and virtual reservations for the explicit target's pending quantity.
+- Planned general-stock costs are rounded to four decimals with PostgreSQL's
+  numeric tie behavior before preview, history storage and movement creation.
+  Apply rereads persisted movements, reversals, affected product balances and
+  egg allocations after flush. A mismatch rolls back the entire correction.
+- Added 21 regression cases covering priority, related-order lot validation,
+  recurring/tie costs, retry history and database-trigger mismatch rollback.
+  Focused correction suites: 75 passed. Full available backend suite: 233 passed,
+  11 skipped; these skips require external database fixtures. A read-only staging
+  query confirmed `numeric(15,4)` cost rounding. No schema changes are required.

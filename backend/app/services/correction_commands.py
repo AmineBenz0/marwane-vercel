@@ -33,6 +33,7 @@ from app.services.financial import validate_payment_date
 from app.services.financial_ledger import sync_payment_cash_movement
 from app.services.stock_corrections import (
     STOCK_FIELDS, lock_stock_scope, stock_dependencies, plan_stock_correction, apply_stock_plan,
+    stock_plan_matches,
 )
 
 
@@ -673,7 +674,8 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
     # Verify the immutable replay payload against actual DB-generated values
     # while the target lock is still held, before making the operation durable.
     db.refresh(record)
-    if _snapshot(command.target.entity_type, record) != result["record"]:
+    if (_snapshot(command.target.entity_type, record) != result["record"]
+            or stock_plan and not stock_plan_matches(db, record, stock_plan)):
         db.rollback()
         raise HTTPException(409, "Le résultat enregistré diffère de la correction prévue. Actualisez son aperçu.")
     db.commit()
