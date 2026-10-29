@@ -55,6 +55,35 @@ def test_correction_contract_rejects_stale_revision_without_changes(db_session, 
     assert not db_session.dirty
 
 
+@pytest.mark.parametrize("legacy_unpaired_reversal", [False, True])
+def test_repeated_purchase_edits_then_cancel_preserve_stock(client, db_session, purchase, legacy_unpaired_reversal):
+    from app.models.inventory import MouvementStock
+    from app.services.inventory import get_stock_quantity, record_transaction_movement
+    record_transaction_movement(db_session, purchase, current_user=None)
+    db_session.commit()
+    url = f"/api/v1/transactions/{purchase.id_transaction}"
+    first = client.put(url, json={"quantite": 12, "prix_unitaire": "3.00"})
+    assert first.status_code == 200, first.text
+    if legacy_unpaired_reversal:
+        # Historical inverses had only the original -> reversal pointer.
+        historical = db_session.query(MouvementStock).filter_by(type_mouvement="reversal").one()
+        historical.id_mouvement_inverse = None
+        db_session.commit()
+    second = client.put(url, json={"quantite": 11, "prix_unitaire": "4.00"})
+    assert second.status_code == 200, second.text
+    assert get_stock_quantity(db_session, purchase.id_produit) == Decimal("11")
+    removed = client.delete(url)
+    assert removed.status_code == 204, removed.text
+    assert get_stock_quantity(db_session, purchase.id_produit) == Decimal("0")
+    originals = db_session.query(MouvementStock).filter_by(source_type="transaction",source_id=purchase.id_transaction).all()
+    assert len(originals) == 3
+    assert all(original.id_mouvement_inverse for original in originals)
+    for original in originals[1:]:
+        inverse = db_session.get(MouvementStock, original.id_mouvement_inverse)
+        assert inverse.id_mouvement_inverse == original.id_mouvement_stock
+        assert inverse.quantite_delta == -original.quantite_delta
+
+
 @pytest.mark.parametrize("state", ["valide", "annule"])
 def test_unchanged_financial_fields_allow_due_date_without_stock_or_payment_writes(client, db_session, purchase, state, monkeypatch):
     payment = add_payment(db_session, purchase, state)

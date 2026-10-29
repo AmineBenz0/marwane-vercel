@@ -31,6 +31,10 @@ def validate_stock_idempotency(existing: MouvementStock, requested: dict) -> Non
         and existing.type_mouvement == requested["type_mouvement"]
         and existing.source_type == requested["source_type"]
         and (
+            requested.get("id_mouvement_inverse") is None
+            or existing.id_mouvement_inverse == requested["id_mouvement_inverse"]
+        )
+        and (
             existing.source_id == requested["source_id"]
             or (
                 requested["source_id"] is None
@@ -90,6 +94,7 @@ def record_movement(
     source_type: str,
     source_id: Optional[int] = None,
     cle_idempotence: Optional[str] = None,
+    id_mouvement_inverse: Optional[int] = None,
     id_utilisateur: Optional[int] = None,
     notes: Optional[str] = None,
     date_mouvement: Optional[datetime] = None,
@@ -114,6 +119,7 @@ def record_movement(
                 "type_mouvement": type_mouvement,
                 "source_type": source_type,
                 "source_id": source_id,
+                "id_mouvement_inverse": id_mouvement_inverse,
             })
             return existing
 
@@ -125,6 +131,7 @@ def record_movement(
         source_type=source_type,
         source_id=source_id,
         cle_idempotence=cle_idempotence,
+        id_mouvement_inverse=id_mouvement_inverse,
         id_utilisateur=id_utilisateur,
         notes=notes,
         date_mouvement=date_mouvement,
@@ -257,6 +264,11 @@ def reverse_source_movements(
             type_mouvement="reversal",
             source_type=f"{source_type}_reversal",
             source_id=source_id,
+            # Pair the inverse at INSERT time. Otherwise it looks like another
+            # active source movement and the next edit/cancel collides with the
+            # earlier reversal under uq_stock_source_movement_active.
+            id_mouvement_inverse=original.id_mouvement_stock,
+            cle_idempotence=f"stock-reversal:{original.id_mouvement_stock}",
             id_utilisateur=user_id,
             notes=reason,
         )
@@ -360,3 +372,4 @@ def record_adjustment(
     movement.source_id = movement.id_mouvement_stock
     db.flush()
     return movement
+

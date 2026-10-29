@@ -137,3 +137,31 @@ row locks, expected versions, request-hash-aware retries and atomic operation/
 revision/financial-journal persistence. Add money/stock adapters before exposing
 any affected financial field. Verify stale previews, concurrent edits, retries,
 rollback and legacy exclusions before enabling the owner-facing editing workflow.
+
+## Manual Phase 1 acceptance follow-up
+
+Browser verification on 29 October found the stable staging alias still serving
+an older deployment. The alias was explicitly reassigned to the Phase 1 preview.
+Future staging releases must verify the alias's resolved commit, not only the
+new deployment's READY status.
+
+The real application runtime successfully saved and restored a paid sale's due
+date and payment notes. Both retained their full before/after snapshots and
+advanced revisions. Cash/bank movement fingerprints stayed unchanged during
+these metadata edits. The paid fields remained locked, and the unchanged
+transaction form disabled save. A new synthetic purchase and payment each
+received an insert revision. Payment cancellation retained its row, advanced its
+revision, wrote its financial journal entry and removed its active cash effect.
+
+The purchase edit -> cancellation walkthrough exposed a pre-existing stock
+reversal defect: an inverse with no back-reference matched the partial unique
+index for active source movements. A later inverse for that same source failed.
+New inverses now receive the original movement reference at insertion and a
+per-original idempotency key. Existing history and constraints are retained;
+there is no schema migration or historical backfill. The fix supports earlier
+one-way reversal records. Regression coverage includes repeated purchase edits
+followed by cancellation with both modern and legacy reversal shapes. The
+expanded backend suite passed 30 tests (one optional native fixture skipped);
+staging PostgreSQL 17 accepted the corrected inverse shape under existing
+constraints in a rolled-back test. Complete the browser cancellation retry and
+final reconciliation before closing manual acceptance.
