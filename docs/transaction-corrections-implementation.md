@@ -366,3 +366,20 @@ cheques and letters of credit remain intentionally gated.
   edit business records or widen access grants.
 - Owner-facing correction forms and end-to-end browser saves are not part of this
   phase. They remain a Phase 5 acceptance item.
+
+### Phase 3 review fixes
+
+- Editing a cleared cheque's notes, including resending its cleared status,
+  preserves the stored settlement date and existing active ledger entry. The
+  default business date is assigned only on the first encashment transition.
+- Correction operations retain `submitted_changes` and authorize all normalized
+  writes in `changes`, including an implicitly cleared bank account. Retry
+  hashes still use the original command. Client bank-to-cash and supplier
+  bank-to-caisse changes preserve balances, movements and replay results.
+- Service transaction dates are checked against the requested final due date,
+  including an explicitly cleared due date. Invalid final date pairs remain
+  rejected. An explicitly null payment method returns HTTP 422 at both routes.
+- Focused suite: 97 passed, one optional disposable-PostgreSQL fixture skipped.
+  Staging's actual PostgreSQL payment guard accepted the normalized bank-to-cash
+  authorization and captured its linked revision under the runtime role. This
+  check ran in a rolled-back transaction; no test payment or operation remained.

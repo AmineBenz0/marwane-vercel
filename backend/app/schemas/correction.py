@@ -39,6 +39,8 @@ class CorrectionChanges(BaseModel):
     def require_one_field(self):
         if not self.model_fields_set:
             raise ValueError("Indiquez au moins une modification.")
+        if "type_paiement" in self.model_fields_set and self.type_paiement is None:
+            raise ValueError("Le moyen de paiement doit être renseigné.")
         return self
 
 

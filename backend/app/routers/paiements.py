@@ -99,7 +99,8 @@ def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> Non
 
     if next_state == "encaisse":
         update_data["statut"] = "valide"
-        update_data.setdefault("date_encaissement_effective", business_date())
+        if current_state != "encaisse":
+            update_data.setdefault("date_encaissement_effective", business_date())
     elif next_state in {"rejete", "annule"}:
         update_data["statut"] = "rejete"
     else:

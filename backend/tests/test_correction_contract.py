@@ -70,6 +70,98 @@ def correction_sale(db_session, test_user):
 from app.services.correction_contract import lock_expected_revision, replay_result, request_fingerprint
 
 
+@pytest.mark.parametrize("supplier", [False, True])
+def test_bank_to_cash_authorizes_derived_account_clear_and_replays(
+    db_session, correction_sale, correction_transaction, test_user, supplier,
+):
+    transaction = correction_transaction if supplier else correction_sale[0]
+    payment = Paiement(
+        id_transaction=transaction.id_transaction, date_paiement=transaction.date_transaction,
+        montant=Decimal("5.00"), type_paiement="virement", statut="valide",
+        source_reglement="banque" if supplier else None,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    ) if supplier else correction_sale[1]
+    payment.type_paiement = "virement"
+    account = CompteBancaire(nom_banque="Correction route", numero_compte="CORR-ROUTE", solde_actuel=Decimal("-5.00" if supplier else "5.00"))
+    db_session.add(account)
+    db_session.flush()
+    payment.id_compte = account.id_compte
+    db_session.add(payment)
+    db_session.flush()
+    db_session.add(MouvementBancaire(
+        id_compte=account.id_compte, montant=payment.montant,
+        type_mouvement="SORTIE" if supplier else "ENTREE", source="virement",
+        id_paiement=payment.id_paiement, statut="active",
+        date_mouvement=datetime.combine(payment.date_paiement, datetime.min.time(), tzinfo=timezone.utc),
+    ))
+    db_session.commit()
+    revision_trigger(db_session, "paiements", "type_paiement,id_compte,source_reglement")
+    submitted = {"source_reglement": "caisse"} if supplier else {"type_paiement": "cash"}
+    command = prepared(db_session, CorrectionCommand(
+        operation_id=uuid4(), reason="Règlement effectué en caisse",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes=submitted,
+    ))
+    result = apply_correction(db_session, command, test_user)
+    operation = db_session.get(CorrectionOperation, command.operation_id)
+    assert operation.request_payload["submitted_changes"] == submitted
+    assert operation.request_payload["changes"] == {**submitted, "id_compte": None}
+    assert operation.request_hash == request_fingerprint(command)
+    assert result["record"]["id_compte"] is None
+    db_session.refresh(account)
+    assert account.solde_actuel == Decimal("0.00")
+    active_cash = db_session.query(Caisse).filter(Caisse.id_paiement == payment.id_paiement, Caisse.statut == "active").one()
+    assert active_cash.montant == Decimal("5.00")
+    assert active_cash.type_mouvement == ("SORTIE" if supplier else "ENTREE")
+    assert db_session.query(MouvementBancaire).filter(MouvementBancaire.id_paiement == payment.id_paiement, MouvementBancaire.statut == "active").count() == 0
+    retry = apply_correction(db_session, command, test_user)
+    assert retry["replayed"] is True
+    assert retry["record"] == result["record"]
+    assert retry["impact"] == result["impact"]
+    assert db_session.query(CorrectionOperation).count() == 1
+
+
+@pytest.mark.parametrize("clear_due_date", [False, True])
+def test_service_date_and_due_date_correction_validates_final_pair(db_session, correction_transaction, test_user, clear_due_date):
+    transaction = correction_transaction
+    transaction.produit.type_produit = "service"
+    transaction.date_transaction = date.today() - timedelta(days=10)
+    transaction.date_echeance = date.today() - timedelta(days=5)
+    db_session.commit()
+    revision_trigger(db_session, "transactions", "date_transaction,date_echeance")
+    final_due_date = None if clear_due_date else date.today() + timedelta(days=5)
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Dates du service corrigées ensemble",
+        target={"entity_type":"transaction","entity_id":transaction.id_transaction,"expected_version":1},
+        changes={"date_transaction": date.today(), "date_echeance": final_due_date},
+    )
+    result = apply_correction(db_session, prepared(db_session, command), test_user)
+    assert result["record"]["date_transaction"] == date.today().isoformat()
+    assert result["record"]["date_echeance"] == (final_due_date.isoformat() if final_due_date else None)
+    invalid = CorrectionCommand(
+        operation_id=uuid4(), reason="Dates incohérentes",
+        target={"entity_type":"transaction","entity_id":transaction.id_transaction,"expected_version":2},
+        changes={"date_transaction": date.today(), "date_echeance": date.today() - timedelta(days=1)},
+    )
+    with pytest.raises(HTTPException):
+        preview_correction(db_session, invalid)
+    assert db_session.query(CorrectionOperation).count() == 1
+
+
+@pytest.mark.parametrize("endpoint", ["preview", "apply"])
+def test_explicit_null_payment_method_returns_422(client, auth_headers, endpoint):
+    payload = {
+        "operation_id": str(uuid4()), "reason": "Moyen de paiement manquant",
+        "target": {"entity_type":"paiement","entity_id":1,"expected_version":1},
+        "changes": {"type_paiement": None},
+    }
+    if endpoint == "apply":
+        payload["dependency_fingerprint"] = "a" * 64
+    response = client.post(f"/api/v1/corrections/{endpoint}", json=payload, headers=auth_headers)
+    assert response.status_code == 422, response.text
+    assert "moyen de paiement" in response.text
+
+
 def test_validated_contract_rejects_blank_reason_and_invalid_version():
     with pytest.raises(ValidationError):
         CorrectionEnvelope(operation_id=uuid4(), reason="   ", target={"entity_type":"transaction", "entity_id":1,"expected_version":1})

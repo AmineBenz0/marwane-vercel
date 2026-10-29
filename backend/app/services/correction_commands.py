@@ -169,7 +169,8 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
                 409,
                 "La date de cette transaction modifie aussi le suivi du stock. Corrigez-la après l’adaptateur de stock.",
             )
-        if record.date_echeance is not None and record.date_echeance < requested["date_transaction"]:
+        final_due_date = requested.get("date_echeance", record.date_echeance)
+        if final_due_date is not None and final_due_date < requested["date_transaction"]:
             raise HTTPException(409, "La date d’échéance deviendrait antérieure à la transaction. Corrigez les deux dates ensemble.")
         chronology_payments = [payment for payment in linked_payments if payment.statut != "annule"]
         if any(_effective_payment_date(payment) < requested["date_transaction"] for payment in chronology_payments):
@@ -577,12 +578,18 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
         },
         "impact": _impact(command.target.entity_type, actual_changes, record, transaction, db),
     }
+    # The guard authorizes the normalized write, including derived account
+    # clears. Retain submitted fields separately; retry hashing continues to
+    # use the original command, independently of this authorization payload.
+    authorized_payload = request_payload(command)
+    authorized_payload["submitted_changes"] = deepcopy(authorized_payload["changes"])
+    authorized_payload["changes"].update(actual_changes)
     operation = CorrectionOperation(
         operation_id=command.operation_id,
         request_hash=request_hash,
         id_utilisateur=actor_id,
         reason=command.reason,
-        request_payload=request_payload(command),
+        request_payload=authorized_payload,
         result_payload=result,
     )
     db.add(operation)

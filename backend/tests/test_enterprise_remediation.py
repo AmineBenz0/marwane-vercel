@@ -277,6 +277,7 @@ def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_header
     product = create_product(client, "Service Chèque", "service", True, False)
     transaction_date = date.today() - timedelta(days=3)
     payment_date = date.today() - timedelta(days=2)
+    settlement_date = date.today() - timedelta(days=1)
     transaction = client.post("/api/v1/transactions", json={
         "date_transaction": transaction_date.isoformat(),
         "date_echeance": date.today().isoformat(),
@@ -298,7 +299,7 @@ def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_header
 
     encashed = client.put(
         f"/api/v1/paiements/{cheque.json()['id_paiement']}",
-        json={"statut_cheque": "encaisse", "date_encaissement_effective": date.today().isoformat()},
+        json={"statut_cheque": "encaisse", "date_encaissement_effective": settlement_date.isoformat()},
         headers=auth_headers,
     )
     assert encashed.status_code == 200, encashed.text
@@ -306,14 +307,16 @@ def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_header
     movement = db_session.query(Caisse).filter(
         Caisse.id_paiement == cheque.json()["id_paiement"], Caisse.statut == "active",
     ).one()
-    assert movement.date_mouvement.date() == date.today()
+    assert movement.date_mouvement.date() == settlement_date
+    original_movement_id = movement.id_mouvement
+    for update in ({"notes": "Note corrigée"}, {"statut_cheque": "encaisse", "notes": "Note confirmée"}):
+        edited = client.put(f"/api/v1/paiements/{cheque.json()['id_paiement']}", json=update, headers=auth_headers)
+        assert edited.status_code == 200, edited.text
+        assert edited.json()["date_encaissement_effective"] == settlement_date.isoformat()
+        active = db_session.query(Caisse).filter(Caisse.id_paiement == cheque.json()["id_paiement"], Caisse.statut == "active").one()
+        assert active.id_mouvement == original_movement_id
+        assert active.date_mouvement.date() == settlement_date
     assert client.get(f"/api/v1/transactions/{transaction['id_transaction']}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "paye"
-    immutable_settlement_date = client.put(
-        f"/api/v1/paiements/{cheque.json()['id_paiement']}",
-        json={"statut_cheque": "encaisse", "date_encaissement_effective": (date.today() + timedelta(days=1)).isoformat()},
-        headers=auth_headers,
-    )
-    assert immutable_settlement_date.status_code == 409
     immutable_settlement_date = client.put(
         f"/api/v1/paiements/{cheque.json()['id_paiement']}",
         json={"statut_cheque": "encaisse", "date_encaissement_effective": (date.today() + timedelta(days=1)).isoformat()},
