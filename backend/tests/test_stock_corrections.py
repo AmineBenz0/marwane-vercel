@@ -164,6 +164,14 @@ def test_egg_plan_cannot_silently_release_priority_reservations(db_session,egg_o
     assert error.value.status_code==409
 
 
+def test_identical_egg_allocation_save_is_noop(db_session,egg_orders,test_user):
+    tx,other,source=egg_orders
+    ready=prepared(db_session,command(tx,{'stock_allocations':[{'id_production':source.id_production,'quantite':80}]}))
+    result=apply_correction(db_session,ready,test_user)
+    assert result['no_op'] and tx.stock_revision==0 and other.stock_revision==0
+    assert db_session.query(CorrectionOperation).count()==0
+
+
 def test_stock_migration_and_bootstrap_match():
     from pathlib import Path
     root=Path(__file__).resolve().parents[2]

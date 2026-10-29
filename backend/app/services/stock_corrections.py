@@ -256,13 +256,16 @@ def _egg_plan(db, record, final, category, explicit):
     changes = {}
     for tid, alloc in after.items():
         tx = record if tid == record.id_transaction else db.get(Transaction, tid)
-        before[str(tid)] = [{'id_production': a.id_production, 'quantite': a.quantite, 'quantite_livree': a.quantite_livree or 0} for a in tx.allocations]
+        before[str(tid)] = [{'id_production': a.id_production, 'quantite': a.quantite, 'quantite_livree': a.quantite_livree or 0} for a in sorted(tx.allocations, key=lambda a:a.id_production)]
         delivered = {a.id_production: a.quantite_livree or 0 for a in tx.allocations}
         changes[str(tid)] = [{'id_production': pid, 'quantite': amount, 'quantite_livree': delivered.get(pid, 0)} for pid, amount in sorted(alloc.items())]
     first = min((sources[pid] for pid in desired), key=lambda p: (p.date_production,p.id_production)) if desired else None
+    if final['id_production'] in desired:
+        first = sources[final['id_production']]
+    pointer = (record.id_production if record.id_production in desired else None) if record.est_promesse else (first.id_production if first else None)
+    cycle = sources[pointer].id_cycle if pointer is not None else None
     return {'kind': 'eggs', 'before': before, 'after': changes,
-            'source': None if record.est_promesse else (first.id_production if first else None),
-            'cycle': None if record.est_promesse else (first.id_cycle if first else None),
+            'source': pointer, 'cycle': cycle,
             'reservation_priority': 'date_creation,id_transaction'}
 
 

@@ -83,6 +83,11 @@ def _stock_plan(db, command, record, changes):
     explicit = command.changes.stock_allocations
     if not changed and explicit is None:
         return None
+    if not changed and explicit is not None:
+        supplied = [(a.id_production, a.quantite) for a in explicit]
+        current = [(a.id_production, a.quantite) for a in record.allocations]
+        if sorted(supplied) == sorted(current):
+            return None
     return plan_stock_correction(db, record, changes,
         [a.model_dump() for a in explicit] if explicit is not None else None)
 
