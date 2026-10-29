@@ -130,13 +130,48 @@ already SQL-migrated schema or stamp away the existing migration histories.
   increment. The unresolved bank discrepancy and missing historical production
   origins remain outside automatic repair.
 
-## Next implementation increment: atomic correction contract
+## Phase 2: shared preview/apply command — initial safe adapter slice
 
-Implement preview/apply schemas and the transaction/payment command service with
-row locks, expected versions, request-hash-aware retries and atomic operation/
-revision/financial-journal persistence. Add money/stock adapters before exposing
-any affected financial field. Verify stale previews, concurrent edits, retries,
-rollback and legacy exclusions before enabling the owner-facing editing workflow.
+The first command path is implemented in `backend/app/services/correction_commands.py`
+and exposed through authenticated `/corrections/preview` and `/corrections/apply`
+routes. It accepts only transaction `date_echeance` and payment `notes`; financial
+dates, amounts, funding/account/LC attribution, transaction identity, quantities,
+and stock origins are rejected until their adapters are ready.
+
+- Preview reads the current revision, returns before/after values and an impact
+  summary, and writes no operation or ledger rows. Its dependency fingerprint is
+  bound to the target ID, expected revision and normalized changes.
+- Apply locks and refreshes the target, checks expected revision, rechecks for a
+  concurrent operation replay after acquiring the lock, and writes one immutable
+  operation record plus the target update in the same database transaction.
+- The operation UUID is bound to the normalized request and authenticated actor.
+  Same-request retries return the stored result; UUID reuse with a different actor
+  or request is rejected. A write that changes nothing creates no operation.
+- The transaction-local operation ID lets the foundation trigger attach the
+  revision to the operation. No financial session flag or guard bypass is used.
+- Tests cover preview without writes, a successful apply/replay, stale revisions,
+  no-op suppression and rollback after a simulated commit failure. The local
+  SQLite test uses a small test-only revision trigger; it does not prove native
+  PostgreSQL concurrency or role behavior.
+
+### Remaining Phase 2 gates
+
+- Run the optional native PostgreSQL foundation fixture against an isolated
+  PostgreSQL 17 database. The previous run was skipped because no disposable
+  native server/runtime-role connection was configured; PGlite and owner-level
+  staging SQL do not close that gate.
+- Exercise duplicate operation UUIDs concurrently and two different operations
+  against one target on PostgreSQL; verify one result replays and the stale edit
+  conflicts without partial writes.
+- Inject failures after each write stage on PostgreSQL and confirm operation,
+  revision and entity state all roll back together.
+- Add payment amount/date, transaction price/date, cash/bank and stock adapters
+  in their planned phases before accepting those fields through this API.
+- Keep the known unreconciled bank account excluded from bank correction
+  acceptance until evidence-based reconciliation or explicit exclusion.
+
+This slice is backend infrastructure only. It does not yet enable broader
+financial editing in the existing transaction or payment forms.
 
 ## Manual Phase 1 acceptance follow-up
 
