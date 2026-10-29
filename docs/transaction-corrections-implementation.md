@@ -438,3 +438,20 @@ resolution flows and indirect-view acceptance remain in their planned phases.
   Focused correction suites: 75 passed. Full available backend suite: 233 passed,
   11 skipped; these skips require external database fixtures. A read-only staging
   query confirmed `numeric(15,4)` cost rounding. No schema changes are required.
+
+### Final-state explicit allocation validation
+
+The explicit source guard now validates the proposed allocation against the
+corrected creation-order queue. It keeps saved allocations fixed, preserves
+the target's retained sources, releases replaced sources and reserves stock
+for earlier pending orders before checking the target's additional sources.
+Younger virtual reservations are recalculated from the corrected quantity.
+Both priority validation and automatic planning use the same FIFO source
+reservation helper and eligibility checks; preview remains read-only.
+
+Five regression cases cover automatic/explicit parity with and without excess
+stock, saved allocations on another order, earlier pending priority and a source
+swap that releases stock to another order. Preview, saved outcomes and retries
+agree. Focused correction suites passed 80 tests; the full available backend
+suite passed 238 tests, with 11 external PostgreSQL fixture tests skipped.
+No schema migration is needed.

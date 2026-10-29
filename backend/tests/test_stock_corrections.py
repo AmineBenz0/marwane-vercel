@@ -192,6 +192,79 @@ def extra_egg_source(db, source, quantity=40, cycle=None):
 
 
 @pytest.mark.parametrize('available', [40, 60])
+def test_explicit_and_automatic_final_allocations_agree(db_session, egg_orders, test_user, available):
+    tx, other, source = egg_orders
+    extra_egg_source(db_session, source, available)
+    automatic = preview_correction(db_session, command(tx, {'quantite': 120}))
+    allocations = automatic['impact']['stock']['after'][str(tx.id_transaction)]
+    cmd = command(tx, {'quantite': 120, 'stock_allocations': [
+        {key: row[key] for key in ('id_production', 'quantite')} for row in allocations]})
+    explicit = preview_correction(db_session, cmd)
+    assert explicit['impact']['stock'] == automatic['impact']['stock']
+    assert not db_session.dirty and db_session.query(CorrectionOperation).count() == 0
+    ready = prepared_command(cmd, explicit)
+    result = apply_correction(db_session, ready, test_user)
+    db_session.expire_all()
+    assert sum(a.quantite for a in tx.allocations) == 120
+    assert sum(a.quantite for a in other.allocations) == available - 40
+    assert tx.allocations[0].quantite_livree == 30
+    assert result['impact']['stock'] == explicit['impact']['stock']
+    assert apply_correction(db_session, ready, test_user)['impact'] == result['impact']
+
+
+def test_explicit_increase_preserves_other_orders_saved_allocations(db_session, egg_orders):
+    tx, other, source = egg_orders
+    extra = extra_egg_source(db_session, source)
+    other.allocations.append(EggAllocation(id_production=extra.id_production, quantite=20, quantite_livree=0))
+    db_session.commit()
+    automatic = preview_correction(db_session, command(tx, {'quantite': 120}))
+    assert sum(a['quantite'] for a in automatic['impact']['stock']['after'][str(tx.id_transaction)]) == 100
+    with pytest.raises(HTTPException) as error:
+        preview_correction(db_session, command(tx, {'quantite': 120, 'stock_allocations': [
+            {'id_production': source.id_production, 'quantite': 80},
+            {'id_production': extra.id_production, 'quantite': 40}]}))
+    assert error.value.status_code == 409 and other.allocations[0].quantite == 20
+    assert db_session.query(CorrectionOperation).count() == 0
+
+
+def test_explicit_increase_cannot_take_earlier_orders_pending_stock(db_session, egg_orders):
+    tx, other, source = egg_orders
+    other.date_creation = tx.date_creation - timedelta(days=1)
+    db_session.commit()
+    extra = extra_egg_source(db_session, source)
+    automatic = preview_correction(db_session, command(tx, {'quantite': 120}))
+    after = automatic['impact']['stock']['after']
+    assert sum(a['quantite'] for a in after[str(tx.id_transaction)]) == 80
+    assert after[str(other.id_transaction)][0]['quantite'] == 40
+    with pytest.raises(HTTPException) as error:
+        preview_correction(db_session, command(tx, {'quantite': 120, 'stock_allocations': [
+            {'id_production': source.id_production, 'quantite': 80},
+            {'id_production': extra.id_production, 'quantite': 40}]}))
+    assert error.value.status_code == 409 and not other.allocations
+    assert db_session.query(CorrectionOperation).count() == 0
+
+
+def test_source_swap_releases_old_stock_before_validating_pending_priority(db_session, egg_orders, test_user):
+    tx, other, source = egg_orders
+    tx.est_promesse = False
+    tx.quantite = 80
+    tx.montant_total = 120
+    tx.id_production = source.id_production
+    tx.allocations[0].quantite_livree = 0
+    db_session.commit()
+    extra = extra_egg_source(db_session, source, 80)
+    cmd = command(tx, {'stock_allocations': [{'id_production': extra.id_production, 'quantite': 80}]})
+    preview = preview_correction(db_session, cmd)
+    assert preview['impact']['stock']['after'][str(other.id_transaction)] == [
+        {'id_production': source.id_production, 'quantite': 50, 'quantite_livree': 0}]
+    apply_correction(db_session, prepared_command(cmd, preview), test_user)
+    db_session.expire_all()
+    assert tx.allocations[0].id_production == extra.id_production
+    assert other.allocations[0].id_production == source.id_production
+    assert other.allocations[0].quantite == 50
+
+
+@pytest.mark.parametrize('available', [40, 60])
 def test_explicit_plan_reserves_pending_priority_without_changing_chosen_sources(
         db_session, egg_orders, test_user, available):
     tx, other, source = egg_orders

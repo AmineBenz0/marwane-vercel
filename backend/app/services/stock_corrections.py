@@ -14,7 +14,7 @@ from app.models.egg_allocation import EggAllocation
 from app.models.inventory import MouvementStock
 from app.models.audit import TransactionAudit
 from app.services.inventory import is_inventory_tracked, get_average_unit_cost, record_movement
-from app.services.egg_sales import source_balances, _stock_state
+from app.services.egg_sales import source_balances
 from app.utils.business_date import business_date
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.utils.production_cycles import cycle_schedule
@@ -161,6 +161,20 @@ def _eligible_egg_source(db, source, building, cutoff, category):
     return True
 
 
+def _reserve_egg_sources(db, rows, balances, pending, building, cutoff, category):
+    """Reserve eligible sources FIFO in the supplied in-memory stock state."""
+    reserved = {}
+    for source in rows:
+        if pending <= 0:
+            break
+        used = min(pending, max(0, balances[source.id_production]))
+        if used and _eligible_egg_source(db, source, building, cutoff, category):
+            reserved[source.id_production] = used
+            balances[source.id_production] -= used
+            pending -= used
+    return reserved
+
+
 def _egg_plan(db, record, final, category, explicit):
     if record.id_client is None or final['id_batiment'] is None:
         raise HTTPException(422, 'Sélectionnez le bâtiment source pour cette vente d’œufs.')
@@ -222,12 +236,6 @@ def _egg_plan(db, record, final, category, explicit):
                 or not _eligible_egg_source(db, sources[pid], final['id_batiment'], cutoff, category)):
             raise HTTPException(409, 'Une origine est indisponible, réservée, incompatible ou postérieure à la vente.')
         balances[pid] -= amount
-    if explicit is not None or final['id_production'] != record.id_production:
-        _, free, reservations = _stock_state(db)
-        for pid, amount in desired.items():
-            allowance = free.get(pid, 0) + existing.get(pid, {}).get('quantite', 0) + reservations.get(record.id_transaction, {}).get(pid, 0)
-            if amount > allowance:
-                raise HTTPException(409, 'Cette répartition utiliserait les œufs réservés à une autre commande.')
     # Existing reservations of other orders stay fixed. Newly available units
     # are offered in original creation order, including this deferred order.
     promises = db.query(Transaction).filter(Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
@@ -235,6 +243,25 @@ def _egg_plan(db, record, final, category, explicit):
     targets = list(promises)
     if not record.est_promesse:
         targets.append(record)
+    if explicit is not None or final['id_production'] != record.id_production:
+        # Validate the corrected state, not virtual reservations based on the
+        # old quantity. Saved allocations stay fixed; only earlier orders can
+        # claim remaining stock before this order chooses its replacement.
+        priority_balances = {pid: amount + desired.get(pid, 0) for pid, amount in balances.items()}
+        retained = {pid: min(amount, existing.get(pid, {}).get('quantite', 0))
+                    for pid, amount in desired.items()}
+        for pid, amount in retained.items():
+            priority_balances[pid] -= amount
+        for tx in targets:
+            if tx.id_transaction == record.id_transaction:
+                break
+            pending = tx.quantite - (tx.quantite_annulee or 0) - sum(a.quantite for a in tx.allocations)
+            product = db.get(Produit, tx.id_produit)
+            _reserve_egg_sources(db, rows, priority_balances, pending, tx.id_batiment,
+                business_date(), parse_sellable_egg_product_name(product.nom_produit))
+        for pid, amount in desired.items():
+            if amount > priority_balances[pid] + retained[pid]:
+                raise HTTPException(409, 'Cette répartition utiliserait les œufs réservés à une autre commande.')
     after = {record.id_transaction: desired}
     for tx in targets:
         target = tx.id_transaction == record.id_transaction
@@ -247,15 +274,11 @@ def _egg_plan(db, record, final, category, explicit):
         cat = category if target else parse_sellable_egg_product_name(product.nom_produit)
         building = final['id_batiment'] if target else tx.id_batiment
         limit = cutoff if target else business_date()
-        for p in rows:
-            if pending <= 0:
-                break
-            used = min(pending, max(0, balances[p.id_production]))
-            if used and _eligible_egg_source(db, p, building, limit, cat):
-                if not reserve_only:
-                    alloc[p.id_production] = alloc.get(p.id_production, 0) + used
-                balances[p.id_production] -= used
-                pending -= used
+        reserved = _reserve_egg_sources(db, rows, balances, pending, building, limit, cat)
+        if not reserve_only:
+            for pid, amount in reserved.items():
+                alloc[pid] = alloc.get(pid, 0) + amount
+        pending -= sum(reserved.values())
         if target and pending and not record.est_promesse:
             raise HTTPException(409, 'Stock insuffisant. Une livraison différée nécessite une opération explicite.')
         if target or alloc != {a.id_production: a.quantite for a in tx.allocations}:
