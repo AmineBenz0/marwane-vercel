@@ -129,6 +129,38 @@ def test_correction_rejects_stale_expected_version(db_session, correction_transa
     assert error.value.status_code == 409
 
 
+def test_matching_retry_after_lock_wait_replays_before_stale_conflict(db_session, correction_transaction, test_user, monkeypatch):
+    from fastapi import HTTPException
+    from sqlalchemy import update
+    import app.services.correction_commands as commands
+
+    db_session.execute(
+        update(Transaction).where(Transaction.id_transaction == correction_transaction.id_transaction)
+        .values(row_version=2), execution_options={"synchronize_session": False},
+    )
+    db_session.commit()
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Rejeu après attente du verrou",
+        target={"entity_type":"transaction","entity_id":correction_transaction.id_transaction,"expected_version":1},
+        changes={"date_echeance": correction_transaction.date_echeance + timedelta(days=1)},
+    )
+    committed_result = {
+        "operation_id": str(command.operation_id),
+        "target": command.target.model_dump(mode="json"),
+        "record": {"row_version": 2},
+        "impact": {"cash":"unchanged"},
+    }
+    calls = {"count": 0}
+    def replay_after_stale(*args):
+        calls["count"] += 1
+        return None if calls["count"] == 1 else committed_result
+    monkeypatch.setattr(commands, "replay_result", replay_after_stale)
+
+    response = apply_correction(db_session, command, test_user)
+    assert response["replayed"] is True
+    assert response["record"]["row_version"] == 2
+
+
 def test_failed_commit_rolls_back_operation_and_record(db_session, correction_transaction, test_user, monkeypatch):
     from sqlalchemy import text
     db_session.execute(text("""

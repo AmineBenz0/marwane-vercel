@@ -150,7 +150,8 @@ and stock origins are rejected until their adapters are ready.
 - The transaction-local operation ID lets the foundation trigger attach the
   revision to the operation. No financial session flag or guard bypass is used.
 - Tests cover preview without writes, a successful apply/replay, stale revisions,
-  no-op suppression and rollback after a simulated commit failure. The local
+  matching retry after a simulated lock wait, no-op suppression and rollback
+  after a simulated commit failure. The local
   SQLite test uses a small test-only revision trigger; it does not prove native
   PostgreSQL concurrency or role behavior.
 

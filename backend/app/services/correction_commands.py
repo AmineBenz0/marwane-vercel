@@ -118,9 +118,20 @@ def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
     if previous is not None:
         return {**previous, "replayed": True}
 
-    record = lock_expected_revision(db, command.target)
-    # A request with the same UUID can have committed while this request waited
-    # on the target row lock. Replay before checking the now-advanced version.
+    try:
+        record = lock_expected_revision(db, command.target)
+    except HTTPException as exc:
+        # A matching operation may commit while this request is waiting on the
+        # target lock, advancing its revision. Resolve that retry before
+        # returning the otherwise-correct stale-revision conflict.
+        if exc.status_code == 409:
+            previous = replay_result(db, command.operation_id, request_hash, actor_id)
+            if previous is not None:
+                return {**previous, "replayed": True}
+        raise
+
+    # Also recheck after acquiring the row lock: a concurrent matching request
+    # can have committed while the initial operation lookup was in flight.
     previous = replay_result(db, command.operation_id, request_hash, actor_id)
     if previous is not None:
         return {**previous, "replayed": True}
