@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import Utilisateur
-from app.schemas.correction import CorrectionCommand
+from app.schemas.correction import CorrectionApplyCommand, CorrectionCommand
 from app.services.correction_commands import apply_correction, preview_correction
 from app.utils.dependencies import get_current_active_user
 
@@ -24,7 +24,7 @@ def preview(
 
 @router.post("/apply")
 def apply(
-    command: CorrectionCommand,
+    command: CorrectionApplyCommand,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):

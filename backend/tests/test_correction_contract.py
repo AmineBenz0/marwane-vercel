@@ -13,8 +13,16 @@ from app.models.paiement import Paiement
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.produit import Produit
 from app.models.transaction import Transaction
-from app.schemas.correction import CorrectionCommand, CorrectionEnvelope, CorrectionTarget
+from app.schemas.correction import CorrectionApplyCommand, CorrectionCommand, CorrectionEnvelope, CorrectionTarget
 from app.services.correction_commands import apply_correction, preview_correction
+
+
+def prepared(db, command):
+    preview = preview_correction(db, command)
+    return CorrectionApplyCommand(
+        **command.model_dump(exclude_unset=True),
+        dependency_fingerprint=preview["dependency_fingerprint"],
+    )
 
 
 @pytest.fixture
@@ -120,6 +128,7 @@ def test_preview_and_apply_create_one_atomic_versioned_operation(db_session, cor
     assert preview["impact"]["cash"] == "unchanged"
     assert db_session.query(CorrectionOperation).count() == before_count
 
+    command = prepared(db_session, command)
     applied = apply_correction(db_session, command, test_user)
     assert applied["record"]["row_version"] == 2
     assert db_session.query(CorrectionOperation).count() == before_count + 1
@@ -136,6 +145,7 @@ def test_correction_noop_does_not_create_operation(db_session, correction_transa
         target={"entity_type":"transaction","entity_id":correction_transaction.id_transaction,"expected_version":1},
         changes={"date_echeance": correction_transaction.date_echeance},
     )
+    command = prepared(db_session, command)
     result = apply_correction(db_session, command, test_user)
     assert result["no_op"] is True
     assert db_session.query(CorrectionOperation).count() == 0
@@ -186,6 +196,7 @@ def test_matching_retry_after_lock_wait_replays_before_stale_conflict(db_session
         return None if calls["count"] == 1 else committed_result
     monkeypatch.setattr(commands, "replay_result", replay_after_stale)
 
+    command = CorrectionApplyCommand(**command.model_dump(exclude_unset=True), dependency_fingerprint="0"*64)
     response = apply_correction(db_session, command, test_user)
     assert response["replayed"] is True
     assert response["record"]["row_version"] == 2
@@ -204,6 +215,7 @@ def test_failed_commit_rolls_back_operation_and_record(db_session, correction_tr
         target={"entity_type":"transaction","entity_id":correction_transaction.id_transaction,"expected_version":1},
         changes={"date_echeance": correction_transaction.date_echeance + timedelta(days=1)},
     )
+    command = prepared(db_session, command)
     def fail_commit():
         raise RuntimeError("simulated commit failure")
     monkeypatch.setattr(db_session, "commit", fail_commit)
@@ -233,6 +245,7 @@ def test_paid_sale_price_correction_recalculates_total_without_changing_payment(
     preview = preview_correction(db_session, command)
     assert preview["after"]["montant_total"] == "22.50"
     assert preview["impact"]["receivable"] == "recalculated from the corrected sale total"
+    command = prepared(db_session, command)
     applied = apply_correction(db_session, command, test_user)
     assert applied["record"]["prix_unitaire"] == "2.25"
     assert applied["record"]["montant_total"] == "22.50"
@@ -297,6 +310,7 @@ def test_cash_payment_date_and_amount_correction_replaces_ledger_once(db_session
     preview = preview_correction(db_session, command)
     assert preview["impact"]["cash"]["before"]["amount"] == "5.00"
     assert preview["impact"]["cash"]["after"]["amount"] == "8.00"
+    command = prepared(db_session, command)
     result = apply_correction(db_session, command, test_user)
     assert result["record"]["row_version"] == 2
     assert result["record"]["montant"] == "8.00"
@@ -310,3 +324,173 @@ def test_cash_payment_date_and_amount_correction_replaces_ledger_once(db_session
     assert db_session.query(CorrectionFinanciere).filter(
         CorrectionFinanciere.operation_id == command.operation_id,
     ).count() >= 1
+
+
+@pytest.fixture
+def cash_payment(db_session, correction_sale):
+    sale, payment = correction_sale
+    movement = Caisse(
+        montant=payment.montant, type_mouvement="ENTREE", statut="active",
+        id_transaction=sale.id_transaction, id_paiement=payment.id_paiement,
+        date_mouvement=datetime.combine(payment.date_paiement, datetime.min.time(), tzinfo=timezone.utc),
+    )
+    db_session.add(movement)
+    db_session.commit()
+    return sale, payment, movement
+
+
+def revision_trigger(db, table, fields):
+    from sqlalchemy import text
+    key = "id_transaction" if table == "transactions" else "id_paiement"
+    db.execute(text(f"""CREATE TRIGGER correction_test_revision AFTER UPDATE OF {fields} ON {table}
+      BEGIN UPDATE {table} SET row_version=OLD.row_version+1 WHERE {key}=OLD.{key}; END"""))
+    db.commit()
+
+
+@pytest.mark.parametrize("changes", [{"montant": "8.00"}, {"date_paiement": date.today()+timedelta(days=1)}])
+def test_single_field_payment_corrections_preserve_omitted_fields(db_session, cash_payment, test_user, changes):
+    sale, payment, movement = cash_payment
+    revision_trigger(db_session, "paiements", "montant,date_paiement")
+    command = prepared(db_session, CorrectionCommand(
+        operation_id=uuid4(), reason="Correction d’un seul champ",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes=changes,
+    ))
+    result = apply_correction(db_session, command, test_user)
+    saved = db_session.get(CorrectionOperation, command.operation_id)
+    assert set(saved.request_payload["changes"]) == set(changes)
+    assert result["record"]["row_version"] == 2
+    assert db_session.query(Caisse).filter(Caisse.statut == "active").one().montant == Decimal(changes.get("montant", "5.00"))
+    retry = apply_correction(db_session, command, test_user)
+    assert retry["record"] == result["record"]
+    assert retry["impact"] == result["impact"]
+    assert retry["replayed"] is True
+
+
+@pytest.mark.parametrize("kind,changes", [("transaction", {"prix_unitaire":"1.5"}), ("paiement", {"montant":"5.0"})])
+def test_equal_decimal_scale_is_a_noop(db_session, cash_payment, test_user, kind, changes):
+    sale, payment, movement = cash_payment
+    command = prepared(db_session, CorrectionCommand(
+        operation_id=uuid4(), reason="Même valeur, présentation différente",
+        target={"entity_type":kind,"entity_id":sale.id_transaction if kind == "transaction" else payment.id_paiement,"expected_version":1},
+        changes=changes,
+    ))
+    result = apply_correction(db_session, command, test_user)
+    assert result["no_op"] is True
+    assert result["record"]["row_version"] == 1
+    assert db_session.query(CorrectionOperation).count() == 0
+    assert db_session.query(Caisse).count() == 1
+    assert db_session.query(CorrectionFinanciere).count() == 0
+
+
+def test_replay_keeps_actual_timestamp_and_actor_even_after_later_edit(db_session, correction_sale, test_user):
+    sale, _ = correction_sale
+    sale.date_modification = datetime(2000,1,1,tzinfo=timezone.utc)
+    db_session.commit()
+    revision_trigger(db_session, "transactions", "date_echeance")
+    command = prepared(db_session, CorrectionCommand(
+        operation_id=uuid4(), reason="Historique fidèle",
+        target={"entity_type":"transaction","entity_id":sale.id_transaction,"expected_version":1},
+        changes={"date_echeance":date.today()+timedelta(days=1)},
+    ))
+    first = apply_correction(db_session, command, test_user)
+    saved = db_session.get(CorrectionOperation, command.operation_id)
+    assert saved.result_payload["record"] == first["record"]
+    assert first["record"]["id_utilisateur_modification"] == test_user.id_utilisateur
+    assert first["record"]["date_modification"].startswith("2000") is False
+    sale.date_echeance = date.today()+timedelta(days=2)
+    db_session.commit()
+    retry = apply_correction(db_session, command, test_user)
+    assert retry["record"] == first["record"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("montant", Decimal("999")), ("type_mouvement", "SORTIE"),
+    ("date_mouvement", datetime(2000,1,1,tzinfo=timezone.utc)), ("id_transaction", None),
+])
+def test_inconsistent_cash_blocks_preview_and_apply(db_session, cash_payment, test_user, field, value):
+    sale, payment, movement = cash_payment
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Ne pas réparer une incohérence indirectement",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes={"montant":"8.00"},
+    )
+    confirmed = prepared(db_session, command)
+    setattr(movement, field, value)
+    db_session.commit()
+    for action, request in [(preview_correction, command), (lambda db, cmd: apply_correction(db,cmd,test_user), confirmed)]:
+        with pytest.raises(HTTPException) as error:
+            action(db_session, request)
+        assert error.value.status_code == 409
+    assert db_session.query(CorrectionOperation).count() == 0
+
+
+@pytest.mark.parametrize("dependency", ["parent", "payment", "cash"])
+def test_apply_rejects_dependency_changed_since_preview(db_session, cash_payment, test_user, dependency):
+    sale, payment, movement = cash_payment
+    command = prepared(db_session, CorrectionCommand(
+        operation_id=uuid4(), reason="Aperçu périmé",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes={"notes":"Nouvelle note"},
+    ))
+    if dependency == "parent":
+        sale.date_echeance = date.today()+timedelta(days=5)
+    elif dependency == "payment":
+        db_session.add(Paiement(id_transaction=sale.id_transaction,date_paiement=date.today(),montant=Decimal("1"),type_paiement="cash",statut="valide"))
+    else:
+        movement.motif_annulation = "Modification indirecte"
+    db_session.commit()
+    with pytest.raises(HTTPException) as error:
+        apply_correction(db_session, command, test_user)
+    assert error.value.status_code == 409
+    assert db_session.query(CorrectionOperation).count() == 0
+    assert payment.notes is None
+
+
+def test_apply_contract_requires_preview_fingerprint():
+    with pytest.raises(ValidationError):
+        CorrectionApplyCommand(operation_id=uuid4(),reason="Aperçu obligatoire",target={"entity_type":"transaction","entity_id":1,"expected_version":1},changes={"date_echeance":None})
+
+
+def test_payload_keeps_explicit_null_and_normalizes_money():
+    from app.services.correction_contract import request_payload
+    command = CorrectionCommand(operation_id=uuid4(),reason="Normaliser",target={"entity_type":"transaction","entity_id":1,"expected_version":1},changes={"date_echeance":None,"prix_unitaire":"1.5"})
+    payload = request_payload(command)
+    assert payload["changes"] == {"date_echeance":None,"prix_unitaire":"1.50"}
+    same = command.model_copy(update={"changes":command.changes.model_copy(update={"prix_unitaire":Decimal("1.50")})})
+    assert request_fingerprint(command) == request_fingerprint(same)
+
+
+def test_cash_correction_rolls_back_all_writes_on_commit_failure(db_session, cash_payment, test_user, monkeypatch):
+    sale, payment, movement = cash_payment
+    revision_trigger(db_session, "paiements", "montant,date_paiement")
+    command = prepared(db_session, CorrectionCommand(operation_id=uuid4(),reason="Échec atomique",target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},changes={"montant":"8.00"}))
+    def fail_commit():
+        raise RuntimeError("commit failure")
+    monkeypatch.setattr(db_session,"commit",fail_commit)
+    with pytest.raises(RuntimeError,match="commit failure"):
+        apply_correction(db_session,command,test_user)
+    db_session.rollback()
+    db_session.expire_all()
+    assert db_session.query(CorrectionOperation).count() == 0
+    assert db_session.query(CorrectionFinanciere).count() == 0
+    assert db_session.query(Caisse).count() == 1
+    assert db_session.get(Caisse,movement.id_mouvement).statut == "active"
+    assert db_session.get(Paiement,payment.id_paiement).montant == Decimal("5.00")
+    assert db_session.get(Paiement,payment.id_paiement).row_version == 1
+
+
+def test_database_result_mismatch_rolls_back_the_operation(db_session, correction_sale, test_user):
+    from sqlalchemy import text
+    sale, _ = correction_sale
+    revision_trigger(db_session, "transactions", "date_echeance")
+    db_session.execute(text("""CREATE TRIGGER unexpected_db_change AFTER UPDATE OF date_echeance ON transactions
+      BEGIN UPDATE transactions SET date_modification='2000-01-01 00:00:00' WHERE id_transaction=OLD.id_transaction; END"""))
+    db_session.commit()
+    command = prepared(db_session,CorrectionCommand(operation_id=uuid4(),reason="Résultat non conforme",target={"entity_type":"transaction","entity_id":sale.id_transaction,"expected_version":1},changes={"date_echeance":date.today()+timedelta(days=2)}))
+    with pytest.raises(HTTPException) as error:
+        apply_correction(db_session,command,test_user)
+    assert error.value.status_code == 409
+    assert db_session.query(CorrectionOperation).count() == 0
+    assert db_session.get(Transaction,sale.id_transaction).date_echeance is None
+    assert db_session.get(Transaction,sale.id_transaction).row_version == 1

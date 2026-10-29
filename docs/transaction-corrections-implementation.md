@@ -146,7 +146,9 @@ scope until their adapters are ready.
 
 - Preview reads the current revision, returns before/after values and an impact
   summary, and writes no operation or ledger rows. Its dependency fingerprint is
-  bound to the target ID, expected revision and normalized changes.
+  bound to the target ID, expected revision, normalized changes, parent transaction,
+  sibling payments, and linked cash/bank movement snapshots. Apply requires the
+  returned fingerprint and rechecks these dependencies under ordered row locks.
 - Apply locks and refreshes the target, checks expected revision, rechecks for a
   concurrent operation replay after acquiring the lock, and writes one immutable
   operation record plus the target update in the same database transaction.
@@ -247,3 +249,37 @@ not a historical allocation repair; retain it in the next dependency review.
 Manual foundation acceptance is complete for the verified scenarios. Phase 2
 still needs its own stale-preview, concurrent-apply, operation-retry and atomic
 money/stock acceptance tests before editable financial fields are enabled.
+
+
+## Phase 2 defect fixes — 29 October 2026
+
+- The stored request and request hash use explicitly supplied fields only;
+  omitted payment date/amount fields are absent, while explicit null remains
+  available for nullable due dates and notes. Monetary request values use exact
+  two-decimal serialization. Numeric equality drives no-op detection.
+- Apply uses `CorrectionApplyCommand`, which requires the preview's dependency
+  fingerprint. Parent, target, sibling payments and linked ledger records are
+  refreshed and locked in the apply transaction before the fingerprint is
+  checked. A changed dependency returns 409 without writing an operation.
+- The actor and UTC modification timestamp are assigned explicitly and included
+  in the immutable result. Before commit, the service refreshes the target and
+  checks its full snapshot against that result. A mismatch rolls back all writes.
+  Initial responses and retries return the same saved snapshot, even after later
+  edits; no post-commit refresh can substitute a newer version.
+- Cash financial edits require one active movement with matching amount,
+  direction, exact accounting datetime, transaction link and origin fields,
+  plus no active bank movement. Inconsistencies return 409 before mutation.
+  Preview uses the recorded movement direction for its before value.
+- The existing database guard is retained. Staging PostgreSQL accepted actual
+  command payload shapes for amount-only and date-only edits in a rolled-back
+  transaction, including expected revisions, actor, explicit timestamps and
+  operation-linked history. Zero regression operation rows remained afterward.
+- Backend suite: 83 passed, one optional native PostgreSQL fixture skipped.
+  Added regressions cover single-field payloads, decimal no-ops, immutable retry
+  metadata, inconsistent ledger links, changed dependencies and atomic rollback
+  after ledger writes or an unexpected database-generated result.
+
+The apply contract is stricter; no existing frontend calls these command routes.
+Native concurrent application/runtime-role tests and the authenticated staging
+walkthrough remain Phase 2 acceptance gates. Bank/cheque/LC, stock and owner UI
+adapters retain their planned later-phase scope.

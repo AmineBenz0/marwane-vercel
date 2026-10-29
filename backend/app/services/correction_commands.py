@@ -5,13 +5,13 @@ notes/cash date/amount. Purchase valuation, bank/cheque/LC funding, transaction
 dates, and inventory quantities await their domain adapters.
 """
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from hashlib import sha256
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,11 +20,12 @@ from app.models.caisse import Caisse
 from app.models.compte_bancaire import MouvementBancaire
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
-from app.schemas.correction import CorrectionCommand, CorrectionPreviewRead
+from app.schemas.correction import CorrectionApplyCommand, CorrectionCommand, CorrectionPreviewRead
 from app.services.correction_contract import (
     lock_expected_revision,
     replay_result,
     request_fingerprint,
+    request_payload,
 )
 from app.services.financial import validate_payment_date
 from app.services.financial_ledger import sync_payment_cash_movement
@@ -42,11 +43,60 @@ def _snapshot(entity_type: str, record) -> dict:
 
 
 def _json_value(value):
-    if isinstance(value, (date, datetime)):
+    if isinstance(value, datetime):
+        return _utc(value).isoformat()
+    if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, Decimal):
-        return format(value, "f")
+        return format(value.quantize(Decimal("0.01")), "f")
     return value
+
+
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _field_value(name, value):
+    if value is not None and name in {"date_echeance", "date_paiement"}:
+        return date.fromisoformat(value) if isinstance(value, str) else value
+    if value is not None and name in {"prix_unitaire", "montant_total", "montant"}:
+        return Decimal(value)
+    return value
+
+
+def _dependencies(db, entity_type, record, transaction=None, *, lock=False):
+    """Read the same dependency set for preview and locked apply."""
+    def rows(model, predicate, key):
+        query = db.query(model).filter(predicate).order_by(key).populate_existing()
+        if lock:
+            query = query.with_for_update()
+        return query.all()
+
+    payments = rows(Paiement, Paiement.id_transaction == record.id_transaction, Paiement.id_paiement)
+    # Include all linked movements, including canceled rows: replacement,
+    # cancellation and new movements must invalidate an earlier preview.
+    payment_ids = [payment.id_paiement for payment in payments]
+    # A malformed cash link still belongs to the dependency and validation set.
+    cash = rows(
+        Caisse,
+        or_(Caisse.id_transaction == record.id_transaction, Caisse.id_paiement.in_(payment_ids)),
+        Caisse.id_mouvement,
+    )
+    bank = rows(
+        MouvementBancaire,
+        MouvementBancaire.id_paiement.in_(payment_ids),
+        MouvementBancaire.id_mouvement,
+    ) if payment_ids else []
+
+    def snapshot(row):
+        return {column.name: _json_value(getattr(row, column.name)) for column in row.__table__.columns}
+
+    return {
+        "transaction": _snapshot("transaction", transaction if transaction is not None else record),
+        "payments": [snapshot(row) for row in payments],
+        "cash": [snapshot(row) for row in cash],
+        "bank": [snapshot(row) for row in bank],
+    }
 
 
 def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, transaction=None) -> dict:
@@ -92,7 +142,7 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
             raise HTTPException(409, "La correction des virements bancaires attend la réconciliation du compte.")
         if not record.est_effectif:
             raise HTTPException(409, "Seul un paiement effectif peut changer de date ou de montant.")
-        active_cash = db.query(Caisse.id_mouvement).filter(
+        active_cash = db.query(Caisse).filter(
             Caisse.id_paiement == record.id_paiement, Caisse.statut == "active",
         ).all()
         active_bank = db.query(MouvementBancaire.id_mouvement).filter(
@@ -101,6 +151,18 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
         ).all()
         if len(active_cash) != 1 or active_bank:
             raise HTTPException(409, "L’effet de caisse de ce paiement doit être réconcilié avant sa correction.")
+        movement = active_cash[0]
+        expected_direction = "ENTREE" if transaction.id_client is not None else "SORTIE"
+        expected_date = datetime.combine(record.date_paiement, time.min, tzinfo=timezone.utc)
+        if (
+            movement.montant != record.montant
+            or movement.type_mouvement != expected_direction
+            or _utc(movement.date_mouvement) != expected_date
+            or movement.id_transaction != record.id_transaction
+            or movement.id_charge is not None
+            or movement.id_cession is not None
+        ):
+            raise HTTPException(409, "Le mouvement de caisse ne correspond pas au paiement. Réconciliez-le avant sa correction.")
         if "date_paiement" in requested:
             validate_payment_date(
                 transaction, requested["date_paiement"],
@@ -121,7 +183,8 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
         if "prix_unitaire" in changes:
             impact["receivable"] = "recalculated from the corrected sale total"
     else:
-        impact["payment_note"] = "updated"
+        if "notes" in changes:
+            impact["payment_note"] = "updated"
         if record is not None and {"date_paiement", "montant"}.intersection(changes):
             old_movement = db.query(Caisse).filter(
                 Caisse.id_paiement == record.id_paiement,
@@ -131,7 +194,7 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
             old_date = _json_value(old_movement.date_mouvement.date() if old_movement else record.date_paiement)
             direction = "ENTREE" if transaction and transaction.id_client is not None else "SORTIE"
             impact["cash"] = {
-                "before": {"date": old_date, "amount": old_amount, "direction": direction},
+                "before": {"date": old_date, "amount": old_amount, "direction": old_movement.type_mouvement if old_movement else direction},
                 "after": {
                     "date": _json_value(changes.get("date_paiement", record.date_paiement)),
                     "amount": changes.get("montant", _json_value(record.montant)),
@@ -141,10 +204,10 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
     return impact
 
 
-def _dependency_fingerprint(entity_type: str, entity_id: int, revision: int, changes: dict) -> str:
+def _dependency_fingerprint(entity_type: str, entity_id: int, revision: int, changes: dict, dependencies: dict) -> str:
     canonical = json.dumps(
         {"entity_type": entity_type, "entity_id": entity_id,
-         "revision": revision, "changes": changes},
+         "revision": revision, "changes": changes, "dependencies": dependencies},
         sort_keys=True, separators=(",", ":"), ensure_ascii=False,
     )
     return sha256(canonical.encode("utf-8")).hexdigest()
@@ -153,7 +216,7 @@ def _dependency_fingerprint(entity_type: str, entity_id: int, revision: int, cha
 def preview_correction(db: Session, command: CorrectionCommand) -> dict:
     model = _MODELS[command.target.entity_type]
     key = getattr(model, _IDS[command.target.entity_type])
-    record = db.query(model).filter(key == command.target.entity_id).one_or_none()
+    record = db.query(model).filter(key == command.target.entity_id).populate_existing().one_or_none()
     if record is None:
         raise HTTPException(404, "L’enregistrement à corriger est introuvable.")
     if record.row_version != command.target.expected_version:
@@ -163,11 +226,16 @@ def preview_correction(db: Session, command: CorrectionCommand) -> dict:
     if command.target.entity_type == "paiement":
         transaction = db.query(Transaction).filter(
             Transaction.id_transaction == record.id_transaction,
-        ).one_or_none()
+        ).populate_existing().one_or_none()
     changes = _normalize_and_validate(command, record, db=db, transaction=transaction)
     before = _snapshot(command.target.entity_type, record)
     after = deepcopy(before)
     after.update(changes)
+    fingerprint = _dependency_fingerprint(
+        command.target.entity_type, command.target.entity_id,
+        command.target.expected_version, changes,
+        _dependencies(db, command.target.entity_type, record, transaction),
+    )
     preview = CorrectionPreviewRead(
         operation_id=command.operation_id,
         target=command.target,
@@ -175,15 +243,12 @@ def preview_correction(db: Session, command: CorrectionCommand) -> dict:
         before=before,
         after=after,
         impact=_impact(command.target.entity_type, changes, record, transaction, db),
+        dependency_fingerprint=fingerprint,
     ).model_dump(mode="json")
-    preview["dependency_fingerprint"] = _dependency_fingerprint(
-        command.target.entity_type, command.target.entity_id,
-        command.target.expected_version, changes,
-    )
     return preview
 
 
-def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
+def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dict:
     if actor is None:
         raise HTTPException(401, "Une session authentifiée est nécessaire pour enregistrer une correction.")
     actor_id = actor.id_utilisateur
@@ -223,12 +288,19 @@ def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
     if previous is not None:
         return {**previous, "replayed": True}
 
+    dependencies = _dependencies(db, command.target.entity_type, record, transaction, lock=True)
     changes = _normalize_and_validate(command, record, db=db, transaction=transaction)
     before = _snapshot(command.target.entity_type, record)
+    fingerprint = _dependency_fingerprint(
+        command.target.entity_type, command.target.entity_id,
+        command.target.expected_version, changes, dependencies,
+    )
+    if getattr(command, "dependency_fingerprint", None) != fingerprint:
+        raise HTTPException(409, "Les données liées à cette correction ont changé. Actualisez son aperçu avant de confirmer.")
     actual_changes = {
         name: value
         for name, value in changes.items()
-        if _json_value(getattr(record, name)) != value
+        if getattr(record, name) != _field_value(name, value)
     }
     if not actual_changes:
         return {
@@ -241,6 +313,7 @@ def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
         }
 
     expected_after_version = record.row_version + 1
+    modified_at = datetime.now(timezone.utc)
     result = {
         "operation_id": str(command.operation_id),
         "target": command.target.model_dump(mode="json"),
@@ -248,6 +321,8 @@ def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
             **before,
             **actual_changes,
             "row_version": expected_after_version,
+            "id_utilisateur_modification": actor_id,
+            "date_modification": _json_value(modified_at),
         },
         "impact": _impact(command.target.entity_type, actual_changes, record, transaction, db),
     }
@@ -256,7 +331,7 @@ def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
         request_hash=request_hash,
         id_utilisateur=actor_id,
         reason=command.reason,
-        request_payload=command.model_dump(mode="json"),
+        request_payload=request_payload(command),
         result_payload=result,
     )
     db.add(operation)
@@ -278,14 +353,9 @@ def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
         )
 
     for name, value in actual_changes.items():
-        # Dates are restored from their canonical ISO representation because
-        # operation JSON payloads intentionally use JSON-safe scalar values.
-        if name in {"date_echeance", "date_paiement"} and value is not None:
-            value = date.fromisoformat(value)
-        elif name in {"prix_unitaire", "montant_total"}:
-            value = Decimal(value)
-        setattr(record, name, value)
+        setattr(record, name, _field_value(name, value))
     record.id_utilisateur_modification = actor_id
+    record.date_modification = modified_at
     if command.target.entity_type == "paiement" and {"date_paiement", "montant"}.intersection(actual_changes):
         sync_payment_cash_movement(
             db,
@@ -296,10 +366,11 @@ def apply_correction(db: Session, command: CorrectionCommand, actor) -> dict:
             operation_id=command.operation_id,
         )
     db.flush()
-    db.commit()
+    # Verify the immutable replay payload against actual DB-generated values
+    # while the target lock is still held, before making the operation durable.
     db.refresh(record)
-    return {
-        **result,
-        "replayed": False,
-        "record": _snapshot(command.target.entity_type, record),
-    }
+    if _snapshot(command.target.entity_type, record) != result["record"]:
+        db.rollback()
+        raise HTTPException(409, "Le résultat enregistré diffère de la correction prévue. Actualisez son aperçu.")
+    db.commit()
+    return {**deepcopy(result), "replayed": False}

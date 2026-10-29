@@ -126,3 +126,29 @@ DO $$ DECLARE blocked boolean:=false; BEGIN
  BEGIN INSERT INTO public.entity_revisions(entity_type,entity_id,revision,event_kind,after_snapshot) VALUES('transaction',1,999,'baseline','{}'); EXCEPTION WHEN check_violation THEN blocked:=true; END;
  IF NOT blocked THEN RAISE EXCEPTION 'Incomplete snapshot accepted'; END IF;
 END $$;
+
+-- Regression: the command serializes only explicitly supplied fields.
+SET LOCAL ROLE app_runtime;
+INSERT INTO public.correction_operations VALUES(
+ 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',repeat('a',64),1,'Date-only correction',
+ '{"target":{"entity_type":"paiement","entity_id":1,"expected_version":2},"changes":{"date_paiement":"2026-10-05"}}',
+ '{"record":{"date_paiement":"2026-10-05","montant":"6.00","row_version":3}}',now());
+SELECT set_config('app.correction_operation_id','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',true);
+UPDATE public.paiements SET date_paiement='2026-10-05',id_utilisateur_modification=1 WHERE id_paiement=1;
+SELECT set_config('app.correction_operation_id','',true);
+INSERT INTO public.correction_operations VALUES(
+ 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',repeat('b',64),1,'Amount-only correction',
+ '{"target":{"entity_type":"paiement","entity_id":1,"expected_version":3},"changes":{"montant":"7.00"}}',
+ '{"record":{"date_paiement":"2026-10-05","montant":"7.00","row_version":4}}',now());
+SELECT set_config('app.correction_operation_id','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',true);
+UPDATE public.paiements SET montant=7,id_utilisateur_modification=1 WHERE id_paiement=1;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.paiements WHERE id_paiement=1 AND date_paiement='2026-10-05' AND montant=7 AND row_version=4) THEN
+  RAISE EXCEPTION 'Single-field correction regression';
+ END IF;
+ IF (SELECT count(*) FROM public.entity_revisions WHERE entity_type='paiement' AND entity_id=1 AND revision IN (3,4))<>2 THEN
+  RAISE EXCEPTION 'Single-field corrections lost history';
+ END IF;
+END $$;
+SELECT set_config('app.correction_operation_id','',true);
+RESET ROLE;

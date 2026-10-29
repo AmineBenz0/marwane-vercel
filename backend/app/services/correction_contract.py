@@ -1,9 +1,9 @@
 """Primitives for a single caller-owned transaction; these never commit or unlock.
 
-The future orchestrator must normalize domain values before hashing, lock related
-records in a consistent order, and handle racing operation inserts atomically.
+The command service owns related-record locking and racing operation inserts.
 """
 from copy import deepcopy
+from decimal import Decimal
 from hashlib import sha256
 import json
 from uuid import UUID
@@ -16,9 +16,20 @@ from app.models.transaction import Transaction
 from app.schemas.correction import CorrectionTarget
 
 
+def request_payload(request: BaseModel) -> dict:
+    """Preserve omitted versus explicitly cleared fields and exact decimals."""
+    payload = request.model_dump(mode="json", exclude_unset=True)
+    # Pydantic serializes Decimal to strings; normalize the monetary fields
+    # before hashing while retaining their supplied/omitted distinction.
+    for name in ("prix_unitaire", "montant"):
+        if payload.get("changes", {}).get(name) is not None:
+            payload["changes"][name] = format(Decimal(payload["changes"][name]).quantize(Decimal("0.01")), "f")
+    return payload
+
+
 def request_fingerprint(request: BaseModel) -> str:
     """Hash validated JSON without converting exact decimal values to floats."""
-    canonical = json.dumps(request.model_dump(mode="json"), sort_keys=True,
+    canonical = json.dumps(request_payload(request), sort_keys=True,
                            separators=(",", ":"), ensure_ascii=False, allow_nan=False)
     return sha256(canonical.encode("utf-8")).hexdigest()
 

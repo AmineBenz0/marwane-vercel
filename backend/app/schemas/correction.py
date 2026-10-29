@@ -40,6 +40,10 @@ class CorrectionCommand(CorrectionEnvelope):
     changes: CorrectionChanges
 
 
+class CorrectionApplyCommand(CorrectionCommand):
+    dependency_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class CorrectionPreviewRead(BaseModel):
     operation_id: UUID
     target: CorrectionTarget
@@ -47,6 +51,7 @@ class CorrectionPreviewRead(BaseModel):
     before: dict
     after: dict
     impact: dict
+    dependency_fingerprint: str
     can_apply: bool = True
 
 
