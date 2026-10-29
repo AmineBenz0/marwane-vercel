@@ -163,5 +163,26 @@ one-way reversal records. Regression coverage includes repeated purchase edits
 followed by cancellation with both modern and legacy reversal shapes. The
 expanded backend suite passed 30 tests (one optional native fixture skipped);
 staging PostgreSQL 17 accepted the corrected inverse shape under existing
-constraints in a rolled-back test. Complete the browser cancellation retry and
-final reconciliation before closing manual acceptance.
+constraints in a rolled-back test. The corrected build then passed the same cancellation through the browser,
+reactivation with the canceled payment left canceled, and another cancellation.
+The test purchase is inactive and its net cash and stock effects are zero.
+Saving an unchanged payment note did not advance its revision.
+
+Final checks retained every baseline revision, found no revision gaps and
+confirmed latest meaningful snapshots match current rows. Native PostgreSQL
+rejected history rewrite, audit deletion and revision truncation inside a
+rolled-back check. Original cash rows, bank rows/balances and egg allocations
+were unchanged; the cash screen, canonical calculation, view and snapshot agree.
+The previously known bank discrepancy and legacy source cases remain for review;
+no new aggregate reconciliation issue was found.
+
+One existing multi-allocation deferred sale had its redundant single-production
+and cycle pointers cleared by the existing global reservation reconciliation
+when the test purchase was canceled. Its actual production allocations and
+supplied quantities were unchanged, and the foundation captured that indirect
+update. This is expected pointer normalization by `assign_pending_promises`,
+not a historical allocation repair; retain it in the next dependency review.
+
+Manual foundation acceptance is complete for the verified scenarios. Phase 2
+still needs its own stale-preview, concurrent-apply, operation-retry and atomic
+money/stock acceptance tests before editable financial fields are enabled.
