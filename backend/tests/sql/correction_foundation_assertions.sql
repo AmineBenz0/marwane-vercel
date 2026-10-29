@@ -73,6 +73,46 @@ DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.entity_revisions WHERE entity_type='paiement' AND entity_id=2 AND revision=1 AND event_kind='insert') THEN RAISE EXCEPTION 'New records not captured'; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.transactions_audit) THEN RAISE EXCEPTION 'Legacy audit writer lost insert permissions'; END IF;
 END $$;
+INSERT INTO public.correction_operations VALUES(
+ '44444444-4444-4444-4444-444444444444',repeat('c',64),1,'Correct payment date and amount',
+ '{"target":{"entity_type":"paiement","entity_id":1,"expected_version":1},"changes":{"date_paiement":"2026-10-04","montant":"6.00"}}',
+ '{"record":{"date_paiement":"2026-10-04","montant":"6.00","row_version":2}}',now());
+SELECT set_config('app.correction_operation_id','44444444-4444-4444-4444-444444444444',true);
+UPDATE public.paiements SET date_paiement='2026-10-04',montant=6,id_utilisateur_modification=1 WHERE id_paiement=1;
+DO $$ BEGIN
+ IF (SELECT row_version FROM public.paiements WHERE id_paiement=1)<>2 THEN RAISE EXCEPTION 'Audited payment correction did not advance revision'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.entity_revisions WHERE entity_type='paiement' AND entity_id=1 AND revision=2
+    AND operation_id='44444444-4444-4444-4444-444444444444'::uuid AND after_snapshot->>'montant'='6') THEN
+  RAISE EXCEPTION 'Audited payment correction was not linked to its immutable history';
+ END IF;
+END $$;
+SELECT set_config('app.correction_operation_id','',true);
+INSERT INTO public.correction_operations VALUES(
+ '55555555-5555-5555-5555-555555555555',repeat('d',64),1,'Wrong requested value',
+ '{"target":{"entity_type":"paiement","entity_id":1,"expected_version":2},"changes":{"montant":"7.00"}}',
+ '{"record":{"montant":"8.00","row_version":3}}',now());
+SELECT set_config('app.correction_operation_id','55555555-5555-5555-5555-555555555555',true);
+DO $$ DECLARE blocked boolean:=false; BEGIN
+ BEGIN UPDATE public.paiements SET montant=7,id_utilisateur_modification=1 WHERE id_paiement=1;
+ EXCEPTION WHEN raise_exception THEN blocked:=true; END;
+ IF NOT blocked OR (SELECT row_version FROM public.paiements WHERE id_paiement=1)<>2 THEN
+  RAISE EXCEPTION 'Mismatched correction result was accepted or partially applied';
+ END IF;
+END $$;
+SELECT set_config('app.correction_operation_id','',true);
+INSERT INTO public.correction_operations VALUES(
+ '66666666-6666-6666-6666-666666666666',repeat('e',64),2,'Wrong actor',
+ '{"target":{"entity_type":"paiement","entity_id":1,"expected_version":2},"changes":{"montant":"7.00"}}',
+ '{"record":{"montant":"7.00","row_version":3}}',now());
+SELECT set_config('app.correction_operation_id','66666666-6666-6666-6666-666666666666',true);
+DO $$ DECLARE blocked boolean:=false; BEGIN
+ BEGIN UPDATE public.paiements SET montant=7,id_utilisateur_modification=1 WHERE id_paiement=1;
+ EXCEPTION WHEN raise_exception THEN blocked:=true; END;
+ IF NOT blocked OR (SELECT row_version FROM public.paiements WHERE id_paiement=1)<>2 THEN
+  RAISE EXCEPTION 'Operation owned by another actor was accepted';
+ END IF;
+END $$;
+SELECT set_config('app.correction_operation_id','',true);
 DO $$ DECLARE blocked boolean:=false; BEGIN
  BEGIN INSERT INTO public.entity_revisions(entity_type,entity_id,revision,event_kind,after_snapshot) VALUES('transaction',1,999,'baseline','{"id_transaction":1,"row_version":null}'); EXCEPTION WHEN check_violation THEN blocked:=true; END;
  IF NOT blocked THEN RAISE EXCEPTION 'Null revision accepted'; END IF;

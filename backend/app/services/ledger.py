@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -32,9 +33,11 @@ def record_correction(
     id_mouvement_original: Optional[int] = None,
     id_mouvement_inverse: Optional[int] = None,
     details: Optional[dict] = None,
+    operation_id: Optional[UUID] = None,
 ) -> CorrectionFinanciere:
     """Append a correction event; this function never updates old events."""
     event = CorrectionFinanciere(
+        operation_id=operation_id,
         type_entite=type_entite,
         id_entite=id_entite,
         action=action,
@@ -56,6 +59,7 @@ def void_cash_movement(
     raison: str,
     current_user: Optional[Utilisateur],
     create_reversal_record: bool = True,
+    operation_id: Optional[UUID] = None,
 ) -> Optional[Caisse]:
     """Void a cash movement and optionally create an explicit voided inverse."""
     if not movement or movement.statut != "active":
@@ -98,6 +102,7 @@ def void_cash_movement(
         current_user=current_user,
         id_mouvement_original=movement.id_mouvement,
         id_mouvement_inverse=reversal.id_mouvement if reversal else None,
+        operation_id=operation_id,
     )
     return reversal
 
@@ -109,6 +114,7 @@ def void_bank_movement(
     raison: str,
     current_user: Optional[Utilisateur],
     create_reversal_record: bool = True,
+    operation_id: Optional[UUID] = None,
 ) -> Optional[MouvementBancaire]:
     """Void a bank movement and restore its account balance exactly once."""
     if not movement or movement.statut != "active":
@@ -160,5 +166,7 @@ def void_bank_movement(
         current_user=current_user,
         id_mouvement_original=movement.id_mouvement,
         id_mouvement_inverse=reversal.id_mouvement if reversal else None,
+        operation_id=operation_id,
     )
     return reversal
+

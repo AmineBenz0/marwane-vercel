@@ -31,10 +31,13 @@ INSERT INTO public.paiements VALUES(1,1,'2026-10-02',5,'cash',NULL,NULL,NULL,'va
 INSERT INTO public.caisse(montant,type_mouvement,statut) VALUES(10,'ENTREE','active'),(90,'ENTREE','annule');
 INSERT INTO public.caisse(montant,type_mouvement,statut,id_cession) VALUES(50,'SORTIE','active',1);
 CREATE VIEW public.vue_solde_caisse AS SELECT sum(montant) solde_actuel,max(date_mouvement) derniere_maj FROM public.caisse;
-CREATE FUNCTION public.fixture_payment_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
- IF OLD.montant IS DISTINCT FROM NEW.montant OR OLD.date_paiement IS DISTINCT FROM NEW.date_paiement THEN
- RAISE EXCEPTION 'Payment identity remains locked'; END IF; RETURN NEW; END $$;
-CREATE TRIGGER trg_protect_payment_identity BEFORE UPDATE ON public.paiements FOR EACH ROW EXECUTE FUNCTION public.fixture_payment_guard();
+CREATE FUNCTION public.protect_financial_identity() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF TG_TABLE_NAME='paiements' AND (OLD.id_transaction IS DISTINCT FROM NEW.id_transaction
+    OR OLD.date_paiement IS DISTINCT FROM NEW.date_paiement OR OLD.montant IS DISTINCT FROM NEW.montant
+    OR OLD.type_paiement IS DISTINCT FROM NEW.type_paiement OR OLD.id_lc IS DISTINCT FROM NEW.id_lc) THEN
+    RAISE EXCEPTION 'Payment financial identity is immutable; void and recreate it';
+ END IF; RETURN NEW; END $$;
+CREATE TRIGGER trg_protect_payment_identity BEFORE UPDATE ON public.paiements FOR EACH ROW EXECUTE FUNCTION public.protect_financial_identity();
 CREATE FUNCTION public.fixture_audit_writer() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER AS $$ BEGIN
  INSERT INTO public.transactions_audit(id_transaction,champ_modifie) VALUES(NEW.id_transaction,'fixture');
  RETURN NEW;

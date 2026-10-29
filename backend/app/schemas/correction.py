@@ -1,5 +1,6 @@
 """Shared envelope for future preview/apply commands, with no financial bypass."""
 from datetime import date
+from decimal import Decimal
 from typing import Literal, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -20,13 +21,12 @@ class CorrectionEnvelope(BaseModel):
 
 
 class CorrectionChanges(BaseModel):
-    """Fields supported by the first adapter slice of the correction command.
-
-    Financial dates, amounts, party/product identity, and quantities are kept
-    out until their ledger and stock adapters land in later phases.
-    """
+    """Validated fields currently supported by the shared correction command."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     date_echeance: Optional[date] = None
+    prix_unitaire: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
+    date_paiement: Optional[date] = None
+    montant: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     notes: Optional[str] = Field(None, max_length=4000)
 
     @model_validator(mode="after")

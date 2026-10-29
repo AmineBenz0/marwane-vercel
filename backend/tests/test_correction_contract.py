@@ -1,11 +1,16 @@
 from datetime import date, timedelta
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
 from app.models.correction_operation import CorrectionOperation
+from app.models.caisse import Caisse
+from app.models.client import Client
 from app.models.fournisseur import Fournisseur
+from app.models.paiement import Paiement
+from app.models.financial_correction import CorrectionFinanciere
 from app.models.produit import Produit
 from app.models.transaction import Transaction
 from app.schemas.correction import CorrectionCommand, CorrectionEnvelope, CorrectionTarget
@@ -28,6 +33,31 @@ def correction_transaction(db_session, test_user):
     db_session.add(transaction)
     db_session.commit()
     return transaction
+
+
+@pytest.fixture
+def correction_sale(db_session, test_user):
+    client = Client(nom_client="Client correction")
+    product = Produit(nom_produit="Produit vendu correction", pour_clients=True,
+                      pour_fournisseurs=False, type_produit="produit_fini")
+    db_session.add_all([client, product])
+    db_session.flush()
+    sale = Transaction(
+        date_transaction=date.today(), id_client=client.id_client,
+        id_produit=product.id_produit, quantite=10,
+        prix_unitaire=Decimal("1.50"), montant_total=Decimal("15.00"),
+        est_actif=True, id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(sale)
+    db_session.flush()
+    payment = Paiement(
+        id_transaction=sale.id_transaction, date_paiement=date.today(),
+        montant=Decimal("5.00"), type_paiement="cash", statut="valide",
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(payment)
+    db_session.commit()
+    return sale, payment
 from app.services.correction_contract import lock_expected_revision, replay_result, request_fingerprint
 
 
@@ -183,3 +213,78 @@ def test_failed_commit_rolls_back_operation_and_record(db_session, correction_tr
     db_session.expire_all()
     assert db_session.query(CorrectionOperation).count() == 0
     assert db_session.get(Transaction, correction_transaction.id_transaction).date_echeance == command.changes.date_echeance - timedelta(days=1)
+
+
+def test_paid_sale_price_correction_recalculates_total_without_changing_payment(db_session, correction_sale, test_user):
+    from sqlalchemy import text
+    sale, payment = correction_sale
+    db_session.execute(text("""
+        CREATE TRIGGER test_transaction_revision AFTER UPDATE OF prix_unitaire, montant_total ON transactions
+        BEGIN UPDATE transactions SET row_version=OLD.row_version+1
+        WHERE id_transaction=OLD.id_transaction; END
+    """))
+    db_session.commit()
+    original_payment = payment.montant
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Prix de vente mal saisi",
+        target={"entity_type":"transaction","entity_id":sale.id_transaction,"expected_version":1},
+        changes={"prix_unitaire":"2.25"},
+    )
+    preview = preview_correction(db_session, command)
+    assert preview["after"]["montant_total"] == "22.50"
+    assert preview["impact"]["receivable"] == "recalculated from the corrected sale total"
+    applied = apply_correction(db_session, command, test_user)
+    assert applied["record"]["prix_unitaire"] == "2.25"
+    assert applied["record"]["montant_total"] == "22.50"
+    db_session.refresh(payment)
+    assert payment.montant == original_payment == Decimal("5.00")
+    assert sale.montant_restant == Decimal("17.50")
+
+
+def test_purchase_price_correction_waits_for_stock_cost_adapter(db_session, correction_transaction):
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Coût d’achat à corriger",
+        target={"entity_type":"transaction","entity_id":correction_transaction.id_transaction,"expected_version":1},
+        changes={"prix_unitaire":"3.00"},
+    )
+    with pytest.raises(HTTPException) as error:
+        preview_correction(db_session, command)
+    assert error.value.status_code == 409
+    assert "valorisation du stock" in error.value.detail
+
+
+def test_cash_payment_date_and_amount_correction_replaces_ledger_once(db_session, correction_sale, test_user):
+    from sqlalchemy import text
+    sale, payment = correction_sale
+    db_session.add(Caisse(
+        montant=Decimal("5.00"), type_mouvement="ENTREE", statut="active",
+        id_transaction=sale.id_transaction, id_paiement=payment.id_paiement,
+        date_mouvement=datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc),
+    ))
+    db_session.execute(text("""
+        CREATE TRIGGER test_payment_revision AFTER UPDATE OF date_paiement, montant ON paiements
+        BEGIN UPDATE paiements SET row_version=OLD.row_version+1
+        WHERE id_paiement=OLD.id_paiement; END
+    """))
+    db_session.commit()
+    command = CorrectionCommand(
+        operation_id=uuid4(), reason="Date et montant du paiement corrigés",
+        target={"entity_type":"paiement","entity_id":payment.id_paiement,"expected_version":1},
+        changes={"date_paiement":date.today() + timedelta(days=1),"montant":"8.00"},
+    )
+    preview = preview_correction(db_session, command)
+    assert preview["impact"]["cash"]["before"]["amount"] == "5.00"
+    assert preview["impact"]["cash"]["after"]["amount"] == "8.00"
+    result = apply_correction(db_session, command, test_user)
+    assert result["record"]["row_version"] == 2
+    assert result["record"]["montant"] == "8.00"
+    assert result["record"]["date_paiement"] == command.changes.date_paiement.isoformat()
+    movements = db_session.query(Caisse).filter(Caisse.id_paiement == payment.id_paiement).all()
+    assert len(movements) == 2
+    assert [m.statut for m in movements].count("active") == 1
+    active = next(m for m in movements if m.statut == "active")
+    assert active.montant == Decimal("8.00")
+    assert active.date_mouvement.date() == command.changes.date_paiement
+    assert db_session.query(CorrectionFinanciere).filter(
+        CorrectionFinanciere.operation_id == command.operation_id,
+    ).count() >= 1

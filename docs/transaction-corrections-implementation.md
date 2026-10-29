@@ -130,13 +130,19 @@ already SQL-migrated schema or stamp away the existing migration histories.
   increment. The unresolved bank discrepancy and missing historical production
   origins remain outside automatic repair.
 
-## Phase 2: shared preview/apply command — initial safe adapter slice
+## Phase 2: shared preview/apply command — safe adapter slices
 
 The first command path is implemented in `backend/app/services/correction_commands.py`
 and exposed through authenticated `/corrections/preview` and `/corrections/apply`
-routes. It accepts only transaction `date_echeance` and payment `notes`; financial
-dates, amounts, funding/account/LC attribution, transaction identity, quantities,
-and stock origins are rejected until their adapters are ready.
+routes. Supported corrections are transaction `date_echeance`, client-sale
+`prix_unitaire`, and payment `notes`. For an effective cash-funded payment with
+one active cash movement and no bank movement, it also accepts `date_paiement`
+and `montant`; the old movement is voided and replaced in the same transaction.
+Supplier purchase cost remains blocked because it changes stock valuation.
+Bank-funded payments, cheques, letters of credit, inactive payments, and
+inconsistent ledger links remain blocked. Transaction date, funding/account/LC
+attribution, transaction identity, quantities, and stock origins remain out of
+scope until their adapters are ready.
 
 - Preview reads the current revision, returns before/after values and an impact
   summary, and writes no operation or ledger rows. Its dependency fingerprint is
@@ -148,7 +154,10 @@ and stock origins are rejected until their adapters are ready.
   Same-request retries return the stored result; UUID reuse with a different actor
   or request is rejected. A write that changes nothing creates no operation.
 - The transaction-local operation ID lets the foundation trigger attach the
-  revision to the operation. No financial session flag or guard bypass is used.
+  revision to the operation. The database payment guard permits date/amount
+  changes only when an immutable operation matches actor, target, expected
+  revision, requested values, and result snapshot. The flag alone cannot
+  authorize an edit. Payment/ledger changes remain atomic.
 - Tests cover preview without writes, a successful apply/replay, stale revisions,
   matching retry after a simulated lock wait, no-op suppression and rollback
   after a simulated commit failure. The local
@@ -166,13 +175,29 @@ and stock origins are rejected until their adapters are ready.
   conflicts without partial writes.
 - Inject failures after each write stage on PostgreSQL and confirm operation,
   revision and entity state all roll back together.
-- Add payment amount/date, transaction price/date, cash/bank and stock adapters
-  in their planned phases before accepting those fields through this API.
+- Add transaction date, bank, cheque/LC and stock adapters in their planned
+  phases before accepting those fields through this API.
 - Keep the known unreconciled bank account excluded from bank correction
   acceptance until evidence-based reconciliation or explicit exclusion.
 
-This slice is backend infrastructure only. It does not yet enable broader
-financial editing in the existing transaction or payment forms.
+This slice is backend infrastructure only. The existing transaction and payment
+forms do not yet expose these corrections; that belongs to the owner UI phase.
+
+### Audited cash payment correction increment
+
+Migration `20261029162302_audited_payment_corrections.sql` was applied to
+staging (Supabase version `20261029162757`) after the current identity trigger
+and app-level flow were inspected.
+The database test ran inside a rolled-back transaction against an existing
+eligible payment: a matching operation changed date and amount, advanced its
+revision, and linked the revision to that operation. Writes with no operation
+ID, a stale expected revision, or a mismatched result value were rejected. The
+test left no operation, payment, or history changes behind.
+
+The app's authenticated correction service now restricts edits to cash paths it
+can reconcile atomically. A purchase-price change stays unavailable pending the
+stock-valuation adapter. Bank account balances remain excluded until the known
+discrepancy is reconciled or explicitly excluded from acceptance.
 
 ## Manual Phase 1 acceptance follow-up
 

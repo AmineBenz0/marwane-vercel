@@ -8,6 +8,7 @@ are kept in this service so every workflow follows the same append-only rules.
 from datetime import datetime, time, timezone
 from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import case, func
@@ -254,6 +255,7 @@ def sync_payment_cash_movement(
     *,
     current_user: Optional[Utilisateur] = None,
     reason: str = "Synchronisation du mouvement de caisse",
+    operation_id: Optional[UUID] = None,
 ) -> Optional[Caisse]:
     """Synchronize a payment's effective cash impact append-only.
 
@@ -282,6 +284,7 @@ def sync_payment_cash_movement(
                 raison=reason,
                 current_user=current_user,
                 create_reversal_record=True,
+                operation_id=operation_id,
             )
             create_cash_snapshot(db, existing.id_mouvement)
         if existing_bank:
@@ -290,6 +293,7 @@ def sync_payment_cash_movement(
                 existing_bank,
                 raison=reason,
                 current_user=current_user,
+                operation_id=operation_id,
             )
         return None
 
@@ -312,6 +316,7 @@ def sync_payment_cash_movement(
                 raison=reason,
                 current_user=current_user,
                 create_reversal_record=True,
+                operation_id=operation_id,
             )
             create_cash_snapshot(db, existing.id_mouvement)
         if existing_bank and (
@@ -328,6 +333,7 @@ def sync_payment_cash_movement(
                 raison=reason,
                 current_user=current_user,
                 create_reversal_record=False,
+                operation_id=operation_id,
             )
         record_bank_movement(
             db,
@@ -350,6 +356,7 @@ def sync_payment_cash_movement(
             raison=reason,
             current_user=current_user,
             create_reversal_record=True,
+            operation_id=operation_id,
         )
 
     if existing and (
@@ -367,6 +374,7 @@ def sync_payment_cash_movement(
             raison=reason,
             current_user=current_user,
             create_reversal_record=False,
+            operation_id=operation_id,
         )
 
     replacement = Caisse(
@@ -393,6 +401,7 @@ def sync_payment_cash_movement(
             id_mouvement_original=original_id,
             id_mouvement_inverse=replacement.id_mouvement,
             details={"table": "caisse"},
+            operation_id=operation_id,
         )
     create_cash_snapshot(db, replacement.id_mouvement)
     return replacement
@@ -573,3 +582,4 @@ def apply_charge_impact(
     db.flush()
     create_cash_snapshot(db, replacement.id_mouvement)
     return replacement
+
