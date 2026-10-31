@@ -29,11 +29,11 @@ describe('MultiPaiementForm', () => {
     render(<MultiPaiementForm {...props} />);
 
     expect(screen.getAllByRole('combobox').map((select) => select.textContent)).toEqual([
-      '💵 Espèces',
-      '💵 Espèces',
+      'Espèces',
+      'Espèces',
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une ligne de paiement' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un autre paiement' }));
     expect(props.append).toHaveBeenCalledWith(expect.objectContaining({ montant: 20, type_paiement: 'cash' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer le paiement 1' }));
@@ -59,3 +59,4 @@ describe('MultiPaiementForm', () => {
     expect(await screen.findByLabelText('N° Chèque')).toBeVisible();
   });
 });
+

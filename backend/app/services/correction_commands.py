@@ -377,6 +377,15 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
         "bank": "unchanged",
         "stock": "unchanged",
     }
+    balance_transaction = record if entity_type == 'transaction' else transaction
+    if db is not None and balance_transaction is not None:
+        payments = db.query(Paiement).filter(Paiement.id_transaction == balance_transaction.id_transaction).populate_existing().all()
+        paid = sum((payment.montant for payment in payments if payment.est_effectif), Decimal('0'))
+        if entity_type == 'paiement' and record.est_effectif:
+            paid += Decimal(str(changes.get('montant', record.montant))) - record.montant
+        total = Decimal(str(changes.get('montant_total', balance_transaction.montant_total))) if entity_type == 'transaction' else balance_transaction.montant_total
+        impact['balance'] = dict(total=_json_value(total), paid=_json_value(paid), remaining=_json_value(total - paid),
+            side='client' if balance_transaction.id_client is not None else 'fournisseur')
     if entity_type == "transaction":
         if "date_echeance" in changes:
             impact["overdue_follow_up"] = "recalculated from the corrected due date"

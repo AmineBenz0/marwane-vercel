@@ -36,12 +36,15 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { IconButton, Tooltip } from '@mui/material';
-import { get, post, put, patch, del } from '../../services/api';
+import { get, post, patch, del } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
-import PaiementForm from '../../components/PaiementForm';
+import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
+import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
+import TransactionEditForm from './TransactionEditForm';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
@@ -84,6 +87,9 @@ function TransactionDetail() {
   // État pour la modal d'ajout/édition de paiement
   const [paiementDialogOpen, setPaiementDialogOpen] = useState(false);
   const [editingPaiement, setEditingPaiement] = useState(null);
+  const [transactionEditOpen, setTransactionEditOpen] = useState(false);
+  const [reuseChanges, setReuseChanges] = useState({});
+  const [historyRevision, setHistoryRevision] = useState(0);
   
   // État pour la confirmation de suppression de paiement
   const [deletePaiementDialogOpen, setDeletePaiementDialogOpen] = useState(false);
@@ -147,8 +153,8 @@ function TransactionDetail() {
   /**
    * Charge les détails de la transaction.
    */
-  const fetchTransaction = async () => {
-    setLoading(true);
+  const fetchTransaction = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError(null);
 
     try {
@@ -156,9 +162,9 @@ function TransactionDetail() {
       setTransaction(data);
     } catch (err) {
       console.error('Erreur lors du chargement de la transaction:', err);
-      setError(err?.message || 'Une erreur est survenue lors du chargement de la transaction');
+      if (!quiet) setError(err?.message || 'Une erreur est survenue lors du chargement de la transaction');
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
 
@@ -387,24 +393,25 @@ function TransactionDetail() {
    * Ouvre le dialog pour éditer un paiement existant.
    */
   const handleEditPaiement = (paiement) => {
-    setEditingPaiement(paiement);
-    resetPaiement({
-      date_paiement: format(new Date(paiement.date_paiement), 'yyyy-MM-dd'),
-      montant: parseFloat(paiement.montant),
-      type_paiement: paiement.type_paiement,
-      numero_cheque: paiement.numero_cheque || '',
-      banque: paiement.banque || '',
-      date_encaissement_prevue: paiement.date_encaissement_prevue 
-        ? format(new Date(paiement.date_encaissement_prevue), 'yyyy-MM-dd')
-        : '',
-      statut_cheque: paiement.statut_cheque || 'a_encaisser',
-      reference_virement: paiement.reference_virement || '',
-      id_lc: paiement.id_lc || null,
-      notes: paiement.notes || '',
-      paiements: [],
-    });
-    setPaiementDialogOpen(true);
+    setReuseChanges({}); setEditingPaiement(paiement);
   };
+  const correctionSaved = () => {
+    setTransactionEditOpen(false); setEditingPaiement(null); setReuseChanges({});
+    notification.success('Correction enregistrée');
+  };
+  const reuseCorrection = async item => {
+    try {
+      const path = item.target.entity_type === 'transaction' ? 'transactions' : 'paiements';
+      const current = await get(`/${path}/${item.target.entity_id}`);
+      setReuseChanges(item.reuse_changes);
+      if (path === 'transactions') { setTransaction(current); setTransactionEditOpen(true); }
+      else setEditingPaiement(current);
+    } catch (err) { notification.error(err.message || 'Les valeurs actuelles ne peuvent pas être chargées.'); }
+  };
+  useCorrectionRefresh(() => {
+    fetchTransaction(true); fetchPaiements(); fetchStatutPaiement();
+    setHistoryRevision(value => value + 1);
+  });
 
   /**
    * Ouvre le dialog de confirmation de suppression.
@@ -446,10 +453,7 @@ function TransactionDetail() {
   const onSubmitPaiement = async (data) => {
     try {
       // Préparer les données
-      // Financial attributes are immutable; editing sends operational fields only.
-      const paiementData = editingPaiement ? {
-        notes: data.notes || null,
-      } : {
+      const paiementData = {
         date_paiement: data.date_paiement,
         montant: parseFloat(data.montant),
         type_paiement: data.type_paiement,
@@ -468,12 +472,6 @@ function TransactionDetail() {
         paiementData.id_lc = data.id_lc || null;
       }
 
-      // Mode édition ou création
-      if (editingPaiement) {
-        // Modification (toujours individuel)
-        await put(`/paiements/${editingPaiement.id_paiement}`, paiementData);
-        notification.success('Paiement modifié avec succès');
-      } else {
         // Création (Multi-lignes)
         if (data.paiements && data.paiements.length > 0) {
           const batchData = {
@@ -498,8 +496,6 @@ function TransactionDetail() {
           await post('/paiements', paiementData);
           notification.success('Paiement ajouté avec succès');
         }
-      }
-
       // Rafraîchir les données
       await refreshPaiements();
 
@@ -609,7 +605,7 @@ function TransactionDetail() {
           <Menu id="transaction-actions" anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={() => setActionsAnchor(null)}>
             {transaction.est_actif !== false && <MenuItem onClick={() => {
               setActionsAnchor(null);
-              navigate('/transactions', { state: { editTransactionId: transaction.id_transaction } });
+              setReuseChanges({}); setTransactionEditOpen(true);
             }}>Modifier la transaction</MenuItem>}
             {transaction.est_promesse && transaction.est_actif !== false && pendingQuantity > 0 && <MenuItem onClick={() => {
               setActionsAnchor(null); setNewDeliveryDate(transaction.date_livraison_prevue || ''); setRescheduleDialogOpen(true);
@@ -741,6 +737,16 @@ function TransactionDetail() {
         </ExpandableDetails>
       </Box>}
 
+      <Box sx={{ mt: 2.5 }}>
+        <CorrectionHistory transactionId={transaction.id_transaction} revision={historyRevision}
+          names={{ id_produit: Object.fromEntries(produitsMap), id_client: Object.fromEntries(clientsMap), id_fournisseur: Object.fromEntries(fournisseursMap) }}
+          onReuse={reuseCorrection} readOnly={inactiveTransaction} />
+      </Box>
+      {transactionEditOpen && <TransactionEditForm open initialValues={transaction} initialChanges={reuseChanges}
+        onClose={() => setTransactionEditOpen(false)} onCorrected={correctionSaved} />}
+      {editingPaiement && <PaymentCorrectionDialog payment={editingPaiement} transaction={{ ...transaction, ...statutPaiement }} initialChanges={reuseChanges}
+        onClose={() => setEditingPaiement(null)} onSaved={correctionSaved} />}
+
       <Dialog open={completionDialogOpen} onClose={() => !promiseActionLoading && setCompletionDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Compléter la livraison</DialogTitle>
         <DialogContent>
@@ -798,19 +804,6 @@ function TransactionDetail() {
           </DialogTitle>
           <DialogContent>
             <Box sx={{ pt: 1 }}>
-              {editingPaiement ? (
-                <PaiementForm
-                  defaultValues={editingPaiement}
-                  isEditing
-                  transaction={{ ...transaction, ...statutPaiement }}
-                  register={registerPaiement}
-                  errors={paiementErrors}
-                  watch={watchPaiement}
-                  setValue={setValuePaiement}
-                  availableLcs={availableLcs}
-                  loadingLcs={loadingLcs}
-                />
-              ) : (
                 <MultiPaiementForm
                   supplierSource={fournisseurs.find((item) => item.id_fournisseur === transaction?.id_fournisseur)?.mode_reglement_prefere || null}
                   transaction={{ ...transaction, ...statutPaiement }}
@@ -824,7 +817,6 @@ function TransactionDetail() {
                   availableLcs={availableLcs}
                   loadingLcs={loadingLcs}
                 />
-              )}
             </Box>
           </DialogContent>
           <DialogActions sx={{ p: 2, gap: 1 }}>

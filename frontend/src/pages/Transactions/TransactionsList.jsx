@@ -33,13 +33,14 @@ import {
   ReceiptLong as ReceiptLongIcon,
 } from '@mui/icons-material';
 import TransactionForm from './TransactionForm';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { deferredSaleStatus } from './deferredSaleStatus';
 import { deferredStockQuantities } from './deferredStockQuantities';
 import { countTransactionQuickFilters, filterTransactions, summarizeTransactions } from './transactionListModel';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
-import { get, post, put } from '../../services/api';
+import { get, post } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -400,6 +401,13 @@ function TransactionsList() {
   /**
    * Gère la soumission du formulaire (création ou édition).
    */
+  useCorrectionRefresh(() => fetchTransactions());
+
+  const handleCorrectionSaved = () => {
+    setModalOpen(false); setEditingTransaction(null); setFormError(null);
+    notification.success('Correction enregistrée');
+  };
+
   const handleSubmit = async (data) => {
     setFormLoading(true);
     setFormError(null);
@@ -408,35 +416,7 @@ function TransactionsList() {
       let result = null;
       
       if (editingTransaction) {
-        // Mode édition : PUT (une seule transaction)
-        // Extraire les données de paiement si présentes
-        const transactionData = { ...data };
-        delete transactionData.paiement;
-        
-        result = await put(`/transactions/${editingTransaction.id_transaction}`, transactionData);
-        
-        // Gérer les paiements si présents
-        if (data.paiements && data.paiements.length > 0) {
-          const paymentsPromises = data.paiements.map(async (p) => {
-            const pData = {
-              ...p,
-              id_transaction: editingTransaction.id_transaction,
-            };
-            if (p.id_paiement) {
-              return put(`/paiements/${p.id_paiement}`, pData);
-            } else {
-              return post('/paiements', pData);
-            }
-          });
-          try {
-            await Promise.all(paymentsPromises);
-          } catch (err) {
-            console.error('Erreur lors de la gestion des paiements:', err);
-            notification.warning('Transaction modifiée mais certains paiements ont échoué');
-          }
-        }
-        
-        notification.success('Transaction modifiée avec succès');
+        throw new Error('Utilisez la vérification de correction pour modifier une transaction.');
       } else {
         // Mode création : vérifier si c'est un batch ou une transaction simple
         if (data.batch && data.transactions) {
@@ -1091,6 +1071,7 @@ function TransactionsList() {
         open={modalOpen}
         onClose={handleCloseModal}
         onSubmit={handleSubmit}
+        onCorrected={handleCorrectionSaved}
         initialValues={editingTransaction || {}}
         loading={formLoading}
         errorMessage={formError}

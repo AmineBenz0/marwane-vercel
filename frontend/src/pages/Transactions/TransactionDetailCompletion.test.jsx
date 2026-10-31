@@ -138,7 +138,8 @@ it('opens the existing transaction editor from the details menu', async () => {
   render(<TransactionDetail />);
   fireEvent.click(await screen.findByRole('button', { name: 'Autres actions' }));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Modifier la transaction' }));
-  expect(navigateMock).toHaveBeenCalledWith('/transactions', { state: { editTransactionId: 7 } });
+  expect(await screen.findByRole('dialog', { name: 'Modifier la transaction n° 7' })).toBeVisible();
+  expect(navigateMock).not.toHaveBeenCalled();
 });
 
 it('requires confirmation before removing an ordinary transaction', async () => {

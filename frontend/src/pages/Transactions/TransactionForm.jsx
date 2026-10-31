@@ -1775,7 +1775,7 @@ function UnpaidTransactionForm({
 
 export default function TransactionForm(props) {
   const transaction = props.initialValues;
-  if (transaction?.id_transaction && (transaction.est_promesse || transaction.paiements?.length || transaction.est_actif === false)) {
+  if (transaction?.id_transaction) {
     return <TransactionEditForm {...props} />;
   }
   return <UnpaidTransactionForm {...props} />;

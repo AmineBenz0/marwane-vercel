@@ -455,3 +455,42 @@ swap that releases stock to another order. Preview, saved outcomes and retries
 agree. Focused correction suites passed 80 tests; the full available backend
 suite passed 238 tests, with 11 external PostgreSQL fixture tests skipped.
 No schema migration is needed.
+
+## Phase 4 closed — 31 October 2026
+
+The owner approved closure after review of staging `9418925`. The final review
+passed 80 focused correction tests and 36 additional allocation scenarios. The
+stock adapters preserve delivered/closed quantities, creation-order priority,
+recorded cost snapshots, dated stock conservation and atomic retry behavior.
+PostgreSQL concurrency, full owner walkthroughs and release recovery remain
+Phase 8 acceptance gates; this closure does not authorize production release.
+
+## Phase 5 implementation — owner editing workflow
+
+- All transaction edit entry points now use the same correction editor, including
+  unpaid records. Supported dates, quantity, price, compatible contact/product,
+  building and explicit egg sources use preview followed by one atomic apply.
+  Transaction edits no longer create or update payments in a second request.
+- Ordinary payment corrections support amount/date/method and explicit cash/bank
+  funding/account choices. Saved supplier funding is preserved independently of
+  payment method, including legacy bank-funded transfers. Cheques and credit
+  letters retain note editing; their financial adapters remain Phase 6 work.
+- A shared confirmation shows changed values, the authoritative debt/credit,
+  stock allocations and other affected orders, plus cash/bank consequences. The
+  server calculates the preview balance from current effective payments.
+- Drafts retain their opening revision during background refreshes. Stale data
+  requires a new preview; ambiguous apply failures retry the same operation UUID
+  and fingerprint. Saving cannot silently repeat a committed financial effect.
+- Authenticated, paginated `/corrections/history` groups transaction/payment and
+  related-stock revisions. History shows actor, timestamp, before/after values
+  and allocations, including readable inactive-contact/source labels. Reusing
+  previous values opens a newly validated correction; unknown historical stock
+  origins are not invented or restored by clearing a production pointer.
+- Transaction list/detail/payment views refresh after corrections and across
+  tabs. Wider report/export/alert refresh and advanced settlements remain in
+  their planned later phases. Existing navigation, styling and creation flows
+  are retained. This release adds no schema migration or privilege grants.
+
+Phase 5 remains open for review and owner acceptance. Automated checks and
+staging deployment are recorded in the delivery report; manual staging
+walkthroughs must be reported separately from unit/integration checks.
