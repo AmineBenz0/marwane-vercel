@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 10898)
+Total output lines: 898
+
 /**
  * Page Détail Transaction.
  * 
@@ -7,7 +10,7 @@
  * - Bouton pour voir l'audit complet
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -78,6 +81,9 @@ function TransactionDetail() {
   const [actionsAnchor, setActionsAnchor] = useState(null);
   const [statutPaiement, setStatutPaiement] = useState(null);
   const [loadingPaiements, setLoadingPaiements] = useState(false);
+  const transactionRequest = useRef(0);
+  const paymentsRequest = useRef(0);
+  const paymentStatusRequest = useRef(0);
 
   // États pour les données de référence
   const [produits, setProduits] = useState([]);
@@ -154,17 +160,18 @@ function TransactionDetail() {
    * Charge les détails de la transaction.
    */
   const fetchTransaction = async (quiet = false) => {
+    const request = ++transactionRequest.current;
     if (!quiet) setLoading(true);
     setError(null);
 
     try {
       const data = await get(`/transactions/${id}`);
-      setTransaction(data);
+      if (request === transactionRequest.current) setTransaction(data);
     } catch (err) {
       console.error('Erreur lors du chargement de la transaction:', err);
-      if (!quiet) setError(err?.message || 'Une erreur est survenue lors du chargement de la transaction');
+      if (request === transactionRequest.current && !quiet) setError(err?.message || 'Une erreur est survenue lors du chargement de la transaction');
     } finally {
-      if (!quiet) setLoading(false);
+      if (request === transactionRequest.current && !quiet) setLoading(false);
     }
   };
 
@@ -172,16 +179,17 @@ function TransactionDetail() {
    * Charge les paiements de la transaction.
    */
   const fetchPaiements = async () => {
+    const request = ++paymentsRequest.current;
     setLoadingPaiements(true);
     try {
       const data = await get(`/paiements`, {
         params: { id_transaction: id },
       });
-      setPaiements(data || []);
+      if (request === paymentsRequest.current) setPaiements(data || []);
     } catch (err) {
-      console.error('Erreur lors du chargement des paiements:', err);
+      if (request === paymentsRequest.current) console.error('Erreur lors du chargement des paiements:', err);
     } finally {
-      setLoadingPaiements(false);
+      if (request === paymentsRequest.current) setLoadingPaiements(false);
     }
   };
 
@@ -189,11 +197,12 @@ function TransactionDetail() {
    * Charge le statut de paiement de la transaction.
    */
   const fetchStatutPaiement = async () => {
+    const request = ++paymentStatusRequest.current;
     try {
       const data = await get(`/paiements/transaction/${id}/statut`);
-      setStatutPaiement(data);
+      if (request === paymentStatusRequest.current) setStatutPaiement(data);
     } catch (err) {
-      console.error('Erreur lors du chargement du statut de paiement:', err);
+      if (request === paymentStatusRequest.current) console.error('Erreur lors du chargement du statut de paiement:', err);
     }
   };
 
@@ -436,233 +445,7 @@ function TransactionDetail() {
       
       // Fermer le dialog
       setDeletePaiementDialogOpen(false);
-      setPaiementToDelete(null);
-      
-      notification.success('Paiement supprimé avec succès');
-    } catch (err) {
-      console.error('Erreur lors de la suppression du paiement:', err);
-      notification.error(err?.message || 'Une erreur est survenue lors de la suppression du paiement');
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  /**
-   * Gère la soumission du formulaire de paiement (création ou modification).
-   */
-  const onSubmitPaiement = async (data) => {
-    try {
-      // Préparer les données
-      const paiementData = {
-        date_paiement: data.date_paiement,
-        montant: parseFloat(data.montant),
-        type_paiement: data.type_paiement,
-        notes: data.notes || null,
-      };
-
-      // Ajouter les champs spécifiques selon le type
-      if (data.type_paiement === 'cheque') {
-        paiementData.numero_cheque = data.numero_cheque || null;
-        paiementData.banque = data.banque || null;
-        paiementData.date_encaissement_prevue = data.date_encaissement_prevue || null;
-        paiementData.statut_cheque = data.statut_cheque || 'a_encaisser';
-      } else if (data.type_paiement === 'virement') {
-        paiementData.reference_virement = data.reference_virement || null;
-      } else if (data.type_paiement === 'lc' && !editingPaiement) {
-        paiementData.id_lc = data.id_lc || null;
-      }
-
-        // Création (Multi-lignes)
-        if (data.paiements && data.paiements.length > 0) {
-          const batchData = {
-            paiements: data.paiements.map(p => ({
-              ...p,
-              id_transaction: parseInt(id),
-              montant: parseFloat(p.montant),
-              // Nettoyer les champs optionnels
-              numero_cheque: p.type_paiement === 'cheque' ? p.numero_cheque || null : null,
-              banque: p.type_paiement === 'cheque' ? p.banque || null : null,
-              date_encaissement_prevue: p.type_paiement === 'cheque' ? p.date_encaissement_prevue || null : null,
-              statut_cheque: p.type_paiement === 'cheque' ? p.statut_cheque || 'a_encaisser' : null,
-              reference_virement: p.type_paiement === 'virement' ? p.reference_virement || null : null,
-              id_lc: p.type_paiement === 'lc' ? p.id_lc || null : null,
-            }))
-          };
-          await post('/paiements/batch', batchData);
-          notification.success(`${data.paiements.length} paiement(s) ajouté(s) avec succès`);
-        } else {
-          // Fallback au mode simple si jamais
-          paiementData.id_transaction = parseInt(id);
-          await post('/paiements', paiementData);
-          notification.success('Paiement ajouté avec succès');
-        }
-      // Rafraîchir les données
-      await refreshPaiements();
-
-      // Fermer la modal et réinitialiser le formulaire
-      setPaiementDialogOpen(false);
-      setEditingPaiement(null);
-      resetPaiement();
-    } catch (err) {
-      console.error('Erreur lors de la soumission du paiement:', err);
-      notification.error(err?.message || 'Une erreur est survenue lors de l\'enregistrement du paiement');
-    }
-  };
-
-  /**
-   * Gère la fermeture de la modal de paiement.
-   */
-  const handleClosePaiementDialog = () => {
-    setPaiementDialogOpen(false);
-    setEditingPaiement(null);
-    resetPaiement();
-  };
-
-  /**
-   * Gère l'ouverture de la modal d'ajout de paiement (nouveau).
-   */
-  const handleAddPaiement = () => {
-    setEditingPaiement(null);
-    resetPaiement({
-      date_paiement: format(new Date(), 'yyyy-MM-dd'),
-      montant: statutPaiement?.montant_restant || 0,
-      type_paiement: 'cash',
-      statut_cheque: 'a_encaisser',
-      numero_cheque: '',
-      banque: '',
-      date_encaissement_prevue: '',
-      reference_virement: '',
-      notes: '',
-      paiements: [],
-    });
-    setPaiementDialogOpen(true);
-  };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(returnPath)}>
-          {fromDeliveries ? 'Retour aux livraisons' : 'Retour à la liste'}
-        </Button>
-      </Box>
-    );
-  }
-
-  if (!transaction) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          Transaction introuvable
-        </Alert>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(returnPath)}>
-          {fromDeliveries ? 'Retour aux livraisons' : 'Retour à la liste'}
-        </Button>
-      </Box>
-    );
-  }
-
-  const inactiveTransaction = transaction.est_actif === false;
-
-  const isSale = Boolean(transaction.id_client);
-  const operationName = isSale ? 'Vente' : transaction.id_fournisseur ? 'Achat' : 'Transaction';
-  const pendingQuantity = Math.max(0, Number(transaction.quantite_en_attente || 0));
-  const reservedQuantity = Math.min(pendingQuantity, Math.max(0, Number(transaction.quantite_reservee || 0)));
-  const recentPayments = [...paiements].sort((a, b) =>
-    String(b.date_paiement).localeCompare(String(a.date_paiement)) || Number(b.id_paiement) - Number(a.id_paiement)
-  );
-  const visiblePayments = showAllPayments ? recentPayments : recentPayments.slice(0, 3);
-  const number = value => value === null || value === undefined ? '—' : Number(value).toLocaleString('fr-FR');
-  const paymentLabels = {
-    a_encaisser: 'À encaisser', encaisse: 'Encaissé', emis: 'Émis',
-    valide: 'Validé', annule: 'Annulé', rejete: 'Rejeté', en_attente: 'En attente',
-  };
-  const paymentTypeLabels = { cash: 'Espèces', cheque: 'Chèque', virement: 'Virement bancaire', carte: 'Carte bancaire', compensation: 'Compensation', lc: 'Lettre de crédit', autre: 'Autre' };
-  const readableStatus = value => paymentLabels[value] || (value ? String(value).replace(/_/g, ' ') : 'Statut non renseigné');
-  const cardSx = { borderRadius: 2, minWidth: 0, height: 'fit-content' };
-  const moneySx = { fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' };
-
-  return (
-    <Box sx={{ maxWidth: 1120, mx: 'auto', minWidth: 0 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(returnPath)} color="inherit">
-          {fromDeliveries ? 'Retour aux livraisons' : 'Ventes et achats'}
-        </Button>
-        <>
-          <Button endIcon={<MoreVertIcon />} color="inherit" onClick={event => setActionsAnchor(event.currentTarget)}
-            aria-haspopup="menu" aria-expanded={Boolean(actionsAnchor)} aria-controls={actionsAnchor ? 'transaction-actions' : undefined}
-            disabled={promiseActionLoading}>Autres actions</Button>
-          <Menu id="transaction-actions" anchorEl={actionsAnchor} open={Boolean(actionsAnchor)} onClose={() => setActionsAnchor(null)}>
-            {transaction.est_actif !== false && <MenuItem onClick={() => {
-              setActionsAnchor(null);
-              setReuseChanges({}); setTransactionEditOpen(true);
-            }}>Modifier la transaction</MenuItem>}
-            {transaction.est_promesse && transaction.est_actif !== false && pendingQuantity > 0 && <MenuItem onClick={() => {
-              setActionsAnchor(null); setNewDeliveryDate(transaction.date_livraison_prevue || ''); setRescheduleDialogOpen(true);
-            }}>Changer la date prévue</MenuItem>}
-            {transaction.est_promesse && transaction.est_actif !== false && pendingQuantity > 0 && <MenuItem onClick={() => {
-              setActionsAnchor(null); setCancelRemainderDialogOpen(true);
-            }}>Clôturer le reste à fournir</MenuItem>}
-            {transaction.est_actif !== false && <MenuItem sx={{ color: 'error.main' }} onClick={() => {
-              setActionsAnchor(null); setCancelTransactionDialogOpen(true);
-            }}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</MenuItem>}
-            {transaction.est_actif === false && <MenuItem onClick={() => {
-              setActionsAnchor(null); reactivateTransaction();
-            }}>{isSale ? 'Réactiver la vente' : 'Réactiver l’achat'}</MenuItem>}
-          </Menu>
-        </>
-      </Stack>
-      <Typography component="h1" variant="h4" sx={{ fontSize: { xs: '1.4rem', md: '1.85rem' }, overflowWrap: 'anywhere', fontWeight: 700 }}>
-        {operationName} n° {transaction.id_transaction} · {getClientOuFournisseur()}
-      </Typography>
-      <Typography color="text.secondary" variant="body2" sx={{ mt: 0.75, mb: 2.5 }}>
-        {isSale ? 'Vendue' : 'Acheté'} le {formatDate(transaction.date_transaction)}
-        {transaction.nom_batiment_source && ` · ${transaction.nom_batiment_source}`}
-      </Typography>
-
-      {inactiveTransaction && <Alert severity="error" sx={{ mb: 2.5 }}>
-        <Typography fontWeight={700}>{isSale ? 'Vente annulée' : 'Achat annulé'}</Typography>
-        Les montants et paiements restent consultables dans l’historique.
-      </Alert>}
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.4fr) minmax(0, 1fr)' }, gap: 2.5, alignItems: 'start' }}>
-        <Stack spacing={2.5} sx={{ minWidth: 0, order: { xs: 2, md: 1 } }}>
-          <Card variant="outlined" sx={cardSx}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
-            <Typography component="h2" variant="h6" sx={{ mb: 2 }}>{isSale ? 'La vente' : 'L’achat'}</Typography>
-            <Typography fontWeight={700}>{getProduitName()}</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mt: 1 }}>
-              <Typography color="text.secondary">
-                {number(transaction.quantite)}{transaction.id_production || transaction.est_promesse ? ' œufs' : ''}
-                {' × '}{formatMontant(transaction.prix_unitaire)}
-              </Typography>
-              <Typography fontWeight={700} sx={moneySx}>{formatMontant(transaction.montant_total)}</Typography>
-            </Stack>
-            {!transaction.est_promesse && transaction.id_production && <ExpandableDetails label="Voir l’origine du stock" icon={<LayersOutlined />} sx={{ mt: 2 }}>
-              {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" key={source.id_production} sx={{ py: 0.75 }}>
-                  <Typography variant="body2" color="text.secondary">Production du {formatDate(source.date_production)}</Typography>
-                  <Typography variant="body2" fontWeight={700}>{number(source.quantite)} œufs</Typography>
-                </Stack>) : <Typography variant="body2">Production du {formatDate(transaction.date_production)}</Typography>}
-            </ExpandableDetails>}
-          </CardContent></Card>
-
-          {transaction.est_promesse && <Card variant="outlined" sx={cardSx}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
-            <Typography component="h2" variant="h6" sx={{ mb: 2 }}>Quantités à fournir</Typography>
-            <TransactionQuantitySummary sale={transaction} />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              {transaction.date_livraison_prevue ? `Date prévue : ${formatDate(transaction.date_livraison_prevue)}` : 'Date prévue non renseignée'}
-            </Typography>
-            {!inactiveTransaction && transaction.est_actif && pendingQuantity > 0 && <Box sx={{ mt: 2 }}>
+      setPaiementT…2898 tokens truncated…&& transaction.est_actif && pendingQuantity > 0 && <Box sx={{ mt: 2 }}>
               <Button variant="contained" fullWidth onClick={openCompletion} disabled={promiseActionLoading || reservedQuantity < 1}>
                 Compléter avec le stock disponible
               </Button>
