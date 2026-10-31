@@ -8,6 +8,18 @@ const entry = { operation_id: 'first', reason: 'Prix corrigé', recorded_at: '20
   reuse_changes: { prix_unitaire: '1.50' }, impact: {} };
 beforeEach(() => { vi.clearAllMocks(); get.mockResolvedValue({ items: [entry], has_more: false, next_offset: 1 }); });
 afterEach(cleanup);
+it('shows a date correction without unchanged money in different numeric formats', async () => {
+  get.mockResolvedValue({ items: [{ ...entry,
+    target: { entity_type: 'paiement', entity_id: 14 },
+    before: { date_paiement: '2026-10-31', montant: 1.5 },
+    after: { date_paiement: '2026-10-30', montant: '1.50' },
+    reuse_changes: { date_paiement: '2026-10-31' },
+  }], has_more: false });
+  render(<CorrectionHistory transactionId={7} revision={1} onReuse={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Historique des corrections' }));
+  expect(await screen.findByText(/Date du paiement :/)).toHaveTextContent('31/10/26 → 30/10/26');
+  expect(screen.queryByText(/Montant du paiement :/)).not.toBeInTheDocument();
+});
 it('loads history on demand and proposes previous values without saving anything', async () => {
   const reuse = vi.fn(); render(<CorrectionHistory transactionId={7} revision={1} onReuse={reuse} />);
   expect(get).not.toHaveBeenCalled();

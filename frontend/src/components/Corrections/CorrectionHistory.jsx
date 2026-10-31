@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
 import ExpandableDetails from '../ExpandableDetails';
 import { get } from '../../services/api';
-import { displayValue, fieldLabels } from './correctionValues';
+import { changedValues, displayValue, fieldLabels } from './correctionValues';
 
 export default function CorrectionHistory({ transactionId, revision, names = {}, onReuse, readOnly }) {
   const [open, setOpen] = useState(false);
@@ -44,7 +44,7 @@ export default function CorrectionHistory({ transactionId, revision, names = {},
         <Typography fontWeight={700}>{item.target.entity_type === 'transaction' ? 'Transaction' : 'Paiement'} n° {item.target.entity_id}</Typography>
         <Typography variant="caption" color="text.secondary">{new Date(item.recorded_at).toLocaleString('fr-FR', { timeZone: 'Africa/Casablanca' })} · {item.actor_name}</Typography>
         <Typography variant="body2" sx={{ my: 1 }}>{item.reason}</Typography>
-        {Object.keys(fieldLabels).filter(key => key in item.before && key in item.after && String(item.before[key] ?? '') !== String(item.after[key] ?? '')).map(key => <Typography variant="body2" key={key} sx={{ overflowWrap: 'anywhere' }}>
+        {Object.keys(changedValues(item.after, item.before)).filter(key => key in fieldLabels && key in item.before).map(key => <Typography variant="body2" key={key} sx={{ overflowWrap: 'anywhere' }}>
           {fieldLabels[key]} : {displayValue(key, item.before[key], labels)} → {displayValue(key, item.after[key], labels)}
         </Typography>)}
         {item.impact?.stock?.kind === 'eggs' && Object.entries(item.impact.stock.after).map(([id, allocations]) => <Box key={id} sx={{ mt: 1 }}>

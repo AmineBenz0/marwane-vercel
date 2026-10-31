@@ -30,7 +30,7 @@ export function displayValue(field, value, names = {}) {
 export function changedValues(values, original) {
   return Object.fromEntries(Object.entries(values).filter(([key, value]) => {
     const before = original[key] ?? null;
-    if (['quantite', 'prix_unitaire', 'montant', 'id_compte', 'id_client', 'id_fournisseur', 'id_produit', 'id_batiment'].includes(key)) {
+    if (['quantite', 'prix_unitaire', 'montant_total', 'montant', 'id_compte', 'id_client', 'id_fournisseur', 'id_produit', 'id_batiment', 'id_production'].includes(key)) {
       return value === null || before === null ? value !== before : Number(value) !== Number(before);
     }
     return (value ?? null) !== before;

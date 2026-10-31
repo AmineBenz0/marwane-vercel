@@ -494,3 +494,25 @@ Phase 8 acceptance gates; this closure does not authorize production release.
 Phase 5 remains open for review and owner acceptance. Automated checks and
 staging deployment are recorded in the delivery report; manual staging
 walkthroughs must be reported separately from unit/integration checks.
+
+### Phase 5 staging walkthrough — 31 October 2026
+
+Staging `b47c792` passed the transaction price correction and previous-value
+reuse flow (1.50 → 1.60 → 1.50 MAD), with actor, timestamp and both corrections
+retained in history. A new test payment on transaction 27 passed amount-only
+correction and reuse (1.50 → 1.20 → 1.50 MAD), with the remaining balance and
+cash impact agreeing with the preview. Date-only correction and reuse
+(31 → 30 → 31 October) also saved successfully. The test payment was canceled
+after verification; the original transaction total and unpaid balance are
+1.50 MAD. Audit history is retained.
+
+The transaction editor was inspected at a 390 × 844 viewport; its fields scroll
+and its confirmation controls remain accessible. Both API health checks returned
+200. The walkthrough caught a history presentation defect where equivalent
+numeric formats appeared as an amount change; history now shares the form's
+normalized numeric comparison and has a date-only regression case.
+
+Available automated baseline: 261 frontend tests, 243 backend tests; 11 backend
+tests need external PostgreSQL fixtures and were skipped. After the history
+fix, 25 focused frontend tests passed. Phase 5 remains open for owner review;
+these checks do not close the later PostgreSQL concurrency/recovery gates.
