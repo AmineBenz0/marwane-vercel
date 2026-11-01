@@ -544,6 +544,14 @@ cash/bank effects intact, including on retry. This increment needs no migration.
 Before rollout, 124 backend financial/correction regressions and 21 frontend
 tests passed. Targeted lint had zero errors and the frontend build passed.
 
+Staging commit `e56307aba6a87a0eb7c6fc0d588e4956c0cf3228` passed the authenticated
+owner walkthrough on 1 November 2026. A paid test sale corrected from 1.50 to
+1.00 MAD displayed 0.50 MAD customer credit, stayed out of unpaid results despite
+a past due date, and retained the same payment and cash movement. The original
+sale values were restored and the marked test payment canceled; read-only SQL
+confirmed zero remaining active cash effects. Both API liveness and database
+readiness returned 200. See [acceptance evidence](phase6a-acceptance-2026-11-01.md).
+
 Phase 6 remains open. The next increments require complete settlement adapters:
 
 - **6B — explicit refunds/receipts:** positive-valued refund records, direction,
