@@ -80,10 +80,20 @@ describe('TransactionsExcelRegister responsive layout', () => {
     expect(screen.getByText('Chargement…')).toBeVisible();
     expect(screen.queryByText('0 opérations')).not.toBeInTheDocument();
   });
+
+  it.each([false, true])('labels retained customer credit without presenting debt (mobile=%s)', mobile => {
+    useMediaQueryMock.mockReturnValue(mobile);
+    renderRegister({ rows: [{ ...transaction, montant_restant: -5, statut_paiement: 'surpaye' }] });
+    expect(screen.getByText('Crédit client')).toBeVisible();
+    expect(screen.getByText('5 MAD')).toBeVisible();
+    expect(screen.queryByText('-5 MAD')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reste à payer')).not.toBeInTheDocument();
+  });
 });
 
 
 it('opens a row or its accessible link once, but never a date group', () => {
+  useMediaQueryMock.mockReturnValue(false);
   const onView = vi.fn();
   renderRegister({ onView, rows: [{ ...transaction, est_actif: false }] });
   fireEvent.click(screen.getByText('+100 MAD'));

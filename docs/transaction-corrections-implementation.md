@@ -516,3 +516,49 @@ Available automated baseline: 261 frontend tests, 243 backend tests; 11 backend
 tests need external PostgreSQL fixtures and were skipped. After the history
 fix, 25 focused frontend tests passed. Phase 5 remains open for owner review;
 these checks do not close the later PostgreSQL concurrency/recovery gates.
+
+## Phase 5 accepted for closure — 1 November 2026
+
+Staging `dadeea0` includes the corrected bank decimal display. Manual owner-UI
+walkthroughs verified price/quantity/source corrections, cash/bank routing,
+supplier funding preservation, partial date/amount/notes edits, history reuse,
+cross-tab refresh and stale-preview rejection. Focused evidence: 25 correction
+UI tests, 3 bank-formatting tests and 85 backend correction tests passed.
+The recorded walkthroughs include reconciled test cleanup and explicit limits.
+Production rollout and final PostgreSQL
+concurrency/recovery checks retain their later acceptance gates.
+
+## Phase 6A — retain and explain transaction credit
+
+The first Phase 6 increment completes retained-credit presentation on transaction
+details and desktop/mobile transaction registers. A corrected total below the
+effective payments shows a labeled positive credit amount and explains that the
+overpayment stays on this transaction. Historical inactive balances retain their
+signed value. Missing balance data is not displayed as zero.
+
+Python and SQL payment status now compare stored cent-precision values exactly:
+one cent still owed is a debt; one cent overpaid is credit. A fully paid or
+overpaid transaction is not overdue. Corrections keep the actual payment and
+cash/bank effects intact, including on retry. This increment needs no migration.
+
+Before rollout, 124 backend financial/correction regressions and 21 frontend
+tests passed. Targeted lint had zero errors and the frontend build passed.
+
+Phase 6 remains open. The next increments require complete settlement adapters:
+
+- **6B — explicit refunds/receipts:** positive-valued refund records, direction,
+  business date, cash/bank account, partial/full refund bounds, immutable history,
+  safe retries and net settled-balance projections. Reconcile all affected
+  current/historical projections before exposing the action.
+- **6C — advances and credit allocation:** party-level advances and linked
+  transfers between compatible transactions, available-credit bounds, ordered
+  locks, cancellation dependencies and no repeated cash effect.
+- **6D — instruments:** cleared-cheque date/status corrections and LC ownership,
+  usage, cession and deposit dependency chains.
+- **6E — restoration/conversion:** explicitly select effects to restore and
+  validate linked replacements or sale/purchase conversion against current stock,
+  parties, payments and instruments.
+
+Retained credit is still attached to its original transaction. Applying it
+elsewhere or paying a real refund must use the future explicit settlement flow;
+a price correction does not create either event.

@@ -293,8 +293,8 @@ def _payment_expressions(payment_totals, today: date):
     paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0")))
     remaining = Transaction.montant_total - paid
     raw_status = case(
-        (paid > Transaction.montant_total + literal(Decimal("0.01")), literal("surpaye")),
-        (paid >= Transaction.montant_total - literal(Decimal("0.01")), literal("paye")),
+        (paid > Transaction.montant_total, literal("surpaye")),
+        (paid == Transaction.montant_total, literal("paye")),
         (paid == literal(Decimal("0")), literal("impaye")),
         else_=literal("partiel"),
     )
@@ -536,3 +536,4 @@ def serialize_financial_transaction(transaction: Transaction, today: Optional[da
         "nombre_paiements": len(transaction.paiements),
         "date_creation": transaction.date_creation,
     }
+

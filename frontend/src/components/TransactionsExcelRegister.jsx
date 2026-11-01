@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import PaymentStatusBadge from './PaymentStatusBadge';
 import { deferredStockQuantities } from '../pages/Transactions/deferredStockQuantities';
+import { transactionBalance } from '../pages/Transactions/transactionBalance';
 
 const PAYMENT_TYPE_LABELS = {
   cash: 'Espèce',
@@ -331,7 +332,7 @@ function TransactionsExcelRegister({
 function TransactionMobileCard({ transaction, partnerName, formatMontant, onView }) {
   const isSale = isClientTransaction(transaction);
   const isCancelled = transaction.est_actif === false;
-  const remainingAmount = Math.abs(Number(transaction.montant_restant || 0));
+  const balance = transactionBalance(transaction);
   const totalAmount = getSignedAmount(transaction);
   const stockSummary = getDeferredStockSummary(transaction);
 
@@ -362,8 +363,8 @@ function TransactionMobileCard({ transaction, partnerName, formatMontant, onView
             <Typography fontWeight={900} color={isSale ? 'success.main' : 'error.main'}>{formatSignedAmount(totalAmount, formatMontant)}</Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" color="text.secondary">Reste à payer</Typography>
-            <Typography fontWeight={850} color={remainingAmount > 0 ? 'warning.main' : 'success.main'}>{formatMontant(remainingAmount)}</Typography>
+            <Typography variant="caption" color="text.secondary">{balance.label}</Typography>
+            <Typography fontWeight={850} color={balance.color}>{balance.amount === null ? '—' : formatMontant(balance.amount)}</Typography>
           </Box>
         </Stack>
 
@@ -383,7 +384,7 @@ function TransactionExcelRow({
   const isSale = isClientTransaction(transaction);
   const paymentStatus = getPaymentStatus(transaction);
   const partnerName = getClientOuFournisseur?.(transaction) || '-';
-  const remainingAmount = Number(transaction.montant_restant || 0);
+  const balance = transactionBalance(transaction);
   const totalAmount = getSignedAmount(transaction);
   const stockSummary = getDeferredStockSummary(transaction);
   const inactive = transaction.est_actif === false;
@@ -447,8 +448,9 @@ function TransactionExcelRow({
         </Typography>
       </TableCell>
       <TableCell align="right">
-        <Typography component="span" fontWeight={800} color={remainingAmount > 0 ? 'warning.main' : 'success.main'}>
-          {formatMontant(remainingAmount)}
+        {balance.credit && <Typography variant="caption" color="info.main" display="block">{balance.label}</Typography>}
+        <Typography component="span" fontWeight={800} color={balance.color}>
+          {balance.amount === null ? '—' : formatMontant(balance.amount)}
         </Typography>
       </TableCell>
       <TableCell>

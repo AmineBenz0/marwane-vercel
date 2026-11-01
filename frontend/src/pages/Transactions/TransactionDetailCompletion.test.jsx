@@ -31,6 +31,24 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it.each([false, true])('explains retained credit without offering another payment (supplier=%s)', async supplier => {
+  const original = get.getMockImplementation();
+  const credit = { ...sale, est_promesse: false, montant_paye: 1505, montant_restant: -5,
+    statut_paiement: 'surpaye', est_en_retard: false,
+    ...(supplier ? { id_client: null, id_fournisseur: 2 } : {}) };
+  get.mockImplementation(path => {
+    if (path === '/transactions/7' || path === '/paiements/transaction/7/statut') return Promise.resolve(credit);
+    if (path === '/fournisseurs') return Promise.resolve([{ id_fournisseur: 2, nom_fournisseur: 'Fournisseur local' }]);
+    return original(path);
+  });
+  render(<TransactionDetail />);
+  expect(await screen.findByText(supplier ? 'Crédit fournisseur' : 'Crédit client')).toBeVisible();
+  expect(screen.getByRole('heading', { name: /^5,00\sMAD$/ })).toBeVisible();
+  expect(screen.getByText(/Aucun remboursement n’a été enregistré/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Ajouter un paiement' })).not.toBeInTheDocument();
+  expect(post).not.toHaveBeenCalled();
+});
+
 it('shows reserved stock on a paid deferred sale without presenting it as delivered', async () => {
   render(<TransactionDetail />);
   expect(await screen.findByRole('heading', { name: 'Vente n° 7 · Client payé' })).toBeVisible();

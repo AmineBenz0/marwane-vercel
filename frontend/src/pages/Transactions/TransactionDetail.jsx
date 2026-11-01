@@ -44,6 +44,7 @@ import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
 import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import TransactionEditForm from './TransactionEditForm';
+import { transactionBalance } from './transactionBalance';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -581,6 +582,7 @@ function TransactionDetail() {
   const inactiveTransaction = transaction.est_actif === false;
 
   const isSale = Boolean(transaction.id_client);
+  const balance = transactionBalance(transaction, statutPaiement?.montant_restant);
   const operationName = isSale ? 'Vente' : transaction.id_fournisseur ? 'Achat' : 'Transaction';
   const pendingQuantity = Math.max(0, Number(transaction.quantite_en_attente || 0));
   const reservedQuantity = Math.min(pendingQuantity, Math.max(0, Number(transaction.quantite_reservee || 0)));
@@ -694,8 +696,11 @@ function TransactionDetail() {
               <Typography fontWeight={700} sx={moneySx}>{formatMontant(statutPaiement.montant_paye)}</Typography>
             </Stack>
             <Box sx={{ mt: 2, p: 2, borderRadius: 1.5, bgcolor: 'action.hover' }}>
-              <Typography variant="body2" color="text.secondary">{inactiveTransaction ? 'Solde (historique)' : isSale ? 'Reste à encaisser' : 'Reste à payer'}</Typography>
-              <Typography variant="h5" fontWeight={700} sx={{ ...moneySx, mt: 0.5 }}>{formatMontant(statutPaiement.montant_restant)}</Typography>
+              <Typography variant="body2" color="text.secondary">{balance.label}</Typography>
+              <Typography variant="h5" fontWeight={700} color={balance.color} sx={{ ...moneySx, mt: 0.5 }}>{balance.amount === null ? '—' : formatMontant(balance.amount)}</Typography>
+              {balance.credit && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Le montant payé en trop reste rattaché à cette transaction. Aucun remboursement n’a été enregistré.
+              </Typography>}
               {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard && !inactiveTransaction ? 'error.main' : 'text.secondary'} sx={{ mt: 1 }}>
                 Échéance : {formatDate(transaction.date_echeance)}
               </Typography>}
