@@ -77,7 +77,7 @@ const getSignedAmount = (movement) => {
 const formatSignedAmount = (movement) => {
   const signed = getSignedAmount(movement);
   const sign = signed > 0 ? '+' : signed < 0 ? '-' : '';
-  return `${sign}${formatMontant(Math.abs(signed), { useCompactNotation: false, maximumFractionDigits: 0 })}`;
+  return `${sign}${formatMontant(Math.abs(signed), { useCompactNotation: false, maximumFractionDigits: 2 })}`;
 };
 
 const getMovementTitle = (movement) => {
@@ -490,7 +490,7 @@ function getInitialMovementForm(idCompte = '') {
 function BigBalanceCard({ value, comptesCount, loading }) {
   const amount = parseAmount(value);
   const formattedAmount = new Intl.NumberFormat('fr-FR', {
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
     minimumFractionDigits: 0,
   }).format(amount);
   const helper = comptesCount === 0
@@ -618,7 +618,7 @@ function AccountCard({ compte, movementsCount, onMovement }) {
           </Typography>
         </Box>
         <Typography variant="h6" fontWeight={950} color="primary.main" sx={{ flexShrink: 0 }}>
-          {formatMontant(parseAmount(compte.solde_actuel), { useCompactNotation: false, maximumFractionDigits: 0 })}
+          {formatMontant(parseAmount(compte.solde_actuel), { useCompactNotation: false, maximumFractionDigits: 2 })}
         </Typography>
       </Stack>
 
@@ -798,7 +798,7 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
             >
               {comptes.map((compte) => (
                 <MenuItem key={compte.id_compte} value={String(compte.id_compte)}>
-                  {compte.nom_banque} - {formatMontant(parseAmount(compte.solde_actuel), { useCompactNotation: false, maximumFractionDigits: 0 })}
+                  {compte.nom_banque} - {formatMontant(parseAmount(compte.solde_actuel), { useCompactNotation: false, maximumFractionDigits: 2 })}
                 </MenuItem>
               ))}
             </TextField>
@@ -875,7 +875,7 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
                   </MenuItem>
                   {availableLcs.map((lc) => (
                     <MenuItem key={lc.id_lc} value={lc.numero_reference}>
-                      {lc.numero_reference} ({formatMontant(parseAmount(lc.montant), { useCompactNotation: false, maximumFractionDigits: 0 })}) {lc.detenteur_nom ? `· ${lc.detenteur_nom}` : ''}
+                      {lc.numero_reference} ({formatMontant(parseAmount(lc.montant), { useCompactNotation: false, maximumFractionDigits: 2 })}) {lc.detenteur_nom ? `· ${lc.detenteur_nom}` : ''}
                     </MenuItem>
                   ))}
                 </TextField>
