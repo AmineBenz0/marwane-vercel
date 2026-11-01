@@ -106,7 +106,7 @@ const getSignedAmount = (movement) => {
 const formatSignedAmount = (movement) => {
   const signed = getSignedAmount(movement);
   const sign = signed > 0 ? '+' : signed < 0 ? '-' : '';
-  return `${sign}${formatMontant(Math.abs(signed), { useCompactNotation: false, maximumFractionDigits: 0 })}`;
+  return `${sign}${formatMontant(Math.abs(signed), { useCompactNotation: false, maximumFractionDigits: 2 })}`;
 };
 
 function Caisse() {
@@ -444,7 +444,7 @@ function Caisse() {
 
 function MainBalanceCard({ value }) {
   const amount = new Intl.NumberFormat('fr-FR', {
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
     minimumFractionDigits: 0,
   }).format(toNumber(value));
 
@@ -510,7 +510,7 @@ function SmallMoneyCard({ label, value, helper, icon, tone }) {
               {label}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 950, mt: 1, letterSpacing: '-0.05em' }}>
-              {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 0 })}
+              {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 2 })}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.75 }}>
               {helper}
@@ -545,7 +545,7 @@ function WatchItem({ label, helper, value, color }) {
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{helper}</Typography>
         </Box>
         <Typography fontWeight={950} color={color} sx={{ whiteSpace: 'nowrap' }}>
-          {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 0 })}
+          {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 2 })}
         </Typography>
       </Stack>
     </Box>
