@@ -61,6 +61,10 @@ class MouvementBancaire(Base):
     compte = relationship("CompteBancaire", back_populates="mouvements")
     paiement = relationship("Paiement")
     charge = relationship("Charge")
+    @property
+    def nature_reglement(self):
+        return self.paiement.nature if self.paiement else None
+
     utilisateur_creation = relationship(
         "Utilisateur",
         foreign_keys=[id_utilisateur_creation],
@@ -72,3 +76,4 @@ class MouvementBancaire(Base):
         CheckConstraint("type_mouvement IN ('ENTREE', 'SORTIE')", name="check_type_mouvement_bancaire_valide"),
         CheckConstraint("statut IN ('active', 'annule')", name="check_statut_mouvement_bancaire_valide"),
     )
+

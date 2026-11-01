@@ -325,6 +325,8 @@ def update_paiement(
 
     if paiement.statut == "annule":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un paiement annulé est immuable")
+    if paiement.nature == "remboursement":
+        raise HTTPException(409, "Un remboursement enregistré ne peut pas être modifié. Annulez l’enregistrement erroné puis recréez-le.")
     old_lc_id = paiement.id_lc
     update_data = paiement_data.model_dump(exclude_unset=True)
     if "type_paiement" in update_data and update_data["type_paiement"]:
@@ -482,6 +484,7 @@ def get_statut_paiement_transaction(
         id_transaction=transaction.id_transaction,
         montant_total=transaction.montant_total,
         montant_paye=transaction.montant_paye,
+        montant_rembourse=transaction.montant_rembourse,
         montant_restant=transaction.montant_restant,
         pourcentage_paye=transaction.pourcentage_paye,
         statut_paiement=payment_status(transaction),
@@ -512,7 +515,7 @@ def get_statistiques_paiements_par_type(
     stats = db.query(
         Paiement.type_paiement,
         func.count(Paiement.id_paiement).label('nombre_paiements'),
-        func.sum(Paiement.montant).label('montant_total')
+        func.sum(Paiement.montant_net).label('montant_total')
     ).filter(
         Paiement.statut.in_(['valide', 'en_attente'])  # Exclure les annulés et rejetés
     ).group_by(

@@ -60,6 +60,10 @@ class Caisse(Base):
 
 
     @property
+    def nature_reglement(self):
+        return self.paiement.nature if self.paiement else None
+
+    @property
     def numero_reference_lc(self):
         if self.cession and self.cession.lettre_credit:
             return self.cession.lettre_credit.numero_reference
@@ -74,4 +78,5 @@ class Caisse(Base):
         if self.source_journaliere and self.charge:
             return self.charge.nom_vaccin
         return None
+
 

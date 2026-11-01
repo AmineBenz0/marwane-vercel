@@ -42,6 +42,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
+import RefundDialog from '../../components/Corrections/RefundDialog';
 import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import TransactionEditForm from './TransactionEditForm';
 import { transactionBalance } from './transactionBalance';
@@ -91,6 +92,7 @@ function TransactionDetail() {
   // État pour la modal d'ajout/édition de paiement
   const [paiementDialogOpen, setPaiementDialogOpen] = useState(false);
   const [editingPaiement, setEditingPaiement] = useState(null);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [transactionEditOpen, setTransactionEditOpen] = useState(false);
   const [reuseChanges, setReuseChanges] = useState({});
   const [historyRevision, setHistoryRevision] = useState(0);
@@ -692,19 +694,24 @@ function TransactionDetail() {
           </Stack>
           {statutPaiement ? <>
             <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', rowGap: 0.5 }}>
-              <Typography color="text.secondary">{inactiveTransaction ? 'Réglé (historique)' : 'Déjà réglé'}</Typography>
+              <Typography color="text.secondary">{inactiveTransaction ? 'Réglé (historique)' : Number(statutPaiement.montant_rembourse) > 0 ? 'Réglé net des remboursements' : 'Déjà réglé'}</Typography>
               <Typography fontWeight={700} sx={moneySx}>{formatMontant(statutPaiement.montant_paye)}</Typography>
             </Stack>
             <Box sx={{ mt: 2, p: 2, borderRadius: 1.5, bgcolor: 'action.hover' }}>
               <Typography variant="body2" color="text.secondary">{balance.label}</Typography>
               <Typography variant="h5" fontWeight={700} color={balance.color} sx={{ ...moneySx, mt: 0.5 }}>{balance.amount === null ? '—' : formatMontant(balance.amount)}</Typography>
               {balance.credit && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Le montant payé en trop reste rattaché à cette transaction. Aucun remboursement n’a été enregistré.
+                {Number(statutPaiement.montant_rembourse) > 0
+                  ? 'Le crédit affiché tient compte des remboursements enregistrés.'
+                  : 'Le montant payé en trop reste rattaché à cette transaction. Aucun remboursement n’a été enregistré.'}
               </Typography>}
               {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard && !inactiveTransaction ? 'error.main' : 'text.secondary'} sx={{ mt: 1 }}>
                 Échéance : {formatDate(transaction.date_echeance)}
               </Typography>}
             </Box>
+            {balance.credit && <Button variant="outlined" fullWidth onClick={() => setRefundOpen(true)} sx={{ mt: 2 }}>
+              {isSale ? 'Rembourser le client' : 'Enregistrer un remboursement fournisseur'}
+            </Button>}
             {!inactiveTransaction && Number(statutPaiement.montant_restant) > 0 && <Button variant="contained" fullWidth startIcon={<AddIcon />} onClick={handleAddPaiement} sx={{ mt: 2 }}>
               Ajouter un paiement
             </Button>}
@@ -720,18 +727,19 @@ function TransactionDetail() {
           {visiblePayments.map(paiement => {
             const status = paiement.type_paiement === 'cheque' && paiement.statut_cheque && paiement.statut !== 'annule' ? paiement.statut_cheque : paiement.statut;
             const reference = paiement.numero_cheque || paiement.reference_virement || paiement.numero_reference_lc || (paiement.id_lc ? `LC n° ${paiement.id_lc}` : null);
-            return <Box component="article" aria-label={`Paiement du ${formatDate(paiement.date_paiement)}`} key={paiement.id_paiement}
+            return <Box component="article" aria-label={`${paiement.nature === 'remboursement' ? 'Remboursement' : 'Paiement'} du ${formatDate(paiement.date_paiement)}`} key={paiement.id_paiement}
               sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1.5, py: 2, '& + &': { borderTop: '1px solid', borderColor: 'divider' } }}>
               <Box sx={{ minWidth: 0, flex: '1 1 180px' }}>
-                <Typography variant="body2" fontWeight={700}>{paymentTypeLabels[paiement.type_paiement] || 'Autre'}</Typography>
+                <Typography variant="body2" fontWeight={700}>{paiement.nature === 'remboursement' ? `${isSale ? 'Remboursement au client' : 'Remboursement du fournisseur'} · ` : ''}{paymentTypeLabels[paiement.type_paiement] || 'Autre'}</Typography>
+                {paiement.nature === 'remboursement' && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{paiement.notes}</Typography>}
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>{formatDate(paiement.date_paiement)} · {readableStatus(status)}</Typography>
                 {reference && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere', mt: 0.5 }}>Référence : {reference}</Typography>}
               </Box>
               <Stack alignItems="flex-end" spacing={0.5} sx={{ minWidth: 0, maxWidth: '100%', ml: 'auto' }}>
                 <Typography fontWeight={700} sx={moneySx}>{formatMontant(paiement.montant)}</Typography>
                 {!inactiveTransaction && paiement.statut !== 'annule' && <Stack direction="row" spacing={0.5}>
-                  <Tooltip title="Modifier le paiement"><IconButton aria-label="Modifier le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} onClick={() => handleEditPaiement(paiement)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                  <Tooltip title="Supprimer le paiement"><IconButton aria-label="Supprimer le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} color="error" onClick={() => handleDeletePaiementClick(paiement)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                  {paiement.nature !== 'remboursement' && <Tooltip title="Modifier le paiement"><IconButton aria-label="Modifier le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} onClick={() => handleEditPaiement(paiement)}><EditIcon fontSize="small" /></IconButton></Tooltip>}
+                  <Tooltip title={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Supprimer le paiement'}><IconButton aria-label={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Supprimer le paiement'} size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} color="error" onClick={() => handleDeletePaiementClick(paiement)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
                 </Stack>}
               </Stack>
             </Box>;
@@ -741,6 +749,9 @@ function TransactionDetail() {
           </Button>}
         </> : <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>Aucun paiement enregistré pour cette transaction.</Typography>}
       </CardContent></Card>
+
+      {refundOpen && <RefundDialog transaction={transaction} credit={balance.amount} onClose={() => setRefundOpen(false)}
+        onSaved={async () => { setRefundOpen(false); await Promise.all([fetchTransaction(), fetchPaiements(), fetchStatutPaiement()]); }} />}
 
       {transaction.est_promesse && <Box sx={{ mt: 2.5 }}>
         <ExpandableDetails label="Historique du stock et des modifications" icon={<HistoryOutlined />}>
@@ -855,10 +866,10 @@ function TransactionDetail() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogTitle>{paiementToDelete?.nature === 'remboursement' ? 'Annuler un remboursement erroné' : 'Confirmer la suppression'}</DialogTitle>
         <DialogContent>
           <Typography>
-            Êtes-vous sûr de vouloir supprimer ce paiement ?
+            {paiementToDelete?.nature === 'remboursement' ? 'Annuler cet enregistrement de remboursement erroné ?' : 'Êtes-vous sûr de vouloir supprimer ce paiement ?'}
           </Typography>
           {paiementToDelete && (
             <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
@@ -874,7 +885,7 @@ function TransactionDetail() {
             </Box>
           )}
           <Alert severity="warning" sx={{ mt: 2 }}>
-            Cette action est irréversible. Le montant restant sera recalculé automatiquement.
+            {paiementToDelete?.nature === 'remboursement' ? 'Le crédit sera rétabli et l’historique conservé. Cette action ne représente pas un nouveau mouvement d’argent réel.' : 'Cette action est irréversible. Le montant restant sera recalculé automatiquement.'}
           </Alert>
         </DialogContent>
         <DialogActions>

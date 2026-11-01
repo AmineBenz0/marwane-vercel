@@ -161,6 +161,8 @@ def _dependencies(db, entity_type, record, transaction=None, *, lock=False, chan
 def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, transaction=None) -> dict:
     entity_type = command.target.entity_type
     requested = command.changes.model_dump(exclude_unset=True)
+    if entity_type == "paiement" and record.nature == "remboursement":
+        raise HTTPException(409, "Un remboursement conserve ses valeurs. Annulez son enregistrement erroné puis enregistrez le remboursement correct.")
     stock_allocations_supplied = 'stock_allocations' in requested
     if stock_allocations_supplied:
         if entity_type != 'transaction' or requested['stock_allocations'] is None:
@@ -209,6 +211,8 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
             raise HTTPException(409, "Une correction de contact conserve le type de transaction. Un achat ne peut pas devenir une vente ici.")
         if "id_fournisseur" in requested and record.id_fournisseur is None:
             raise HTTPException(409, "Une correction de contact conserve le type de transaction. Une vente ne peut pas devenir un achat ici.")
+        if any(payment.nature == "remboursement" and payment.statut != "annule" for payment in linked_payments):
+            raise HTTPException(409, "Cette transaction comporte un remboursement. Son attribution nécessite le parcours de transfert dédié.")
         if any(payment.id_lc is not None for payment in linked_payments):
             raise HTTPException(409, "L’attribution d’un paiement lié à une lettre de crédit nécessite son adaptateur dédié.")
         if "id_client" in requested:
@@ -380,7 +384,7 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
     balance_transaction = record if entity_type == 'transaction' else transaction
     if db is not None and balance_transaction is not None:
         payments = db.query(Paiement).filter(Paiement.id_transaction == balance_transaction.id_transaction).populate_existing().all()
-        paid = sum((payment.montant for payment in payments if payment.est_effectif), Decimal('0'))
+        paid = sum((payment.montant_net for payment in payments if payment.est_effectif), Decimal('0'))
         if entity_type == 'paiement' and record.est_effectif:
             paid += Decimal(str(changes.get('montant', record.montant))) - record.montant
         total = Decimal(str(changes.get('montant_total', balance_transaction.montant_total))) if entity_type == 'transaction' else balance_transaction.montant_total

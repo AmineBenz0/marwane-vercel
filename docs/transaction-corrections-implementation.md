@@ -570,3 +570,33 @@ Phase 6 remains open. The next increments require complete settlement adapters:
 Retained credit is still attached to its original transaction. Applying it
 elsewhere or paying a real refund must use the future explicit settlement flow;
 a price correction does not create either event.
+
+## Phase 6A closed; Phase 6B — explicit refunds
+
+Phase 6A passed its closure review. Phase 6B adds a dedicated preview/confirm flow
+for real customer refunds and supplier reimbursements through cash or bank.
+The positive settlement amount has an immutable `remboursement` classification;
+Python and SQL projections subtract it from net paid while preserving the
+original payment. Existing payment rows default to `paiement` unchanged.
+
+Refunds are bounded by available credit at their business date and every later
+dated balance, so backdating cannot consume credit already returned before a
+later payment. Preview covers the related payments, movements and bank balances;
+apply locks the parent transaction, revalidates the fingerprint and commits the
+refund, ledger movement, balance/snapshot and saved retry result together.
+
+The staging database migration is `20261101232602_explicit_transaction_refunds`.
+PostgreSQL bounds, immutable classification and non-deletion guards passed
+rollback-only checks. Local evidence: 144 existing/new backend regression tests
+passed before the additional backdating case; the final focused refund suite
+has 21 passing cases. The six focused frontend files have 29 passing tests.
+Build passed and targeted lint has zero errors with four existing warnings.
+Application rollout and owner walkthrough remain pending at this checkpoint.
+
+Refund records are visible in payment history and labeled in cash/bank histories
+and exports. A recorded refund cannot be financially edited through payment
+correction; an erroneous record is canceled separately, preserving its audit.
+An active refund blocks transaction withdrawal/contact transfer until its
+dependencies are explicitly handled. Cheque/LC-backed transactions remain gated
+for their dedicated instrument workflow. Advances, credit transfers, instrument
+corrections and restoration/conversion are still pending Phase 6 work.

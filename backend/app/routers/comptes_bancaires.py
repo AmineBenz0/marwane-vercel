@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List
 from decimal import Decimal
 from datetime import date
@@ -51,7 +51,7 @@ def get_mouvements(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Récupère l'historique des mouvements pour un compte."""
-    return db.query(MouvementBancaire).filter(
+    return db.query(MouvementBancaire).options(selectinload(MouvementBancaire.paiement)).filter(
         MouvementBancaire.id_compte == id,
         MouvementBancaire.statut == "active",
     ).order_by(MouvementBancaire.date_mouvement.desc()).offset(skip).limit(limit).all()
@@ -174,3 +174,4 @@ def create_mouvement(
     if replay:
         response.status_code = status.HTTP_200_OK
     return mouvement
+

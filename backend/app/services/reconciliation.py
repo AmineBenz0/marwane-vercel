@@ -110,7 +110,7 @@ def run_integrity_check(db: Session) -> list[dict]:
 
     for transaction in transactions:
         payment_total = sum(
-            (_money(item.montant) for item in transaction.paiements if item.est_effectif),
+            (item.montant_net for item in transaction.paiements if item.est_effectif),
             Decimal("0"),
         )
         if abs(payment_total - transaction.montant_paye) > Decimal("0.01"):
@@ -152,7 +152,7 @@ def run_integrity_check(db: Session) -> list[dict]:
                     payment.id_paiement,
                     "Le montant du mouvement financier ne correspond pas au paiement.",
                 ))
-            expected_direction = "ENTREE" if transaction.id_client is not None else "SORTIE"
+            expected_direction = payment.ledger_direction(transaction)
             if movement.type_mouvement != expected_direction:
                 issues.append(IntegrityIssue(
                     "PAYMENT_MOVEMENT_DIRECTION_MISMATCH",

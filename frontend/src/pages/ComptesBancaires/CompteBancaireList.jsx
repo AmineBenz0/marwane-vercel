@@ -82,7 +82,7 @@ const formatSignedAmount = (movement) => {
 
 const getMovementTitle = (movement) => {
   if (movement.notes) return movement.notes;
-  return SOURCE_LABELS[movement.source] || movement.source || 'Mouvement bancaire';
+  return movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || 'Mouvement bancaire';
 };
 
 function CompteBancaireList() {
@@ -245,7 +245,7 @@ function CompteBancaireList() {
         compte: movement.compte_nom || comptesMap.get(movement.id_compte)?.nom_banque || '-',
         operation: getMovementTitle(movement),
         type: movement.type_mouvement === 'ENTREE' ? 'Entrée' : 'Sortie',
-        source: SOURCE_LABELS[movement.source] || movement.source || '-',
+        source: (movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || '-'),
         reference: movement.reference || '',
         montant: getSignedAmount(movement),
       })),
@@ -655,7 +655,7 @@ function MovementRow({ movement }) {
           <Box>
             <Typography fontWeight={900}>{getMovementTitle(movement)}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {SOURCE_LABELS[movement.source] || movement.source || '-'} · {isEntry ? 'Entrée' : 'Sortie'}
+              {(movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || '-')} · {isEntry ? 'Entrée' : 'Sortie'}
             </Typography>
           </Box>
         </Stack>
@@ -682,7 +682,7 @@ function MovementMobileCard({ movement }) {
             {movement.compte_nom || '-'} · {formatDate(movement.date_mouvement)}
           </Typography>
           <Typography color="text.secondary" variant="caption">
-            {movement.reference || SOURCE_LABELS[movement.source] || movement.source || '-'}
+            {movement.reference || (movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || '-')}
           </Typography>
         </Box>
         <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>

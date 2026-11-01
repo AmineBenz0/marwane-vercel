@@ -297,7 +297,7 @@ def sync_payment_cash_movement(
             )
         return None
 
-    movement_type = "ENTREE" if transaction.id_client is not None else "SORTIE"
+    movement_type = payment.ledger_direction(transaction)
     # A cleared cheque affects the ledger on the encashment date. The issue
     # date remains visible on the payment record but is not its cash/bank date.
     effective_payment_date = (

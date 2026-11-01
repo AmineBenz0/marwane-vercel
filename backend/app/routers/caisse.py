@@ -67,7 +67,7 @@ def get_mouvements(
     Returns:
         Liste des mouvements de caisse (MouvementCaisseRead)
     """
-    query = cash_movements_as_of(db, date_fin or business_date()).options(joinedload(Caisse.charge))
+    query = cash_movements_as_of(db, date_fin or business_date()).options(joinedload(Caisse.charge), joinedload(Caisse.paiement))
     
     # Filtre par date
     if date_debut:
@@ -257,4 +257,5 @@ def get_historique(
     ).offset(skip).limit(limit).all()
     
     return historique
+
 

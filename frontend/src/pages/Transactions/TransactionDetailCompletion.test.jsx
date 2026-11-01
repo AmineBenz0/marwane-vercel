@@ -46,7 +46,21 @@ it.each([false, true])('explains retained credit without offering another paymen
   expect(screen.getByRole('heading', { name: /^5,00\sMAD$/ })).toBeVisible();
   expect(screen.getByText(/Aucun remboursement n’a été enregistré/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Ajouter un paiement' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: supplier ? 'Enregistrer un remboursement fournisseur' : 'Rembourser le client' })).toBeVisible();
   expect(post).not.toHaveBeenCalled();
+});
+
+it('explains a credit remaining after a recorded partial refund without claiming none exists', async () => {
+  const original = get.getMockImplementation();
+  get.mockImplementation(path => {
+    if (path === '/transactions/7' || path === '/paiements/transaction/7/statut') return Promise.resolve({ ...sale,
+      montant_paye: 1505, montant_restant: -5, montant_rembourse: '2.50', statut_paiement: 'surpaye' });
+    return original(path);
+  });
+  render(<TransactionDetail />);
+  expect(await screen.findByText('Le crédit affiché tient compte des remboursements enregistrés.')).toBeVisible();
+  expect(screen.getByText('Réglé net des remboursements')).toBeVisible();
+  expect(screen.queryByText(/Aucun remboursement n’a été enregistré/)).not.toBeInTheDocument();
 });
 
 it('shows reserved stock on a paid deferred sale without presenting it as delivered', async () => {

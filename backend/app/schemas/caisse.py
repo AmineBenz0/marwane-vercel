@@ -67,6 +67,7 @@ class MouvementCaisseRead(MouvementCaisseBase):
     Inclut les champs générés automatiquement (id, date).
     """
     numero_reference_lc: str | None = Field(None, description="Référence de la lettre de crédit associée")
+    nature_reglement: str | None = None
     id_mouvement: int = Field(..., description="Identifiant unique du mouvement de caisse")
     date_mouvement: datetime = Field(..., description="Date et heure du mouvement")
     motif_annulation: str | None = None
@@ -166,3 +167,4 @@ class HistoriqueSoldeRead(BaseModel):
     id_mouvement: int | None = Field(None, description="ID du mouvement associé (si disponible)")
 
     model_config = ConfigDict(from_attributes=True)
+

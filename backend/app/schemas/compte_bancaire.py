@@ -40,6 +40,7 @@ class CompteBancaireRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class MouvementBancaireRead(BaseModel):
+    nature_reglement: Optional[str] = None
     id_mouvement: int
     id_compte: int
     date_mouvement: datetime
@@ -59,3 +60,4 @@ class MouvementBancaireRead(BaseModel):
     id_mouvement_inverse: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+

@@ -257,7 +257,7 @@ def get_fournisseur_stats_mensuelles(
         Transaction.date_transaction < date_debut
     ).scalar() or 0
     
-    total_paiements_avant = db.query(func.coalesce(func.sum(Paiement.montant), 0)).join(
+    total_paiements_avant = db.query(func.coalesce(func.sum(Paiement.montant_net), 0)).join(
         Transaction, Paiement.id_transaction == Transaction.id_transaction
     ).filter(
         Transaction.id_fournisseur == id,
@@ -288,7 +288,7 @@ def get_fournisseur_stats_mensuelles(
     paiements_query = db.query(
         extract('year', Paiement.date_paiement).label('annee'),
         extract('month', Paiement.date_paiement).label('mois'),
-        func.coalesce(func.sum(Paiement.montant), Decimal('0')).label('montant')
+        func.coalesce(func.sum(Paiement.montant_net), Decimal('0')).label('montant')
     ).join(
         Transaction, Paiement.id_transaction == Transaction.id_transaction
     ).filter(
@@ -704,7 +704,7 @@ def get_fournisseur_insights_financiers(
     
     # 2. Calculer le montant total payé
     montant_paye_query = db.query(
-        func.coalesce(func.sum(Paiement.montant), Decimal('0'))
+        func.coalesce(func.sum(Paiement.montant_net), Decimal('0'))
     ).join(
         Transaction, Paiement.id_transaction == Transaction.id_transaction
     ).filter(
@@ -778,7 +778,7 @@ def get_fournisseur_insights_financiers(
     transactions_en_retard_query = db.query(
         Transaction.id_transaction,
         Transaction.montant_total,
-        func.coalesce(func.sum(Paiement.montant), Decimal('0')).label('montant_paye')
+        func.coalesce(func.sum(Paiement.montant_net), Decimal('0')).label('montant_paye')
     ).outerjoin(
         Paiement, (Paiement.id_transaction == Transaction.id_transaction) & (Paiement.statut == 'valide')
     ).filter(
@@ -893,7 +893,7 @@ def get_fournisseur_score(
     montant_total = Decimal(str(montant_total_query or '0'))
     
     montant_paye_query = db.query(
-        func.coalesce(func.sum(Paiement.montant), Decimal('0'))
+        func.coalesce(func.sum(Paiement.montant_net), Decimal('0'))
     ).join(
         Transaction, Paiement.id_transaction == Transaction.id_transaction
     ).filter(
@@ -916,7 +916,7 @@ def get_fournisseur_score(
     transactions_en_retard_query = db.query(
         Transaction.id_transaction,
         Transaction.montant_total,
-        func.coalesce(func.sum(Paiement.montant), Decimal('0')).label('montant_paye')
+        func.coalesce(func.sum(Paiement.montant_net), Decimal('0')).label('montant_paye')
     ).outerjoin(
         Paiement, (Paiement.id_transaction == Transaction.id_transaction) & (Paiement.statut == 'valide')
     ).filter(
@@ -1047,3 +1047,4 @@ def get_fournisseur_score(
         anciennete_mois=anciennete_mois,
         recommandation=recommandation
     )
+

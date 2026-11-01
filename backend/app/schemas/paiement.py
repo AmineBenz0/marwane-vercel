@@ -155,6 +155,7 @@ class PaiementRead(PaiementBase):
     Inclut les champs générés automatiquement (id, dates, statut, etc.).
     """
     id_paiement: int = Field(..., description="Identifiant unique du paiement")
+    nature: str = 'paiement'
     row_version: int = Field(default=1, description="Révision pour détecter les modifications concurrentes")
     id_transaction: int = Field(..., description="ID de la transaction associée")
     date_encaissement_effective: Optional[date] = Field(None, description="Date effective d'encaissement")
@@ -185,6 +186,7 @@ class StatutPaiementTransaction(BaseModel):
     id_transaction: int = Field(..., description="ID de la transaction")
     montant_total: Decimal = Field(..., description="Montant total de la transaction")
     montant_paye: Decimal = Field(..., description="Montant déjà payé")
+    montant_rembourse: Decimal = Decimal('0')
     montant_restant: Decimal = Field(..., description="Montant restant à payer")
     pourcentage_paye: float = Field(..., description="Pourcentage payé (0-100)")
     statut_paiement: str = Field(..., description="Statut du paiement (paye, partiel, impaye)")

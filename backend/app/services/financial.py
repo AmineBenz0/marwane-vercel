@@ -30,7 +30,8 @@ from app.utils.business_date import business_date
 def validate_payment_idempotency(existing, requested) -> None:
     """Reject reuse of a payment key with a different financial identity."""
     same_identity = (
-        existing.id_transaction == requested.id_transaction
+        existing.nature != "remboursement"
+        and existing.id_transaction == requested.id_transaction
         and existing.date_paiement == requested.date_paiement
         and Decimal(str(existing.montant)) == Decimal(str(requested.montant))
         and existing.type_paiement == requested.type_paiement.lower()
@@ -70,7 +71,7 @@ def payment_total_as_of(transaction: Transaction, as_of: date) -> Decimal:
     """Return effective payments posted on or before an accounting date."""
     return sum(
         (
-            Decimal(str(payment.montant))
+            payment.montant_net
             for payment in transaction.paiements
             if _payment_date(payment) <= as_of and payment.est_effectif
         ),
@@ -109,7 +110,7 @@ def _payment_totals_subquery(db: Session, as_of: Optional[date] = None):
     """Aggregate effective payments once so collection queries stay set-based."""
     query = db.query(
         Paiement.id_transaction.label("id_transaction"),
-        func.sum(Paiement.montant).label("montant_paye"),
+        func.sum(Paiement.montant_net).label("montant_paye"),
     ).filter(_effective_payment_predicate())
     if as_of is not None:
         query = query.filter(_effective_payment_date_expression() <= as_of)

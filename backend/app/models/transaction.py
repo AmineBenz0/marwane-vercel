@@ -139,10 +139,15 @@ class Transaction(Base):
         total = Decimal('0')
         for paiement in self.paiements:
             if paiement.est_effectif:
-                total += Decimal(str(paiement.montant))
+                total += paiement.montant_net
         
         return total
     
+    @property
+    def montant_rembourse(self) -> Decimal:
+        return sum((Decimal(str(p.montant)) for p in self.paiements
+                    if p.nature == 'remboursement' and p.est_effectif), Decimal('0'))
+
     @property
     def montant_restant(self) -> Decimal:
         """

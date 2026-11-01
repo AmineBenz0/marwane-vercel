@@ -79,6 +79,7 @@ const getMovementLabel = (movement) => {
     ? `Paiement fournisseur LC n° ${movement.numero_reference_lc}`
     : `Paiement fournisseur LC #${movement.id_cession}`;
   if (movement.id_charge) return movement.source_journaliere ? 'Dépense vaccin' : 'Dépense';
+  if (movement.nature_reglement === 'remboursement') return movement.type_mouvement === 'ENTREE' ? 'Remboursement fournisseur' : 'Remboursement client';
   if (movement.id_paiement) return movement.type_mouvement === 'ENTREE' ? 'Paiement client' : 'Paiement fournisseur';
   if (movement.id_transaction) return movement.type_mouvement === 'ENTREE' ? 'Vente encaissée' : 'Achat payé';
   return movement.type_mouvement === 'ENTREE' ? 'Entrée caisse' : 'Sortie caisse';
@@ -92,7 +93,7 @@ const getMovementOrigin = (movement) => {
       ? `Vaccin ${movement.nom_vaccin} · Saisie journalière`
       : 'Saisie journalière des vaccins';
   }
-  if (movement.id_paiement) return `Paiement #${movement.id_paiement}`;
+  if (movement.id_paiement) return `${movement.nature_reglement === 'remboursement' ? 'Remboursement' : 'Paiement'} #${movement.id_paiement}`;
   if (movement.id_transaction) return `Transaction #${movement.id_transaction}`;
   return 'Caisse';
 };
@@ -600,3 +601,4 @@ function MovementMobileCard({ movement }) {
 }
 
 export default Caisse;
+
