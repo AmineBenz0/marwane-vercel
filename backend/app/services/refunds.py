@@ -140,7 +140,9 @@ def apply_refund(db, command, actor):
             cle_idempotence=f'refund:{command.operation_id}', id_utilisateur_creation=actor_id)
         db.add(refund)
         db.flush()
-        sync_payment_cash_movement(db, refund, transaction, current_user=actor, reason=command.reason)
+        # Bank movement notes are varchar(255); the full reason remains on the
+        # settlement and immutable operation journal.
+        sync_payment_cash_movement(db, refund, transaction, current_user=actor, reason=command.reason[:255])
         db.flush()
         db.refresh(refund)
         result = {'record': PaiementRead.model_validate(refund).model_dump(mode='json'),

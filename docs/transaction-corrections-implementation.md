@@ -586,12 +586,20 @@ apply locks the parent transaction, revalidates the fingerprint and commits the
 refund, ledger movement, balance/snapshot and saved retry result together.
 
 The staging database migration is `20261101232602_explicit_transaction_refunds`.
-PostgreSQL bounds, immutable classification and non-deletion guards passed
-rollback-only checks. Local evidence: 144 existing/new backend regression tests
-passed before the additional backdating case; the final focused refund suite
-has 21 passing cases. The six focused frontend files have 29 passing tests.
-Build passed and targeted lint has zero errors with four existing warnings.
-Application rollout and owner walkthrough remain pending at this checkpoint.
+PostgreSQL bounds, immutable classification, historical credit and non-deletion
+guards passed rollback-only checks. Local evidence: 145 backend regressions
+passed before the final long-reason case; the focused refund suite has 22
+passing cases (146 distinct backend cases across these runs). The seven focused
+frontend files have 31 passing tests. Build passed and targeted lint has zero
+errors with four existing warnings.
+
+The authenticated staging walkthrough verified a 0.20 MAD cash refund followed
+by a 0.30 MAD bank refund, settling a 0.50 MAD credit without changing the
+original payment. A second-tab stale preview was rejected without creating a
+refund. A one-cent cash refund exposed pre-existing rounding in the cash screen;
+the cash balance, cards and history now retain cent precision. The original
+test sale and zero test-bank balance were restored, with no active money effects.
+See [Phase 6B evidence](phase6b-acceptance.md) for scope and verification limits.
 
 Refund records are visible in payment history and labeled in cash/bank histories
 and exports. A recorded refund cannot be financially edited through payment

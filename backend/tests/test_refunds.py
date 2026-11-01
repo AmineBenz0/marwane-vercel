@@ -231,3 +231,16 @@ def test_backdated_refund_cannot_spend_credit_already_returned_before_a_later_pa
     with pytest.raises(HTTPException) as exc:
         preview_refund(db_session, backdated)
     assert exc.value.status_code == 409
+
+
+def test_bank_refund_keeps_full_reason_without_exceeding_bank_note_capacity(db_session, correction_sale, test_user):
+    tx = correction_sale[0]
+    _, account = setup_credit(db_session, tx, test_user, bank=True)
+    reason = ('Remboursement documenté ' * 30).strip()
+    cmd = command(tx, account).model_copy(update={'reason': reason})
+    result = apply_refund(db_session, prepared(db_session, cmd), test_user)
+    refund = db_session.get(Paiement, result['record']['id_paiement'])
+    movement = db_session.query(MouvementBancaire).filter_by(id_paiement=refund.id_paiement, statut='active').one()
+    assert refund.notes == reason
+    assert len(movement.notes) <= 255
+    assert db_session.get(CorrectionOperation, cmd.operation_id).reason == reason
