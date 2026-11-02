@@ -5,12 +5,14 @@ Scope: shared client/supplier balances and advance history, editable oldest-firs
 ## Automated verification
 
 - Backend full suite: 335 passed, 11 skipped. Final settlement and atomic-creation checks: 14 passed after the last backend changes.
-- Frontend full run: 303 passed out of 306. One new assertion needed its expected complement normalized from `4` to `4.00`; an existing LC test timed out under parallel load and left its following test with a pending rejection. The complete two-dialog rerun passed all 10 checks. These were not left as unresolved failures.
+- Frontend full suite: 308 passed across 63 files. The final creation checks passed all 3 targeted cases after the cent-rounding and transaction-type freeze adjustments. The 24 focused creation/reference/dialog checks also passed; earlier timeout and formatting-assertion failures were resolved.
 - The creation form's uncertain-response test exposed a missing effective field lock. Inputs and controls now freeze while the original confirmation can be retried with its original UUID and payload. The creation tests cover full advance funding, partial funding, and ambiguous-response retry.
 - A live check found the initial sales-products request could overwrite purchase products when opening from a supplier profile. Reference loading now ignores superseded requests; switching type uses the same effect rather than launching an extra unguarded request. Added delayed-response and type-switch regressions.
 - Production frontend build passed. Targeted lint has no errors; three existing hook-dependency warnings remain in the profile/detail pages.
 
 ## Authenticated staging walkthrough
+
+Final verified code deployment: `dpl_69ctNbvA8RdQyZRaTDqiWLVGLp8U`, commit `37922e61ee5cadbd53f2765a9d95987fa609109b`. The staging alias resolves to this READY deployment. Follow-up commits fixed purchase reference loading, cent-rounded complements, and disabling the transaction-type switch during an uncertain confirmation.
 
 Initial feature deployment: `dpl_7XvynvpKtEt4mWCNfYT4mfUNo4az`, commit `f646c3a61ad58fbeb887ef64df17acc2bb7be622`. Staging alias was explicitly assigned after its commit, project and READY state were verified.
 
@@ -21,7 +23,10 @@ Initial feature deployment: `dpl_7XvynvpKtEt4mWCNfYT4mfUNo4az`, commit `f646c3a6
 - Returned the remaining 0.10 MAD. Return `e445c25b-dd7d-4109-9655-b575b7d596d3` created incoming bank movement 32 and changed account 3 to -0.20 MAD. Canceled that return, the allocation, and the original advance through the preview/confirmation UI.
 - Read-only SQL after cleanup confirmed zero active marked advances, allocations or new payment effects; cash movements 68/69 and bank movements 31/32 canceled; account 3 restored to zero. Supplier 6 returned to 2,000 MAD net outstanding. No console errors were captured on the walkthrough tab.
 
-Screenshots show the [client layout](qa/advance-client-profile.png), [combined confirmation](qa/advance-combined-preview.png), and [supplier advance with grouped usage](qa/advance-supplier-grouped.png). Screenshots containing active entries were captured during verification, before cleanup.
+- New purchase creation from supplier 6: after correcting the reference-loading race, the selector showed only purchase products. Recorded test purchase 41 (one unit, 0.30 MAD) with advance `bdbd29df-aae0-4aca-8359-1c9fd74c7417` for 0.20 MAD and an automatically suggested complement of exactly 0.10 MAD. SQL confirmed compensation payment 59, ordinary payment 60, cash advance movement 72 and complement movement 73, with no cash movement for compensation. The form closed successfully and the profile refreshed to fully settled purchase totals.
+- Final cleanup canceled allocation `5cb3e406-8bcd-5a03-9f2a-60da8ceca879`, payment 60, purchase 41 and its unused advance. SQL confirmed all marked advances and allocations canceled, payments 56–60 inactive, no active test cash/bank movements, account 3 at zero, purchase 41 inactive, sale 27 with no active payments, and product 6 stock restored to its baseline of 200. Retained journals and canceled history remain available.
+
+Screenshots show the [client layout](qa/advance-client-profile.png), [combined confirmation](qa/advance-combined-preview.png), and [supplier advance with grouped usage](qa/advance-supplier-grouped.png). Screenshots containing active entries were captured during verification, before cleanup. The [final verified supplier profile](qa/advance-final-verified.png) shows the restored balance after cleanup.
 
 ## Release limits
 
