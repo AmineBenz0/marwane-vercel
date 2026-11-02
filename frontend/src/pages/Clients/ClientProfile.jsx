@@ -1,5 +1,6 @@
 import { buildTransactionPaymentBatch } from '../Transactions/transactionPaymentBatch';
 import PartyCreditPanel from '../../components/Corrections/PartyCreditPanel';
+import PartyCreditMenu from '../../components/Corrections/PartyCreditMenu';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 /**
  * Page Profil Client.
@@ -126,6 +127,7 @@ function ClientProfile() {
   const [transactionFormLoading, setTransactionFormLoading] = useState(false);
   const [transactionFormError, setTransactionFormError] = useState(null);
   const [activeTab, setActiveTab] = useState('resume');
+  const [creditPanelOpen, setCreditPanelOpen] = useState(false);
   const [balancePeriod, setBalancePeriod] = useState('month');
 
   /**
@@ -609,7 +611,7 @@ function ClientProfile() {
         </Box>
         <Box sx={{ 
           display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
+          flexDirection: 'row',
           gap: { xs: 1.5, sm: 2 }, 
           width: { xs: '100%', sm: 'auto' }
         }}>
@@ -618,7 +620,7 @@ function ClientProfile() {
             startIcon={!isMobile && <EditIcon />}
             onClick={handleEdit}
             size={isMobile ? 'medium' : 'medium'}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
+            sx={{ width: 'auto' }}
           >
             Éditer
           </Button>
@@ -627,10 +629,11 @@ function ClientProfile() {
             startIcon={!isMobile && <AddIcon />}
             onClick={handleNewTransaction}
             size={isMobile ? 'medium' : 'medium'}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
+            sx={{ flexGrow: { xs: 1, sm: 0 }, width: 'auto' }}
           >
             Nouvelle vente
           </Button>
+          <PartyCreditMenu onOpen={() => setCreditPanelOpen(true)} />
         </Box>
       </Box>
 
@@ -663,8 +666,10 @@ function ClientProfile() {
         </Tabs>
       </Card>
 
+      <PartyCreditPanel key={id} partyType="client" partyId={id} partyName={client.nom_client} totalActivity={statistiques?.montant_total_ventes ?? null} totalTransactions={statistiques?.total_transactions ?? null}
+        showSummary={activeTab === 'resume'} open={creditPanelOpen} onOpen={() => setCreditPanelOpen(true)} onClose={() => setCreditPanelOpen(false)} />
+
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
-      <PartyCreditPanel partyType="client" partyId={id} totalActivity={statistiques?.montant_total_ventes ?? null} totalTransactions={statistiques?.total_transactions ?? null} />
 
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 }, borderRadius: 3 }}>
         <CardContent>

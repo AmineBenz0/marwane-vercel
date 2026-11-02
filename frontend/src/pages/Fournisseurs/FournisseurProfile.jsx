@@ -1,5 +1,6 @@
 import { buildTransactionPaymentBatch } from '../Transactions/transactionPaymentBatch';
 import PartyCreditPanel from '../../components/Corrections/PartyCreditPanel';
+import PartyCreditMenu from '../../components/Corrections/PartyCreditMenu';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 /**
  * Page Profil Fournisseur.
@@ -124,6 +125,7 @@ function FournisseurProfile() {
   const [transactionFormLoading, setTransactionFormLoading] = useState(false);
   const [transactionFormError, setTransactionFormError] = useState(null);
   const [activeTab, setActiveTab] = useState('resume');
+  const [creditPanelOpen, setCreditPanelOpen] = useState(false);
   const [balancePeriod, setBalancePeriod] = useState('month');
 
   /**
@@ -646,6 +648,7 @@ function FournisseurProfile() {
           >
             Nouvel achat
           </Button>
+          <PartyCreditMenu onOpen={() => setCreditPanelOpen(true)} />
         </Box>
       </Box>
 
@@ -664,8 +667,10 @@ function FournisseurProfile() {
         </Tabs>
       </Card>
 
+      <PartyCreditPanel key={id} partyType="fournisseur" partyId={id} partyName={fournisseur.nom_fournisseur} totalActivity={statistiques?.montant_total_achats ?? null} totalTransactions={statistiques?.total_transactions ?? null}
+        showSummary={activeTab === 'resume'} open={creditPanelOpen} onOpen={() => setCreditPanelOpen(true)} onClose={() => setCreditPanelOpen(false)} />
+
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
-      <PartyCreditPanel partyType="fournisseur" partyId={id} totalActivity={statistiques?.montant_total_achats ?? null} totalTransactions={statistiques?.total_transactions ?? null} />
 
       <Card sx={{ mb: 3, borderRadius: 3 }}>
         <CardContent>

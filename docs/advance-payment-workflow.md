@@ -4,7 +4,9 @@ Advances retain the existing accounting model: recording money received from a c
 
 ## User workflow
 
-- Client and supplier summaries show total activity, the net outstanding balance, and available advances together. Active advances show their remaining amount; uses and returns sit under the originating advance. Finished and canceled records remain in a collapsed history.
+- Client and supplier summaries show two primary cards: total activity and the net outstanding balance. An available advance adds a discreet link beneath the balance. The shared “Autres actions” menu opens “Avances et crédits” from every profile tab, including when no advance exists.
+- The responsive advance drawer contains the available amount, recording and settlement actions, active advance cards, and collapsed history. Uses and returns remain grouped under their originating advance through the existing ExpandableDetails component.
+- PartyCreditPanel owns the single balance/history request and the summary; PartyCreditDrawer owns the detailed view and its existing operation dialogs; PartyCreditMenu provides the shared header entry point. Refreshing balances keeps an open operation mounted. The drawer cannot be dismissed while an operation dialog is open.
 - Recording an advance does not require selecting a sale or purchase.
 - A transaction payment can combine existing advances with a new cash or bank complement. The preview distinguishes compensation from actual new money and shows the resulting debt and available advance.
 - The profile shortcut proposes the oldest unpaid transactions first and allows editing amounts before confirmation. A specific advance can also be selected from its card.
