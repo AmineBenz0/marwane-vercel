@@ -70,7 +70,6 @@ export default function CreditOperationDialog({ action, partyType, partyId, tran
           : <Alert severity={cancel ? 'warning' : 'info'}>{cancel ? 'Les mouvements de cet enregistrement erroné seront annulés. L’historique sera conservé.'
             : `${flow.review.direction === 'ENTREE' ? 'Argent reçu' : 'Argent versé'} · ${values.type_paiement === 'cash' ? 'Espèces' : `Compte : ${accounts.find(a => a.id_compte === Number(values.id_compte))?.nom_banque || 'Compte bancaire'}`}`}</Alert>}
       </> : <>
-        {money && <Alert severity="info">Enregistrez uniquement un mouvement d’argent réellement effectué. Une avance reste disponible jusqu’à son utilisation ou sa restitution.</Alert>}
         {cancel && <Alert severity="warning">Annulez uniquement un enregistrement erroné. Les conséquences seront présentées avant confirmation.</Alert>}
         {action === 'allocate' && <>
           {transaction ? <TextField select required label="Crédit à utiliser" value={values.source} onChange={update('source')} disabled={flow.busy || loading}>
