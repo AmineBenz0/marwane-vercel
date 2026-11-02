@@ -873,9 +873,9 @@ function UnpaidTransactionForm({
                           : 'cash'
                       ),
                     ]);
-                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount));
+                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount).toFixed(2));
                   } else {
-                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount));
+                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount).toFixed(2));
                     setValue(
                       `lignes.${index}.paiements.0.date`,
                       watch('date_transaction') || today()

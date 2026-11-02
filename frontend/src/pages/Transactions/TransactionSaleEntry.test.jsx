@@ -70,23 +70,23 @@ describe('sale entry preserves user input', () => {
     expect(submit.mock.calls[0][0]).toMatchObject({ operation_id: expect.any(String), lignesData: [{ montant_avance: 15, ajouter_paiement: false }] });
   });
 
-  it('suggests only the cash complement when an advance covers part of a new sale', async () => {
+  it.each([{ advance: '6', qty: '10', unitPrice: '1.5', complement: 9 }, { advance: '0.20', qty: '1', unitPrice: '0.30', complement: 0.10 }])('suggests the exact cash complement for a partial advance ($advance)', async ({ advance, qty, unitPrice, complement }) => {
     const original = get.getMockImplementation();
     get.mockImplementation((path, options) => path === '/credits/party' ? Promise.resolve({ advances: [
-      { nature: 'avance', statut: 'active', date_effet: '2000-01-01', available: '6' }], allocations: [] }) : original(path, options));
+      { nature: 'avance', statut: 'active', date_effet: '2000-01-01', available: advance }], allocations: [] }) : original(path, options));
     const submit = vi.fn();
     render(<TransactionForm {...props} onSubmit={submit} />);
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
     fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
     await selectBuilding('Bâtiment A');
-    fireEvent.change(quantity(), { target: { value: '10' } });
-    fireEvent.change(price(), { target: { value: '1.5' } });
+    fireEvent.change(quantity(), { target: { value: qty } });
+    fireEvent.change(price(), { target: { value: unitPrice } });
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: /Utiliser l’avance disponible/ }));
     fireEvent.click(screen.getByRole('radio', { name: 'Régler le complément' }));
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
     await waitFor(() => expect(submit).toHaveBeenCalledOnce());
-    expect(submit.mock.calls[0][0].lignesData[0]).toMatchObject({ montant_avance: 6, ajouter_paiement: true, paiements: [{ montant: 9 }] });
+    expect(submit.mock.calls[0][0].lignesData[0]).toMatchObject({ montant_avance: Number(advance), ajouter_paiement: true, paiements: [{ montant: complement }] });
   });
   it('keeps the saved deferred status when editing a sale that is fully covered', async () => {
     render(<TransactionForm {...props} initialValues={{
