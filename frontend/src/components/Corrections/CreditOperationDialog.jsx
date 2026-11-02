@@ -39,7 +39,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, tran
   const update = key => event => setValues(v => ({ ...v, [key]: event.target.value }));
   const submit = event => {
     event.preventDefault();
-    let payload = { action, reason: values.reason };
+    let payload = { action, reason: values.reason.trim() || titles[action] };
     if (!cancel) payload = { ...payload, montant: values.montant, date_effet: values.date_effet };
     if (money) payload = { ...payload, type_paiement: values.type_paiement, id_compte: values.type_paiement === 'virement' ? Number(values.id_compte) : null };
     if (action === 'advance') payload[partyType === 'client' ? 'id_client' : 'id_fournisseur'] = Number(partyId);
@@ -94,7 +94,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, tran
             <MenuItem value="">Choisir un compte</MenuItem>{accounts.map(a => <MenuItem key={a.id_compte} value={a.id_compte}>{a.nom_banque} · {a.numero_compte}</MenuItem>)}
           </TextField>}
         </>}
-        <TextField required label="Commentaire" value={values.reason} onChange={update('reason')} disabled={flow.busy} multiline rows={2} inputProps={{ minLength: 3, maxLength: 1000 }} />
+        <TextField label="Commentaire (optionnel)" value={values.reason} onChange={update('reason')} disabled={flow.busy} multiline rows={2} inputProps={{ minLength: 3, maxLength: 1000 }} />
       </>}
     </Stack></DialogContent>
     <DialogActions>
