@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Stack, Typography } from '@mui/material';
-import { AccountBalanceWalletOutlined, ReceiptLongOutlined, HistoryOutlined, ExpandMore } from '@mui/icons-material';
+import { AccountBalanceWalletOutlined, ReceiptLongOutlined, HistoryOutlined } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import StatCard from '../StatCard/StatCard';
+import ExpandableDetails from '../ExpandableDetails';
 import useCorrectionRefresh from './useCorrectionRefresh';
 import CreditOperationDialog from './CreditOperationDialog';
 import AdvanceSettlementDialog from './AdvanceSettlementDialog';
@@ -64,14 +65,13 @@ export default function PartyCreditPanel({ partyType, partyId, totalActivity = n
           {Number(a.available) === Number(a.montant) && <Button size="small" color="error" onClick={() => setAction({ action: 'cancel_advance', advance: a })}>Annuler l’enregistrement</Button>}
         </Stack>
       </Stack>}
-      {(uses.length > 0 || returns.length > 0) && <Box component="details" open={history || undefined} sx={{ mt: 1.5 }}>
-        <Box component="summary" sx={{ color: 'primary.main', cursor: 'pointer', fontSize: '0.8125rem' }}>Voir les utilisations et restitutions</Box>
+      {(uses.length > 0 || returns.length > 0) && <ExpandableDetails label="Utilisations et restitutions" icon={<ReceiptLongOutlined />} defaultExpanded={history} sx={{ mt: 1.5 }}>
         {uses.map(allocationRow)}
         {returns.map(r => <Stack key={r.id_avance} direction="row" spacing={1} justifyContent="space-between" sx={{ borderTop: 1, borderColor: 'divider', pt: 1, mt: 1 }}>
           <Typography variant="body2">Restitution du {formatShortDate(r.date_effet)} · {money(r.montant)}{r.statut === 'annule' ? ' · Annulée' : ''}</Typography>
           {r.statut === 'active' && <Button size="small" onClick={() => setAction({ action: 'cancel_advance', advance: r })}>Annuler l’enregistrement</Button>}
         </Stack>)}
-      </Box>}
+      </ExpandableDetails>}
     </Box>;
   };
   return <Box sx={{ mb: 3 }}>
@@ -93,10 +93,9 @@ export default function PartyCreditPanel({ partyType, partyId, totalActivity = n
         {active.map(a => advanceCard(a))}
         {!active.length && <Typography color="text.secondary" sx={{ py: 2 }}>Aucune avance disponible actuellement.</Typography>}
         {ungrouped.filter(a => a.statut === 'active').length > 0 && <Box sx={{ mt: 1, mb: 2 }}><Typography variant="subtitle2">Crédits entre transactions</Typography>{ungrouped.filter(a => a.statut === 'active').map(allocationRow)}</Box>}
-        <Box component="details" sx={{ borderTop: 1, borderColor: 'divider', pt: 2, mt: 1 }}>
-          <Box component="summary" sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', listStyle: 'none' }}><HistoryOutlined fontSize="small" /><Typography fontWeight={600}>Historique</Typography><Typography variant="caption" color="text.secondary">{archived.length} avance(s) terminée(s)</Typography><ExpandMore sx={{ ml: 'auto' }} /></Box>
-          <Box sx={{ mt: 2 }}>{archived.map(a => advanceCard(a, true))}{ungrouped.filter(a => a.statut === 'annule').map(allocationRow)}{!archived.length && !ungrouped.some(a => a.statut === 'annule') && <Typography color="text.secondary">Aucun enregistrement terminé ou annulé.</Typography>}</Box>
-        </Box>
+        <ExpandableDetails label="Historique" icon={<HistoryOutlined />} meta={`${archived.length} ${archived.length === 1 ? 'avance terminée' : 'avances terminées'}`} sx={{ mt: 1 }}>
+          {archived.map(a => advanceCard(a, true))}{ungrouped.filter(a => a.statut === 'annule').map(allocationRow)}{!archived.length && !ungrouped.some(a => a.statut === 'annule') && <Typography color="text.secondary">Aucun enregistrement terminé ou annulé.</Typography>}
+        </ExpandableDetails>
       </>}
     </CardContent></Card>
     {action && <CreditOperationDialog {...action} partyType={partyType} partyId={partyId} onClose={() => setAction(null)} onSaved={() => setAction(null)} />}
