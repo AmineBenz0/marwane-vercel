@@ -68,7 +68,7 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
         {preview.before.notes !== preview.after.notes && <Typography sx={{ overflowWrap: 'anywhere' }}>Notes : {preview.after.notes || 'Non renseigné'}</Typography>}
         {preview.id_compte && <Typography>Compte après correction : {accountLabel(preview.id_compte)}</Typography>}
         {preview.bank_balances?.map(a => <Typography key={a.id_compte}>Solde de {accountLabel(a.id_compte)} : {formatMontant(a.before)} → <strong>{formatMontant(a.after)}</strong></Typography>)}
-        {preview.remaining_after !== null && <Typography>Reste à régler après : <strong>{formatMontant(preview.remaining_after)}</strong></Typography>}
+        {preview.remaining_after !== null && <Typography>{Number(preview.remaining_after) < 0 ? `Crédit ${preview.balance_side || (lc.id_client ? 'client' : 'fournisseur')} après correction : ` : 'Reste à régler après : '}<strong>{formatMontant(Math.abs(Number(preview.remaining_after)))}</strong></Typography>}
         <Alert severity={cancelUsage ? 'warning' : 'info'}>{cancelUsage
           ? 'L’utilisation et ses mouvements seront annulés ensemble. La LC redeviendra disponible et l’historique sera conservé.'
           : preview.usage === 'cession' ? 'La cession sera remplacée en conservant son historique. Aucun argent supplémentaire en caisse.'

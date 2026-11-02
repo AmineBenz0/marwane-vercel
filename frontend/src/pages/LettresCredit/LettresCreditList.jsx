@@ -764,7 +764,7 @@ function ActionDialog({
                   key={isBank ? option.id_compte : option.id_fournisseur}
                   value={isBank ? option.id_compte : option.id_fournisseur}
                 >
-                  {isBank ? option.nom_compte : option.nom_fournisseur}
+                  {isBank ? `${option.nom_banque} · ${option.numero_compte}` : option.nom_fournisseur}
                 </MenuItem>
               ))}
             </TextField>
@@ -799,3 +799,4 @@ function ActionDialog({
 }
 
 export default LettresCreditList;
+

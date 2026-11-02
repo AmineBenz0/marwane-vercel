@@ -60,3 +60,13 @@ it('keeps the preview visible and disables confirmation after a conflict', async
   await screen.findByText('Aperçu périmé');
   expect(screen.getByRole('button', { name: 'Confirmer la correction' })).toBeDisabled();
 });
+
+it('labels surplus as credit instead of a negative amount due', async () => {
+  post.mockResolvedValue({ before: lc, after: { ...lc, montant: '6.00' }, usage: 'payment',
+    remaining_after: '-1.00', balance_side: 'client', money_effect: 'replaced', dependency_fingerprint: 'a'.repeat(64) });
+  render(<LCCorrectionDialog lc={lc} onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.change(await screen.findByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Corriger crédit' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
+  expect(await screen.findByText(/Crédit client après correction/)).toHaveTextContent('1 MAD');
+  expect(screen.queryByText(/Reste à régler après/)).not.toBeInTheDocument();
+});

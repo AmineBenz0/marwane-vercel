@@ -206,6 +206,7 @@ def plan_lc_correction(db, command, *, lock=False):
         'usage_before': {'date_effet': old_day.isoformat() if old_day else None, 'id_compte': deposit.id_compte if deposit else None},
         'bank_balances': bank_balances,
         'payment_id': payment.id_paiement if payment else None, 'remaining_after': remaining,
+        'balance_side': 'client' if payment and tx_by_id[payment.id_transaction].id_client is not None else 'fournisseur',
         'cession_id': cession.id_cession if cession else None, 'deposit_id': deposit.id_mouvement if deposit else None,
         'bank_before': [{'id_compte': m.id_compte, 'montant': format(m.montant, '.2f'), 'direction': m.type_mouvement} for m in active_bank],
         'money_effect': 'replaced' if effect_changed and usage in {'payment', 'deposit'} else 'unchanged',

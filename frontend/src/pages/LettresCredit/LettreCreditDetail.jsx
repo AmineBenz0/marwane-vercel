@@ -40,6 +40,7 @@ function LettreCreditDetail() {
   const [cessions, setCessions] = useState([]);
   const [correction, setCorrection] = useState(null);
   const [history, setHistory] = useState([]);
+  const [usage, setUsage] = useState(null);
   const [historyError, setHistoryError] = useState('');
   const [reload, setReload] = useState(0);
   useCorrectionRefresh(() => setReload(v => v + 1));
@@ -53,7 +54,7 @@ function LettreCreditDetail() {
           get(`/lettres-credit/${id}/correction-context`).catch(err => ({ error: err.message }))]);
         if (!active) return;
         setLc(data);
-        setHistory(context.history || []); setHistoryError(context.error || '');
+        setHistory(context.history || []); setUsage(context.plan || null); setHistoryError(context.error || '');
         setCessions(allCessions.filter((cession) => cession.id_lc === parseInt(id, 10)));
       } catch (err) {
         if (!active) return;
@@ -147,6 +148,8 @@ function LettreCreditDetail() {
 
         <Grid item xs={12}>
           <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Historique d'utilisation</Typography>
+          {usage?.usage === 'payment' && <Alert severity="info" sx={{ mb: 1 }}>Paiement n° {usage.payment_id} · {formatMontant(lc.montant)} · {formatDate(usage.date_effet)}</Alert>}
+          {usage?.usage === 'deposit' && <Alert severity="info" sx={{ mb: 1 }}>Versement bancaire · Compte n° {usage.id_compte} · {formatMontant(lc.montant)} · {formatDate(usage.date_effet)}</Alert>}
           <TableContainer component={Paper}>
             <Table size="small">
               <TableHead>
@@ -161,7 +164,7 @@ function LettreCreditDetail() {
               <TableBody>
                 {cessions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">Aucune utilisation enregistrée</TableCell>
+                    <TableCell colSpan={5} align="center">Aucune cession enregistrée</TableCell>
                   </TableRow>
                 ) : (
                   cessions.map((cession) => (
