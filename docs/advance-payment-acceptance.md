@@ -49,3 +49,11 @@ The final code deployment is `dpl_9gJjiZu9KoMAvS3gTSfHvC7hVTyd`, commit `54973aa
 - Canceled the unused test advance. SQL confirmed the advance, allocation and cash movement 76 canceled, and zero active payments on sale 27. Client 7 returned to 206.50 MAD net with no advance link. Supplier 6 remained at 2,000 MAD net; its empty drawer, supplier labels and retained grouped history were verified. No console errors were captured.
 
 Evidence: [summary with an available-advance link](qa/advance-secondary-hint.png), [detailed drawer](qa/advance-secondary-drawer.png), and [final supplier summary after cleanup](qa/advance-secondary-summary.png). The first two images contain the marked test advance before cancellation.
+## Optional comments — 2026-11-02
+
+Advance operation dialogs show `Commentaire (optionnel)` without a required marker. A blank or whitespace-only value uses the operation title as the audit reason; an entered comment is preserved. Database audit constraints remain unchanged.
+
+Validation: focused dialog tests 8/8 passed, ESLint passed, frontend build passed. On staging commit `0655968ee1bb474652a122bc7ef346711e033fd2` (READY deployment `dpl_3nCV4fUMNCwTZCRZcM2YiCa2fVJ4`), a 0.01 MAD cash advance was previewed and saved for synthetic client 7 with no comment. The drawer displayed the automatic description `Enregistrer une avance`. The same entry was cancelled through preview/confirmation with its comment cleared. Available advances returned to 0.00 MAD and the client's net balance returned to 206.50 MAD.
+
+Screenshot: [Optional comment field](qa/advance-optional-comment.png).
+
