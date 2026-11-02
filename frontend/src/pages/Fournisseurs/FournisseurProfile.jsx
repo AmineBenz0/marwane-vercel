@@ -238,7 +238,7 @@ function FournisseurProfile() {
     } catch (err) {
       console.error('Erreur lors du chargement du profil fournisseur:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors du chargement du profil fournisseur';
-      setError(errorMessage);
+      if (!background) setError(errorMessage);
       notification.error(errorMessage);
     } finally {
       setLoading(false);

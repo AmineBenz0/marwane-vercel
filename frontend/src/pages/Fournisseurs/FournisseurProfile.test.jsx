@@ -8,10 +8,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import FournisseurProfile from './FournisseurProfile';
 import { get } from '../../services/api';
+import { CORRECTION_EVENT } from '../../components/Corrections/useCorrectionFlow';
 
 // Mock des dépendances
 vi.mock('../../services/api', () => ({
@@ -37,7 +38,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('../../components/Corrections/PartyCreditMenu', () => ({ default: ({ onOpen }) => <button onClick={onOpen}>Autres actions</button> }));
 
-vi.mock('../../components/Corrections/PartyCreditPanel', () => ({ default: ({ partyType, partyId }) => <section aria-label={`Crédits ${partyType} ${partyId}`} /> }));
+vi.mock('../../components/Corrections/PartyCreditPanel', () => ({ default: ({ partyType, partyId, open }) => <section aria-label={`Crédits ${partyType} ${partyId}`} data-open={String(open)} /> }));
 
 // Mock des composants Material-UI
 vi.mock('@mui/material', () => ({
@@ -156,6 +157,21 @@ describe('FournisseurProfile', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('keeps an open advance drawer mounted when the profile background refresh fails', async () => {
+    configureProfileApi({ fournisseur: { id_fournisseur: 1, nom_fournisseur: 'Fournisseur stable', est_actif: true }, statistiques: { total_transactions: 0, montant_total_achats: 0 }, transactions: [] });
+    render(<BrowserRouter><FournisseurProfile /></BrowserRouter>);
+    await screen.findByText('Fournisseur stable');
+    fireEvent.click(screen.getByRole('button', { name: 'Autres actions' }));
+    expect(screen.getByRole('region', { name: 'Crédits fournisseur 1' })).toHaveAttribute('data-open', 'true');
+    get.mockRejectedValue(new Error('Réseau indisponible'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await act(async () => { fireEvent(window, new Event(CORRECTION_EVENT)); });
+      expect(screen.getByText('Fournisseur stable')).toBeVisible();
+      expect(screen.getByRole('region', { name: 'Crédits fournisseur 1' })).toHaveAttribute('data-open', 'true');
+    } finally { log.mockRestore(); }
   });
 
   it('devrait importer le composant sans erreur', () => {
