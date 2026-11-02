@@ -82,6 +82,10 @@ def void_payment(
     if payment.statut == "annule":
         raise HTTPException(status_code=400, detail="Le paiement est déjà annulé")
 
+    if payment.nature in {None, 'paiement'} and db.query(Paiement.id_paiement).filter(
+        Paiement.id_transaction == payment.id_transaction, Paiement.statut != 'annule',
+        Paiement.nature.in_(['remboursement', 'credit_recu', 'credit_transfere'])).first():
+        raise HTTPException(409, 'Traitez les remboursements ou affectations liés avant d’annuler ce paiement.')
     original_status = payment.statut
     original_lc_id = payment.id_lc
     payment.statut = "annule"
@@ -355,7 +359,7 @@ def sync_payment_cash_movement(
             type_mouvement=movement_type,
             source=payment.type_paiement,
             reference=payment.reference_virement or payment.numero_cheque,
-            notes=reason,
+            notes=reason[:255],
             id_paiement=payment.id_paiement,
             current_user=current_user,
             date_mouvement=expected_date,

@@ -75,7 +75,7 @@ def payment_total_as_of(transaction: Transaction, as_of: date) -> Decimal:
         (
             payment.montant_net
             for payment in transaction.paiements
-            if _payment_date(payment) <= as_of and payment.est_effectif
+            if payment_effective_date(payment) <= as_of and payment.est_effectif
         ),
         Decimal("0"),
     )
@@ -86,7 +86,7 @@ def remaining_amount_as_of(transaction: Transaction, as_of: date) -> Decimal:
     return Decimal(str(transaction.montant_total)) - payment_total_as_of(transaction, as_of)
 
 
-def _payment_date(payment: Paiement) -> date:
+def payment_effective_date(payment: Paiement) -> date:
     """Use the settlement date for cleared checks and the posted date otherwise."""
     if payment.type_paiement == "cheque":
         return payment.date_encaissement_effective or payment.date_paiement

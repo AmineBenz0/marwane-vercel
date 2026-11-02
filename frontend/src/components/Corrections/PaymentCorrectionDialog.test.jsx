@@ -44,3 +44,12 @@ it('preserves legacy supplier bank funding when changing only the payment method
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
   await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ type_paiement: 'cash', source_reglement: 'banque' }));
 });
+
+it('previews a cleared-cheque status correction while preserving amount and funding', async () => {
+  render(<PaymentCorrectionDialog payment={{ ...payment, type_paiement: 'cheque', statut_cheque: 'encaisse', date_encaissement_effective: '2026-10-21' }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByRole('spinbutton', { name: /^Montant/ })).toBeDisabled();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Statut du chèque' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Rejeté' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
+  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ statut_cheque: 'rejete', date_encaissement_effective: null }));
+});

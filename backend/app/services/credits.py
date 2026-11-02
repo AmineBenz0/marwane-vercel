@@ -19,7 +19,7 @@ from app.models.correction_operation import CorrectionOperation
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.services.correction_contract import replay_result
-from app.services.financial import payment_total_as_of, query_financial_transactions
+from app.services.financial import payment_effective_date, payment_total_as_of, query_financial_transactions
 from app.services.financial_ledger import create_cash_snapshot, record_bank_movement
 from app.services.ledger import void_cash_movement, void_bank_movement
 from app.services.settlement_state import json_value, row_snapshot, settlement_state
@@ -48,8 +48,8 @@ def settlement_capacity(transaction, effective_date, *, credit=True):
     capacity = min(running, -transaction.montant_restant * sign)
     deltas = {}
     for payment in transaction.paiements:
-        if payment.est_effectif and payment.date_paiement > effective_date:
-            deltas[payment.date_paiement] = deltas.get(payment.date_paiement, Decimal('0')) + payment.montant_net
+        if payment.est_effectif and payment_effective_date(payment) > effective_date:
+            deltas[payment_effective_date(payment)] = deltas.get(payment_effective_date(payment), Decimal('0')) + payment.montant_net
     for day in sorted(deltas):
         running += deltas[day] * sign
         capacity = min(capacity, running)

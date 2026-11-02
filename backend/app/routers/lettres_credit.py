@@ -24,6 +24,10 @@ from app.utils.dependencies import get_current_active_user
 from app.services.financial_ledger import create_cash_snapshot, record_bank_movement, validate_bank_idempotency
 from app.services.letter_credit_cancellation import cancel_letter_credit
 from app.utils.business_date import business_date
+from app.schemas.lc_correction import LCCorrectionCommand, LCCorrectionApply
+from app.services.lc_corrections import preview_lc_correction, apply_lc_correction
+from app.models.correction_operation import CorrectionOperation
+from app.services.settlement_state import row_snapshot
 
 router = APIRouter(prefix="/lettres-credit", tags=["Lettres de Crédit"])
 
@@ -117,6 +121,38 @@ def get_lettres_credit_disponibles(
     return results
 
 
+@router.post("/corrections/preview")
+def preview_lc(command: LCCorrectionCommand, db: Session = Depends(get_db),
+               actor: Utilisateur = Depends(get_current_active_user)):
+    return preview_lc_correction(db, command)
+
+
+@router.post("/corrections/apply")
+def apply_lc(body: LCCorrectionApply, db: Session = Depends(get_db),
+             actor: Utilisateur = Depends(get_current_active_user)):
+    return apply_lc_correction(db, body.command, body.dependency_fingerprint, actor)
+
+
+@router.get("/{id}/correction-context")
+def lc_correction_context(id: int, db: Session = Depends(get_db),
+                          actor: Utilisateur = Depends(get_current_active_user)):
+    lc = db.get(LettreDeCredit, id)
+    if lc is None:
+        raise HTTPException(404, 'Lettre de crédit introuvable.')
+    from uuid import uuid4
+    command = LCCorrectionCommand(operation_id=uuid4(), id_lc=id, expected_version=lc.version_utilisation,
+        reason='Chargement de la situation', changes={'notes': lc.notes})
+    plan = preview_lc_correction(db, command)
+    operations = db.query(CorrectionOperation).filter(
+        CorrectionOperation.request_payload['kind'].as_string() == 'lc_correction',
+        CorrectionOperation.request_payload['id_lc'].as_integer() == id).order_by(
+        CorrectionOperation.recorded_at.desc()).limit(30).all()
+    return {'plan': plan, 'history': [{'operation_id': str(o.operation_id), 'reason': o.reason,
+        'recorded_at': o.recorded_at, 'actor_id': o.id_utilisateur,
+        'before': o.result_payload['impact']['before'], 'after': o.result_payload['record'],
+        'impact': o.result_payload['impact']} for o in operations]}
+
+
 @router.get("/{id}", response_model=LettreCreditRead)
 def get_lettre_credit(
     id: int,
@@ -177,6 +213,8 @@ def update_lettre_credit(
         raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
     
     update_data = lc_data.model_dump(exclude_unset=True)
+    if set(update_data) - {'notes'}:
+        raise HTTPException(409, 'Utilisez la correction avec aperçu pour modifier les valeurs de la LC.')
     for key, value in update_data.items():
         setattr(lc, key, value)
     
@@ -198,8 +236,10 @@ def delete_lettre_credit(
     if not lc:
         raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
     
-    if lc.statut == 'utilisee':
-        raise HTTPException(status_code=400, detail="Impossible de supprimer une LC déjà utilisée")
+    from app.models.paiement import Paiement
+    if (lc.statut == 'utilisee' or lc.cessions or db.query(Paiement.id_paiement).filter(Paiement.id_lc == id).first()
+        or lc.version_utilisation > 0):
+        raise HTTPException(409, 'Une LC avec un historique d’utilisation est conservée dans le registre.')
     
     db.delete(lc)
     db.commit()
@@ -351,3 +391,4 @@ def payer_fournisseur_lc(
     db.commit()
     db.refresh(lc)
     return format_lc_read(lc)
+

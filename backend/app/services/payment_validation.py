@@ -106,6 +106,8 @@ def validate_lc_payment(
                 ),
             )
 
+    if paiement_data.date_paiement < lc.date_disponibilite:
+        raise HTTPException(422, 'Le paiement ne peut pas précéder la disponibilité de la LC.')
     if Decimal(str(paiement_data.montant)) != Decimal(str(lc.montant)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,3 +137,4 @@ def validate_lc_payment(
     lc.statut = "utilisee"
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     return lc
+

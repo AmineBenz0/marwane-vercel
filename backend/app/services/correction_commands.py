@@ -30,6 +30,7 @@ from app.services.correction_contract import (
     request_fingerprint,
     request_payload,
 )
+from app.services.cheque_corrections import validate_cheque_correction
 from app.services.financial import validate_payment_date
 from app.services.financial_ledger import sync_payment_cash_movement
 from app.services.stock_corrections import (
@@ -72,7 +73,7 @@ def _effective_payment_date(payment: Paiement) -> date:
 
 
 def _field_value(name, value):
-    if value is not None and name in {"date_echeance", "date_transaction", "date_paiement"}:
+    if value is not None and name in {"date_echeance", "date_transaction", "date_paiement", "date_encaissement_effective"}:
         return date.fromisoformat(value) if isinstance(value, str) else value
     if value is not None and name in {"prix_unitaire", "montant_total", "montant"}:
         return Decimal(value)
@@ -174,7 +175,7 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
     allowed = (
         {"date_echeance", "date_transaction", "id_client", "id_fournisseur", "prix_unitaire", "quantite", "id_produit", "id_batiment", "id_production"}
         if entity_type == "transaction"
-        else {"notes", "date_paiement", "montant", "type_paiement", "id_compte", "source_reglement"}
+        else {"notes", "date_paiement", "montant", "type_paiement", "id_compte", "source_reglement", "date_encaissement_effective", "statut_cheque"}
     )
     if (not requested and not stock_allocations_supplied) or set(requested) - allowed:
         raise HTTPException(422, "Un ou plusieurs champs ne sont pas encore disponibles pour la correction.")
@@ -241,6 +242,12 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
         requested["montant_total"] = Decimal(str(requested.get("quantite", record.quantite))) * Decimal(str(requested.get("prix_unitaire", record.prix_unitaire)))
         if requested['montant_total'] > Decimal('9999999999999.99'):
             raise HTTPException(422, 'Le montant total dépasse la capacité de la transaction.')
+
+    if entity_type == "paiement" and record.type_paiement == "cheque":
+        requested = validate_cheque_correction(db, record, transaction, requested)
+        return {key: _json_value(value) for key, value in requested.items()}
+    if entity_type == "paiement" and {'date_encaissement_effective', 'statut_cheque'}.intersection(requested):
+        raise HTTPException(422, 'Ces champs concernent uniquement un chèque.')
 
     payment_financial_fields = {"date_paiement", "montant", "type_paiement", "id_compte", "source_reglement"}
     if entity_type == "paiement" and payment_financial_fields.intersection(requested):
@@ -388,8 +395,10 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
     if db is not None and balance_transaction is not None:
         payments = db.query(Paiement).filter(Paiement.id_transaction == balance_transaction.id_transaction).populate_existing().all()
         paid = sum((payment.montant_net for payment in payments if payment.est_effectif), Decimal('0'))
-        if entity_type == 'paiement' and record.est_effectif:
-            paid += Decimal(str(changes.get('montant', record.montant))) - record.montant
+        if entity_type == 'paiement':
+            next_effective = (changes.get('statut', record.statut) == 'valide' and
+                (record.type_paiement != 'cheque' or changes.get('statut_cheque', record.statut_cheque) == 'encaisse'))
+            paid += (Decimal(str(changes.get('montant', record.montant))) if next_effective else Decimal('0')) - (record.montant if record.est_effectif else Decimal('0'))
         total = Decimal(str(changes.get('montant_total', balance_transaction.montant_total))) if entity_type == 'transaction' else balance_transaction.montant_total
         impact['balance'] = dict(total=_json_value(total), paid=_json_value(paid), remaining=_json_value(total - paid),
             side='client' if balance_transaction.id_client is not None else 'fournisseur')
@@ -412,7 +421,7 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
     else:
         if "notes" in changes:
             impact["payment_note"] = "updated"
-        if record is not None and {"date_paiement", "montant", "type_paiement", "id_compte", "source_reglement"}.intersection(changes):
+        if record is not None and {"date_paiement", "montant", "type_paiement", "id_compte", "source_reglement", "date_encaissement_effective", "statut_cheque"}.intersection(changes):
             old_movement = db.query(Caisse).filter(
                 Caisse.id_paiement == record.id_paiement,
                 Caisse.statut == "active",
@@ -435,13 +444,15 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
                 )
             )
             after = {
-                "date": changes.get("date_paiement", _json_value(record.date_paiement)),
+                "date": (changes.get("date_encaissement_effective", _json_value(record.date_encaissement_effective)) if record.type_paiement == "cheque" else changes.get("date_paiement", _json_value(record.date_paiement))),
                 "amount": changes.get("montant", _json_value(record.montant)),
                 "direction": direction,
                 "method": after_method,
                 "source": after_source or ("banque" if after_bank else "caisse"),
                 "account_id": after_account if after_bank else None,
             }
+            after_effective = (changes.get('statut', record.statut) == 'valide' and
+                (record.type_paiement != 'cheque' or changes.get('statut_cheque', record.statut_cheque) == 'encaisse'))
             before = {
                 "date": old_date,
                 "amount": old_amount,
@@ -451,7 +462,7 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
             if old_bank or after_bank:
                 impact["bank"] = {
                     "before": {**before, "account_id": old_bank.id_compte} if old_bank else None,
-                    "after": after if after_bank else None,
+                    "after": after if after_bank and after_effective else None,
                 }
                 account_deltas: dict[int, Decimal] = {}
                 if old_bank:
@@ -459,7 +470,7 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
                     account_deltas[old_bank.id_compte] = account_deltas.get(old_bank.id_compte, Decimal("0")) + (
                         old_amount_decimal if old_bank.type_mouvement == "SORTIE" else -old_amount_decimal
                     )
-                if after_bank and after_account is not None:
+                if after_bank and after_effective and after_account is not None:
                     new_amount_decimal = Decimal(str(after["amount"]))
                     account_deltas[after_account] = account_deltas.get(after_account, Decimal("0")) + (
                         -new_amount_decimal if direction == "SORTIE" else new_amount_decimal
@@ -479,10 +490,10 @@ def _impact(entity_type: str, changes: dict, record=None, transaction=None, db: 
                 impact["bank"]["account_balances"] = account_impacts
                 impact["cash"] = {
                     "before": before if isinstance(old_movement, Caisse) else None,
-                    "after": None if after_bank else after,
+                    "after": after if not after_bank and after_effective else None,
                 }
             else:
-                impact["cash"] = {"before": before, "after": after}
+                impact["cash"] = {"before": before if old_movement else None, "after": after if after_effective else None}
     return impact
 
 
@@ -676,7 +687,7 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
     if stock_plan:
         apply_stock_plan(db, record, stock_plan, actor, command.operation_id, command.reason)
     if command.target.entity_type == "paiement" and {
-        "date_paiement", "montant", "type_paiement", "id_compte", "source_reglement",
+        "date_paiement", "montant", "type_paiement", "id_compte", "source_reglement", "date_encaissement_effective", "statut_cheque",
     }.intersection(actual_changes):
         sync_payment_cash_movement(
             db,

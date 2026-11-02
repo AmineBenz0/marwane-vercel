@@ -6,6 +6,7 @@ export const fieldLabels = {
   quantite: 'Quantité', prix_unitaire: 'Prix unitaire', montant_total: 'Montant total',
   id_client: 'Client', id_fournisseur: 'Fournisseur', id_produit: 'Produit',
   id_batiment: 'Bâtiment', id_production: 'Production', date_paiement: 'Date du paiement',
+  date_encaissement_effective: 'Date d’encaissement effective', statut_cheque: 'Statut du chèque', statut: 'Statut du paiement',
   montant: 'Montant du paiement', type_paiement: 'Mode de paiement',
   id_compte: 'Compte bancaire', source_reglement: 'Source du règlement', notes: 'Notes',
 };
@@ -22,6 +23,7 @@ export function displayValue(field, value, names = {}) {
   if (names[field]?.[value]) return names[field][value];
   if (field.startsWith('date_')) return formatShortDate(value);
   if (['prix_unitaire', 'montant_total', 'montant'].includes(field)) return money(value);
+  if (field === 'statut_cheque' || field === 'statut') return ({ emis: 'Émis', a_encaisser: 'À encaisser', encaisse: 'Encaissé', rejete: 'Rejeté', annule: 'Annulé', valide: 'Validé', en_attente: 'En attente' })[value] || value;
   if (field === 'type_paiement') return methods[value] || value;
   if (field === 'source_reglement') return value === 'banque' ? 'Compte bancaire' : 'Caisse';
   if (field.startsWith('id_')) return `N° ${value}`;

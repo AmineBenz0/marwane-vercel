@@ -57,16 +57,15 @@ def cancel_letter_credit(
         source_cession.date_creation.desc(),
         source_cession.id_cession.desc(),
     ).with_for_update().all()
-    bank_movement = db.query(MouvementBancaire).filter(
-        MouvementBancaire.cle_idempotence == f"lc-bank-deposit-{id_lc}-{version_utilisation}",
-        MouvementBancaire.statut == "active",
-    ).with_for_update().first()
-    if bank_movement is None and version_utilisation == 1:
-        # First-use deposits created before per-use idempotency keys were added.
-        bank_movement = db.query(MouvementBancaire).filter(
-            MouvementBancaire.cle_idempotence == f"lc-bank-deposit-{id_lc}",
-            MouvementBancaire.statut == "active",
-        ).with_for_update().first()
+    deposits = db.query(MouvementBancaire).filter(
+        MouvementBancaire.id_paiement.is_(None), MouvementBancaire.source == 'lc',
+        MouvementBancaire.statut == 'active',
+        (MouvementBancaire.cle_idempotence.like(f'lc-bank-deposit-{id_lc}-%') |
+         (MouvementBancaire.cle_idempotence == f'lc-bank-deposit-{id_lc}')),
+    ).order_by(MouvementBancaire.id_mouvement).with_for_update().all()
+    if len(deposits) > 1:
+        raise HTTPException(409, 'Réconciliez les versements multiples de cette LC avant son annulation.')
+    bank_movement = deposits[0] if deposits else None
 
     previous_status = lc.statut
     for payment in linked_payments:
@@ -92,13 +91,13 @@ def cancel_letter_credit(
             id_cessionnaire_client=cession.id_cedant_client,
             id_cessionnaire_fournisseur=cession.id_cedant_fournisseur,
             date_cession=business_date(),
+            id_cession_origine=cession.id_cession,
             motif=f"Contrepassation de la cession #{cession.id_cession}: {reason}",
             id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
         )
         db.add(reversal_cession)
         db.flush()
 
-        reversal_cession.id_cession_origine = cession.id_cession
 
         for cash_movement in db.query(Caisse).filter(
             Caisse.id_cession == cession.id_cession,
@@ -150,3 +149,4 @@ def cancel_letter_credit(
     db.commit()
     db.refresh(lc)
     return lc
+

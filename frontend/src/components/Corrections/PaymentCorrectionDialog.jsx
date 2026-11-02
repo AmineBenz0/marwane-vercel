@@ -7,6 +7,7 @@ import CorrectionReview from './CorrectionReview';
 import { changedValues, methods } from './correctionValues';
 
 const initial = payment => ({ date_paiement: payment.date_paiement?.slice(0, 10) || '', montant: String(payment.montant),
+  date_encaissement_effective: payment.date_encaissement_effective?.slice(0, 10) || '', statut_cheque: payment.statut_cheque || '',
   type_paiement: payment.type_paiement, id_compte: payment.id_compte || '', source_reglement: payment.source_reglement || '', notes: payment.notes || '' });
 export default function PaymentCorrectionDialog({ payment, transaction, initialChanges = {}, onClose, onSaved }) {
   const fundingOriginal = transaction.id_fournisseur ? payment.source_reglement || (payment.type_paiement === 'virement' && payment.id_compte ? 'banque' : 'caisse') : '';
@@ -18,6 +19,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
   const [reload, setReload] = useState(0);
   const flow = useCorrectionFlow({ entityType: 'paiement', record: payment, onSaved });
   const protectedInstrument = ['cheque', 'lc'].includes(payment.type_paiement) || payment.id_lc;
+  const cheque = payment.type_paiement === 'cheque' && payment.statut !== 'annule' && transaction.est_actif !== false;
   const financial = !protectedInstrument && payment.statut === 'valide' && transaction.est_actif !== false;
   const supplier = Boolean(transaction.id_fournisseur);
   const bank = supplier ? values.source_reglement === 'banque' || !values.source_reglement && values.type_paiement === 'virement' && Boolean(values.id_compte)
@@ -44,6 +46,8 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
         id_compte: bank ? Number(values.id_compte) : null };
       if (supplier && (values.source_reglement !== fundingOriginal || payment.source_reglement || values.type_paiement !== payment.type_paiement)) payload.source_reglement = values.source_reglement;
     }
+    if (cheque) payload = { ...payload, date_paiement: values.date_paiement,
+      ...(values.statut_cheque ? { statut_cheque: values.statut_cheque, date_encaissement_effective: values.statut_cheque === 'encaisse' ? values.date_encaissement_effective || null : null } : {}) };
     const changes = changedValues(payload, payment);
     if (!Object.keys(changes).length) { setError('Aucune valeur n’a changé.'); return; }
     await flow.prepare(changes, reason);
@@ -54,9 +58,18 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
     <DialogTitle id="payment-correction-title">Modifier le paiement n° {payment.id_paiement}</DialogTitle>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
-        {!financial && <Alert severity="info">Les notes peuvent être corrigées ici. Les changements financiers de ce paiement nécessitent son action dédiée.</Alert>}
+        {!financial && !cheque && <Alert severity="info">Les notes peuvent être corrigées ici. Les changements financiers de ce paiement nécessitent son action dédiée.</Alert>}
         {(error || flow.error) && <Alert severity="error" role="alert">{error || flow.error}</Alert>}
-        <DateField label="Date du paiement" value={values.date_paiement} onChange={update('date_paiement')} disabled={!financial || flow.busy} fullWidth required />
+        <DateField label="Date du paiement" value={values.date_paiement} onChange={update('date_paiement')} disabled={!(financial || cheque) || flow.busy} fullWidth required />
+        {cheque && <>
+          <Alert severity="info">La date d’encaissement détermine le mouvement de caisse ou de banque. Le montant et la source du chèque sont conservés.</Alert>
+          <TextField select label="Statut du chèque" value={values.statut_cheque} onChange={update('statut_cheque')} disabled={flow.busy}>
+            {!values.statut_cheque && <MenuItem value="">Statut enregistré non renseigné</MenuItem>}
+            {Object.entries({ emis: 'Émis', a_encaisser: 'À encaisser', encaisse: 'Encaissé', rejete: 'Rejeté', annule: 'Annulé' }).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}
+          </TextField>
+          {values.statut_cheque === 'encaisse' && <DateField required fullWidth label="Date d’encaissement effective" value={values.date_encaissement_effective} onChange={update('date_encaissement_effective')} disabled={flow.busy} />}
+        </>}
+        {payment.id_lc && <Button component="a" href={`/lettres-credit/${payment.id_lc}`}>Corriger la lettre de crédit et ses opérations liées</Button>}
         <TextField label="Montant (MAD)" type="number" value={values.montant} onChange={update('montant')} disabled={!financial || flow.busy} inputProps={{ min: 0.01, step: '0.01' }} required />
         <TextField select label="Mode de paiement" value={values.type_paiement} disabled={!financial || flow.busy} onChange={event => setValues(v => ({ ...v,
           type_paiement: event.target.value, ...(!supplier && event.target.value !== 'virement' ? { id_compte: '' } : {}),

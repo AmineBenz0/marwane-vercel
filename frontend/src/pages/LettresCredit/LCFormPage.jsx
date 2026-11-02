@@ -25,6 +25,7 @@ function LCFormPage() {
   const navigate = useNavigate();
   const notification = useNotification();
   const isEdit = !!id;
+  useEffect(() => { if (id) navigate(`/lettres-credit/${id}`, { replace: true }); }, [id, navigate]);
 
   const [loading, setLoading] = useState(isEdit);
   const [clients, setClients] = useState([]);
@@ -216,3 +217,4 @@ function LCFormPage() {
 }
 
 export default LCFormPage;
+

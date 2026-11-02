@@ -44,7 +44,7 @@ it.each([false, true])('explains retained credit without offering another paymen
   render(<TransactionDetail />);
   expect(await screen.findByText(supplier ? 'Crédit fournisseur' : 'Crédit client')).toBeVisible();
   expect(screen.getByRole('heading', { name: /^5,00\sMAD$/ })).toBeVisible();
-  expect(screen.getByText(/Aucun remboursement n’a été enregistré/)).toBeVisible();
+  expect(screen.getByText('Le crédit disponible peut être remboursé ou utilisé pour une autre transaction de ce contact.')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Ajouter un paiement' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: supplier ? 'Enregistrer un remboursement fournisseur' : 'Rembourser le client' })).toBeVisible();
   expect(post).not.toHaveBeenCalled();

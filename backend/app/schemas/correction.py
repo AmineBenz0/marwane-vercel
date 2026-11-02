@@ -35,6 +35,8 @@ class CorrectionChanges(BaseModel):
     id_fournisseur: Optional[int] = Field(None, gt=0)
     prix_unitaire: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     date_paiement: Optional[date] = None
+    date_encaissement_effective: Optional[date] = None
+    statut_cheque: Optional[Literal["emis", "a_encaisser", "encaisse", "rejete", "annule"]] = None
     montant: Optional[Decimal] = Field(None, gt=0, max_digits=15, decimal_places=2)
     type_paiement: Optional[Literal["cash", "virement", "carte", "compensation", "autre"]] = None
     id_compte: Optional[int] = Field(None, gt=0)

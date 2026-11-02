@@ -7,6 +7,8 @@ from sqlalchemy import or_
 from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.paiement import Paiement
+from app.models.lettre_credit import LettreDeCredit
+from app.services.financial import payment_effective_date
 
 
 def json_value(value):
@@ -30,6 +32,9 @@ def settlement_state(db, transactions, *, account_id=None, lock=False, lock_acco
         return (query.with_for_update() if lock else query).all()
 
     by_id = {t.id_transaction: t for t in transactions}
+    lc_ids = {r[0] for r in db.query(Paiement.id_lc).filter(Paiement.id_transaction.in_(sorted(by_id)), Paiement.id_lc.isnot(None))}
+    lcs = rows(LettreDeCredit, LettreDeCredit.id_lc.in_(sorted(lc_ids)), LettreDeCredit.id_lc)
+    lc_by_id = {lc.id_lc: lc for lc in lcs}
     payments = rows(Paiement, Paiement.id_transaction.in_(sorted(by_id)), Paiement.id_paiement)
     by_payment = {p.id_paiement: p for p in payments}
     ids = sorted(by_payment)
@@ -50,8 +55,12 @@ def settlement_state(db, transactions, *, account_id=None, lock=False, lock_acco
             linked.setdefault(movement.id_paiement, []).append(movement)
     for p in payments:
         transaction = by_id[p.id_transaction]
-        if p.statut != 'annule' and (p.type_paiement in {'cheque', 'lc'} or p.id_lc):
-            raise HTTPException(409, 'Cette opération nécessite le traitement dédié du chèque ou de la lettre de crédit.')
+        if p.statut != 'annule' and p.type_paiement == 'cheque' and (not p.est_effectif or p.date_encaissement_effective is None):
+            raise HTTPException(409, 'Ce chèque doit être encaissé avant de pouvoir utiliser son crédit.')
+        if p.statut != 'annule' and (p.type_paiement == 'lc' or p.id_lc):
+            lc = lc_by_id.get(p.id_lc)
+            if not lc or lc.statut != 'utilisee' or p.type_paiement != 'lc' or not p.est_effectif or lc.montant != p.montant or lc.id_client != transaction.id_client or lc.id_fournisseur != transaction.id_fournisseur:
+                raise HTTPException(409, 'Réconciliez la lettre de crédit et son paiement avant cette opération.')
         movements = linked.get(p.id_paiement, [])
         if len(movements) != (1 if p.est_effectif and not p.est_affectation else 0):
             raise HTTPException(409, 'Réconciliez les mouvements de cette transaction avant cette opération.')
@@ -59,7 +68,7 @@ def settlement_state(db, transactions, *, account_id=None, lock=False, lock_acco
             expected_bank = p.id_compte is not None and (p.source_reglement == 'banque'
                 or p.source_reglement is None and p.type_paiement == 'virement')
             if (m.montant != p.montant or m.type_mouvement != p.ledger_direction(transaction)
-                or m.date_mouvement.date() != p.date_paiement or m.id_avance is not None
+                or m.date_mouvement.date() != payment_effective_date(p) or m.id_avance is not None
                 or isinstance(m, MouvementBancaire) != expected_bank
                 or expected_bank and (m.id_compte != p.id_compte or m.source != p.type_paiement
                     or m.reference != (p.reference_virement or p.numero_cheque) or m.id_charge is not None)
@@ -68,5 +77,5 @@ def settlement_state(db, transactions, *, account_id=None, lock=False, lock_acco
     for transaction in transactions:
         db.expire(transaction, ['paiements'])
     return {'transactions': [row_snapshot(t) for t in sorted(transactions, key=lambda t: t.id_transaction)],
-            'payments': [row_snapshot(p) for p in payments], 'cash': [row_snapshot(m) for m in cash],
+            'letters_credit': [row_snapshot(lc) for lc in lcs], 'payments': [row_snapshot(p) for p in payments], 'cash': [row_snapshot(m) for m in cash],
             'bank': [row_snapshot(m) for m in bank], 'accounts': [row_snapshot(a) for a in accounts]}

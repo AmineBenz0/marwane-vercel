@@ -633,6 +633,7 @@ Migration `20261102000432_party_advances_credit_allocation` is applied to stagin
 See [Phase 6C acceptance](phase6c-acceptance.md) for current verification evidence.
 Phase 6 remains open: 6D cheque/LC dependencies and 6E restoration/conversion follow.
 
+
 ## Phase 6C closed — 2 November 2026
 
 The owner accepted Phase 6C after the authenticated staging walkthrough and
@@ -646,3 +647,18 @@ See [acceptance evidence](phase6c-acceptance.md).
 Next: Phase 6D, beginning with cleared-cheque corrections and then LC dependency
 chains. Phase 6E restoration/conversion follows. Broader reporting consistency
 and final PostgreSQL concurrency/recovery/release acceptance remain later gates.
+
+## Phase 6D — prepared; staging acceptance pending
+
+The cheque and LC dependency adapters and owner forms are implemented for review.
+Cheques retain amount/funding while their issue/clearing dates and state are
+corrected atomically. LC corrections coordinate the current payment, transfer or
+deposit, preserve transfer history and support explicit usage cancellation.
+Settled instrument credit uses its effective settlement date; downstream refunds
+and allocations must be handled before changing their funding instrument.
+
+The staging migration confirmation expired twice and migration history confirms
+it was not applied. The change is held outside staging pending migration,
+PostgreSQL guard verification and authenticated manual acceptance. See
+[Phase 6D evidence and remaining checks](phase6d-acceptance.md).
+

@@ -30,17 +30,27 @@ def transaction_correction_history(db, transaction_id, *, offset=0, limit=20):
         revision_map.setdefault((revision.operation_id, revision.entity_type, revision.entity_id), revision)
     items = []
     for operation, actor_name in rows[:limit]:
-        target = operation.request_payload['target']
+        lc_operation = operation.request_payload.get('kind') == 'lc_correction'
+        if lc_operation:
+            revision = next((r for r in revisions if r.operation_id == operation.operation_id and r.entity_type == 'paiement'
+                and r.entity_id in {p.id_paiement for p in db.query(Paiement).filter(Paiement.id_transaction == transaction_id)}), None)
+            if revision is None:
+                continue
+            target = {'entity_type': 'paiement', 'entity_id': revision.entity_id, 'expected_version': revision.revision - 1}
+        else:
+            target = operation.request_payload['target']
         revision = revision_map.get((operation.operation_id, target['entity_type'], target['entity_id']))
         before = revision.before_snapshot if revision and revision.before_snapshot else {}
-        after = operation.result_payload.get('record', {})
+        after = operation.result_payload['payments'][str(target['entity_id'])] if lc_operation else operation.result_payload.get('record', {})
         allowed = ({'date_transaction', 'date_echeance', 'prix_unitaire', 'quantite',
                     'id_client', 'id_fournisseur', 'id_produit', 'id_batiment', 'id_production'}
                    if target['entity_type'] == 'transaction' else
-                   {'date_paiement', 'montant', 'type_paiement', 'id_compte', 'source_reglement', 'notes'})
-        changes = operation.request_payload.get('changes', {})
+                   {'date_paiement', 'date_encaissement_effective', 'statut_cheque', 'montant', 'type_paiement', 'id_compte', 'source_reglement', 'notes'})
+        changes = {key: value for key, value in after.items() if before.get(key) != value} if lc_operation else operation.request_payload.get('changes', {})
         reuse = {key: before[key] for key in changes.keys() & allowed & CorrectionChanges.model_fields.keys()
                  if key in before and before[key] != after.get(key)}
+        if lc_operation:
+            reuse = {}
         stock = operation.result_payload.get('impact', {}).get('stock')
         if isinstance(stock, dict) and stock.get('kind') == 'eggs':
             allocations = stock['before'].get(str(target['entity_id']), [])

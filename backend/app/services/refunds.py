@@ -18,7 +18,7 @@ from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.schemas.paiement import PaiementRead
 from app.services.correction_contract import replay_result
-from app.services.financial import payment_total_as_of, validate_payment_date
+from app.services.financial import payment_effective_date, payment_total_as_of, validate_payment_date
 from app.services.financial_ledger import sync_payment_cash_movement
 from app.services.financial_locking import lock_transaction
 from app.services.settlement_state import settlement_state
@@ -63,8 +63,8 @@ def _preview(db, command, transaction, *, lock=False):
     # date, even when a subsequent payment replenished today's credit.
     deltas = {}
     for payment in transaction.paiements:
-        if payment.est_effectif and payment.date_paiement > command.date_paiement:
-            deltas[payment.date_paiement] = deltas.get(payment.date_paiement, Decimal('0')) + payment.montant_net
+        if payment.est_effectif and payment_effective_date(payment) > command.date_paiement:
+            deltas[payment_effective_date(payment)] = deltas.get(payment_effective_date(payment), Decimal('0')) + payment.montant_net
     running_credit = credit_at_date
     for effective_date in sorted(deltas):
         running_credit += deltas[effective_date]
