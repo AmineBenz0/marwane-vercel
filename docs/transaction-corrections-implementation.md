@@ -632,3 +632,17 @@ ledger pages subscribe to correction refreshes, including cross-tab events.
 Migration `20261102000432_party_advances_credit_allocation` is applied to staging.
 See [Phase 6C acceptance](phase6c-acceptance.md) for current verification evidence.
 Phase 6 remains open: 6D cheque/LC dependencies and 6E restoration/conversion follow.
+
+## Phase 6C closed — 2 November 2026
+
+The owner accepted Phase 6C after the authenticated staging walkthrough and
+read-only ledger cleanup checks. Client/supplier advances, partial/full cash or
+bank returns, advance allocation, transaction surplus transfer, whole-allocation
+cancellation and rejection of a competing return passed. Test effects were
+canceled and original balances restored; history remains intact. Fresh focused
+runs passed 45 backend tests and 15 frontend tests (overlapping earlier totals).
+See [acceptance evidence](phase6c-acceptance.md).
+
+Next: Phase 6D, beginning with cleared-cheque corrections and then LC dependency
+chains. Phase 6E restoration/conversion follows. Broader reporting consistency
+and final PostgreSQL concurrency/recovery/release acceptance remain later gates.
