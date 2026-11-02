@@ -20,6 +20,12 @@ Status: deployed to staging; native PostgreSQL guards and the authenticated walk
 
 ## Deployment and database verification
 
+### Review follow-up — LC metadata and canceled-cheque notes
+
+The two regressions found during owner review are corrected. Issuing bank, serial number and reference are editable through LC preview/confirm and retained in correction history. Optional issuer/serial values can be cleared; references remain required and unique. A deposited LC reference correction voids and replaces its linked bank movement with the same amount, date and account, so the balance remains unchanged. Issuer/serial corrections do not replace money movements and metadata-only changes remain allowed after a linked refund.
+
+Notes-only cheque corrections are again allowed on canceled payments and inactive transactions. Financial date/status corrections remain blocked on those records, and tests verify that annotation does not restore the payment or change movements. These fixes reuse the applied schema and require no new migration.
+
 The staging migration confirmation succeeded on retry. Migration `20261102125600_instrument_corrections` is applied to staging project `aqosvbpcxfpntcejebma`, and migration history confirms it. The authenticated staging walkthrough below subsequently passed.
 
 The migration is prepared in `backend/migrations/instrument_corrections.sql`, with its Alembic wrapper and bootstrap copy. Its identical Supabase mirror is `supabase_migrations/20261102125600_instrument_corrections.sql`.

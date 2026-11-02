@@ -103,7 +103,7 @@ def plan_lc_correction(db, command, *, lock=False):
     deposit = deposits[0] if deposits else None
     usage = 'payment' if payment else 'cession' if cession else 'deposit' if deposit else 'unused'
     changes = command.changes.model_dump(exclude_unset=True)
-    financial = bool(set(changes) - {'notes'}) or command.action == 'cancel_usage'
+    financial = bool(set(changes) - {'notes', 'numero_reference', 'numero_serie', 'banque_emettrice'}) or command.action == 'cancel_usage'
     if financial and any(p.statut != 'annule' and p.nature in {'remboursement', 'credit_recu', 'credit_transfere'} for p in siblings):
         raise HTTPException(409, 'Traitez les remboursements ou crédits liés avant cette correction.')
     if command.action == 'cancel_usage' and not uses:
@@ -111,6 +111,9 @@ def plan_lc_correction(db, command, *, lock=False):
     before = row_snapshot(lc)
     after = {**before, **{k: json_value(v) for k, v in changes.items() if k not in {'date_effet', 'id_compte'}}}
     after['montant'] = format(changes.get('montant', lc.montant), '.2f')
+    if 'numero_reference' in changes and db.query(LettreDeCredit.id_lc).filter(
+            LettreDeCredit.numero_reference == changes['numero_reference'], LettreDeCredit.id_lc != lc.id_lc).first():
+        raise HTTPException(422, 'Cette référence de LC existe déjà.')
     holder_change = bool({'id_client', 'id_fournisseur'} & changes.keys())
     if holder_change:
         if payment or deposit:
@@ -184,7 +187,8 @@ def plan_lc_correction(db, command, *, lock=False):
         db.expire(tx, ['paiements'])
         remaining = format(tx.montant_restant + payment.montant - (0 if cancel else amount), '.2f')
     old_day = payment.date_paiement if payment else cession.date_cession if cession else deposit.date_mouvement.date() if deposit else None
-    effect_changed = cancel or amount != lc.montant or day != old_day or deposit is not None and new_account != deposit.id_compte
+    effect_changed = cancel or amount != lc.montant or day != old_day or deposit is not None and (
+        new_account != deposit.id_compte or after['numero_reference'] != lc.numero_reference)
     cession_changed = cession is not None and (effect_changed or holder_change)
     bank_after = []
     if not cancel:
@@ -260,7 +264,7 @@ def apply_lc_correction(db, command, fingerprint, actor):
         db.flush()
         if db.get_bind().dialect.name == 'postgresql':
             db.execute(text("SELECT set_config('app.correction_operation_id', :op, true)"), {'op': str(command.operation_id)})
-        for field in ('montant', 'date_emission', 'date_disponibilite', 'notes', 'type_detenteur', 'id_client', 'id_fournisseur', 'statut'):
+        for field in ('numero_reference', 'numero_serie', 'banque_emettrice', 'montant', 'date_emission', 'date_disponibilite', 'notes', 'type_detenteur', 'id_client', 'id_fournisseur', 'statut'):
             value = after[field]
             if field == 'montant': value = Decimal(value)
             if field.startswith('date_'): value = datetime.fromisoformat(value).date()

@@ -14,10 +14,10 @@ CHEQUE_FIELDS = {'date_paiement', 'date_encaissement_effective', 'statut_cheque'
 def validate_cheque_correction(db, payment, transaction, requested):
     if set(requested) - (CHEQUE_FIELDS | {'notes'}):
         raise HTTPException(422, 'Cette correction conserve le montant et la source du chèque.')
-    if payment.statut == 'annule' or not transaction or not transaction.est_actif:
-        raise HTTPException(409, 'Un enregistrement annulé nécessite le parcours de restauration.')
     if not CHEQUE_FIELDS.intersection(requested):
         return requested
+    if payment.statut == 'annule' or not transaction or not transaction.est_actif:
+        raise HTTPException(409, 'Un enregistrement annulé nécessite le parcours de restauration.')
     if db.query(Paiement.id_paiement).filter(Paiement.id_transaction == payment.id_transaction,
             Paiement.statut != 'annule', Paiement.nature.in_(['remboursement', 'credit_recu', 'credit_transfere'])).first():
         raise HTTPException(409, 'Traitez les remboursements ou affectations liés avant de corriger ce chèque.')

@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class LCChanges(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    numero_reference: str | None = Field(None, min_length=1, max_length=50)
+    numero_serie: str | None = Field(None, max_length=50)
+    banque_emettrice: str | None = Field(None, max_length=100)
     montant: Decimal | None = Field(None, gt=0, max_digits=15, decimal_places=2)
     date_emission: date | None = None
     date_disponibilite: date | None = None
@@ -19,7 +22,7 @@ class LCChanges(BaseModel):
 
     @model_validator(mode='after')
     def validate_fields(self):
-        if any(getattr(self, k) is None for k in self.model_fields_set - {'notes', 'id_client', 'id_fournisseur'}):
+        if any(getattr(self, k) is None for k in self.model_fields_set - {'notes', 'numero_serie', 'banque_emettrice', 'id_client', 'id_fournisseur'}):
             raise ValueError('Les valeurs financières et les dates doivent être renseignées.')
         if {'id_client', 'id_fournisseur'}.intersection(self.model_fields_set):
             if (self.id_client is None) == (self.id_fournisseur is None):

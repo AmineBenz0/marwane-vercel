@@ -6,6 +6,8 @@ import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useCreditFlow from './useCreditFlow';
 
+const metadataLabels = { numero_reference: 'Référence LC', numero_serie: 'Numéro de série', banque_emettrice: 'Banque émettrice' };
+
 export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, onClose, onSaved }) {
   const [lc] = useState(sourceLc);
   const [context, setContext] = useState(null);
@@ -15,6 +17,7 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const [loadError, setLoadError] = useState('');
   const [reload, setReload] = useState(0);
   const [values, setValues] = useState({ montant: String(lc.montant), date_emission: lc.date_emission,
+    numero_reference: lc.numero_reference || '', numero_serie: lc.numero_serie || '', banque_emettrice: lc.banque_emettrice || '',
     date_disponibilite: lc.date_disponibilite, notes: lc.notes || '', date_effet: '', id_compte: '',
     holder: `${lc.type_detenteur}:${lc.id_client || lc.id_fournisseur}`, reason: '' });
   const flow = useCreditFlow(onSaved, '/lettres-credit/corrections');
@@ -35,8 +38,8 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
     event.preventDefault();
     const changes = {};
     if (!cancelUsage) {
-      for (const field of ['montant', 'date_emission', 'date_disponibilite', 'notes']) {
-        const value = field === 'notes' ? values[field] || null : values[field];
+      for (const field of [...Object.keys(metadataLabels), 'montant', 'date_emission', 'date_disponibilite', 'notes']) {
+        const value = ['notes', 'numero_serie', 'banque_emettrice'].includes(field) ? values[field] || null : values[field];
         if (field === 'montant' ? Number(value) !== Number(lc[field]) : value !== (lc[field] ?? null)) changes[field] = value;
       }
       if (context.date_effet && values.date_effet !== context.date_effet) changes.date_effet = values.date_effet;
@@ -59,6 +62,9 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
       {loadError && <Button onClick={() => setReload(v => v + 1)}>Réessayer le chargement</Button>}
       {!context && !loadError && <CircularProgress aria-label="Chargement des opérations liées" />}
       {preview ? <>
+        {Object.entries(metadataLabels).filter(([k]) => preview.before[k] !== preview.after[k]).map(([k, label]) => <Typography key={k} sx={{ overflowWrap: 'anywhere' }}>
+          {label} : {preview.before[k] || 'Non renseigné'} → <strong>{preview.after[k] || 'Non renseigné'}</strong>
+        </Typography>)}
         <Typography>Montant de la LC : {formatMontant(preview.before.montant)} → <strong>{formatMontant(preview.after.montant)}</strong></Typography>
         {['date_emission', 'date_disponibilite'].filter(k => preview.before[k] !== preview.after[k]).map(k => <Typography key={k}>
           {k === 'date_emission' ? 'Émission' : 'Disponibilité'} : {formatShortDate(preview.before[k])} → {formatShortDate(preview.after[k])}
@@ -78,6 +84,8 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
         <Alert severity={cancelUsage ? 'warning' : 'info'}>{cancelUsage ? 'Annulez uniquement une utilisation enregistrée par erreur.'
           : 'Les changements seront appliqués à la LC et à son paiement, sa cession ou son versement lié dans une seule opération.'}</Alert>
         {!cancelUsage && <>
+          {Object.entries(metadataLabels).map(([field, label]) => <TextField key={field} label={label} value={values[field]} onChange={update(field)}
+            required={field === 'numero_reference'} inputProps={{ maxLength: field === 'banque_emettrice' ? 100 : 50 }} disabled={flow.busy} />)}
           <TextField label="Montant de la LC (MAD)" type="number" value={values.montant} onChange={update('montant')} inputProps={{ min: 0.01, step: '0.01' }} required disabled={flow.busy} />
           <DateField fullWidth required label="Date d’émission" value={values.date_emission} onChange={update('date_emission')} disabled={flow.busy} />
           <DateField fullWidth required label="Date de disponibilité" value={values.date_disponibilite} onChange={update('date_disponibilite')} disabled={flow.busy} />

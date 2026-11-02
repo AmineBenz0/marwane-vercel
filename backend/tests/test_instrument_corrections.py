@@ -25,7 +25,7 @@ def cheque(db_session, correction_sale, test_user):
     p.statut_cheque, p.date_encaissement_effective = 'encaisse', date.today() - timedelta(days=2)
     sync_payment_cash_movement(db_session, p, tx, current_user=test_user)
     db_session.commit()
-    revision_trigger(db_session, 'paiements', 'date_paiement,date_encaissement_effective,statut_cheque,statut')
+    revision_trigger(db_session, 'paiements', 'date_paiement,date_encaissement_effective,statut_cheque,statut,notes')
     return tx, p
 
 
@@ -267,6 +267,9 @@ def test_lc_dependent_refund_blocks_amount_edit_and_cancellation(db_session, let
     for command in [lc_cmd(lc, {'montant':'4.00'}), lc_cmd(lc, action='cancel_usage')]:
         with pytest.raises(HTTPException):
             preview_lc_correction(db_session, command)
+    before = (p.montant, p.date_paiement, p.row_version, db_session.query(Caisse).count())
+    apply_lc(db_session, lc_cmd(lc, {'numero_reference': 'LC-REF-CORRECTED', 'banque_emettrice': 'Banque corrigée'}), test_user)
+    assert before == (p.montant, p.date_paiement, p.row_version, db_session.query(Caisse).count())
 
 
 def test_lc_correction_preserves_values_on_wrong_owner_or_date(db_session, letter, test_user):
@@ -304,3 +307,96 @@ def test_lc_numeric_formats_save_and_retry_with_cent_precision(db_session, lette
     assert result['record']['montant'] == '6.00'
     equivalent = command.model_copy(update={'changes': command.changes.__class__(montant=Decimal('6.00'))})
     assert apply_lc_correction(db_session, equivalent, 'a'*64, test_user)['replayed']
+
+
+@pytest.mark.parametrize('inactive_transaction', [False, True])
+def test_cheque_notes_on_cancelled_records_preserve_financial_state(db_session, cheque, test_user, inactive_transaction):
+    from app.services.financial_ledger import void_payment
+    tx, p = cheque
+    if inactive_transaction:
+        tx.est_actif = False
+    else:
+        void_payment(db_session, p, current_user=test_user, reason='Annulation pour test de notes')
+    db_session.commit()
+    state = (p.statut, p.statut_cheque, p.date_paiement, p.date_encaissement_effective, p.montant, tx.est_actif)
+    movements = [(m.id_mouvement, m.statut, m.montant, m.date_mouvement) for m in db_session.query(Caisse).all()]
+    command = prepared(db_session, cheque_cmd(p, {'notes': 'Précision conservée après annulation'}))
+    result = apply_correction(db_session, command, test_user)
+    assert result['record']['notes'] == 'Précision conservée après annulation'
+    assert state == (p.statut, p.statut_cheque, p.date_paiement, p.date_encaissement_effective, p.montant, tx.est_actif)
+    assert movements == [(m.id_mouvement, m.statut, m.montant, m.date_mouvement) for m in db_session.query(Caisse).all()]
+    assert apply_correction(db_session, command, test_user)['replayed']
+    with pytest.raises(HTTPException) as error:
+        preview_correction(db_session, cheque_cmd(p, {'statut_cheque': 'rejete'}))
+    assert error.value.status_code == 409
+
+
+def test_unused_lc_metadata_is_audited_replayable_and_optional_values_clear(db_session, letter, test_user):
+    lc, tx = letter
+    changes = {'numero_reference': 'LC-CORRECTED', 'numero_serie': 'SERIE-123', 'banque_emettrice': 'Banque corrigée'}
+    command = lc_cmd(lc, changes)
+    result = apply_lc(db_session, command, test_user)
+    assert {k: result['record'][k] for k in changes} == changes
+    assert lc.montant == 5 and lc.version_utilisation == 1
+    assert db_session.get(CorrectionOperation, command.operation_id).request_payload['changes'] == changes
+    assert apply_lc_correction(db_session, command, 'a'*64, test_user)['replayed']
+    result = apply_lc(db_session, lc_cmd(lc, {'numero_serie': None, 'banque_emettrice': None}), test_user)
+    assert result['record']['numero_serie'] is None and result['record']['banque_emettrice'] is None
+    assert db_session.query(Caisse).count() == db_session.query(MouvementBancaire).count() == 0
+
+
+def test_deposited_lc_reference_replaces_only_reference_and_keeps_legacy_cancel_working(db_session, letter, test_user):
+    from app.services.letter_credit_cancellation import cancel_letter_credit
+    lc, tx = letter
+    account = deposit(db_session, lc, test_user)
+    old = db_session.query(MouvementBancaire).one()
+    day = old.date_mouvement
+    result = apply_lc(db_session, lc_cmd(lc, {'numero_reference': 'LC-DEPOSIT-CORRECTED'}), test_user)
+    active = db_session.query(MouvementBancaire).filter(MouvementBancaire.statut == 'active').one()
+    assert old.statut == 'annule' and active.id_mouvement != old.id_mouvement
+    assert active.reference == lc.numero_reference == 'LC-DEPOSIT-CORRECTED'
+    assert active.montant == lc.montant == account.solde_actuel == 5
+    assert active.date_mouvement == day and active.id_compte == old.id_compte
+    assert result['impact']['bank_balances'][0]['before'] == result['impact']['bank_balances'][0]['after']
+    movement_count = db_session.query(MouvementBancaire).count()
+    apply_lc(db_session, lc_cmd(lc, {'banque_emettrice': 'Nouvelle banque', 'numero_serie': 'SERIE-456'}), test_user)
+    assert db_session.query(MouvementBancaire).count() == movement_count
+    assert db_session.query(MouvementBancaire).filter(MouvementBancaire.statut == 'active').one().id_mouvement == active.id_mouvement
+    cancel_letter_credit(db_session, lc.id_lc, current_user=test_user, reason='Fin du test', version_utilisation=lc.version_utilisation)
+    assert account.solde_actuel == 0
+
+
+def test_duplicate_lc_reference_is_rejected_before_writing(db_session, letter, test_user):
+    lc, tx = letter
+    other = LettreDeCredit(numero_reference='LC-EXISTING', montant=5, date_emission=lc.date_emission,
+        date_disponibilite=lc.date_disponibilite, id_client=lc.id_client)
+    db_session.add(other)
+    db_session.commit()
+    with pytest.raises(HTTPException) as error:
+        preview_lc_correction(db_session, lc_cmd(lc, {'numero_reference': other.numero_reference}))
+    assert error.value.status_code == 422
+    assert lc.numero_reference == 'TEST-LC-INSTRUMENT' and lc.version_utilisation == 0
+    assert db_session.query(CorrectionOperation).count() == 0
+
+
+def test_lc_metadata_is_available_through_preview_and_apply_api(client, auth_headers, letter, test_user):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    lc, tx = letter
+    command = lc_cmd(lc, {'banque_emettrice': 'Banque via aperçu', 'numero_serie': 'SERIE-API'}).model_dump(mode='json', exclude_unset=True)
+    preview = client.post('/api/v1/lettres-credit/corrections/preview', headers=auth_headers, json=command)
+    assert preview.status_code == 200, preview.json()
+    response = client.post('/api/v1/lettres-credit/corrections/apply', headers=auth_headers,
+        json={'command': command, 'dependency_fingerprint': preview.json()['dependency_fingerprint']})
+    assert response.status_code == 200, response.json()
+    assert response.json()['record']['banque_emettrice'] == 'Banque via aperçu'
+    assert response.json()['record']['numero_serie'] == 'SERIE-API'
+
+
+@pytest.mark.parametrize('reference', [None, '', ' ', 'R' * 51])
+def test_lc_correction_requires_a_nonempty_bounded_reference(reference):
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        LCCorrectionCommand(operation_id=uuid4(), id_lc=1, expected_version=0,
+            reason='Référence corrigée', changes={'numero_reference': reference})

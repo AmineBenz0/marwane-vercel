@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import LCCorrectionDialog from './LCCorrectionDialog';
 import { get, post } from '../../services/api';
 vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn() }));
-const lc = { id_lc: 3, version_utilisation: 2, montant: '5.00', notes: null, type_detenteur: 'client', id_client: 7,
+const lc = { id_lc: 3, numero_reference: 'LC-TEST', numero_serie: null, banque_emettrice: null, version_utilisation: 2, montant: '5.00', notes: null, type_detenteur: 'client', id_client: 7,
   id_fournisseur: null, statut: 'utilisee', date_emission: '2026-10-01', date_disponibilite: '2026-10-02' };
 const context = { usage: 'deposit', date_effet: '2026-10-03', id_compte: 2 };
 beforeEach(() => {
@@ -69,4 +69,30 @@ it('labels surplus as credit instead of a negative amount due', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
   expect(await screen.findByText(/Crédit client après correction/)).toHaveTextContent('1 MAD');
   expect(screen.queryByText(/Reste à régler après/)).not.toBeInTheDocument();
+});
+
+it('previews metadata changes and confirms the frozen correction through the audited endpoint', async () => {
+  const saved = vi.fn();
+  render(<LCCorrectionDialog lc={lc} onClose={vi.fn()} onSaved={saved} />);
+  fireEvent.change(await screen.findByLabelText('Référence LC', { exact: false }), { target: { value: 'LC-CORRECTED' } });
+  fireEvent.change(screen.getByLabelText('Numéro de série'), { target: { value: 'SERIE-123' } });
+  fireEvent.change(screen.getByLabelText('Banque émettrice'), { target: { value: 'Banque corrigée' } });
+  fireEvent.change(screen.getByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Informations corrigées' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
+  await screen.findByRole('button', { name: 'Confirmer la correction' });
+  expect(post.mock.calls[0][1].changes).toEqual({ numero_reference: 'LC-CORRECTED', numero_serie: 'SERIE-123', banque_emettrice: 'Banque corrigée' });
+  expect(screen.getByText(/Référence LC : LC-TEST/)).toHaveTextContent('LC-CORRECTED');
+  expect(screen.getByText(/Banque émettrice : Non renseigné/)).toHaveTextContent('Banque corrigée');
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer la correction' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(post.mock.calls[1][1].command).toEqual(post.mock.calls[0][1]);
+});
+
+it('allows optional issuer and serial values to be cleared without clearing the reference', async () => {
+  render(<LCCorrectionDialog lc={{ ...lc, banque_emettrice: 'Ancienne banque', numero_serie: 'SERIE-OLD' }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.change(await screen.findByLabelText('Numéro de série'), { target: { value: '' } });
+  fireEvent.change(screen.getByLabelText('Banque émettrice'), { target: { value: '' } });
+  fireEvent.change(screen.getByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Retirer les valeurs erronées' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
+  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ numero_serie: null, banque_emettrice: null }));
 });

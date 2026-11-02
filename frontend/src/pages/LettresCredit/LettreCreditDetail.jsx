@@ -201,7 +201,7 @@ function LettreCreditDetail() {
         {history.map(row => <Paper variant="outlined" key={row.operation_id} sx={{ p: 2, mt: 1 }}>
           <Typography>{formatDate(row.recorded_at)} · Utilisateur n° {row.actor_id}</Typography>
           <Typography sx={{ overflowWrap: 'anywhere' }}>{row.reason}</Typography>
-          {Object.entries({ montant: 'Montant', date_emission: 'Émission', date_disponibilite: 'Disponibilité', id_client: 'Client', id_fournisseur: 'Fournisseur', statut: 'État', notes: 'Notes' })
+          {Object.entries({ numero_reference: 'Référence LC', numero_serie: 'Numéro de série', banque_emettrice: 'Banque émettrice', montant: 'Montant', date_emission: 'Émission', date_disponibilite: 'Disponibilité', id_client: 'Client', id_fournisseur: 'Fournisseur', statut: 'État', notes: 'Notes' })
             .filter(([k]) => k === 'montant' ? Number(row.before[k]) !== Number(row.after[k]) : row.before[k] !== row.after[k])
             .map(([k, label]) => <Typography key={k} sx={{ overflowWrap: 'anywhere' }}>{label} : {k === 'statut' ? (row.before[k] === 'utilisee' ? 'Utilisée' : 'Disponible') : displayValue(k, row.before[k])} → {k === 'statut' ? (row.after[k] === 'utilisee' ? 'Utilisée' : 'Disponible') : displayValue(k, row.after[k])}</Typography>)}
           {row.impact?.usage_before?.date_effet !== row.impact?.date_effet && <Typography>Date d’utilisation : {formatDate(row.impact?.usage_before?.date_effet)} → {formatDate(row.impact?.date_effet)}</Typography>}
