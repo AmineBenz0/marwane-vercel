@@ -1,3 +1,4 @@
+import { buildTransactionPaymentBatch } from '../Transactions/transactionPaymentBatch';
 import PartyCreditPanel from '../../components/Corrections/PartyCreditPanel';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 /**
@@ -43,9 +44,6 @@ import {
   Edit as EditIcon,
   Add as AddIcon,
   FileDownload as FileDownloadIcon,
-  AttachMoney as AttachMoneyIcon,
-  Receipt as ReceiptIcon,
-  TrendingUp as TrendingUpIcon,
   Inventory as InventoryIcon,
   ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
@@ -503,7 +501,7 @@ function ClientProfile() {
 
     try {
       // Mode création : POST
-      await post('/transactions', data);
+      await post(data.batch ? '/transactions/batch-with-payments' : '/transactions', data.batch ? buildTransactionPaymentBatch(data) : data);
 
       // Fermer la modal et rafraîchir les données du profil
       setTransactionModalOpen(false);
@@ -636,8 +634,6 @@ function ClientProfile() {
         </Box>
       </Box>
 
-      <PartyCreditPanel partyType="client" partyId={id} />
-
       <Card
         variant="outlined"
         sx={{
@@ -668,39 +664,7 @@ function ClientProfile() {
       </Card>
 
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Depuis le début</Typography>
-      {/* Cartes statistiques */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-        <Grid item xs={12} sm={6} md={4}>
-          <StatCard
-            title="Total ventes"
-            value={statistiques?.montant_total_ventes || 0}
-            icon={<AttachMoneyIcon />}
-            valueFormat="currency"
-            currency="MAD"
-            color="primary"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <StatCard
-            title="Nombre transactions"
-            value={statistiques?.total_transactions || 0}
-            icon={<ReceiptIcon />}
-            valueFormat="number"
-            color="info"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <StatCard
-            title={Number(insightsFinanciers?.montant_impaye) < 0 ? 'Crédit disponible' : 'Reste à encaisser'}
-            value={insightsFinanciers?.montant_impaye == null ? null : Math.abs(Number(insightsFinanciers.montant_impaye))}
-            icon={<TrendingUpIcon />}
-            valueFormat="currency"
-            currency="MAD"
-            color="success"
-          />
-        </Grid>
-      </Grid>
+      <PartyCreditPanel partyType="client" partyId={id} totalActivity={statistiques?.montant_total_ventes ?? null} totalTransactions={statistiques?.total_transactions ?? null} />
 
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 }, borderRadius: 3 }}>
         <CardContent>

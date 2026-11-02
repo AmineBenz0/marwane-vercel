@@ -229,7 +229,7 @@ def _cancel(record, reason, actor):
     record.id_utilisateur_annulation = actor.id_utilisateur
 
 
-def apply_credit(db, command, fingerprint, actor):
+def apply_credit(db, command, fingerprint, actor, *, commit=True):
     payload = _payload(command)
     request_hash = _hash(payload)
     try:
@@ -290,7 +290,10 @@ def apply_credit(db, command, fingerprint, actor):
         db.add(CorrectionOperation(operation_id=command.operation_id, request_hash=request_hash,
             id_utilisateur=actor.id_utilisateur, reason=command.reason,
             request_payload=payload, result_payload=deepcopy(result)))
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         return {**result, 'replayed': False}
     except HTTPException as exc:
         db.rollback()
@@ -343,5 +346,7 @@ def party_credit_history(db, *, id_client=None, id_fournisseur=None):
     allocations = db.query(AffectationCredit).filter(AffectationCredit.id_transaction_cible.in_(ids)).order_by(AffectationCredit.date_effet.desc(), AffectationCredit.id_affectation).all()
     from app.services.financial import contact_balances
     balance = contact_balances(db, direction='receivable' if id_client is not None else 'payable', contact_ids=[id_client or id_fournisseur])[id_client or id_fournisseur]
-    return {'balance': str(balance), 'advances': items, 'allocations': [row_snapshot(a) for a in allocations],
+    debt_total = sum((max(Decimal('0'), t.montant_restant) for t in db.query(Transaction).filter(
+        tx_key == (id_client or id_fournisseur), Transaction.est_actif.is_(True)).all()), Decimal('0'))
+    return {'balance': str(balance), 'debt_total': str(debt_total), 'advances': items, 'allocations': [row_snapshot(a) for a in allocations],
             'available': str(sum((a.montant_disponible for a in records if a.nature == 'avance'), Decimal('0')))}

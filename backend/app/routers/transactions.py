@@ -31,7 +31,7 @@ from app.schemas.transaction import (
     DeferredSaleReschedule,
     TransactionAuditRead
 )
-from app.schemas.paiement import PaiementCreate
+from app.schemas.paiement import PaiementCreate, PaiementRead
 from app.schemas.transaction_payment import (
     TransactionPaymentBatchCreate,
     TransactionPaymentBatchItemRead,
@@ -441,6 +441,19 @@ def create_transactions_with_payments_batch(
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
     """Create transactions, payments, LC usage, and ledgers in one DB commit."""
+    from uuid import uuid5
+    from app.models.correction_operation import CorrectionOperation
+    from app.services.correction_contract import replay_result
+    from app.services.credits import _hash
+    from app.services.advance_settlements import allocate_advances
+    payload = {'kind': 'transaction_payment_batch', **batch_data.model_dump(mode='json')}
+    request_hash = _hash(payload)
+    if batch_data.operation_id:
+        if current_user is None:
+            raise HTTPException(401, 'Un utilisateur connecté est requis pour cette confirmation.')
+        replay = replay_result(db, batch_data.operation_id, request_hash, current_user.id_utilisateur)
+        if replay is not None:
+            return replay['items']
     results = []
     try:
         for item in batch_data.items:
@@ -450,6 +463,14 @@ def create_transactions_with_payments_batch(
                 current_user,
             )
             created_payments = []
+            if item.montant_avance > 0:
+                day = item.date_avance or transaction.date_transaction
+                # Compensation payments and the extra money share this commit.
+                allocate_advances(db, transaction, item.montant_avance, day, current_user,
+                    uuid5(batch_data.operation_id, item.client_ref))
+                db.expire(transaction, ['paiements'])
+                if sum((p.montant for p in item.paiements), Decimal('0')) > transaction.montant_restant:
+                    raise HTTPException(422, 'Le complément dépasse le reste après utilisation de l’avance.')
             for payment_input in item.paiements:
                 payment_data = PaiementCreate(
                     id_transaction=transaction.id_transaction,
@@ -495,8 +516,24 @@ def create_transactions_with_payments_batch(
 
             results.append((item.client_ref, transaction, created_payments))
 
-        # One commit covers all transaction, payment, LC, and ledger changes.
+        if batch_data.operation_id:
+            db.flush()
+            for _, tx, payments in results:
+                db.refresh(tx)
+                db.expire(tx, ['paiements'])
+                for payment in payments:
+                    db.refresh(payment)
+            snapshots = [{'client_ref': ref,
+                'transaction': TransactionRead.model_validate(tx).model_dump(mode='json'),
+                'paiements': [PaiementRead.model_validate(p).model_dump(mode='json') for p in payments]}
+                for ref, tx, payments in results]
+            db.add(CorrectionOperation(operation_id=batch_data.operation_id, request_hash=request_hash,
+                id_utilisateur=current_user.id_utilisateur, reason='Création de transactions et règlements',
+                request_payload=payload, result_payload={'items': snapshots}))
+        # One commit covers all transaction, payment, LC, advance and ledger changes.
         db.commit()
+        if batch_data.operation_id:
+            return snapshots
         response = []
         for client_ref, transaction, payments in results:
             db.refresh(transaction)
@@ -510,9 +547,17 @@ def create_transactions_with_payments_batch(
         return response
     except HTTPException:
         db.rollback()
+        if batch_data.operation_id:
+            replay = replay_result(db, batch_data.operation_id, request_hash, current_user.id_utilisateur)
+            if replay is not None:
+                return replay['items']
         raise
     except Exception as exc:
         db.rollback()
+        if batch_data.operation_id:
+            replay = replay_result(db, batch_data.operation_id, request_hash, current_user.id_utilisateur)
+            if replay is not None:
+                return replay['items']
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Erreur lors de la création des transactions et paiements: {exc}",

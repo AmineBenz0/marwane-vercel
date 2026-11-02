@@ -67,6 +67,9 @@ import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
+import AdvanceUsageField from '../../components/Corrections/AdvanceUsageField';
+import { announceCorrection } from '../../components/Corrections/useCorrectionFlow';
+import { getBusinessDateInput } from '../../utils/businessDate';
 
 const EMPTY_INITIAL_VALUES = {};
 
@@ -317,6 +320,12 @@ function UnpaidTransactionForm({
   const [loadingData, setLoadingData] = useState(true);
   const [animateInvalidFields, setAnimateInvalidFields] = useState(false);
   const validationAnimationTimer = useRef(null);
+  const creationOperation = useRef(null);
+  const pendingCreation = useRef(null);
+  const [uncertainCreation, setUncertainCreation] = useState(false);
+  const [advanceData, setAdvanceData] = useState(null);
+  const [advanceError, setAdvanceError] = useState('');
+  const [advanceReload, setAdvanceReload] = useState(0);
 
   // État pour gérer les paiements par ligne (tableau de booleans)
   // État pour stocker les paiements existants (en mode édition)
@@ -354,7 +363,23 @@ function UnpaidTransactionForm({
   const watchedLignes = useWatch({ control, name: 'lignes' });
   const watchedTypeEntite = watch('type_entite');
   const watchedFournisseurId = watch('id_fournisseur');
+  const watchedClientId = watch('id_client');
   const isEditingTransaction = Boolean(initialValues?.id_transaction);
+  const advancePartyKey = `${watchedTypeEntite}:${watchedTypeEntite === 'client' ? watchedClientId : watchedFournisseurId}`;
+  useEffect(() => {
+    let active = true;
+    setAdvanceData(null); setAdvanceError('');
+    const partyId = watchedTypeEntite === 'client' ? watchedClientId : watchedFournisseurId;
+    if (!open || isEditingTransaction || !partyId) return () => { active = false; };
+    get('/credits/party', { params: { [watchedTypeEntite === 'client' ? 'id_client' : 'id_fournisseur']: Number(partyId) } })
+      .then(data => { if (active) setAdvanceData({ key: advancePartyKey, data }); })
+      .catch(() => { if (active) setAdvanceError('Les avances ne peuvent pas être vérifiées. Vous pouvez réessayer avant de les utiliser.'); });
+    return () => { active = false; };
+  }, [open, isEditingTransaction, watchedTypeEntite, watchedClientId, watchedFournisseurId, advancePartyKey, advanceReload]);
+  useEffect(() => {
+    if (!isEditingTransaction) (watch('lignes') || []).forEach((_, index) => setValue(`lignes.${index}.montant_avance`, 0));
+    creationOperation.current = null;
+  }, [advancePartyKey, open, isEditingTransaction, setValue, watch]);
   useEffect(() => {
     if (!open || isEditingTransaction || watchedTypeEntite !== 'client') return;
     (watchedLignes || []).forEach((line, index, lines) => {
@@ -558,6 +583,11 @@ function UnpaidTransactionForm({
   const handleFormSubmit = async (data) => {
     clearErrors('root');
     try {
+      if (uncertainCreation && pendingCreation.current) {
+        await onSubmit(pendingCreation.current);
+        setUncertainCreation(false); pendingCreation.current = null;
+        announceCorrection(); reset(); return;
+      }
       const isEditing = initialValues && initialValues.id_transaction;
 
       if (isEditing) {
@@ -626,12 +656,17 @@ function UnpaidTransactionForm({
         }));
 
         // Appeler le callback onSubmit avec le tableau de transactions et les données des lignes (pour les paiements)
-        await onSubmit({ batch: true, transactions: transactionsData, lignesData: data.lignes });
+        creationOperation.current ||= crypto.randomUUID();
+        pendingCreation.current = structuredClone({ batch: true, transactions: transactionsData, lignesData: data.lignes, operation_id: creationOperation.current });
+        await onSubmit(pendingCreation.current);
+        pendingCreation.current = null;
+        announceCorrection();
       }
 
       // Si la soumission réussit, réinitialiser le formulaire
       reset();
     } catch (error) {
+      if (pendingCreation.current && (!error.status || error.status >= 500)) setUncertainCreation(true);
       // Gérer les erreurs de validation serveur
       if (error?.data?.detail) {
         const detail = error.data.detail;
@@ -670,8 +705,8 @@ function UnpaidTransactionForm({
         });
       }
 
-      // Re-throw pour que le composant parent puisse aussi gérer l'erreur
-      throw error;
+      // The parent already handled the failed request. Keep the draft and any
+      // uncertain confirmation here rather than rejecting RHF's event handler.
     }
   };
 
@@ -727,6 +762,7 @@ function UnpaidTransactionForm({
    * Gère la fermeture de la modal.
    */
   const handleClose = () => {
+    if (uncertainCreation) return;
     if (!loading) {
       reset();
       clearErrors();
@@ -789,9 +825,8 @@ function UnpaidTransactionForm({
 
   const montantTotal = calculateTotal();
   const montantPaye = (watchedLignes || []).reduce(
-    (sum, ligne) => ligne.ajouter_paiement
-      ? sum + (ligne.paiements || []).reduce((ligneSum, paiement) => ligneSum + (parseFloat(paiement.montant) || 0), 0)
-      : sum,
+    (sum, ligne) => sum + Number(ligne.montant_avance || 0) + (ligne.ajouter_paiement
+      ? (ligne.paiements || []).reduce((ligneSum, paiement) => ligneSum + (parseFloat(paiement.montant) || 0), 0) : 0),
     0
   );
   const montantRestant = Math.max(0, montantTotal - montantPaye);
@@ -803,7 +838,20 @@ function UnpaidTransactionForm({
   });
   const renderLinePayment = (ligne, index) => {
     const ligneTotal = (Number(ligne.quantite) || 0) * (Number(ligne.prix_unitaire) || 0);
+    const advanceDay = ligne.date_avance || getBusinessDateInput();
+    const available = advanceData?.key === advancePartyKey ? (advanceData.data.advances || []).filter(a => a.nature === 'avance' && a.statut === 'active' && a.date_effet <= advanceDay).reduce((n, a) => n + Number(a.available || 0), 0) : 0;
+    const otherAdvances = (watchedLignes || []).reduce((n, line, i) => n + (i === index ? 0 : Number(line.montant_avance || 0)), 0);
+    const advanceAmount = Number(ligne.montant_avance || 0);
+    const updateAdvance = amount => {
+      setValue(`lignes.${index}.montant_avance`, amount, { shouldValidate: true });
+      setValue(`lignes.${index}.date_avance`, advanceDay);
+      const remainder = Math.max(0, ligneTotal - Number(amount || 0));
+      if (remainder === 0) setValue(`lignes.${index}.ajouter_paiement`, false);
+      else if (ligne.ajouter_paiement && ligne.paiements?.length === 1 && ['cash', 'virement'].includes(ligne.paiements[0].type)) setValue(`lignes.${index}.paiements.0.montant`, remainder.toFixed(2));
+    };
     return <>
+      {!isEditingTransaction && <AdvanceUsageField available={Math.max(0, available - otherAdvances)} amount={ligne.montant_avance || 0} day={advanceDay} total={ligneTotal} onChange={updateAdvance}
+        onDateChange={event => setValue(`lignes.${index}.date_avance`, event.target.value)} error={index === 0 ? advanceError : ''} onRetry={() => setAdvanceReload(v => v + 1)} disabled={loading || uncertainCreation} />}
       <Grid item xs={12}>
         <Divider />
       </Grid>
@@ -835,9 +883,9 @@ function UnpaidTransactionForm({
                           : 'cash'
                       ),
                     ]);
-                    setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
+                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount));
                   } else {
-                    setValue(`lignes.${index}.paiements.0.montant`, ligneTotal);
+                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount));
                     setValue(
                       `lignes.${index}.paiements.0.date`,
                       watch('date_transaction') || today()
@@ -862,8 +910,8 @@ function UnpaidTransactionForm({
                   '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
                 }}
                 control={<Radio size="small" />}
-                label="Payer maintenant"
-                disabled={loading}
+                label={advanceAmount > 0 ? 'Régler le complément' : 'Payer maintenant'}
+                disabled={loading || uncertainCreation}
               />
               <FormControlLabel
                 value="later"
@@ -881,7 +929,7 @@ function UnpaidTransactionForm({
                 }}
                 control={<Radio size="small" />}
                 label="À régler plus tard"
-                disabled={loading}
+                disabled={loading || uncertainCreation}
               />
             </RadioGroup>
           )}
@@ -898,7 +946,7 @@ function UnpaidTransactionForm({
               </Typography>
               <Button
                 size="small"
-                disabled={loading}
+                disabled={loading || uncertainCreation}
                 startIcon={<AddIcon />}
                 onClick={() => {
                   const currentPaiements = watch(`lignes.${index}.paiements`) || [];
@@ -929,7 +977,7 @@ function UnpaidTransactionForm({
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="caption" fontWeight="bold">Paiement #{pIndex + 1}</Typography>
 
-                    <IconButton size="small" color="error" disabled={loading} aria-label={`Supprimer le paiement ${pIndex + 1}`} onClick={() => {
+                    <IconButton size="small" color="error" disabled={loading || uncertainCreation} aria-label={`Supprimer le paiement ${pIndex + 1}`} onClick={() => {
                       const newPaiements = ligne.paiements.filter((_, i) => i !== pIndex);
                       setValue(`lignes.${index}.paiements`, newPaiements);
                     }}>
@@ -952,7 +1000,7 @@ function UnpaidTransactionForm({
                           error={!!error}
                           sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                           helperText={error?.message}
-                          disabled={loading}
+                          disabled={loading || uncertainCreation}
                           inputProps={{ step: '0.01', min: '0.01' }}
                           InputLabelProps={{ shrink: true }}
                           size="small"
@@ -975,7 +1023,7 @@ function UnpaidTransactionForm({
                           error={!!error}
                           sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                           helperText={error?.message}
-                          disabled={loading}
+                          disabled={loading || uncertainCreation}
                           size="small"
                           onChange={(event) => {
                             field.onChange(event);
@@ -1027,7 +1075,7 @@ function UnpaidTransactionForm({
                           error={!!error}
                           sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                           helperText={error?.message}
-                          disabled={loading}
+                          disabled={loading || uncertainCreation}
                           InputLabelProps={{ shrink: true }}
                           size="small"
                         />
@@ -1043,7 +1091,7 @@ function UnpaidTransactionForm({
                           name={`lignes.${index}.paiements.${pIndex}.numero_cheque`}
                           control={control}
                           render={({ field }) => (
-                            <TextField {...field} fullWidth label="N° Chèque" disabled={loading} size="small" />
+                            <TextField {...field} fullWidth label="N° Chèque" disabled={loading || uncertainCreation} size="small" />
                           )}
                         />
                       </Grid>
@@ -1052,7 +1100,7 @@ function UnpaidTransactionForm({
                           name={`lignes.${index}.paiements.${pIndex}.banque`}
                           control={control}
                           render={({ field }) => (
-                            <TextField {...field} fullWidth label="Banque" disabled={loading} size="small" />
+                            <TextField {...field} fullWidth label="Banque" disabled={loading || uncertainCreation} size="small" />
                           )}
                         />
                       </Grid>
@@ -1074,7 +1122,7 @@ function UnpaidTransactionForm({
                               label="Compte bancaire"
                               error={!!error}
                               helperText={error?.message || (comptesBancaires.length ? '' : 'Aucun compte bancaire configuré')}
-                              disabled={loading || (isEditingTransaction && (watchedTypeEntite !== 'fournisseur' || Boolean(paiement.id_paiement))) || comptesBancaires.length === 0}
+                              disabled={loading || uncertainCreation || (isEditingTransaction && (watchedTypeEntite !== 'fournisseur' || Boolean(paiement.id_paiement))) || comptesBancaires.length === 0}
                               size="small"
                               value={field.value || ''}
                               onChange={(event) => field.onChange(event.target.value)}
@@ -1098,7 +1146,7 @@ function UnpaidTransactionForm({
                           name={`lignes.${index}.paiements.${pIndex}.reference`}
                           control={control}
                           render={({ field }) => (
-                            <TextField {...field} fullWidth label="Référence" disabled={loading} size="small" />
+                            <TextField {...field} fullWidth label="Référence" disabled={loading || uncertainCreation} size="small" />
                           )}
                         />
                       </Grid>
@@ -1113,7 +1161,7 @@ function UnpaidTransactionForm({
                         control={control}
                         watch={watch}
                         setValue={setValue}
-                        loading={loading}
+                        loading={loading || uncertainCreation}
                         formatMontant={formatMontant}
                         animateInvalidFields={animateInvalidFields}
                       />
@@ -1138,7 +1186,7 @@ function UnpaidTransactionForm({
                 Total du produit : <Box component="span" fontWeight={600} color="text.primary">{formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
               </Typography>
               <Typography variant="body2" fontWeight={700}>
-                Reste à régler : <Box component="span" color="primary.main">{formatMontant(Math.max(0, ligneTotal - (ligne.paiements || []).reduce((acc, paiement) => acc + (parseFloat(paiement.montant) || 0), 0)), { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
+                Reste à régler : <Box component="span" color="primary.main">{formatMontant(Math.max(0, ligneTotal - advanceAmount - (ligne.ajouter_paiement ? (ligne.paiements || []).reduce((acc, paiement) => acc + (parseFloat(paiement.montant) || 0), 0) : 0)), { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
               </Typography>
             </Box>
           </Box>
@@ -1172,7 +1220,7 @@ function UnpaidTransactionForm({
           <Box sx={{ display: 'flex', flexDirection: watchedTypeEntite === 'client' ? 'column-reverse' : 'row', gap: 1, mt: watchedTypeEntite === 'client' ? 2 : 0, width: '100%' }}>
             <Button
               onClick={handleClose}
-              disabled={loading}
+              disabled={loading || uncertainCreation}
               color="inherit"
               sx={{ flex: { xs: 1, sm: 'initial' } }}
             >
@@ -1181,12 +1229,13 @@ function UnpaidTransactionForm({
             <Button
               type="submit"
               variant="contained"
-              disabled={loading || !isDirty || saleBlocked}
+              disabled={loading || (!uncertainCreation && (!isDirty || saleBlocked))}
               startIcon={loading ? <CircularProgress size={16} /> : null}
               sx={{ flex: { xs: 1, sm: 'initial' } }}
             >
               {loading
                 ? 'Enregistrement...'
+                : uncertainCreation ? 'Vérifier l’enregistrement'
                 : isEditing
                   ? 'Enregistrer les modifications'
                   : watchedTypeEntite === 'client'
@@ -1206,7 +1255,7 @@ function UnpaidTransactionForm({
         // Let React Hook Form render consistent French errors for every required field.
         component: 'form',
         noValidate: true,
-        onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
+        onSubmit: uncertainCreation ? (event) => { event.preventDefault(); void handleFormSubmit(); } : handleSubmit(handleFormSubmit, handleInvalidSubmit),
         sx: {
           minHeight: { xs: 0, sm: '640px' },
           maxHeight: '90vh',
@@ -1249,13 +1298,14 @@ function UnpaidTransactionForm({
                 Choisissez le partenaire et les lignes de vente ou d’achat, puis validez.
               </Typography>
             </Box>
-            <IconButton onClick={handleClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
+            <IconButton onClick={handleClose} disabled={loading || uncertainCreation} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
               <CloseIcon />
             </IconButton>
           </Box>
         </DialogTitle>
 
-        <DialogContent dividers sx={{ backgroundColor: 'background.default', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
+        <DialogContent dividers sx={{ minWidth: 0, m: 0, backgroundColor: 'background.default', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
+          {uncertainCreation && <Alert severity="warning" sx={{ mb: 2 }}>La réponse n’a pas été reçue. Vérifiez le même enregistrement pour retrouver son résultat sans créer de doublon.</Alert>}
           {/* Afficher l'erreur serveur générale si présente */}
           {(errorMessage || errors.root) && (() => {
             const fieldPaths = [...new Set(getFieldErrorPaths(errors))];
@@ -1406,7 +1456,7 @@ function UnpaidTransactionForm({
                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || ''}
                     required
-                    disabled={loading}
+                    disabled={loading || uncertainCreation}
                     margin="dense"
                     variant="outlined"
                     InputLabelProps={{
@@ -1430,7 +1480,7 @@ function UnpaidTransactionForm({
                     error={!!error}
                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || 'Date limite pour le paiement'}
-                    disabled={loading}
+                    disabled={loading || uncertainCreation}
                     margin="dense"
                     variant="outlined"
                     InputLabelProps={{
@@ -1457,13 +1507,13 @@ function UnpaidTransactionForm({
                         value="client"
                         control={<Radio />}
                         label="Client"
-                        disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
+                        disabled={loading || uncertainCreation || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                       />
                       <FormControlLabel
                         value="fournisseur"
                         control={<Radio />}
                         label="Fournisseur"
-                        disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
+                        disabled={loading || uncertainCreation || (prefillClientId !== null && prefillClientId !== undefined)}
                       />
                     </RadioGroup>
                   )}
@@ -1490,7 +1540,7 @@ function UnpaidTransactionForm({
                       error={!!error}
                       sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
-                      disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
+                      disabled={loading || uncertainCreation || (prefillClientId !== null && prefillClientId !== undefined)}
                       value={field.value || ''}
                     >
                       <MenuItem value="">
@@ -1523,7 +1573,7 @@ function UnpaidTransactionForm({
                       error={!!error}
                       sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
-                      disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
+                      disabled={loading || uncertainCreation || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                       value={field.value || ''}
                     >
                       <MenuItem value="">
@@ -1574,7 +1624,7 @@ function UnpaidTransactionForm({
                       sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
                       startIcon={<AddIcon />}
                       onClick={handleAddLine}
-                      disabled={loading}
+                      disabled={loading || uncertainCreation}
                     >
                       {watchedTypeEntite === 'client' ? 'Ajouter une ligne de vente' : 'Ajouter un produit'}
                     </Button>
@@ -1612,14 +1662,14 @@ function UnpaidTransactionForm({
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message}
                                     size="small"
-                                    disabled={loading}
+                                    disabled={loading || uncertainCreation}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
                                       // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
-                                        setValue(`lignes.${index}.paiements.0.montant`, newTotal);
+                                        setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal - Number(ligne.montant_avance || 0)).toFixed(2));
                                       }
                                     }}
                                     onBlur={field.onBlur}
@@ -1645,14 +1695,14 @@ function UnpaidTransactionForm({
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || ''}
                                     size="small"
-                                    disabled={loading}
+                                    disabled={loading || uncertainCreation}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
                                       // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(ligne.quantite) || 0) * (parseFloat(value) || 0);
-                                        setValue(`lignes.${index}.paiements.0.montant`, newTotal);
+                                        setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal - Number(ligne.montant_avance || 0)).toFixed(2));
                                       }
                                     }}
                                     onBlur={field.onBlur}
@@ -1675,7 +1725,7 @@ function UnpaidTransactionForm({
                             <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total de la ligne : {ligneTotal.toFixed(2)} MAD</Typography>
                           </Box>
                           {!isEditing && watchedLignes.length > 1 && (
-                            <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
+                            <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading || uncertainCreation} aria-label={`Supprimer le produit ${index + 1}`}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           )}
@@ -1684,7 +1734,7 @@ function UnpaidTransactionForm({
                       {shouldShowBatimentSource && <ProductionSourcePicker
                         index={index} control={control} setValue={setValue} batiments={batiments}
                         produits={produits}
-                        disabled={loading} transactionId={initialValues.id_transaction}
+                        disabled={loading || uncertainCreation} transactionId={initialValues.id_transaction}
                         saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>
@@ -1694,14 +1744,14 @@ function UnpaidTransactionForm({
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
-                                <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
+                                <FormControl fullWidth size="small" error={!!error} disabled={loading || uncertainCreation} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
                                   <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
                                       size="small"
                                       value={field.value || ''}
                                     label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}
-                                      disabled={loading}
+                                      disabled={loading || uncertainCreation}
                                       onChange={(event) => {
                                         field.onChange(event);
                                         const selected = produits.find(p => Number(p.id_produit) === Number(event.target.value));
@@ -1746,7 +1796,7 @@ function UnpaidTransactionForm({
               </Paper>
               {watchedTypeEntite === 'client' && <SaleSummary
                 lines={watchedLignes || []} products={produits} control={control} saleDate={watch('date_transaction')}
-                loading={loading} renderPayment={renderLinePayment}>
+                loading={loading || uncertainCreation} renderPayment={renderLinePayment}>
                 {totalsAndActions}
               </SaleSummary>}
               </Box>

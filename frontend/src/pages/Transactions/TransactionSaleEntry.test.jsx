@@ -34,6 +34,60 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
+  it('freezes an uncertain creation and retries the same confirmation without changing the draft', async () => {
+    const submit = vi.fn().mockRejectedValueOnce(Object.assign(new Error('Réponse perdue'), { status: 504 })).mockResolvedValueOnce([]);
+    render(<TransactionForm {...props} onSubmit={submit} />);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
+    await selectBuilding('Bâtiment A');
+    fireEvent.change(quantity(), { target: { value: '10' } });
+    fireEvent.change(price(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
+    const retry = await screen.findByRole('button', { name: 'Vérifier l’enregistrement' });
+    expect(quantity()).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Annuler', exact: true })).toBeDisabled();
+    fireEvent.click(retry);
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    expect(submit.mock.calls[0][0]).toEqual(submit.mock.calls[1][0]);
+  });
+  it('uses an existing advance without generating a second cash payment when it covers the sale', async () => {
+    const original = get.getMockImplementation();
+    get.mockImplementation((path, options) => path === '/credits/party' ? Promise.resolve({ available: '100', advances: [
+      { nature: 'avance', statut: 'active', date_effet: '2000-01-01', available: '100' }], allocations: [] }) : original(path, options));
+    const submit = vi.fn();
+    render(<TransactionForm {...props} onSubmit={submit} />);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
+    await selectBuilding('Bâtiment A');
+    fireEvent.change(quantity(), { target: { value: '10' } });
+    fireEvent.change(price(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Utiliser l’avance disponible/ }));
+    expect(screen.getByRole('spinbutton', { name: 'Avance utilisée (MAD)' })).toHaveValue(15);
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    expect(submit.mock.calls[0][0]).toMatchObject({ operation_id: expect.any(String), lignesData: [{ montant_avance: 15, ajouter_paiement: false }] });
+  });
+
+  it('suggests only the cash complement when an advance covers part of a new sale', async () => {
+    const original = get.getMockImplementation();
+    get.mockImplementation((path, options) => path === '/credits/party' ? Promise.resolve({ advances: [
+      { nature: 'avance', statut: 'active', date_effet: '2000-01-01', available: '6' }], allocations: [] }) : original(path, options));
+    const submit = vi.fn();
+    render(<TransactionForm {...props} onSubmit={submit} />);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
+    await selectBuilding('Bâtiment A');
+    fireEvent.change(quantity(), { target: { value: '10' } });
+    fireEvent.change(price(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Utiliser l’avance disponible/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Régler le complément' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    expect(submit.mock.calls[0][0].lignesData[0]).toMatchObject({ montant_avance: 6, ajouter_paiement: true, paiements: [{ montant: 9 }] });
+  });
   it('keeps the saved deferred status when editing a sale that is fully covered', async () => {
     render(<TransactionForm {...props} initialValues={{
       id_transaction: 32, row_version: 1, id_client: 1, id_produit: 7, id_batiment: 1,

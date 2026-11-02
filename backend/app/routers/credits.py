@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from uuid import UUID
+from datetime import date
 from app.database import get_db
 from app.models.credit import Avance, AffectationCredit
 from app.models.transaction import Transaction
@@ -12,8 +13,35 @@ from app.services.credits import available_sources, party_credit_history, previe
 from app.services.financial import query_financial_transactions
 from app.services.settlement_state import row_snapshot
 from app.utils.dependencies import get_current_active_user
+from app.schemas.advance_settlement import AdvanceSettlementCommand, AdvanceSettlementApply
+from app.services.advance_settlements import plan_settlement, apply_settlement
 
 router = APIRouter(prefix='/credits', tags=['Avances et crédits'])
+
+
+@router.get('/settlements/options')
+def settlement_options(id_transaction: int | None = Query(None, gt=0), id_client: int | None = Query(None, gt=0),
+                       id_fournisseur: int | None = Query(None, gt=0), date_effet: date | None = None, id_avance: UUID | None = None,
+                       db: Session = Depends(get_db), actor: Utilisateur = Depends(get_current_active_user)):
+    from uuid import uuid4
+    from app.utils.business_date import business_date
+    if sum(v is not None for v in [id_transaction, id_client, id_fournisseur]) != 1:
+        raise HTTPException(422, 'Choisissez une transaction ou un seul contact.')
+    command = AdvanceSettlementCommand(operation_id=uuid4(), reason='Proposition d’utilisation des avances',
+        date_effet=date_effet or business_date(), id_transaction=id_transaction, id_client=id_client, id_fournisseur=id_fournisseur, id_avance=id_avance)
+    return plan_settlement(db, command)[0]
+
+
+@router.post('/settlements/preview')
+def settlement_preview(command: AdvanceSettlementCommand, db: Session = Depends(get_db),
+                       actor: Utilisateur = Depends(get_current_active_user)):
+    return plan_settlement(db, command)[0]
+
+
+@router.post('/settlements/apply')
+def settlement_apply(body: AdvanceSettlementApply, db: Session = Depends(get_db),
+                     actor: Utilisateur = Depends(get_current_active_user)):
+    return apply_settlement(db, body.command, body.dependency_fingerprint, actor)
 
 
 @router.get('/sources')

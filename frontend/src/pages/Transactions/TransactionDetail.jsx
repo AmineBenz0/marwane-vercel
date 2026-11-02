@@ -1,4 +1,5 @@
 import TransactionCreditPanel from '../../components/Corrections/TransactionCreditPanel';
+import AdvanceSettlementDialog from '../../components/Corrections/AdvanceSettlementDialog';
 /**
  * Page Détail Transaction.
  * 
@@ -92,11 +93,23 @@ function TransactionDetail() {
 
   // État pour la modal d'ajout/édition de paiement
   const [paiementDialogOpen, setPaiementDialogOpen] = useState(false);
+  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
+  const [advanceAvailable, setAdvanceAvailable] = useState(null);
   const [editingPaiement, setEditingPaiement] = useState(null);
   const [refundOpen, setRefundOpen] = useState(false);
   const [transactionEditOpen, setTransactionEditOpen] = useState(false);
   const [reuseChanges, setReuseChanges] = useState({});
   const [historyRevision, setHistoryRevision] = useState(0);
+  const advanceClientId = transaction?.id_client;
+  const advanceSupplierId = transaction?.id_fournisseur;
+  useEffect(() => {
+    let active = true;
+    setAdvanceAvailable(null);
+    if (!advanceClientId && !advanceSupplierId) return () => { active = false; };
+    get('/credits/party', { params: { [advanceClientId ? 'id_client' : 'id_fournisseur']: advanceClientId || advanceSupplierId } })
+      .then(data => { if (active) setAdvanceAvailable(Number(data.available)); }).catch(() => {});
+    return () => { active = false; };
+  }, [advanceClientId, advanceSupplierId, historyRevision]);
   
   // État pour la confirmation de suppression de paiement
   const [deletePaiementDialogOpen, setDeletePaiementDialogOpen] = useState(false);
@@ -531,7 +544,8 @@ function TransactionDetail() {
   /**
    * Gère l'ouverture de la modal d'ajout de paiement (nouveau).
    */
-  const handleAddPaiement = () => {
+  const handleAddPaiement = (otherPayment = false) => {
+    if (otherPayment !== true && advanceAvailable > 0) { setAdvanceDialogOpen(true); return; }
     setEditingPaiement(null);
     resetPaiement({
       date_paiement: format(new Date(), 'yyyy-MM-dd'),
@@ -804,6 +818,10 @@ function TransactionDetail() {
         <DialogActions><Button onClick={() => setCancelTransactionDialogOpen(false)}>Retour</Button><Button color="error" variant="contained" onClick={submitCancelTransaction} disabled={promiseActionLoading || (transaction.est_promesse && cancelReason.trim().length < 3)}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</Button></DialogActions>
       </Dialog>
 
+      {advanceDialogOpen && <AdvanceSettlementDialog transaction={{ ...transaction, ...statutPaiement }}
+        supplierSource={fournisseurs.find(f => f.id_fournisseur === transaction.id_fournisseur)?.mode_reglement_prefere || null}
+        onClose={() => setAdvanceDialogOpen(false)} onSaved={() => { setAdvanceDialogOpen(false); notification.success('Règlement enregistré'); }}
+        onOtherPayment={() => { setAdvanceDialogOpen(false); handleAddPaiement(true); }} />}
       {/* Modal d'ajout/édition de paiement */}
       <Dialog
         open={paiementDialogOpen}

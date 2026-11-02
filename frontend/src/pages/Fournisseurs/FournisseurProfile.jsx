@@ -1,3 +1,4 @@
+import { buildTransactionPaymentBatch } from '../Transactions/transactionPaymentBatch';
 import PartyCreditPanel from '../../components/Corrections/PartyCreditPanel';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 /**
@@ -41,12 +42,8 @@ import {
   Edit as EditIcon,
   Add as AddIcon,
   FileDownload as FileDownloadIcon,
-  AttachMoney as AttachMoneyIcon,
-  Receipt as ReceiptIcon,
-  TrendingUp as TrendingUpIcon,
   Inventory as InventoryIcon,
   Store as StoreIcon,
-  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import {
   Line,
@@ -548,7 +545,7 @@ function FournisseurProfile() {
 
     try {
       // Mode création : POST
-      await post('/transactions', data);
+      await post(data.batch ? '/transactions/batch-with-payments' : '/transactions', data.batch ? buildTransactionPaymentBatch(data) : data);
 
       // Fermer la modal et rafraîchir les données du profil
       setTransactionModalOpen(false);
@@ -652,8 +649,6 @@ function FournisseurProfile() {
         </Box>
       </Box>
 
-      <PartyCreditPanel partyType="fournisseur" partyId={id} />
-
       <Card variant="outlined" sx={{ mb: { xs: 2, sm: 2.5, md: 3 }, borderRadius: 3, overflow: 'hidden' }}>
         <Tabs
           value={activeTab}
@@ -670,48 +665,7 @@ function FournisseurProfile() {
       </Card>
 
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
-      {/* Cartes statistiques */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title={Number(insightsFinanciers?.montant_impaye) < 0 ? 'Crédit disponible' : 'Solde à payer'}
-            value={insightsFinanciers?.montant_impaye == null ? null : Math.abs(Number(insightsFinanciers.montant_impaye))}
-            icon={<AccountBalanceIcon />}
-            valueFormat="currency"
-            currency="MAD"
-            color="error"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Total achats"
-            value={statistiques?.montant_total_achats || 0}
-            icon={<AttachMoneyIcon />}
-            valueFormat="currency"
-            currency="MAD"
-            color="primary"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Nombre transactions"
-            value={statistiques?.total_transactions || 0}
-            icon={<ReceiptIcon />}
-            valueFormat="number"
-            color="info"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Montant moyen"
-            value={statistiques?.montant_moyen_transaction || 0}
-            icon={<TrendingUpIcon />}
-            valueFormat="currency"
-            currency="MAD"
-            color="success"
-          />
-        </Grid>
-      </Grid>
+      <PartyCreditPanel partyType="fournisseur" partyId={id} totalActivity={statistiques?.montant_total_achats ?? null} totalTransactions={statistiques?.total_transactions ?? null} />
 
       <Card sx={{ mb: 3, borderRadius: 3 }}>
         <CardContent>
@@ -806,6 +760,7 @@ function FournisseurProfile() {
       </Box>
 
       <Box sx={{ display: activeTab === 'analyse' ? 'block' : 'none' }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Montant moyen d’un achat : {statistiques?.montant_moyen_transaction == null ? '—' : formatMontant(statistiques.montant_moyen_transaction)}</Typography>
       {/* Insights Financiers */}
       <FinancialInsights 
         insights={insightsFinanciers}
