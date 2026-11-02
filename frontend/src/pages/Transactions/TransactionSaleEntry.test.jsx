@@ -46,6 +46,10 @@ describe('sale entry preserves user input', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
     const retry = await screen.findByRole('button', { name: 'Vérifier l’enregistrement' });
     expect(quantity()).toBeDisabled();
+    const switchType = screen.getByRole('button', { name: /Achat fournisseur/ });
+    expect(switchType).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(switchType);
+    expect(quantity()).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Annuler', exact: true })).toBeDisabled();
     fireEvent.click(retry);
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));

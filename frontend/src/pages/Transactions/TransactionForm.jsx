@@ -806,6 +806,7 @@ function UnpaidTransactionForm({
    * Gère le changement du type d'entité (client/fournisseur).
    */
   const handleTypeEntiteChange = (newType) => {
+    if (loading || uncertainCreation) return;
     setValue('type_entite', newType, { shouldDirty: true });
     setValue('id_client', '', { shouldDirty: true });
     setValue('id_fournisseur', '', { shouldDirty: true });
@@ -1369,7 +1370,8 @@ function UnpaidTransactionForm({
                         <Box
                           key={option.value}
                           role="button"
-                          tabIndex={option.disabled || loading ? -1 : 0}
+                          aria-disabled={option.disabled || loading || uncertainCreation}
+                          tabIndex={option.disabled || loading || uncertainCreation ? -1 : 0}
                           onClick={() => {
                             if (!option.disabled && !loading) {
                               handleTypeEntiteChange(option.value);
@@ -1388,15 +1390,15 @@ function UnpaidTransactionForm({
                             border: '2px solid',
                             borderColor: isSelected ? option.activeColor : 'divider',
                             backgroundColor: isSelected ? option.activeBg : 'background.paper',
-                            opacity: option.disabled || loading ? 0.55 : 1,
-                            cursor: option.disabled || loading ? 'not-allowed' : 'pointer',
+                            opacity: option.disabled || loading || uncertainCreation ? 0.55 : 1,
+                            cursor: option.disabled || loading || uncertainCreation ? 'not-allowed' : 'pointer',
                             transition: 'all 160ms ease',
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'center',
                             '&:hover': {
-                              borderColor: option.disabled || loading ? 'divider' : option.activeColor,
-                              transform: option.disabled || loading ? 'none' : 'translateY(-1px)',
+                              borderColor: option.disabled || loading || uncertainCreation ? 'divider' : option.activeColor,
+                              transform: option.disabled || loading || uncertainCreation ? 'none' : 'translateY(-1px)',
                             },
                           }}
                         >
