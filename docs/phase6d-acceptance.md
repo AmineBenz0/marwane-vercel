@@ -1,6 +1,6 @@
 # Phase 6D — cheque and LC corrections
 
-Status: staging migration and native PostgreSQL guard checks passed; application deployment and UI acceptance pending.
+Status: deployed to staging; native PostgreSQL guards and the authenticated walkthrough passed. Ready for owner review; Phase 6D remains open pending acceptance.
 
 ## Implemented scope
 
@@ -18,14 +18,32 @@ Status: staging migration and native PostgreSQL guard checks passed; application
 - Frontend build passed; targeted ESLint reported zero errors and one existing dependency warning in LCFormPage.
 - New coverage exercises clearing dates/statuses, supplier bank cheques, refund chronology/dependencies, LC payment/deposit/transfer correction and cancellation, stale previews, same-operation retries, rollback after an injected replacement failure and long reasons.
 
-## Deployment blocker and next checks
+## Deployment and database verification
 
-The staging migration confirmation succeeded on retry. Migration `20261102125600_instrument_corrections` is applied to staging project `aqosvbpcxfpntcejebma`, and migration history confirms it. No Phase 6D manual staging acceptance is claimed yet.
+The staging migration confirmation succeeded on retry. Migration `20261102125600_instrument_corrections` is applied to staging project `aqosvbpcxfpntcejebma`, and migration history confirms it. The authenticated staging walkthrough below subsequently passed.
 
 The migration is prepared in `backend/migrations/instrument_corrections.sql`, with its Alembic wrapper and bootstrap copy. Its identical Supabase mirror is `supabase_migrations/20261102125600_instrument_corrections.sql`.
 
-Run `backend/tests/phase6d_postgres_checks.sql` on staging after the migration; it rolls back its synthetic records and checks audited value authorization, clearing-date capacity, downstream cancellation guards and immutable transfer history. The script passed against staging and rolled back all synthetic records. The security advisor reports no new findings.
+`backend/tests/phase6d_postgres_checks.sql` ran on staging after the migration; it rolls back its synthetic records and checks audited value authorization, clearing-date capacity, downstream cancellation guards and immutable transfer history. The script passed against staging and rolled back all synthetic records. The security advisor reports no new findings.
 
-Then deploy the reviewed source to staging and verify through the authenticated UI: cleared cheque date/status changes and restoration, cash/bank balances, LC payment correction, deposit date/account correction, transfer recipient/date replacement, usage cancellation, historical balances, correction history and cross-tab conflicts. Restore test effects and verify cleanup with read-only SQL.
+Staging alias serves READY deployment `dpl_82dQah8qcrBN2YZVHVg6CcuGQD4T`, source commit `66d578fdc414ed5462c4ee5ba1a55b2f33a4c759` (preview environment, cdg1). The alias was explicitly assigned and its resolved commit verified. Production was not changed.
+
+## Authenticated staging walkthrough — 2 November 2026
+
+- Cheque payment 54, 1.50 MAD on the marked test sale: pending → cleared on 2 November, clearing date corrected to 1 November, then rejected. Each preview agreed with the saved debt and active cash effect. SQL confirmed the old movement was retained canceled and only the corrected movement was active before rejection. The test payment was then canceled.
+- LC `TEST-PH6D-0211` (id 5), payment 55: corrected from 1.50 to 1.60 MAD and usage date from 2 to 1 November. SQL confirmed both LC and payment amounts/dates changed together and payment revision advanced. Explicit cancellation removed the payment effect and made the LC available again.
+- The same LC was deposited in reconciled test account 3. Its amount/date correction changed the active deposit from 1.60 MAD on 2 November to 1.70 MAD on 1 November, preserving the old movement. Cancellation returned the account to zero.
+- Two tabs previewed competing LC operations. After the first canceled the deposit, the second save was rejected with “La lettre de crédit a changé. Actualisez son aperçu.” Confirmation was disabled and SQL found zero operations for its marked reason.
+- Supplier transfer: original transfer to supplier 6 was corrected to supplier 5 and dated 1 November. The original remained canceled, a compensating transfer and replacement were retained, and the LC holder matched the replacement. Cancellation restored client 7 and voided its active transfer movement.
+- Manual verification found and resolved three display issues: LC credit was presented as negative debt; payment/deposit usage was absent from the cession-only table; and the bank picker used nonexistent `nom_compte` instead of `nom_banque`. Follow-up frontend regressions (10 checks, then 7 label/detail checks, overlapping) passed, all 23 instrument backend tests passed again, build passed and targeted lint had zero errors. The final deployed commit contains these fixes.
+- No console errors were captured on the primary walkthrough tab. Screenshots show [cheque rejection preview](qa/phase6d-cheque-preview.png), [stale LC preview](qa/phase6d-stale-preview.png) and [retained transfer history before cleanup](qa/phase6d-transfer-history.png).
+
+## Cleanup and verification limits
+
+Read-only SQL confirmed test payments 54 and 55 canceled; zero active test cash, deposit or transfer movements; account 3 at zero; sale 27 unchanged at 1.50 MAD and with no active payments. All financial and transfer history remains retained.
+
+The synthetic LC cannot be deleted after acquiring history. Its original client was restored, notes explicitly identify it as archived test data, and its availability was set to **31 December 2099** through the correction UI. It remains an active-but-unavailable test record, contributing **zero to current balances**, rather than being falsely described as a canceled or deleted LC. No existing demo instruments or unreconciled bank balances were repaired.
+
+Destination-bank changes and supplier-funded cheque reversal passed local integration checks; the recorded live walkthrough used the reconciled test bank account rather than moving a deposit between two accounts. Live PostgreSQL concurrency/load and recovery/rollback drills remain final-release gates.
 
 Phase 6D remains open. Production release, live PostgreSQL concurrency/recovery checks and Phase 6E restoration/conversion remain separate gates.

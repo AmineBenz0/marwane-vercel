@@ -648,7 +648,7 @@ Next: Phase 6D, beginning with cleared-cheque corrections and then LC dependency
 chains. Phase 6E restoration/conversion follows. Broader reporting consistency
 and final PostgreSQL concurrency/recovery/release acceptance remain later gates.
 
-## Phase 6D — prepared; staging acceptance pending
+## Phase 6D — implemented and verified on staging; owner review pending
 
 The cheque and LC dependency adapters and owner forms are implemented for review.
 Cheques retain amount/funding while their issue/clearing dates and state are
@@ -660,6 +660,18 @@ and allocations must be handled before changing their funding instrument.
 Migration `20261102125600_instrument_corrections` is applied to staging. Native
 PostgreSQL guard verification passed with synthetic records rolled back and no
 new security advisor findings. Application deployment and authenticated manual
-acceptance are pending. See
+acceptance are recorded in the evidence below. See
 [Phase 6D evidence and remaining checks](phase6d-acceptance.md).
 
+
+
+### Phase 6D staging walkthrough — 2 November 2026
+
+Staging `66d578f` passed cheque clearing/date/status correction, LC payment and
+bank deposit correction/cancellation, transfer recipient/date replacement,
+compensating history and two-tab stale-preview rejection. The three display
+issues found during acceptance are fixed in this release. Read-only SQL
+confirmed zero remaining active test money effects and the original sale and
+bank balances. The synthetic LC remains retained and explicitly marked as test
+data with availability in 2099, contributing zero to current balances.
+Phase 6D is ready for owner review; it is not marked closed automatically.
