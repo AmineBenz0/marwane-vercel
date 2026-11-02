@@ -31,3 +31,7 @@ Screenshots show the [client layout](qa/advance-client-profile.png), [combined c
 ## Release limits
 
 Staging checks use marked test contacts and small synthetic amounts. Local tests verify rollback and idempotency; broader live PostgreSQL concurrency/load and recovery drills remain separate release gates. This feature does not close Phase 6D owner acceptance or Phase 6E restoration/conversion work.
+
+## Shared disclosure components
+
+Follow-up code commit `cf3e8e75618b3ae810c4078f978343a5111a0cc4` replaces both native disclosure controls with the existing `ExpandableDetails` component. History stays collapsed initially; archived usage remains expanded when history is opened. Its five focused tests passed, targeted lint had no errors, and the frontend build passed. READY deployment `dpl_7efyGPdSnRViMN5Rs5wsJK5W1pZi` was verified and assigned to staging. The browser check confirmed the history default and Space/Enter toggling of a nested usage section. See the [shared disclosure controls](qa/advance-shared-disclosures.png). No financial records were created for this UI check.
