@@ -26,13 +26,17 @@ The two regressions found during owner review are corrected. Issuing bank, seria
 
 Notes-only cheque corrections are again allowed on canceled payments and inactive transactions. Financial date/status corrections remain blocked on those records, and tests verify that annotation does not restore the payment or change movements. These fixes reuse the applied schema and require no new migration.
 
+Follow-up automated validation: **325 backend tests passed, 11 external PostgreSQL checks skipped; 297 frontend tests passed across 61 files.** Frontend build and targeted ESLint passed.
+
+Fix commit `16f7ee32a50813589265dbb8745a36f0b4d07033` is deployed to staging as READY deployment `dpl_6YCXUTWQakVXgYTUbpdp3YgKe7Zc`. The staging alias was assigned to that exact preview deployment. In the signed-in browser, LC 5 reference, serial and issuer were corrected and then restored through preview/confirm; both operations appear in [retained metadata history](qa/phase6d-metadata-regression.png). The LC remains unavailable until 2099. Canceled cheque 54 was opened from its correction history, annotated and then restored; [both notes corrections remain visible](qa/phase6d-cancelled-cheque-notes.png), the payment stayed canceled and sale 27 remained unpaid at 1.50 MAD. No console errors were captured on either verification tab. The deposited-reference replacement is covered by the local integration test; this follow-up live walkthrough changed metadata on the already neutralized LC rather than introducing another deposit.
+
 The staging migration confirmation succeeded on retry. Migration `20261102125600_instrument_corrections` is applied to staging project `aqosvbpcxfpntcejebma`, and migration history confirms it. The authenticated staging walkthrough below subsequently passed.
 
 The migration is prepared in `backend/migrations/instrument_corrections.sql`, with its Alembic wrapper and bootstrap copy. Its identical Supabase mirror is `supabase_migrations/20261102125600_instrument_corrections.sql`.
 
 `backend/tests/phase6d_postgres_checks.sql` ran on staging after the migration; it rolls back its synthetic records and checks audited value authorization, clearing-date capacity, downstream cancellation guards and immutable transfer history. The script passed against staging and rolled back all synthetic records. The security advisor reports no new findings.
 
-Staging alias serves READY deployment `dpl_82dQah8qcrBN2YZVHVg6CcuGQD4T`, source commit `66d578fdc414ed5462c4ee5ba1a55b2f33a4c759` (preview environment, cdg1). The alias was explicitly assigned and its resolved commit verified. Production was not changed.
+The original walkthrough used READY deployment `dpl_82dQah8qcrBN2YZVHVg6CcuGQD4T`, source commit `66d578fdc414ed5462c4ee5ba1a55b2f33a4c759` (preview environment, cdg1). It has since been superseded by the review-fix deployment above. Production was not changed.
 
 ## Authenticated staging walkthrough — 2 November 2026
 
