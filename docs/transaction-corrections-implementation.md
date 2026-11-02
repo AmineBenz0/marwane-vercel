@@ -657,8 +657,9 @@ deposit, preserve transfer history and support explicit usage cancellation.
 Settled instrument credit uses its effective settlement date; downstream refunds
 and allocations must be handled before changing their funding instrument.
 
-The staging migration confirmation expired twice and migration history confirms
-it was not applied. The change is held outside staging pending migration,
-PostgreSQL guard verification and authenticated manual acceptance. See
+Migration `20261102125600_instrument_corrections` is applied to staging. Native
+PostgreSQL guard verification passed with synthetic records rolled back and no
+new security advisor findings. Application deployment and authenticated manual
+acceptance are pending. See
 [Phase 6D evidence and remaining checks](phase6d-acceptance.md).
 
