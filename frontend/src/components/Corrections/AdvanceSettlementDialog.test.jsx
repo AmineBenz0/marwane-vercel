@@ -18,7 +18,7 @@ it('suggests the advance and complement, previews once, and confirms a frozen co
   expect(screen.getByRole('spinbutton', { name: 'Complément à encaisser (MAD)' })).toHaveValue(4);
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier le règlement' }));
   await screen.findByRole('button', { name: 'Confirmer le règlement' });
-  expect(post.mock.calls[0][1]).toMatchObject({ id_transaction: 10, montant_avance: '6.00', paiement: { montant: '4', type_paiement: 'cash', id_compte: null } });
+  expect(post.mock.calls[0][1]).toMatchObject({ id_transaction: 10, montant_avance: '6.00', paiement: { montant: '4.00', type_paiement: 'cash', id_compte: null } });
   expect(saved).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer le règlement' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());

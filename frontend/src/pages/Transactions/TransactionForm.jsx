@@ -435,7 +435,7 @@ function UnpaidTransactionForm({
   /**
    * Charge les données de référence (clients, fournisseurs, produits).
    */
-  const fetchReferenceData = async (typeEntite = 'client') => {
+  const fetchReferenceData = async (typeEntite = 'client', isCurrent = () => true) => {
     setLoadingData(true);
     try {
       const [clientsData, fournisseursData, produitsData, batimentsData, comptesData] = await Promise.all([
@@ -446,15 +446,16 @@ function UnpaidTransactionForm({
         get('/comptes-bancaires'),
       ]);
 
+      if (!isCurrent()) return;
       setClients(clientsData || []);
       setFournisseurs(fournisseursData || []);
       setProduits(produitsData || []);
       setBatiments(batimentsData || []);
       setComptesBancaires(comptesData || []);
     } catch (err) {
-      console.error('Erreur lors du chargement des données de référence:', err);
+      if (isCurrent()) console.error('Erreur lors du chargement des données de référence:', err);
     } finally {
-      setLoadingData(false);
+      if (isCurrent()) setLoadingData(false);
     }
   };
 
@@ -476,9 +477,11 @@ function UnpaidTransactionForm({
 
   // Charger les données de référence au montage et à l'ouverture de la modal
   useEffect(() => {
+    let current = true;
     if (open) {
-      fetchReferenceData(watchedTypeEntite || 'client');
+      fetchReferenceData(watchedTypeEntite || 'client', () => current);
     }
+    return () => { current = false; };
   }, [open, watchedTypeEntite]);
 
   // Réinitialiser le formulaire lorsque initialValues change (pour l'édition)
@@ -802,25 +805,12 @@ function UnpaidTransactionForm({
   /**
    * Gère le changement du type d'entité (client/fournisseur).
    */
-  const handleTypeEntiteChange = async (newType) => {
+  const handleTypeEntiteChange = (newType) => {
     setValue('type_entite', newType, { shouldDirty: true });
     setValue('id_client', '', { shouldDirty: true });
     setValue('id_fournisseur', '', { shouldDirty: true });
     setValue('lignes', [createLineDefaults()], { shouldDirty: true });
-
-    // Recharger les produits pour le type sélectionné
-    setLoadingData(true);
-    try {
-      const produitsData = await getProduitsParType(newType, {
-        est_actif: true,
-        limit: 1000,
-      });
-      setProduits(produitsData || []);
-    } catch (err) {
-      console.error('Erreur lors du chargement des produits:', err);
-    } finally {
-      setLoadingData(false);
-    }
+    // The reference-data effect owns loading and ignores superseded requests.
   };
 
   const montantTotal = calculateTotal();
@@ -1745,9 +1735,10 @@ function UnpaidTransactionForm({
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
                                 <FormControl fullWidth size="small" error={!!error} disabled={loading || uncertainCreation} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
-                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
+                                  <InputLabel id={`product-label-${index}`}>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
+                                      labelId={`product-label-${index}`}
                                       size="small"
                                       value={field.value || ''}
                                     label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}
