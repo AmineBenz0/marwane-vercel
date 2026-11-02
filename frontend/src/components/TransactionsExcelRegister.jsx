@@ -110,7 +110,7 @@ const formatPaymentAmountForSummary = (value) => {
 const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountForSummary) => {
   if (!payment) return null;
 
-  const label = `${payment.nature === 'remboursement' ? 'Remboursement · ' : ''}${getPaymentTypeLabel(payment)}`;
+  const label = { credit_recu: 'Crédit utilisé', credit_transfere: 'Crédit transféré' }[payment.nature] || `${payment.nature === 'remboursement' ? 'Remboursement · ' : ''}${getPaymentTypeLabel(payment)}`;
   const reference = getPaymentReferenceValue(payment);
   const referenceText = reference
     ? ` ${reference}`

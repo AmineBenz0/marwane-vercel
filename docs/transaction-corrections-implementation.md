@@ -608,3 +608,27 @@ An active refund blocks transaction withdrawal/contact transfer until its
 dependencies are explicitly handled. Cheque/LC-backed transactions remain gated
 for their dedicated instrument workflow. Advances, credit transfers, instrument
 corrections and restoration/conversion are still pending Phase 6 work.
+
+
+## Phase 6C — advances and explicit credit allocation
+
+Adds contact-level cash/bank advances, explicit returns of unused advances, and
+previewed non-cash allocations to active transactions of the same contact and side.
+A surplus transfer saves two linked settlement entries; an advance allocation saves
+one destination entry and consumes the advance. Neither allocation creates cash.
+Cancellation applies to the complete allocation and retains both sides in history.
+
+New `/credits` endpoints share normalized operation IDs, frozen preview fingerprints,
+ordered record locks, one commit and exact-response replay. Deferred PostgreSQL
+constraints reject incomplete pairs and missing/mismatched advance effects. Public
+roles cannot access the new tables; the trusted application role can insert and
+cancel records, but cannot rewrite their financial columns or delete history.
+
+Contact lists, profiles, supplier monthly balances, dated financial position,
+cash/bank registers and transaction exports include the new settlement semantics.
+Forms distinguish an actual receipt/return from use of existing credit. Contact and
+ledger pages subscribe to correction refreshes, including cross-tab events.
+
+Migration `20261102000432_party_advances_credit_allocation` is applied to staging.
+See [Phase 6C acceptance](phase6c-acceptance.md) for current verification evidence.
+Phase 6 remains open: 6D cheque/LC dependencies and 6E restoration/conversion follow.

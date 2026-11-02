@@ -35,6 +35,8 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+vi.mock('../../components/Corrections/PartyCreditPanel', () => ({ default: ({ partyType, partyId }) => <section aria-label={`Crédits ${partyType} ${partyId}`} /> }));
+
 // Mock des composants Material-UI
 vi.mock('@mui/material', () => ({
   Box: ({ children, ...props }) => <div data-testid="box" {...props}>{children}</div>,
@@ -313,4 +315,5 @@ describe('FournisseurProfile', () => {
     });
   });
 });
+
 

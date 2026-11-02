@@ -13,8 +13,6 @@ import json
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
-from app.models.caisse import Caisse
-from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.correction_operation import CorrectionOperation
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
@@ -23,6 +21,7 @@ from app.services.correction_contract import replay_result
 from app.services.financial import payment_total_as_of, validate_payment_date
 from app.services.financial_ledger import sync_payment_cash_movement
 from app.services.financial_locking import lock_transaction
+from app.services.settlement_state import settlement_state
 from app.services.ledger import record_correction
 from app.utils.business_date import business_date
 
@@ -46,42 +45,7 @@ def _payload(command):
 
 
 def _state(db, transaction, command, *, lock=False):
-    def rows(model, predicate, key):
-        query = db.query(model).filter(predicate).order_by(key).populate_existing()
-        return (query.with_for_update() if lock else query).all()
-
-    payments = rows(Paiement, Paiement.id_transaction == transaction.id_transaction, Paiement.id_paiement)
-    ids = [p.id_paiement for p in payments]
-    cash = rows(Caisse, Caisse.id_paiement.in_(ids), Caisse.id_mouvement)
-    bank = rows(MouvementBancaire, MouvementBancaire.id_paiement.in_(ids), MouvementBancaire.id_mouvement)
-    account_ids = {m.id_compte for m in bank}
-    if command.id_compte is not None:
-        account_ids.add(command.id_compte)
-    accounts = rows(CompteBancaire, CompteBancaire.id_compte.in_(sorted(account_ids)), CompteBancaire.id_compte)
-    if command.id_compte and command.id_compte not in {a.id_compte for a in accounts}:
-        raise HTTPException(404, 'Compte bancaire introuvable.')
-    for payment in payments:
-        if payment.statut != 'annule' and (payment.type_paiement in {'cheque', 'lc'} or payment.id_lc):
-            raise HTTPException(409, 'Ce remboursement nécessite le traitement dédié du chèque ou de la lettre de crédit.')
-        linked = [m for m in cash + bank if m.id_paiement == payment.id_paiement and m.statut == 'active']
-        if len(linked) != (1 if payment.est_effectif else 0):
-            raise HTTPException(409, 'Réconciliez les mouvements de cette transaction avant le remboursement.')
-        for movement in linked:
-            bank_expected = payment.id_compte is not None and (
-                payment.source_reglement == 'banque' or payment.source_reglement is None and payment.type_paiement == 'virement')
-            if (movement.montant != payment.montant or movement.type_mouvement != payment.ledger_direction(transaction)
-                or movement.date_mouvement.date() != payment.date_paiement
-                or isinstance(movement, MouvementBancaire) != bank_expected
-                or bank_expected and (movement.id_compte != payment.id_compte or movement.source != payment.type_paiement)
-                or isinstance(movement, Caisse) and (movement.id_transaction != transaction.id_transaction or movement.id_charge or movement.id_cession)):
-                raise HTTPException(409, 'Un mouvement ne correspond pas au règlement. Réconciliez-le avant le remboursement.')
-    # The relationship may have been read before a writer acquired its lock.
-    db.expire(transaction, ['paiements'])
-    def snapshot(row):
-        return {c.name: _json(getattr(row, c.name)) for c in row.__table__.columns}
-    state = {'transaction': snapshot(transaction), 'payments': [snapshot(p) for p in payments],
-             'cash': [snapshot(m) for m in cash], 'bank': [snapshot(m) for m in bank],
-             'accounts': [snapshot(a) for a in accounts]}
+    state = settlement_state(db, [transaction], account_id=command.id_compte, lock=lock)
     return _hash({'request': _payload(command), 'state': state})
 
 

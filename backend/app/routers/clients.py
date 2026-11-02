@@ -705,7 +705,7 @@ def get_client_insights_financiers(
     taux_paiement = float((montant_paye / montant_total * 100) if montant_total > 0 else 0)
     
     # 4. Calculer le montant impayé
-    montant_impaye = montant_total - montant_paye
+    montant_impaye = contact_balances(db, direction='receivable', contact_ids=[id])[id]
     
     # 5. Calculer le délai moyen de paiement (jours entre date_transaction et date_paiement)
     # En PostgreSQL, la soustraction de deux DATE renvoie le nombre de jours directement

@@ -8,6 +8,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from hashlib import sha256
 import json
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import case, func, or_, text
@@ -49,6 +50,8 @@ def _snapshot(entity_type: str, record) -> dict:
 
 
 def _json_value(value):
+    if isinstance(value, UUID):
+        return str(value)
     if isinstance(value, datetime):
         return _utc(value).isoformat()
     if isinstance(value, date):
@@ -161,8 +164,8 @@ def _dependencies(db, entity_type, record, transaction=None, *, lock=False, chan
 def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, transaction=None) -> dict:
     entity_type = command.target.entity_type
     requested = command.changes.model_dump(exclude_unset=True)
-    if entity_type == "paiement" and record.nature == "remboursement":
-        raise HTTPException(409, "Un remboursement conserve ses valeurs. Annulez son enregistrement erroné puis enregistrez le remboursement correct.")
+    if entity_type == "paiement" and record.nature not in {None, "paiement"}:
+        raise HTTPException(409, "Un remboursement ou une affectation de crédit conserve ses valeurs. Annulez l’opération liée erronée puis recréez-la.")
     stock_allocations_supplied = 'stock_allocations' in requested
     if stock_allocations_supplied:
         if entity_type != 'transaction' or requested['stock_allocations'] is None:
@@ -211,8 +214,8 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
             raise HTTPException(409, "Une correction de contact conserve le type de transaction. Un achat ne peut pas devenir une vente ici.")
         if "id_fournisseur" in requested and record.id_fournisseur is None:
             raise HTTPException(409, "Une correction de contact conserve le type de transaction. Une vente ne peut pas devenir un achat ici.")
-        if any(payment.nature == "remboursement" and payment.statut != "annule" for payment in linked_payments):
-            raise HTTPException(409, "Cette transaction comporte un remboursement. Son attribution nécessite le parcours de transfert dédié.")
+        if any(payment.nature in {"remboursement", "credit_recu", "credit_transfere"} and payment.statut != "annule" for payment in linked_payments):
+            raise HTTPException(409, "Cette transaction comporte un remboursement ou une affectation de crédit. Traitez les opérations liées avant de changer le contact.")
         if any(payment.id_lc is not None for payment in linked_payments):
             raise HTTPException(409, "L’attribution d’un paiement lié à une lettre de crédit nécessite son adaptateur dédié.")
         if "id_client" in requested:

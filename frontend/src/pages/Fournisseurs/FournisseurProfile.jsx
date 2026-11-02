@@ -1,3 +1,5 @@
+import PartyCreditPanel from '../../components/Corrections/PartyCreditPanel';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 /**
  * Page Profil Fournisseur.
  * 
@@ -203,8 +205,8 @@ function FournisseurProfile() {
   /**
    * Charge le profil du fournisseur.
    */
-  const fetchFournisseurProfile = async () => {
-    setLoading(true);
+  const fetchFournisseurProfile = async (background = false) => {
+    if (!background) setLoading(true);
     setError(null);
 
     try {
@@ -247,6 +249,8 @@ function FournisseurProfile() {
   /**
    * Charge les données au montage et lorsque l'ID change.
    */
+  useCorrectionRefresh(() => fetchFournisseurProfile(true));
+
   useEffect(() => {
     if (id) {
       fetchProduits();
@@ -648,6 +652,8 @@ function FournisseurProfile() {
         </Box>
       </Box>
 
+      <PartyCreditPanel partyType="fournisseur" partyId={id} />
+
       <Card variant="outlined" sx={{ mb: { xs: 2, sm: 2.5, md: 3 }, borderRadius: 3, overflow: 'hidden' }}>
         <Tabs
           value={activeTab}
@@ -668,8 +674,8 @@ function FournisseurProfile() {
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Solde à payer"
-            value={insightsFinanciers?.montant_impaye || 0}
+            title={Number(insightsFinanciers?.montant_impaye) < 0 ? 'Crédit disponible' : 'Solde à payer'}
+            value={insightsFinanciers?.montant_impaye == null ? null : Math.abs(Number(insightsFinanciers.montant_impaye))}
             icon={<AccountBalanceIcon />}
             valueFormat="currency"
             currency="MAD"
@@ -1041,3 +1047,4 @@ function MiniBalanceCard({ label, value, color }) {
     </Box>
   );
 }
+

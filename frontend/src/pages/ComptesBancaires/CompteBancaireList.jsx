@@ -1,3 +1,4 @@
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -80,9 +81,11 @@ const formatSignedAmount = (movement) => {
   return `${sign}${formatMontant(Math.abs(signed), { useCompactNotation: false, maximumFractionDigits: 2 })}`;
 };
 
+const getMovementSource = movement => ({ remboursement: 'Remboursement', avance: 'Avance', retour_avance: 'Restitution d’avance' }[movement.nature_reglement] || SOURCE_LABELS[movement.source] || movement.source || 'Mouvement bancaire');
+
 const getMovementTitle = (movement) => {
   if (movement.notes) return movement.notes;
-  return movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || 'Mouvement bancaire';
+  return getMovementSource(movement);
 };
 
 function CompteBancaireList() {
@@ -174,6 +177,8 @@ function CompteBancaireList() {
     }
   };
 
+  useCorrectionRefresh(() => fetchData());
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -245,7 +250,7 @@ function CompteBancaireList() {
         compte: movement.compte_nom || comptesMap.get(movement.id_compte)?.nom_banque || '-',
         operation: getMovementTitle(movement),
         type: movement.type_mouvement === 'ENTREE' ? 'Entrée' : 'Sortie',
-        source: (movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || '-'),
+        source: getMovementSource(movement),
         reference: movement.reference || '',
         montant: getSignedAmount(movement),
       })),
@@ -655,7 +660,7 @@ function MovementRow({ movement }) {
           <Box>
             <Typography fontWeight={900}>{getMovementTitle(movement)}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {(movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || '-')} · {isEntry ? 'Entrée' : 'Sortie'}
+              {getMovementSource(movement)} · {isEntry ? 'Entrée' : 'Sortie'}
             </Typography>
           </Box>
         </Stack>
@@ -682,7 +687,7 @@ function MovementMobileCard({ movement }) {
             {movement.compte_nom || '-'} · {formatDate(movement.date_mouvement)}
           </Typography>
           <Typography color="text.secondary" variant="caption">
-            {movement.reference || (movement.nature_reglement === 'remboursement' ? 'Remboursement' : SOURCE_LABELS[movement.source] || movement.source || '-')}
+            {movement.reference || getMovementSource(movement)}
           </Typography>
         </Box>
         <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>

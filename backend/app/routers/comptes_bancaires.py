@@ -51,7 +51,7 @@ def get_mouvements(
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
     """Récupère l'historique des mouvements pour un compte."""
-    return db.query(MouvementBancaire).options(selectinload(MouvementBancaire.paiement)).filter(
+    return db.query(MouvementBancaire).options(selectinload(MouvementBancaire.paiement), selectinload(MouvementBancaire.avance)).filter(
         MouvementBancaire.id_compte == id,
         MouvementBancaire.statut == "active",
     ).order_by(MouvementBancaire.date_mouvement.desc()).offset(skip).limit(limit).all()

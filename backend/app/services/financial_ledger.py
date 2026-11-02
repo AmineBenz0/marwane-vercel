@@ -146,6 +146,7 @@ def validate_bank_idempotency(existing: MouvementBancaire, requested: dict) -> N
         and existing.reference == requested.get("reference")
         and existing.id_paiement == requested.get("id_paiement")
         and existing.id_charge == requested.get("id_charge")
+        and existing.id_avance == requested.get("id_avance")
     )
     if not same_identity:
         raise HTTPException(
@@ -165,6 +166,7 @@ def record_bank_movement(
     notes: Optional[str] = None,
     id_paiement: Optional[int] = None,
     id_charge: Optional[int] = None,
+    id_avance: Optional[UUID] = None,
     cle_idempotence: Optional[str] = None,
     current_user: Optional[Utilisateur] = None,
     date_mouvement: Optional[datetime] = None,
@@ -199,6 +201,7 @@ def record_bank_movement(
                 "reference": reference,
                 "id_paiement": id_paiement,
                 "id_charge": id_charge,
+                "id_avance": id_avance,
             })
             return existing
 
@@ -211,6 +214,7 @@ def record_bank_movement(
         notes=notes,
         id_paiement=id_paiement,
         id_charge=id_charge,
+        id_avance=id_avance,
         cle_idempotence=cle_idempotence,
         id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
         date_mouvement=date_mouvement,
@@ -262,7 +266,7 @@ def sync_payment_cash_movement(
     A changed movement is voided and replaced by a new row. A movement that
     ceases to be effective is voided with an explicit inverse audit row.
     """
-    should_create = payment.est_effectif and (
+    should_create = payment.est_effectif and not payment.est_affectation and (
         payment.type_paiement in IMMEDIATE_PAYMENT_TYPES
         or payment.type_paiement == "cheque"
     )

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, Date
 from decimal import Decimal
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from app.database import get_db
 from app.models.fournisseur import Fournisseur
@@ -20,6 +20,7 @@ from app.schemas.fournisseur import (
     FournisseurProfileStats, FournisseurStatsMensuelles, FournisseurStatsMensuellesItem,
     FournisseurProduitsVendus, ProduitVendu, FournisseurInsightsFinanciers, FournisseurScore
 )
+from app.services.credit_balances import advance_balances
 from app.services.financial import contact_balances
 from app.utils.dependencies import get_current_active_user
 
@@ -329,7 +330,8 @@ def get_fournisseur_stats_mensuelles(
             mois=mois_key,
             montant=montant_achats,
             paiements=montant_paiements,
-            solde_cumule=solde_courant,
+            solde_cumule=solde_courant - advance_balances(db, direction='payable', contact_ids=[id],
+                as_of=min(date_fin, current_date + relativedelta(months=1) - timedelta(days=1))).get(id, Decimal('0')),
             nb_transactions=nb_trans
         ))
         
@@ -719,7 +721,7 @@ def get_fournisseur_insights_financiers(
     taux_paiement = float((montant_paye / montant_total * 100) if montant_total > 0 else 0)
     
     # 4. Calculer le montant impayé
-    montant_impaye = montant_total - montant_paye
+    montant_impaye = contact_balances(db, direction='payable', contact_ids=[id])[id]
     
     # 5. Calculer le délai moyen de paiement (jours entre date_transaction et date_paiement)
     # En PostgreSQL, la soustraction de deux DATE renvoie le nombre de jours directement

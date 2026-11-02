@@ -1189,8 +1189,8 @@ def delete_transaction(
             detail="La raison de l'annulation est obligatoire",
         )
 
-    if any(p.nature == "remboursement" and p.statut != "annule" for p in transaction.paiements):
-        raise HTTPException(409, "Cette transaction comporte un remboursement. Vérifiez et annulez séparément les enregistrements erronés avant de retirer la transaction.")
+    if any(p.nature in {"remboursement", "credit_recu", "credit_transfere"} and p.statut != "annule" for p in transaction.paiements):
+        raise HTTPException(409, "Cette transaction comporte un remboursement ou une affectation de crédit. Traitez les opérations liées avant de retirer la transaction.")
 
     # Void every payment first. This preserves the payment rows and removes
     # their active ledger impact before the transaction leaves the active set.

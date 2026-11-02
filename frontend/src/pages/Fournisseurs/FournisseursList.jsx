@@ -1,3 +1,4 @@
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -108,6 +109,8 @@ function FournisseursList() {
       setLoading(false);
     }
   };
+
+  useCorrectionRefresh(() => fetchFournisseurs());
 
   useEffect(() => {
     fetchFournisseurs();
@@ -307,3 +310,4 @@ function SummaryCard({ label, value, icon, color }) {
 }
 
 export default FournisseursList;
+

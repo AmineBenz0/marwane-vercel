@@ -120,7 +120,10 @@ def test_bulk_query_count_is_constant(client, db_session, ledger):
     event.listen(engine, "before_cursor_execute", record)
     try:
         assert client.get(f"/api/v1/{endpoint}", params={"include_balance": True}).status_code == 200
-        assert len(statements) == 2  # One contact page + one grouped balance query, regardless of page size.
+        assert len(statements) == 3  # Contact page + grouped transaction balances + grouped unused advances.
+        statements.clear()
+        assert client.get(f"/api/v1/{endpoint}", params={"include_balance": True, "limit": 1}).status_code == 200
+        assert len(statements) == 3  # The query count is independent of the number of contacts.
         statements.clear()
         assert client.get(f"/api/v1/{endpoint}").status_code == 200
         assert len(statements) == 1
@@ -131,7 +134,7 @@ def test_bulk_query_count_is_constant(client, db_session, ledger):
         assert contact_balances(db_session, direction=direction, contact_ids=[]) == {}
         assert statements == []
         assert set(contact_balances(db_session, direction=direction, contact_ids=[ids["partial"]])) == {ids["partial"]}
-        assert len(statements) == 1
+        assert len(statements) == 2
     finally:
         event.remove(engine, "before_cursor_execute", record)
 
@@ -145,3 +148,4 @@ def test_balance_failure_does_not_become_zero(db_session, ledger, monkeypatch):
     monkeypatch.setattr(db_session, "query", unavailable)
     with pytest.raises(RuntimeError, match="ledger unavailable"):
         contact_balances(db_session, direction=direction, contact_ids=list(ids.values()))
+

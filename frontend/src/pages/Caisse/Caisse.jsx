@@ -1,3 +1,4 @@
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -75,6 +76,7 @@ const getPeriodParams = (period) => {
 };
 
 const getMovementLabel = (movement) => {
+  if (movement.id_avance) return movement.nature_reglement === 'retour_avance' ? 'Restitution d’avance' : 'Avance';
   if (movement.id_cession) return movement.numero_reference_lc
     ? `Paiement fournisseur LC n° ${movement.numero_reference_lc}`
     : `Paiement fournisseur LC #${movement.id_cession}`;
@@ -86,6 +88,7 @@ const getMovementLabel = (movement) => {
 };
 
 const getMovementOrigin = (movement) => {
+  if (movement.id_avance) return `Avance ${movement.id_avance.slice(0, 8)}`;
   if (movement.id_cession) return `Cession LC #${movement.id_cession}`;
   if (movement.id_charge) {
     if (!movement.source_journaliere) return 'Dépense';
@@ -156,6 +159,8 @@ function Caisse() {
     }
   };
 
+  useCorrectionRefresh(() => loadData());
+
   useEffect(() => {
     loadData();
   }, [period, movementType]);
@@ -192,6 +197,7 @@ function Caisse() {
         movement.id_transaction,
         movement.id_paiement,
         movement.id_charge,
+        movement.id_avance,
       ]
         .filter((value) => value !== null && value !== undefined)
         .some((value) => String(value).toLowerCase().includes(normalizedSearch))

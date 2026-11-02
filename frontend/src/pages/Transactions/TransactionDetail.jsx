@@ -1,3 +1,4 @@
+import TransactionCreditPanel from '../../components/Corrections/TransactionCreditPanel';
 /**
  * Page Détail Transaction.
  * 
@@ -703,7 +704,7 @@ function TransactionDetail() {
               {balance.credit && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 {Number(statutPaiement.montant_rembourse) > 0
                   ? 'Le crédit affiché tient compte des remboursements enregistrés.'
-                  : 'Le montant payé en trop reste rattaché à cette transaction. Aucun remboursement n’a été enregistré.'}
+                  : 'Le crédit disponible peut être remboursé ou utilisé pour une autre transaction de ce contact.'}
               </Typography>}
               {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard && !inactiveTransaction ? 'error.main' : 'text.secondary'} sx={{ mt: 1 }}>
                 Échéance : {formatDate(transaction.date_echeance)}
@@ -718,6 +719,7 @@ function TransactionDetail() {
           </> : <Alert severity="warning" sx={{ mt: 2 }} action={<Button onClick={fetchStatutPaiement}>Réessayer</Button>}>
             Le solde du paiement est indisponible.
           </Alert>}
+          <TransactionCreditPanel transaction={transaction} canAllocate={!inactiveTransaction && Number(statutPaiement?.montant_restant) > 0} />
         </CardContent></Card>
       </Box>
 
@@ -725,19 +727,21 @@ function TransactionDetail() {
         <Typography component="h2" variant="h6" sx={{ mb: 1 }}>Paiements enregistrés</Typography>
         {loadingPaiements ? <CircularProgress size={24} aria-label="Chargement des paiements" /> : visiblePayments.length ? <>
           {visiblePayments.map(paiement => {
+            const isAllocation = ['credit_recu', 'credit_transfere'].includes(paiement.nature);
+            const settlementLabel = paiement.nature === 'credit_recu' ? 'Crédit utilisé' : paiement.nature === 'credit_transfere' ? 'Crédit transféré' : paiement.nature === 'remboursement' ? 'Remboursement' : 'Paiement';
             const status = paiement.type_paiement === 'cheque' && paiement.statut_cheque && paiement.statut !== 'annule' ? paiement.statut_cheque : paiement.statut;
             const reference = paiement.numero_cheque || paiement.reference_virement || paiement.numero_reference_lc || (paiement.id_lc ? `LC n° ${paiement.id_lc}` : null);
-            return <Box component="article" aria-label={`${paiement.nature === 'remboursement' ? 'Remboursement' : 'Paiement'} du ${formatDate(paiement.date_paiement)}`} key={paiement.id_paiement}
+            return <Box component="article" aria-label={`${settlementLabel} du ${formatDate(paiement.date_paiement)}`} key={paiement.id_paiement}
               sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1.5, py: 2, '& + &': { borderTop: '1px solid', borderColor: 'divider' } }}>
               <Box sx={{ minWidth: 0, flex: '1 1 180px' }}>
-                <Typography variant="body2" fontWeight={700}>{paiement.nature === 'remboursement' ? `${isSale ? 'Remboursement au client' : 'Remboursement du fournisseur'} · ` : ''}{paymentTypeLabels[paiement.type_paiement] || 'Autre'}</Typography>
-                {paiement.nature === 'remboursement' && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{paiement.notes}</Typography>}
+                <Typography variant="body2" fontWeight={700}>{isAllocation ? settlementLabel : `${paiement.nature === 'remboursement' ? `${isSale ? 'Remboursement au client' : 'Remboursement du fournisseur'} · ` : ''}${paymentTypeLabels[paiement.type_paiement] || 'Autre'}`}</Typography>
+                {(isAllocation || paiement.nature === 'remboursement') && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{paiement.notes}</Typography>}
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>{formatDate(paiement.date_paiement)} · {readableStatus(status)}</Typography>
                 {reference && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere', mt: 0.5 }}>Référence : {reference}</Typography>}
               </Box>
               <Stack alignItems="flex-end" spacing={0.5} sx={{ minWidth: 0, maxWidth: '100%', ml: 'auto' }}>
                 <Typography fontWeight={700} sx={moneySx}>{formatMontant(paiement.montant)}</Typography>
-                {!inactiveTransaction && paiement.statut !== 'annule' && <Stack direction="row" spacing={0.5}>
+                {!inactiveTransaction && !isAllocation && paiement.statut !== 'annule' && <Stack direction="row" spacing={0.5}>
                   {paiement.nature !== 'remboursement' && <Tooltip title="Modifier le paiement"><IconButton aria-label="Modifier le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} onClick={() => handleEditPaiement(paiement)}><EditIcon fontSize="small" /></IconButton></Tooltip>}
                   <Tooltip title={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Supprimer le paiement'}><IconButton aria-label={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Supprimer le paiement'} size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} color="error" onClick={() => handleDeletePaiementClick(paiement)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
                 </Stack>}

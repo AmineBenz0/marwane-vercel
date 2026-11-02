@@ -25,12 +25,14 @@ from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
 from app.utils.business_date import business_date
+from app.models.credit import Avance
+from app.services.credit_balances import advance_balances
 
 
 def validate_payment_idempotency(existing, requested) -> None:
     """Reject reuse of a payment key with a different financial identity."""
     same_identity = (
-        existing.nature != "remboursement"
+        existing.nature in {None, "paiement"}
         and existing.id_transaction == requested.id_transaction
         and existing.date_paiement == requested.date_paiement
         and Decimal(str(existing.montant)) == Decimal(str(requested.montant))
@@ -152,6 +154,8 @@ def contact_balances(
     rows = query.group_by(contact_id).all()
     balances = dict.fromkeys(contact_ids, Decimal("0"))
     balances.update({row.contact_id: Decimal(str(row.balance)) for row in rows})
+    for contact, amount in advance_balances(db, direction=direction, contact_ids=contact_ids, as_of=as_of).items():
+        balances[contact] -= amount
     return balances
 
 
@@ -179,8 +183,8 @@ def financial_position_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
         Transaction.est_actif.is_(True), Transaction.date_transaction <= as_of,
     ).one()
     return {
-        "receivables": Decimal(str(rows.receivables or 0)),
-        "payables": Decimal(str(rows.payables or 0)),
+        "receivables": Decimal(str(rows.receivables or 0)) - sum(advance_balances(db, direction='receivable', as_of=as_of).values(), Decimal('0')),
+        "payables": Decimal(str(rows.payables or 0)) - sum(advance_balances(db, direction='payable', as_of=as_of).values(), Decimal('0')),
     }
 
 
@@ -193,8 +197,9 @@ def cash_movements_as_of(db: Session, as_of: date):
         Transaction, Transaction.id_transaction == transaction_id,
     ).outerjoin(
         Charge, Charge.id_charge == Caisse.id_charge,
-    ).filter(
+    ).outerjoin(Avance, Avance.id_avance == Caisse.id_avance).filter(
         Caisse.statut == "active",
+        or_(Caisse.id_avance.is_(None), and_(Avance.statut == "active", Avance.date_effet <= as_of)),
         Caisse.id_cession.is_(None),
         func.date(Caisse.date_mouvement) <= as_of,
         or_(transaction_id.is_(None), Transaction.est_actif.is_(True)),
@@ -241,8 +246,9 @@ def bank_ledgers_as_of(db: Session, as_of: date) -> dict[int, Decimal]:
         Transaction, Transaction.id_transaction == Paiement.id_transaction,
     ).outerjoin(
         Charge, Charge.id_charge == MouvementBancaire.id_charge,
-    ).filter(
+    ).outerjoin(Avance, Avance.id_avance == MouvementBancaire.id_avance).filter(
         MouvementBancaire.statut == "active",
+        or_(MouvementBancaire.id_avance.is_(None), and_(Avance.statut == "active", Avance.date_effet <= as_of)),
         func.date(MouvementBancaire.date_mouvement) <= as_of,
         or_(
             MouvementBancaire.id_paiement.is_(None),
@@ -273,8 +279,9 @@ def bank_activity_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
         Transaction, Transaction.id_transaction == Paiement.id_transaction,
     ).outerjoin(
         Charge, Charge.id_charge == MouvementBancaire.id_charge,
-    ).filter(
+    ).outerjoin(Avance, Avance.id_avance == MouvementBancaire.id_avance).filter(
         MouvementBancaire.statut == "active",
+        or_(MouvementBancaire.id_avance.is_(None), and_(Avance.statut == "active", Avance.date_effet <= as_of)),
         func.date(MouvementBancaire.date_mouvement) <= as_of,
         or_(
             MouvementBancaire.id_paiement.is_(None),

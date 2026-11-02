@@ -28,6 +28,7 @@ from app.models.financial_correction import CorrectionFinanciere
 from app.models.correction_operation import CorrectionOperation, EntityRevision
 from app.models.job_execution import JobExecution
 from app.models.task import Tache
+from app.models.credit import Avance, AffectationCredit
 
 # Export de tous les modèles pour faciliter les imports
 __all__ = [
@@ -62,6 +63,8 @@ __all__ = [
     "EntityRevision",
     "JobExecution",
     "Tache",
+    "Avance",
+    "AffectationCredit",
 ]
 
 from app.models.egg_allocation import EggAllocation  # noqa: F401

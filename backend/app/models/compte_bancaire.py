@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour les Comptes Bancaires.
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, CheckConstraint, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, CheckConstraint, Text, Uuid
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -56,14 +56,16 @@ class MouvementBancaire(Base):
     # Lien optionnel vers un paiement ou une charge
     id_paiement = Column(Integer, ForeignKey("paiements.id_paiement"), nullable=True)
     id_charge = Column(Integer, ForeignKey("charges.id_charge"), nullable=True)
+    id_avance = Column(Uuid, ForeignKey('avances.id_avance', ondelete='RESTRICT'), index=True)
     
     # Relations
     compte = relationship("CompteBancaire", back_populates="mouvements")
     paiement = relationship("Paiement")
     charge = relationship("Charge")
+    avance = relationship('Avance')
     @property
     def nature_reglement(self):
-        return self.paiement.nature if self.paiement else None
+        return self.paiement.nature if self.paiement else self.avance.nature if self.avance else None
 
     utilisateur_creation = relationship(
         "Utilisateur",
@@ -72,6 +74,7 @@ class MouvementBancaire(Base):
     )
 
     __table_args__ = (
+        CheckConstraint('id_avance IS NULL OR (id_paiement IS NULL AND id_charge IS NULL)', name='check_bank_avance_origin'),
         CheckConstraint("montant > 0", name="check_mouvement_bancaire_montant_positif"),
         CheckConstraint("type_mouvement IN ('ENTREE', 'SORTIE')", name="check_type_mouvement_bancaire_valide"),
         CheckConstraint("statut IN ('active', 'annule')", name="check_statut_mouvement_bancaire_valide"),

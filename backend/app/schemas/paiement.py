@@ -1,6 +1,7 @@
 """
 Schémas Pydantic pour la validation des données de paiements.
 """
+from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Literal, Optional
 from datetime import datetime, date
@@ -156,6 +157,7 @@ class PaiementRead(PaiementBase):
     """
     id_paiement: int = Field(..., description="Identifiant unique du paiement")
     nature: str = 'paiement'
+    id_affectation: UUID | None = None
     row_version: int = Field(default=1, description="Révision pour détecter les modifications concurrentes")
     id_transaction: int = Field(..., description="ID de la transaction associée")
     date_encaissement_effective: Optional[date] = Field(None, description="Date effective d'encaissement")

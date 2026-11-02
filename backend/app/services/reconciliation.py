@@ -15,6 +15,7 @@ from app.models.inventory import MouvementStock
 from app.models.paiement import Paiement
 from app.models.produit import Produit
 from app.models.transaction import Transaction
+from app.models.credit import Avance, AffectationCredit
 
 
 @dataclass
@@ -22,7 +23,7 @@ class IntegrityIssue:
     code: str
     severity: str
     entity: str
-    entity_id: int | None
+    entity_id: int | str | None
     message: str
 
 
@@ -83,7 +84,7 @@ def run_integrity_check(db: Session) -> list[dict]:
                     movement.id_mouvement,
                     "Le mouvement de caisse ne référence pas la transaction du paiement.",
                 ))
-        if movement.id_transaction is None and movement.id_charge is None and movement.id_paiement is None:
+        if movement.id_transaction is None and movement.id_charge is None and movement.id_paiement is None and movement.id_avance is None:
             issues.append(IntegrityIssue("ORPHAN_CASH_MOVEMENT", "high", "caisse", movement.id_mouvement, "Mouvement de caisse sans source."))
 
     for movement in active_bank_movements:
@@ -107,6 +108,29 @@ def run_integrity_check(db: Session) -> list[dict]:
             or charge_by_id[movement.id_charge].statut != "active"
         ):
             issues.append(IntegrityIssue("ORPHAN_CASH_MOVEMENT", "high", "caisse", movement.id_mouvement, "Mouvement de caisse lié à une charge inexistante ou annulée."))
+
+    for advance in db.query(Avance).all():
+        linked = [m for m in active_cash_movements + active_bank_movements if m.id_avance == advance.id_avance]
+        valid = len(linked) == (1 if advance.statut == 'active' else 0)
+        for movement in linked:
+            valid = valid and movement.montant == advance.montant and movement.type_mouvement == advance.ledger_direction
+            valid = valid and movement.date_mouvement.date() == advance.date_effet
+            valid = valid and isinstance(movement, MouvementBancaire) == (advance.id_compte is not None)
+            if isinstance(movement, MouvementBancaire):
+                valid = valid and movement.id_compte == advance.id_compte and movement.source == advance.nature
+        if not valid:
+            issues.append(IntegrityIssue('ADVANCE_MOVEMENT_MISMATCH', 'high', 'avance', str(advance.id_avance), 'Les mouvements ne correspondent pas à l’avance enregistrée.'))
+        if advance.nature == 'avance' and advance.montant_disponible < 0:
+            issues.append(IntegrityIssue('ADVANCE_OVERALLOCATED', 'high', 'avance', str(advance.id_avance), 'Cette avance a été utilisée au-delà de son montant.'))
+    for allocation in db.query(AffectationCredit).all():
+        linked = [p for p in payments if p.id_affectation == allocation.id_affectation]
+        expected = {('credit_recu', allocation.id_transaction_cible)}
+        if allocation.id_transaction_source is not None:
+            expected.add(('credit_transfere', allocation.id_transaction_source))
+        if (len(linked) != len(expected) or {(p.nature,p.id_transaction) for p in linked} != expected
+            or any(p.montant != allocation.montant or p.date_paiement != allocation.date_effet
+                or p.est_effectif != (allocation.statut == 'active') for p in linked)):
+            issues.append(IntegrityIssue('CREDIT_PAIR_MISMATCH', 'high', 'affectation_credit', str(allocation.id_affectation), 'Les côtés de cette affectation ne correspondent pas.'))
 
     for transaction in transactions:
         payment_total = sum(
@@ -133,7 +157,7 @@ def run_integrity_check(db: Session) -> list[dict]:
             issues.append(IntegrityIssue("INVALID_PAYMENT_DATE", "medium", "paiement", payment.id_paiement, "La date du paiement est antérieure à la date de la transaction."))
 
         linked_movements = cash_by_payment.get(payment.id_paiement, []) + bank_by_payment.get(payment.id_paiement, [])
-        expected_movement_count = 1 if payment.est_effectif else 0
+        expected_movement_count = 1 if payment.est_effectif and not payment.est_affectation else 0
         if len(linked_movements) != expected_movement_count:
             issues.append(IntegrityIssue(
                 "PAYMENT_MOVEMENT_MISMATCH",

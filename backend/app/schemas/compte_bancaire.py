@@ -1,3 +1,4 @@
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from decimal import Decimal
 from datetime import datetime, date
@@ -40,6 +41,7 @@ class CompteBancaireRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class MouvementBancaireRead(BaseModel):
+    id_avance: UUID | None = None
     nature_reglement: Optional[str] = None
     id_mouvement: int
     id_compte: int

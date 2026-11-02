@@ -325,8 +325,8 @@ def update_paiement(
 
     if paiement.statut == "annule":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un paiement annulé est immuable")
-    if paiement.nature == "remboursement":
-        raise HTTPException(409, "Un remboursement enregistré ne peut pas être modifié. Annulez l’enregistrement erroné puis recréez-le.")
+    if paiement.nature not in {None, "paiement"}:
+        raise HTTPException(409, "Un remboursement ou une affectation de crédit ne peut pas être modifié isolément. Annulez l’opération liée erronée puis recréez-la.")
     old_lc_id = paiement.id_lc
     update_data = paiement_data.model_dump(exclude_unset=True)
     if "type_paiement" in update_data and update_data["type_paiement"]:
@@ -433,6 +433,8 @@ def delete_paiement(
     paiement, transaction = lock_payment(db, id)
     _require_active_transaction(transaction)
 
+    if paiement.est_affectation:
+        raise HTTPException(409, "Annulez l’affectation de crédit pour rétablir ses deux côtés ensemble.")
     void_payment(db, paiement, current_user=current_user, reason=raison.strip())
     db.commit()
     

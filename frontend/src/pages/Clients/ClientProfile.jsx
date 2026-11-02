@@ -1,3 +1,5 @@
+import PartyCreditPanel from '../../components/Corrections/PartyCreditPanel';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 /**
  * Page Profil Client.
  * 
@@ -204,8 +206,8 @@ function ClientProfile() {
   /**
    * Charge le profil du client.
    */
-  const fetchClientProfile = async () => {
-    setLoading(true);
+  const fetchClientProfile = async (background = false) => {
+    if (!background) setLoading(true);
     setError(null);
 
     try {
@@ -248,6 +250,8 @@ function ClientProfile() {
   /**
    * Charge les données au montage et lorsque l'ID change.
    */
+  useCorrectionRefresh(() => fetchClientProfile(true));
+
   useEffect(() => {
     if (id) {
       fetchProduits();
@@ -632,6 +636,8 @@ function ClientProfile() {
         </Box>
       </Box>
 
+      <PartyCreditPanel partyType="client" partyId={id} />
+
       <Card
         variant="outlined"
         sx={{
@@ -686,8 +692,8 @@ function ClientProfile() {
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <StatCard
-            title="Reste à encaisser"
-            value={insightsFinanciers?.montant_impaye ?? null}
+            title={Number(insightsFinanciers?.montant_impaye) < 0 ? 'Crédit disponible' : 'Reste à encaisser'}
+            value={insightsFinanciers?.montant_impaye == null ? null : Math.abs(Number(insightsFinanciers.montant_impaye))}
             icon={<TrendingUpIcon />}
             valueFormat="currency"
             currency="MAD"
@@ -1074,3 +1080,4 @@ function ClientProfile() {
 }
 
 export default ClientProfile;
+
