@@ -43,9 +43,9 @@ export default function PartyCreditDrawer({ partyType, partyId, partyName, open,
           {!history && <Typography variant="caption" color="text.secondary">encore disponibles</Typography>}</Box>
       </Stack>
       {a.reason && <Typography variant="body2" color="text.secondary" sx={{ mt: 1, overflowWrap: 'anywhere' }}>{a.reason}</Typography>}
-      {!history && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" sx={{ mt: 1.5 }}>
+      {!history && <Stack spacing={1.5} sx={{ mt: 1.5 }}>
         <Typography variant="body2" color="text.secondary">{client ? 'Reçue' : 'Versée'} : {money(a.montant)} · Utilisée : {money(used)}</Typography>
-        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Button size="small" variant="outlined" onClick={() => setSettlement({ advance: a })}>Utiliser</Button>
           <Button size="small" onClick={() => setAction({ action: 'return_advance', advance: a })}>Restituer</Button>
           {Number(a.available) === Number(a.montant) && <Button size="small" color="error" onClick={() => setAction({ action: 'cancel_advance', advance: a })}>Annuler l’enregistrement</Button>}
