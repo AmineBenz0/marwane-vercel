@@ -412,7 +412,6 @@ function LettresCreditList() {
         fournisseurs={fournisseurs}
         targetId={targetId}
         setTargetId={setTargetId}
-        notes={notes}
         loading={actionLoading}
         onClose={closeActionDialog}
         onConfirm={handleConfirmAction}
