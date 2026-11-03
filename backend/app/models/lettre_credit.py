@@ -72,7 +72,7 @@ class LettreDeCredit(Base):
     )
     
     # Relations
-    client = relationship("Client", backref="lettres_credit")
+    client = relationship("Client", foreign_keys=[id_client], backref="lettres_credit")
     client_origine = relationship("Client", foreign_keys=[id_client_origine], backref="lettres_credit_emises")
     fournisseur = relationship("Fournisseur", backref="lettres_credit")
     paiements = relationship("Paiement", back_populates="lettre_credit")
