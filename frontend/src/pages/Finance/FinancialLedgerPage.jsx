@@ -327,7 +327,7 @@ function FinancialLedgerPage({ direction }) {
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" fontWeight={700}>{title}</Typography>
-          <Typography color="text.secondary">Suivi centralisé des soldes et échéances.</Typography>
+          <Typography color="text.secondary">Soldes par transaction et échéances. Le solde net après avances figure sur la fiche du contact.</Typography>
         </Box>
         <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualiser</Button>
       </Stack>
@@ -376,3 +376,4 @@ export function ReceivablesPage() { return <FinancialLedgerPage direction="recei
 export function PayablesPage() { return <FinancialLedgerPage direction="payable" />; }
 FinancialLedgerPage.propTypes = { direction: PropTypes.oneOf(['receivable', 'payable']).isRequired };
 export default FinancialLedgerPage;
+

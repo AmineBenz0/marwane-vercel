@@ -67,9 +67,7 @@ import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
-import AdvanceUsageField from '../../components/Corrections/AdvanceUsageField';
 import { announceCorrection } from '../../components/Corrections/useCorrectionFlow';
-import { getBusinessDateInput } from '../../utils/businessDate';
 
 const EMPTY_INITIAL_VALUES = {};
 
@@ -323,9 +321,6 @@ function UnpaidTransactionForm({
   const creationOperation = useRef(null);
   const pendingCreation = useRef(null);
   const [uncertainCreation, setUncertainCreation] = useState(false);
-  const [advanceData, setAdvanceData] = useState(null);
-  const [advanceError, setAdvanceError] = useState('');
-  const [advanceReload, setAdvanceReload] = useState(0);
 
   // État pour gérer les paiements par ligne (tableau de booleans)
   // État pour stocker les paiements existants (en mode édition)
@@ -365,21 +360,7 @@ function UnpaidTransactionForm({
   const watchedFournisseurId = watch('id_fournisseur');
   const watchedClientId = watch('id_client');
   const isEditingTransaction = Boolean(initialValues?.id_transaction);
-  const advancePartyKey = `${watchedTypeEntite}:${watchedTypeEntite === 'client' ? watchedClientId : watchedFournisseurId}`;
-  useEffect(() => {
-    let active = true;
-    setAdvanceData(null); setAdvanceError('');
-    const partyId = watchedTypeEntite === 'client' ? watchedClientId : watchedFournisseurId;
-    if (!open || isEditingTransaction || !partyId) return () => { active = false; };
-    get('/credits/party', { params: { [watchedTypeEntite === 'client' ? 'id_client' : 'id_fournisseur']: Number(partyId) } })
-      .then(data => { if (active) setAdvanceData({ key: advancePartyKey, data }); })
-      .catch(() => { if (active) setAdvanceError('Les avances ne peuvent pas être vérifiées. Vous pouvez réessayer avant de les utiliser.'); });
-    return () => { active = false; };
-  }, [open, isEditingTransaction, watchedTypeEntite, watchedClientId, watchedFournisseurId, advancePartyKey, advanceReload]);
-  useEffect(() => {
-    if (!isEditingTransaction) (watch('lignes') || []).forEach((_, index) => setValue(`lignes.${index}.montant_avance`, 0));
-    creationOperation.current = null;
-  }, [advancePartyKey, open, isEditingTransaction, setValue, watch]);
+  useEffect(() => { creationOperation.current = null; }, [watchedTypeEntite, watchedClientId, watchedFournisseurId, open]);
   useEffect(() => {
     if (!open || isEditingTransaction || watchedTypeEntite !== 'client') return;
     (watchedLignes || []).forEach((line, index, lines) => {
@@ -816,7 +797,7 @@ function UnpaidTransactionForm({
 
   const montantTotal = calculateTotal();
   const montantPaye = (watchedLignes || []).reduce(
-    (sum, ligne) => sum + Number(ligne.montant_avance || 0) + (ligne.ajouter_paiement
+    (sum, ligne) => sum + (ligne.ajouter_paiement
       ? (ligne.paiements || []).reduce((ligneSum, paiement) => ligneSum + (parseFloat(paiement.montant) || 0), 0) : 0),
     0
   );
@@ -829,20 +810,7 @@ function UnpaidTransactionForm({
   });
   const renderLinePayment = (ligne, index) => {
     const ligneTotal = (Number(ligne.quantite) || 0) * (Number(ligne.prix_unitaire) || 0);
-    const advanceDay = ligne.date_avance || getBusinessDateInput();
-    const available = advanceData?.key === advancePartyKey ? (advanceData.data.advances || []).filter(a => a.nature === 'avance' && a.statut === 'active' && a.date_effet <= advanceDay).reduce((n, a) => n + Number(a.available || 0), 0) : 0;
-    const otherAdvances = (watchedLignes || []).reduce((n, line, i) => n + (i === index ? 0 : Number(line.montant_avance || 0)), 0);
-    const advanceAmount = Number(ligne.montant_avance || 0);
-    const updateAdvance = amount => {
-      setValue(`lignes.${index}.montant_avance`, amount, { shouldValidate: true });
-      setValue(`lignes.${index}.date_avance`, advanceDay);
-      const remainder = Math.max(0, ligneTotal - Number(amount || 0));
-      if (remainder === 0) setValue(`lignes.${index}.ajouter_paiement`, false);
-      else if (ligne.ajouter_paiement && ligne.paiements?.length === 1 && ['cash', 'virement'].includes(ligne.paiements[0].type)) setValue(`lignes.${index}.paiements.0.montant`, remainder.toFixed(2));
-    };
     return <>
-      {!isEditingTransaction && <AdvanceUsageField available={Math.max(0, available - otherAdvances)} amount={ligne.montant_avance || 0} day={advanceDay} total={ligneTotal} onChange={updateAdvance}
-        onDateChange={event => setValue(`lignes.${index}.date_avance`, event.target.value)} error={index === 0 ? advanceError : ''} onRetry={() => setAdvanceReload(v => v + 1)} disabled={loading || uncertainCreation} />}
       <Grid item xs={12}>
         <Divider />
       </Grid>
@@ -874,9 +842,9 @@ function UnpaidTransactionForm({
                           : 'cash'
                       ),
                     ]);
-                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount).toFixed(2));
+                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal).toFixed(2));
                   } else {
-                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal - advanceAmount).toFixed(2));
+                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal).toFixed(2));
                     setValue(
                       `lignes.${index}.paiements.0.date`,
                       watch('date_transaction') || today()
@@ -901,7 +869,7 @@ function UnpaidTransactionForm({
                   '&:has(.Mui-focusVisible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
                 }}
                 control={<Radio size="small" />}
-                label={advanceAmount > 0 ? 'Régler le complément' : 'Payer maintenant'}
+                label="Payer maintenant"
                 disabled={loading || uncertainCreation}
               />
               <FormControlLabel
@@ -1177,7 +1145,7 @@ function UnpaidTransactionForm({
                 Total du produit : <Box component="span" fontWeight={600} color="text.primary">{formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
               </Typography>
               <Typography variant="body2" fontWeight={700}>
-                Reste à régler : <Box component="span" color="primary.main">{formatMontant(Math.max(0, ligneTotal - advanceAmount - (ligne.ajouter_paiement ? (ligne.paiements || []).reduce((acc, paiement) => acc + (parseFloat(paiement.montant) || 0), 0) : 0)), { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
+                Reste à régler : <Box component="span" color="primary.main">{formatMontant(Math.max(0, ligneTotal - (ligne.ajouter_paiement ? (ligne.paiements || []).reduce((acc, paiement) => acc + (parseFloat(paiement.montant) || 0), 0) : 0)), { minimumFractionDigits: 2, useCompactNotation: false })}</Box>
               </Typography>
             </Box>
           </Box>
@@ -1661,7 +1629,7 @@ function UnpaidTransactionForm({
                                       // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
-                                        setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal - Number(ligne.montant_avance || 0)).toFixed(2));
+                                        setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal).toFixed(2));
                                       }
                                     }}
                                     onBlur={field.onBlur}
@@ -1694,7 +1662,7 @@ function UnpaidTransactionForm({
                                       // Mettre à jour le montant du paiement si paiement activé
                                       if (ligne.ajouter_paiement) {
                                         const newTotal = (parseFloat(ligne.quantite) || 0) * (parseFloat(value) || 0);
-                                        setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal - Number(ligne.montant_avance || 0)).toFixed(2));
+                                        setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal).toFixed(2));
                                       }
                                     }}
                                     onBlur={field.onBlur}

@@ -30,7 +30,6 @@ const TYPES_PAIEMENT = [
   { value: 'cheque', label: '💳 Chèque' },
   { value: 'virement', label: '🏦 Virement' },
   { value: 'carte', label: '💳 Carte bancaire' },
-  { value: 'compensation', label: '↔️ Compensation' },
   { value: 'lc', label: '📜 Lettre de Crédit' },
   { value: 'autre', label: '📄 Autre' },
 ];
@@ -169,7 +168,9 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
             error={!!errors.type_paiement}
             helperText={errors.type_paiement?.message}
           >
-            {TYPES_PAIEMENT.map((type) => (
+            {(isEditing && defaultValues.type_paiement === 'compensation'
+              ? [...TYPES_PAIEMENT, { value: 'compensation', label: 'Compensation (historique)' }]
+              : TYPES_PAIEMENT).map((type) => (
               <MenuItem key={type.value} value={type.value}>
                 {type.label}
               </MenuItem>
@@ -322,4 +323,5 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
 }
 
 export default PaiementForm;
+
 

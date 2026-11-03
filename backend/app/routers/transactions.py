@@ -441,11 +441,9 @@ def create_transactions_with_payments_batch(
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
     """Create transactions, payments, LC usage, and ledgers in one DB commit."""
-    from uuid import uuid5
     from app.models.correction_operation import CorrectionOperation
     from app.services.correction_contract import replay_result
     from app.services.credits import _hash
-    from app.services.advance_settlements import allocate_advances
     payload = {'kind': 'transaction_payment_batch', **batch_data.model_dump(mode='json')}
     request_hash = _hash(payload)
     if batch_data.operation_id:
@@ -454,6 +452,10 @@ def create_transactions_with_payments_batch(
         replay = replay_result(db, batch_data.operation_id, request_hash, current_user.id_utilisateur)
         if replay is not None:
             return replay['items']
+    if any(item.montant_avance > 0 for item in batch_data.items):
+        raise HTTPException(410, 'Les avances sont comptabilisées dans le solde global du contact, sans affectation aux nouvelles transactions.')
+    if any(p.type_paiement == 'compensation' for item in batch_data.items for p in item.paiements):
+        raise HTTPException(422, 'La compensation ne peut plus être saisie comme un paiement.')
     results = []
     try:
         for item in batch_data.items:
@@ -463,14 +465,6 @@ def create_transactions_with_payments_batch(
                 current_user,
             )
             created_payments = []
-            if item.montant_avance > 0:
-                day = item.date_avance or transaction.date_transaction
-                # Compensation payments and the extra money share this commit.
-                allocate_advances(db, transaction, item.montant_avance, day, current_user,
-                    uuid5(batch_data.operation_id, item.client_ref))
-                db.expire(transaction, ['paiements'])
-                if sum((p.montant for p in item.paiements), Decimal('0')) > transaction.montant_restant:
-                    raise HTTPException(422, 'Le complément dépasse le reste après utilisation de l’avance.')
             for payment_input in item.paiements:
                 payment_data = PaiementCreate(
                     id_transaction=transaction.id_transaction,

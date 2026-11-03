@@ -75,15 +75,3 @@ it('requires a refreshed preview after a conflict', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Revenir aux champs' }));
   expect(screen.getByRole('button', { name: 'Vérifier' })).toBeEnabled();
 });
-it('explains that allocating an advance creates no new money movement', async () => {
-  get.mockResolvedValue([{ id_transaction: 27, produit_nom: 'Œufs', montant_restant: '1.50' }]);
-  post.mockResolvedValueOnce({ ...preview, money_effect: 'unchanged', source_after: '1.99', target_remaining_after: '1.49', target_transaction: 27 });
-  render(<CreditOperationDialog action="allocate" advance={{ id_avance: 'advance-id', available: '2' }} onClose={vi.fn()} onSaved={vi.fn()} />);
-  await waitFor(() => expect(screen.getByRole('combobox', { name: /Transaction à régler/ })).toBeEnabled());
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Transaction à régler/ }));
-  fireEvent.click(await screen.findByRole('option', { name: /N° 27/ }));
-  fireEvent.change(screen.getByLabelText(/Montant/), { target: { value: '0.01' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier' }));
-  await screen.findByText(/Aucun nouveau mouvement de caisse ou de banque/);
-  expect(post.mock.calls[0][1]).toMatchObject({ action: 'allocate', id_avance: 'advance-id', id_transaction_cible: 27, montant: '0.01' });
-});

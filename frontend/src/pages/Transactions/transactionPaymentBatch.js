@@ -25,7 +25,6 @@ export const buildTransactionPaymentBatch = (data) => ({
       client_ref: data.operation_id ? `${data.operation_id}:${index}` : createClientRef(index),
       transaction,
       paiements,
-      ...(Number(line?.montant_avance) > 0 ? { montant_avance: String(line.montant_avance), date_avance: line.date_avance } : {}),
     };
   }),
 });

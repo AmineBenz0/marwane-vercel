@@ -258,6 +258,8 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
         if record.statut == "annule":
             raise HTTPException(409, "Un paiement annulé ne peut plus changer ses attributs financiers.")
         next_method = requested.get("type_paiement", record.type_paiement)
+        if next_method == 'compensation' and record.type_paiement != 'compensation':
+            raise HTTPException(422, 'La compensation ne peut plus être sélectionnée comme moyen de paiement.')
         if record.type_paiement == "cheque" or next_method == "cheque":
             raise HTTPException(409, "Le moyen de paiement ne peut pas passer vers ou depuis un chèque par cette correction.")
         if record.type_paiement == "lc" or next_method == "lc" or record.id_lc is not None:

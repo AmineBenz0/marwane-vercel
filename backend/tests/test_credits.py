@@ -194,13 +194,23 @@ def test_credit_endpoints_and_sources(client, db_session, credit_pair, test_user
     c = cmd('allocate', id_transaction_source=source.id_transaction, id_transaction_cible=target.id_transaction,
             montant='4', date_effet=business_date())
     preview = client.post('/api/v1/credits/preview', json=c.model_dump(mode='json'))
-    assert preview.status_code == 200
-    result = client.post('/api/v1/credits/apply', json={'command': c.model_dump(mode='json'), 'dependency_fingerprint': preview.json()['dependency_fingerprint']})
-    assert result.status_code == 200
-    record_id = result.json()['payment_ids'][0]
+    assert preview.status_code == 410
+    body = {'command': c.model_dump(mode='json'), 'dependency_fingerprint': 'a'*64}
+    assert client.post('/api/v1/credits/apply', json=body).status_code == 410
+    assert db_session.query(AffectationCredit).count() == 0
+    # Seed a historical allocation: reads, exact retries and cancellation remain supported.
+    result = apply(db_session, c, test_user)
+    assert client.post('/api/v1/credits/apply', json=body).json()['replayed'] is True
+    record_id = result['payment_ids'][0]
     assert client.delete(f'/api/v1/paiements/{record_id}').status_code == 409
     assert client.delete(f'/api/v1/transactions/{target.id_transaction}').status_code == 409
     assert len(client.get('/api/v1/credits/allocations', params={'transaction_id': target.id_transaction}).json()) == 1
+    cancel = cmd('cancel_allocation', id_affectation=c.operation_id)
+    review = client.post('/api/v1/credits/preview', json=cancel.model_dump(mode='json'))
+    assert review.status_code == 200
+    assert client.post('/api/v1/credits/apply', json={'command': cancel.model_dump(mode='json'),
+        'dependency_fingerprint': review.json()['dependency_fingerprint']}).status_code == 200
+    assert db_session.get(AffectationCredit, c.operation_id).statut == 'annule'
 
 
 def test_credit_rows_remain_compatible_with_transaction_correction_and_refunds(db_session, credit_pair, test_user):

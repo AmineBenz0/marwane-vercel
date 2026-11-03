@@ -6,7 +6,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import useCorrectionRefresh from './useCorrectionRefresh';
 import CreditOperationDialog from './CreditOperationDialog';
 
-export default function TransactionCreditPanel({ transaction, canAllocate }) {
+export default function TransactionCreditPanel({ transaction }) {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
@@ -21,7 +21,6 @@ export default function TransactionCreditPanel({ transaction, canAllocate }) {
     return () => { active = false; };
   }, [transaction.id_transaction, reload]);
   return <Box sx={{ mt: 2 }}>
-    {canAllocate && <Button variant="outlined" fullWidth onClick={() => setAction({ action: 'allocate' })}>Utiliser un crédit</Button>}
     {error && <Alert severity="error" sx={{ mt: 1 }} action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{error}</Alert>}
     {rows.map(row => <Stack key={row.id_affectation} spacing={0.5} sx={{ mt: 1.5, borderTop: 1, borderColor: 'divider', pt: 1 }}>
       <Typography variant="body2">{row.id_transaction_cible === transaction.id_transaction

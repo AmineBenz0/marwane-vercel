@@ -34,7 +34,6 @@ const TYPES_PAIEMENT = [
   { value: 'cheque', label: 'Chèque' },
   { value: 'virement', label: 'Virement' },
   { value: 'carte', label: 'Carte bancaire' },
-  { value: 'compensation', label: 'Compensation' },
   { value: 'lc', label: 'Lettre de crédit' },
   { value: 'autre', label: 'Autre' },
 ];
@@ -417,3 +416,4 @@ MultiPaiementForm.propTypes = {
 };
 
 export default MultiPaiementForm;
+

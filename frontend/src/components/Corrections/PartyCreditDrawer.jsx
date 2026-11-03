@@ -5,15 +5,13 @@ import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import ExpandableDetails from '../ExpandableDetails';
 import CreditOperationDialog from './CreditOperationDialog';
-import AdvanceSettlementDialog from './AdvanceSettlementDialog';
 
 const money = amount => formatMontant(amount, { useCompactNotation: false, minimumFractionDigits: 2 });
 
 export default function PartyCreditDrawer({ partyType, partyId, partyName, open, onClose, data, error, onRetry }) {
   const [action, setAction] = useState(null);
-  const [settlement, setSettlement] = useState(null);
   const client = partyType === 'client';
-  const operationOpen = Boolean(action || settlement);
+  const operationOpen = Boolean(action);
   const close = () => { if (!operationOpen) onClose(); };
   const advances = data?.advances || [];
   const allocations = data?.allocations || [];
@@ -40,13 +38,12 @@ export default function PartyCreditDrawer({ partyType, partyId, partyName, open,
           <Typography variant="caption" color="text.secondary">{a.type_paiement === 'cash' ? 'Espèces' : 'Virement bancaire'}</Typography>
           {history && <Box sx={{ mt: 0.5 }}><Chip size="small" label={a.statut === 'annule' ? 'Annulée' : 'Utilisée ou restituée'} /></Box>}</Box>
         <Box sx={{ textAlign: 'right' }}><Typography variant={history ? 'body1' : 'h6'} sx={{ whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{money(history ? a.montant : a.available)}</Typography>
-          {!history && <Typography variant="caption" color="text.secondary">encore disponibles</Typography>}</Box>
+          {!history && <Typography variant="caption" color="text.secondary">au compte</Typography>}</Box>
       </Stack>
       {a.reason && <Typography variant="body2" color="text.secondary" sx={{ mt: 1, overflowWrap: 'anywhere' }}>{a.reason}</Typography>}
       {!history && <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-        <Typography variant="body2" color="text.secondary">{client ? 'Reçue' : 'Versée'} : {money(a.montant)} · Utilisée : {money(used)}</Typography>
+        <Typography variant="body2" color="text.secondary">{client ? 'Reçue' : 'Versée'} : {money(a.montant)}{used > 0 ? ` · Affectée (historique) : ${money(used)}` : ''}</Typography>
         <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Button size="small" variant="outlined" onClick={() => setSettlement({ advance: a })}>Utiliser</Button>
           <Button size="small" onClick={() => setAction({ action: 'return_advance', advance: a })}>Restituer</Button>
           {Number(a.available) === Number(a.montant) && <Button size="small" color="error" onClick={() => setAction({ action: 'cancel_advance', advance: a })}>Annuler l’enregistrement</Button>}
         </Stack>
@@ -72,17 +69,16 @@ export default function PartyCreditDrawer({ partyType, partyId, partyName, open,
         {!data && !error && <Box sx={{ py: 3 }}><CircularProgress size={24} aria-label="Chargement des avances" /></Box>}
         {data && <Box sx={{ p: 2, mb: 2, border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-            <Box><Typography variant="body2" color="text.secondary">{client ? 'Avances reçues disponibles' : 'Avances versées disponibles'}</Typography>
+            <Box><Typography variant="body2" color="text.secondary">{client ? 'Avances reçues au compte' : 'Avances versées au compte'}</Typography>
               <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>{money(data.available)}</Typography></Box>
             <AccountBalanceWalletOutlined color="primary" />
           </Stack>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{client ? 'À utiliser sur une vente ou à restituer au client.' : 'À utiliser sur un achat ou à récupérer auprès du fournisseur.'}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>Ces avances sont déjà déduites du solde global du contact.</Typography>
         </Box>}
         <Button variant="contained" fullWidth sx={{ mb: 2 }} onClick={() => setAction({ action: 'advance' })}>{client ? 'Enregistrer une avance reçue' : 'Enregistrer une avance versée'}</Button>
         {data && <>
-          {Number(data.available) > 0 && Number(data.debt_total ?? Number(data.balance) + Number(data.available)) > 0 && <Button variant="outlined" fullWidth sx={{ mb: 2 }} onClick={() => setSettlement({})}>Utiliser les avances disponibles</Button>}
           {active.map(a => advanceCard(a))}
-          {!active.length && <Typography color="text.secondary" sx={{ py: 2 }}>Aucune avance disponible actuellement.</Typography>}
+          {!active.length && <Typography color="text.secondary" sx={{ py: 2 }}>Aucune avance au compte actuellement.</Typography>}
           {ungrouped.filter(a => a.statut === 'active').length > 0 && <Box sx={{ mt: 1, mb: 2 }}><Typography variant="subtitle2">Crédits entre transactions</Typography>{ungrouped.filter(a => a.statut === 'active').map(allocationRow)}</Box>}
           <ExpandableDetails label="Historique" icon={<HistoryOutlined />} meta={`${archived.length} ${archived.length === 1 ? 'avance terminée' : 'avances terminées'}`} sx={{ mt: 1 }}>
             {archived.map(a => advanceCard(a, true))}{ungrouped.filter(a => a.statut === 'annule').map(allocationRow)}{!archived.length && !ungrouped.some(a => a.statut === 'annule') && <Typography color="text.secondary">Aucun enregistrement terminé ou annulé.</Typography>}
@@ -92,6 +88,5 @@ export default function PartyCreditDrawer({ partyType, partyId, partyName, open,
       <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', borderTop: 1, borderColor: 'divider' }}><Button variant="outlined" onClick={close} disabled={operationOpen}>Fermer</Button></Box>
     </Drawer>
     {action && <CreditOperationDialog {...action} partyType={partyType} partyId={partyId} onClose={() => setAction(null)} onSaved={() => setAction(null)} />}
-    {settlement && <AdvanceSettlementDialog {...settlement} partyType={partyType} partyId={partyId} onClose={() => setSettlement(null)} onSaved={() => setSettlement(null)} />}
   </>;
 }

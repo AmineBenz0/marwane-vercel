@@ -1,27 +1,26 @@
-# Advances and payment workflow
+# Contact-level advances and payments
 
-Advances retain the existing accounting model: recording money received from a client or paid to a supplier immediately creates its cash or bank movement. Applying that advance to a sale or purchase creates compensation payments and no second money movement.
+Advances belong to a client or supplier account. Recording money received from a client or paid to a supplier creates one cash or bank movement and adjusts the contact's net balance. New advances are not assigned to individual sales or purchases.
 
 ## User workflow
 
-- Client and supplier summaries show two primary cards: total activity and the net outstanding balance. An available advance adds a discreet link beneath the balance. The shared “Autres actions” menu opens “Avances et crédits” from every profile tab, including when no advance exists.
-- The responsive advance drawer contains the available amount, recording and settlement actions, active advance cards, and collapsed history. Uses and returns remain grouped under their originating advance through the existing ExpandableDetails component.
-- PartyCreditPanel owns the single balance/history request and the summary; PartyCreditDrawer owns the detailed view and its existing operation dialogs; PartyCreditMenu provides the shared header entry point. Refreshing balances keeps an open operation mounted. The drawer cannot be dismissed while an operation dialog is open.
-- Recording an advance does not require selecting a sale or purchase.
-- A transaction payment can combine existing advances with a new cash or bank complement. The preview distinguishes compensation from actual new money and shows the resulting debt and available advance.
-- The profile shortcut proposes the oldest unpaid transactions first and allows editing amounts before confirmation. A specific advance can also be selected from its card.
-- New sales and purchases can use available advances while recording any complement in the same batch. Existing cheque, LC, and manual credit paths remain available.
+- Client and supplier profiles show total activity and the net outstanding balance, including advances. The discreet `Avances au compte` link and `Autres actions → Avances et crédits` open the shared drawer.
+- The drawer records advances and restitutions and retains their cancellation and history. No transaction selection or `Utiliser` action is offered.
+- A transaction's remaining amount and payment status reflect its own recorded settlements. Account advances affect the contact's net balance, without marking a particular transaction paid. The transaction detail and financial register identify this distinction.
+- New transactions and payments record only new money. `Compensation` is absent from payment and correction choices, except when displaying an existing historical compensation payment.
 
-## Persistence and safety
+Example: an unpaid 1,000 MAD sale and a 300 MAD advance give a 700 MAD contact balance. The sale still has 1,000 MAD without an assigned settlement. Recording a subsequent 700 MAD payment against that sale leaves 300 MAD on the sale and 300 MAD as an advance at account level, giving a zero contact balance. The advance is not silently consumed or reassigned.
 
-`/credits/settlements/options` and `/preview` calculate date-sensitive capacity. `/apply` locks the relevant records, rejects a changed dependency fingerprint, and commits advance allocations, the optional complement, and their operation journal together. Native credit allocation operations remain the source of compensation effects and their cancellation behavior.
+## Persistence and compatibility
 
-`/transactions/batch-with-payments` accepts a stable operation UUID and per-line advance amount/date. Transaction creation, stock allocation, compensation, payments, and ledgers share one commit. Repeating a confirmation returns its saved response. Reusing an operation UUID for different data is rejected. The creation form freezes an uncertain submission and retries its original payload.
+The shared contact and financial-position calculations deduct active advances after restitutions and historical allocations. Recording or returning an advance retains preview, dependency checks, atomic application and idempotent retry. Comments remain optional with an automatic audit description.
 
-Cancellation of an allocation restores the available advance. Cancellation of an unused advance reverses its original ledger entry. A restitution creates the opposite money movement. History is retained. No database migration is required for this change.
+New `allocate` commands and advance-settlement previews/applications return HTTP 410 at the public API boundary. Transaction creation rejects positive advance-allocation amounts before writing any transaction. New manual compensation payments are rejected in direct, batch and transaction-creation workflows; corrections cannot change an ordinary payment into compensation.
 
-## Validation
+Historical allocations, their paired compensation payments, ledger records and audit entries are preserved. Read access and cancellation remain available. Exact retries of already journaled allocations, settlements and transaction creations still return their saved result after checking payload identity and actor. The retired backend implementation remains for compatibility and internal historical-data tests; the production UI no longer imports its allocation dialogs.
 
-Backend integration tests cover mixed payments, oldest-first allocation, editable destinations, stale previews, replay, supplier bank funding, rollback after partial work, ineligible advances, and transaction creation with exhausted credit or uncertain retries. UI tests cover grouped history, combined confirmation, edited bulk allocations, frozen retries, and fully or partly advance-funded sale creation.
+No schema migration or historical rewrite is required. New behavior is deployed to staging; production release remains separate.
 
-See `advance-payment-acceptance.md` for release checks and staging walkthrough evidence. Production release and broader concurrency/recovery drills remain separate gates.
+## Verification
+
+Tests cover contact-level advance and return accounting without transaction settlement, rejection of new allocation and compensation commands, historical reads/cancellation/retry, transaction creation without consuming advances, and frozen payment retries. See `advance-payment-acceptance.md` for results and staging evidence.

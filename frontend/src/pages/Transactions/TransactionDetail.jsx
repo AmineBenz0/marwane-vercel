@@ -1,5 +1,4 @@
 import TransactionCreditPanel from '../../components/Corrections/TransactionCreditPanel';
-import AdvanceSettlementDialog from '../../components/Corrections/AdvanceSettlementDialog';
 /**
  * Page Détail Transaction.
  * 
@@ -93,24 +92,11 @@ function TransactionDetail() {
 
   // État pour la modal d'ajout/édition de paiement
   const [paiementDialogOpen, setPaiementDialogOpen] = useState(false);
-  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
-  const [advanceAvailable, setAdvanceAvailable] = useState(null);
   const [editingPaiement, setEditingPaiement] = useState(null);
   const [refundOpen, setRefundOpen] = useState(false);
   const [transactionEditOpen, setTransactionEditOpen] = useState(false);
   const [reuseChanges, setReuseChanges] = useState({});
   const [historyRevision, setHistoryRevision] = useState(0);
-  const advanceClientId = transaction?.id_client;
-  const advanceSupplierId = transaction?.id_fournisseur;
-  useEffect(() => {
-    let active = true;
-    setAdvanceAvailable(null);
-    if (!advanceClientId && !advanceSupplierId) return () => { active = false; };
-    get('/credits/party', { params: { [advanceClientId ? 'id_client' : 'id_fournisseur']: advanceClientId || advanceSupplierId } })
-      .then(data => { if (active) setAdvanceAvailable(Number(data.available)); }).catch(() => {});
-    return () => { active = false; };
-  }, [advanceClientId, advanceSupplierId, historyRevision]);
-  
   // État pour la confirmation de suppression de paiement
   const [deletePaiementDialogOpen, setDeletePaiementDialogOpen] = useState(false);
   const [paiementToDelete, setPaiementToDelete] = useState(null);
@@ -544,8 +530,7 @@ function TransactionDetail() {
   /**
    * Gère l'ouverture de la modal d'ajout de paiement (nouveau).
    */
-  const handleAddPaiement = (otherPayment = false) => {
-    if (otherPayment !== true && advanceAvailable > 0) { setAdvanceDialogOpen(true); return; }
+  const handleAddPaiement = () => {
     setEditingPaiement(null);
     resetPaiement({
       date_paiement: format(new Date(), 'yyyy-MM-dd'),
@@ -700,7 +685,7 @@ function TransactionDetail() {
 
         <Card variant="outlined" sx={{ ...cardSx, order: { xs: 1, md: 2 } }}><CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mb: 2 }}>
-            <Typography component="h2" variant="h6">Paiement</Typography>
+            <Typography component="h2" variant="h6">Règlement de cette transaction</Typography>
             {statutPaiement && !inactiveTransaction && <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />}
           </Stack>
           <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
@@ -718,7 +703,7 @@ function TransactionDetail() {
               {balance.credit && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 {Number(statutPaiement.montant_rembourse) > 0
                   ? 'Le crédit affiché tient compte des remboursements enregistrés.'
-                  : 'Le crédit disponible peut être remboursé ou utilisé pour une autre transaction de ce contact.'}
+                  : 'Ce crédit est inclus dans le solde global du contact et peut être remboursé.'}
               </Typography>}
               {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard && !inactiveTransaction ? 'error.main' : 'text.secondary'} sx={{ mt: 1 }}>
                 Échéance : {formatDate(transaction.date_echeance)}
@@ -733,7 +718,8 @@ function TransactionDetail() {
           </> : <Alert severity="warning" sx={{ mt: 2 }} action={<Button onClick={fetchStatutPaiement}>Réessayer</Button>}>
             Le solde du paiement est indisponible.
           </Alert>}
-          <TransactionCreditPanel transaction={transaction} canAllocate={!inactiveTransaction && Number(statutPaiement?.montant_restant) > 0} />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>Les avances au compte sont prises en compte dans le solde global du contact.</Typography>
+          <TransactionCreditPanel transaction={transaction} />
         </CardContent></Card>
       </Box>
 
@@ -818,10 +804,6 @@ function TransactionDetail() {
         <DialogActions><Button onClick={() => setCancelTransactionDialogOpen(false)}>Retour</Button><Button color="error" variant="contained" onClick={submitCancelTransaction} disabled={promiseActionLoading || (transaction.est_promesse && cancelReason.trim().length < 3)}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</Button></DialogActions>
       </Dialog>
 
-      {advanceDialogOpen && <AdvanceSettlementDialog transaction={{ ...transaction, ...statutPaiement }}
-        supplierSource={fournisseurs.find(f => f.id_fournisseur === transaction.id_fournisseur)?.mode_reglement_prefere || null}
-        onClose={() => setAdvanceDialogOpen(false)} onSaved={() => { setAdvanceDialogOpen(false); notification.success('Règlement enregistré'); }}
-        onOtherPayment={() => { setAdvanceDialogOpen(false); handleAddPaiement(true); }} />}
       {/* Modal d'ajout/édition de paiement */}
       <Dialog
         open={paiementDialogOpen}
@@ -837,7 +819,7 @@ function TransactionDetail() {
             </Typography>
             {statutPaiement && !editingPaiement && (
               <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-                Transaction n° {id} · Reste à régler : {formatMontant(statutPaiement.montant_restant)}
+                Transaction n° {id} · Reste sur cette transaction : {formatMontant(statutPaiement.montant_restant)}
               </Typography>
             )}
             {editingPaiement && (

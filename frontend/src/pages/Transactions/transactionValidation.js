@@ -25,7 +25,7 @@ const paymentSchema = yup.object().shape({
   type: yup
     .string()
     .required('Le type est requis')
-    .oneOf(['cash', 'cheque', 'virement', 'carte', 'compensation', 'lc', 'autre']),
+    .oneOf(['cash', 'cheque', 'virement', 'carte', 'lc', 'autre']),
   numero_cheque: yup.string().nullable(),
   banque: yup.string().nullable(),
   reference: yup.string().nullable(),
@@ -43,10 +43,6 @@ const paymentSchema = yup.object().shape({
 });
 
 const lineSchema = yup.object().shape({
-  montant_avance: yup.number().transform((value, original) => original === '' ? 0 : value).min(0).default(0).test('advance-within-total', 'L’avance dépasse le montant de la transaction.', function(value) {
-    return !value || value <= Number(this.parent.quantite || 0) * Number(this.parent.prix_unitaire || 0);
-  }),
-  date_avance: yup.string().nullable().when('montant_avance', { is: value => value > 0, then: schema => schema.required('La date d’utilisation est requise') }),
   id_produit: optionalNumber(),
   id_production: optionalNumber(),
   date_production: yup.string().nullable(),

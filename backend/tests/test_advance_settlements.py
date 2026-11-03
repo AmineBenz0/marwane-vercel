@@ -142,7 +142,7 @@ def test_future_advance_and_other_party_cannot_fund_payment(db_session, unsettle
         plan_settlement(db_session, request)
 
 
-def test_creation_with_advance_payment_and_retry_is_atomic(client, db_session, correction_transaction, test_user, monkeypatch):
+def test_creation_keeps_advance_on_account_and_payment_retry_is_atomic(client, db_session, correction_transaction, test_user, monkeypatch):
     from app.main import app
     from app.utils.dependencies import get_current_active_user
     app.dependency_overrides[get_current_active_user] = lambda: test_user
@@ -153,6 +153,11 @@ def test_creation_with_advance_payment_and_retry_is_atomic(client, db_session, c
         'date_transaction': business_date().isoformat(), 'id_produit': tx.id_produit, 'id_fournisseur': tx.id_fournisseur,
         'quantite': 10, 'prix_unitaire': '1'}, 'montant_avance': '5', 'paiements': [{
             'date_paiement': business_date().isoformat(), 'montant': '5', 'type_paiement': 'cash'}]}]}
+    rejected = client.post('/api/v1/transactions/batch-with-payments', json=payload)
+    assert rejected.status_code == 410, rejected.text
+    assert db_session.query(Transaction).count() == 1
+    payload['items'][0]['montant_avance'] = '0'
+    payload['items'][0]['paiements'][0]['montant'] = '10'
     first = client.post('/api/v1/transactions/batch-with-payments', json=payload)
     assert first.status_code == 201, first.text
     # Simulate a competing retry whose first journal read happened before the
@@ -171,6 +176,8 @@ def test_creation_with_advance_payment_and_retry_is_atomic(client, db_session, c
     target = db_session.get(Transaction, first.json()[0]['transaction']['id_transaction'])
     assert target.montant_restant == 0
     assert db_session.query(Caisse).count() == 2
+    assert db_session.query(AffectationCredit).count() == 0
+    assert db_session.query(Avance).one().montant_disponible == 5
 
 
 def test_selected_advance_is_used_without_consuming_an_older_one(db_session, unsettled, test_user):
@@ -195,7 +202,7 @@ def test_multiple_new_lines_cannot_overspend_the_same_advance(client, db_session
         'id_fournisseur': tx.id_fournisseur, 'quantite': 10, 'prix_unitaire': '1'}, 'montant_avance': '4', 'paiements': []}
     response = client.post('/api/v1/transactions/batch-with-payments', json={'operation_id': str(uuid4()),
         'items': [{**item, 'client_ref': 'one'}, {**item, 'client_ref': 'two'}]})
-    assert response.status_code == 409, response.text
+    assert response.status_code == 410, response.text
     assert db_session.query(Transaction).count() == 1
     assert db_session.query(AffectationCredit).count() == 0
     assert db_session.query(Caisse).count() == 1

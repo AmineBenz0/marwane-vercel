@@ -3,11 +3,13 @@ import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { transactionValidationSchema } from './transactionValidation';
 
 describe('buildTransactionPaymentBatch', () => {
-  it('preserves confirmation identity, advance amount and deterministic line references on retry', () => {
+  it('preserves confirmation identity without forwarding stale advance allocation fields', () => {
     const data = { operation_id: 'frozen-operation', transactions: [{ id_client: 7 }], lignesData: [{ montant_avance: '6.00', date_avance: '2026-11-02', ajouter_paiement: true,
       paiements: [{ date: '2026-11-02', montant: '4.00', type: 'cash' }] }] };
     expect(buildTransactionPaymentBatch(data)).toEqual(buildTransactionPaymentBatch(data));
-    expect(buildTransactionPaymentBatch(data)).toMatchObject({ operation_id: 'frozen-operation', items: [{ client_ref: 'frozen-operation:0', montant_avance: '6.00', date_avance: '2026-11-02', paiements: [{ montant: 4 }] }] });
+    expect(buildTransactionPaymentBatch(data).items[0]).not.toHaveProperty('montant_avance');
+    expect(buildTransactionPaymentBatch(data).items[0]).not.toHaveProperty('date_avance');
+    expect(buildTransactionPaymentBatch(data)).toMatchObject({ operation_id: 'frozen-operation', items: [{ client_ref: 'frozen-operation:0', paiements: [{ montant: 4 }] }] });
   });
   it('sends the funding source and bank account independently of cash method', () => {
     const payload = buildTransactionPaymentBatch({

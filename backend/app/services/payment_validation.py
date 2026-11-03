@@ -17,6 +17,8 @@ from app.utils.business_date import business_date
 
 def resolve_payment_funding(db: Session, payment_data, transaction: Transaction) -> dict:
     """Capture supplier funding independently of the method; preserve client routing."""
+    if payment_data.type_paiement == 'compensation':
+        raise HTTPException(422, 'La compensation ne peut plus être saisie comme un paiement. Les avances sont comptabilisées dans le solde du contact.')
     account_id = payment_data.id_compte
     requested_source = payment_data.source_reglement
     if transaction.id_fournisseur is None:

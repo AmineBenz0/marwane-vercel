@@ -55,7 +55,7 @@ describe('sale entry preserves user input', () => {
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
     expect(submit.mock.calls[0][0]).toEqual(submit.mock.calls[1][0]);
   });
-  it('uses an existing advance without generating a second cash payment when it covers the sale', async () => {
+  it('keeps a new sale separate from existing account advances', async () => {
     const original = get.getMockImplementation();
     get.mockImplementation((path, options) => path === '/credits/party' ? Promise.resolve({ available: '100', advances: [
       { nature: 'avance', statut: 'active', date_effet: '2000-01-01', available: '100' }], allocations: [] }) : original(path, options));
@@ -67,14 +67,14 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(quantity(), { target: { value: '10' } });
     fireEvent.change(price(), { target: { value: '1.5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
-    fireEvent.click(await screen.findByRole('checkbox', { name: /Utiliser l’avance disponible/ }));
-    expect(screen.getByRole('spinbutton', { name: 'Avance utilisée (MAD)' })).toHaveValue(15);
+    expect(screen.queryByRole('checkbox', { name: /Utiliser l’avance disponible/ })).not.toBeInTheDocument();
+    expect(get.mock.calls.some(([path]) => path === '/credits/party')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
     await waitFor(() => expect(submit).toHaveBeenCalledOnce());
-    expect(submit.mock.calls[0][0]).toMatchObject({ operation_id: expect.any(String), lignesData: [{ montant_avance: 15, ajouter_paiement: false }] });
+    expect(submit.mock.calls[0][0]).toMatchObject({ operation_id: expect.any(String), lignesData: [{ ajouter_paiement: false }] });
   });
 
-  it.each([{ advance: '6', qty: '10', unitPrice: '1.5', complement: 9 }, { advance: '0.20', qty: '1', unitPrice: '0.30', complement: 0.10 }])('suggests the exact cash complement for a partial advance ($advance)', async ({ advance, qty, unitPrice, complement }) => {
+  it.each([{ advance: '6', qty: '10', unitPrice: '1.5', complement: 15 }, { advance: '0.20', qty: '1', unitPrice: '0.30', complement: 0.30 }])('records only new money when paying now, independently of account advances ($advance)', async ({ advance, qty, unitPrice, complement }) => {
     const original = get.getMockImplementation();
     get.mockImplementation((path, options) => path === '/credits/party' ? Promise.resolve({ advances: [
       { nature: 'avance', statut: 'active', date_effet: '2000-01-01', available: advance }], allocations: [] }) : original(path, options));
@@ -86,11 +86,11 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(quantity(), { target: { value: qty } });
     fireEvent.change(price(), { target: { value: unitPrice } });
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
-    fireEvent.click(await screen.findByRole('checkbox', { name: /Utiliser l’avance disponible/ }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Régler le complément' }));
+    expect(screen.queryByRole('checkbox', { name: /Utiliser l’avance disponible/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Payer maintenant' }));
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
     await waitFor(() => expect(submit).toHaveBeenCalledOnce());
-    expect(submit.mock.calls[0][0].lignesData[0]).toMatchObject({ montant_avance: Number(advance), ajouter_paiement: true, paiements: [{ montant: complement }] });
+    expect(submit.mock.calls[0][0].lignesData[0]).toMatchObject({ ajouter_paiement: true, paiements: [{ montant: complement }] });
   });
   it('keeps the saved deferred status when editing a sale that is fully covered', async () => {
     render(<TransactionForm {...props} initialValues={{
