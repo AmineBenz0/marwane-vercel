@@ -17,7 +17,9 @@ class CompteBancaireCreate(BaseModel):
 class MouvementBancaireCreate(BaseModel):
     montant: Decimal = Field(..., gt=0)
     type_mouvement: Literal['ENTREE', 'SORTIE']
-    source: Literal['virement', 'cheque', 'lc', 'autre']
+    source: Literal['virement', 'cheque', 'lc', 'autre'] = Field(
+        description="Nouveaux mouvements : virement, cheque ou lc. Autre reste accepté uniquement pour rejouer un mouvement historique déjà enregistré."
+    )
     reference: Optional[str] = None
     notes: Optional[str] = None
     cle_idempotence: Optional[str] = Field(None, min_length=8, max_length=120)

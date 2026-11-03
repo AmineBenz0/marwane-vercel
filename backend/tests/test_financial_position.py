@@ -215,3 +215,40 @@ def test_bank_settlements_through_payment_api_reduce_debt_without_cash(client, d
     accounts = client.get("/api/v1/comptes-bancaires")
     assert accounts.status_code == 200, accounts.text
     assert Decimal(accounts.json()[0]["solde_actuel"]) == 2400
+
+
+@pytest.mark.parametrize('key', [None, 'new-retired-bank-source'])
+def test_new_other_bank_movement_is_rejected_without_changing_balance(client, db_session, key):
+    account = CompteBancaire(nom_banque='Retired source', numero_compte='RETIRED-1', solde_actuel=Decimal('100'))
+    db_session.add(account)
+    db_session.commit()
+    response = client.post(f'/api/v1/comptes-bancaires/{account.id_compte}/mouvements', json={
+        'montant': '25', 'type_mouvement': 'ENTREE', 'source': 'autre', 'cle_idempotence': key})
+    assert response.status_code == 422, response.text
+    db_session.refresh(account)
+    assert account.solde_actuel == Decimal('100')
+    assert db_session.query(MouvementBancaire).count() == 0
+
+
+@pytest.mark.parametrize('direction,expected', [('ENTREE', '125'), ('SORTIE', '75')])
+def test_other_bank_history_can_be_read_and_replayed_without_new_money(client, db_session, test_user, direction, expected):
+    from app.services.financial_ledger import record_bank_movement
+    account = CompteBancaire(nom_banque='Historical source', numero_compte='HISTORY-1', solde_actuel=Decimal('100'))
+    db_session.add(account)
+    db_session.commit()
+    payload = {'montant': '25', 'type_mouvement': direction, 'source': 'autre', 'cle_idempotence': 'historical-other-bank-movement'}
+    saved = record_bank_movement(db_session, id_compte=account.id_compte, montant=Decimal('25'),
+        type_mouvement=direction, source='autre', cle_idempotence=payload['cle_idempotence'], current_user=test_user)
+    db_session.commit()
+    path = f'/api/v1/comptes-bancaires/{account.id_compte}/mouvements'
+    history = client.get(path)
+    assert history.status_code == 200, history.text
+    assert history.json()[0]['source'] == 'autre'
+    replay = client.post(path, json=payload)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()['id_mouvement'] == saved.id_mouvement
+    assert client.post(path, json={**payload, 'montant': '26'}).status_code == 409
+    db_session.refresh(account)
+    assert account.solde_actuel == Decimal(expected)
+    assert db_session.query(MouvementBancaire).count() == 1
+

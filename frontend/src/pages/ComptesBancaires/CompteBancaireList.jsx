@@ -49,7 +49,6 @@ const SOURCE_OPTIONS = [
   { value: 'virement', label: 'Virement' },
   { value: 'cheque', label: 'Chèque' },
   { value: 'lc', label: 'Lettre de crédit' },
-  { value: 'autre', label: 'Autre' },
 ];
 
 const SOURCE_LABELS = {

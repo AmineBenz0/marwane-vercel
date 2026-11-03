@@ -8,6 +8,7 @@ Advances belong to a client or supplier account. Recording money received from a
 - The drawer records advances and restitutions and retains their cancellation and history. No transaction selection or `Utiliser` action is offered.
 - A transaction's remaining amount and payment status reflect its own recorded settlements. Account advances affect the contact's net balance, without marking a particular transaction paid. The transaction detail and financial register identify this distinction.
 - New transactions and payments record only new money. Payment methods are Espèces, Chèque, Virement and Lettre de crédit. Compensation, Carte bancaire and Autre are absent from new payment and correction choices; an existing record can still display its historical method.
+- Manual bank movements offer Virement, Chèque and Lettre de crédit. New movements with source Autre are rejected; existing movements remain readable and exact idempotent retries remain supported.
 
 Example: an unpaid 1,000 MAD sale and a 300 MAD advance give a 700 MAD contact balance. The sale still has 1,000 MAD without an assigned settlement. Recording a subsequent 700 MAD payment against that sale leaves 300 MAD on the sale and 300 MAD as an advance at account level, giving a zero contact balance. The advance is not silently consumed or reassigned.
 

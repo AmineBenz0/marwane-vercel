@@ -51,6 +51,9 @@ it('preserves account and credit-letter amounts in movement choices', async () =
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Compte bancaire' }));
   fireEvent.click(await screen.findByRole('option', { name: /Banque test - 1,25\sMAD/ }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Type' }));
+  expect(screen.queryByRole('option', { name: 'Autre' })).not.toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'Virement' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'Chèque' })).toBeInTheDocument();
   fireEvent.click(await screen.findByRole('option', { name: 'Lettre de crédit' }));
   fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Lettre de crédit' }));
   expect(await screen.findByRole('option', { name: /LC-TEST \(3,75\sMAD\)/ })).toBeInTheDocument();

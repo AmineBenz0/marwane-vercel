@@ -132,6 +132,8 @@ def create_mouvement(
             MouvementBancaire.cle_idempotence == mouvement_in.cle_idempotence,
         ).first()
     )
+    if mouvement_in.source == 'autre' and not replay:
+        raise HTTPException(422, 'Choisissez un mouvement par virement, chèque ou lettre de crédit.')
     try:
         mouvement = record_bank_movement(
             db,

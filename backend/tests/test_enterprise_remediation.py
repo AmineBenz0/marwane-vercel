@@ -1047,7 +1047,7 @@ def test_manual_bank_movement_uses_shared_ledger_and_is_idempotent(
     payload = {
         "montant": 25,
         "type_mouvement": "ENTREE",
-        "source": "autre",
+        "source": "virement",
         "reference": "DEPOT-001",
         "cle_idempotence": "bank-movement-ledger-001",
     }
