@@ -34,6 +34,60 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
+  it('keeps the selected LC amount through price, quantity, pay-later toggles and an uncertain retry', async () => {
+    const original = get.getMockImplementation();
+    get.mockImplementation((path, options) => path === '/lettres-credit/disponibles' ? Promise.resolve([
+      { id_lc: 7, numero_reference: 'LC-FIXED-7', montant: '9.75' },
+      { id_lc: 8, numero_reference: 'LC-FIXED-8', montant: '12.50' },
+    ]) : original(path, options));
+    const submit = vi.fn().mockRejectedValueOnce(Object.assign(new Error('Réponse perdue'), { status: 504 })).mockResolvedValueOnce([]);
+    render(<TransactionForm {...props} onSubmit={submit} />);
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /^Client/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Client test' }));
+    await selectBuilding('Bâtiment A');
+    fireEvent.change(quantity(), { target: { value: '10' } });
+    fireEvent.change(price(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Payer maintenant' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Mode de paiement' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Lettre de crédit/i }));
+    const amount = screen.getByRole('spinbutton', { name: 'Montant de la LC (MAD)' });
+    expect(amount).toHaveAttribute('readonly');
+    await waitFor(() => expect(amount).toHaveValue(null));
+    const selectLC = async name => {
+      const selector = screen.getByRole('combobox', { name: 'Choisir une Lettre de Crédit' });
+      await waitFor(() => expect(selector).not.toHaveAttribute('aria-disabled', 'true'));
+      fireEvent.mouseDown(selector);
+      fireEvent.click(await screen.findByRole('option', { name }));
+    };
+    await selectLC(/LC-FIXED-7/);
+    expect(amount).toHaveValue(9.75);
+    fireEvent.change(quantity(), { target: { value: '20' } });
+    fireEvent.change(price(), { target: { value: '2' } });
+    expect(amount).toHaveValue(9.75);
+    await selectLC(/LC-FIXED-8/);
+    expect(amount).toHaveValue(12.5);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Mode de paiement' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Espèces' }));
+    const cashAmount = screen.getByRole('spinbutton', { name: 'Montant (MAD)' });
+    expect(cashAmount).not.toHaveAttribute('readonly');
+    fireEvent.change(cashAmount, { target: { value: '8' } });
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Mode de paiement' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Lettre de crédit/i }));
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Montant de la LC (MAD)' })).toHaveValue(null));
+    await selectLC(/LC-FIXED-7/);
+    fireEvent.click(screen.getByRole('radio', { name: 'À régler plus tard' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Payer maintenant' }));
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Montant de la LC (MAD)' })).toHaveValue(9.75));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la vente' }));
+    const retry = await screen.findByRole('button', { name: 'Vérifier l’enregistrement' });
+    expect(screen.getByRole('spinbutton', { name: 'Montant de la LC (MAD)' })).toBeDisabled();
+    expect(submit.mock.calls[0][0].lignesData[0].paiements[0]).toMatchObject({ type: 'lc', id_lc: 7, montant: 9.75 });
+    fireEvent.click(retry);
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    expect(submit.mock.calls[1][0]).toEqual(submit.mock.calls[0][0]);
+  });
+
   it('freezes an uncertain creation and retries the same confirmation without changing the draft', async () => {
     const submit = vi.fn().mockRejectedValueOnce(Object.assign(new Error('Réponse perdue'), { status: 504 })).mockResolvedValueOnce([]);
     render(<TransactionForm {...props} onSubmit={submit} />);

@@ -47,6 +47,17 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
   const [accountError, setAccountError] = useState('');
 
   useEffect(() => {
+    (watchedFields || []).forEach((payment, index) => {
+      if (payment.type_paiement !== 'lc') return;
+      const lc = availableLcs.find(row => Number(row.id_lc) === Number(payment.id_lc));
+      const amount = lc ? Number(lc.montant) : '';
+      const differs = lc ? Number(payment.montant) !== amount
+        : payment.montant !== '' && !Number.isNaN(payment.montant);
+      if (differs) setValue(`paiements.${index}.montant`, amount);
+    });
+  }, [watchedFields, availableLcs, setValue]);
+
+  useEffect(() => {
     if (supplierSource !== 'banque') return;
     let active = true;
     setAccountError('');
@@ -101,9 +112,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
     const selectedId = lcId === '' ? null : Number(lcId);
     setValue(`paiements.${index}.id_lc`, selectedId, { shouldDirty: true, shouldValidate: true });
     const selectedLc = availableLcs.find(l => Number(l.id_lc) === selectedId);
-    if (selectedLc) {
-      setValue(`paiements.${index}.montant`, Number(selectedLc.montant), { shouldDirty: true, shouldValidate: true });
-    }
+    setValue(`paiements.${index}.montant`, selectedLc ? Number(selectedLc.montant) : '', { shouldDirty: true, shouldValidate: true });
   };
 
   return (
@@ -148,6 +157,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
           <TableBody>
             {fields.map((item, index) => {
               const type = watch(`paiements.${index}.type_paiement`);
+              const typeRegistration = register(`paiements.${index}.type_paiement`);
               // Register even while details are collapsed so a missing LC blocks submission.
               const lcRegistration = register(`paiements.${index}.id_lc`, {
                 validate: (value) => type !== 'lc' || (
@@ -185,7 +195,12 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                     </TableCell>
                     <TableCell>
                       <TextField
-                        {...register(`paiements.${index}.type_paiement`)}
+                        {...typeRegistration}
+                        onChange={event => {
+                          typeRegistration.onChange(event);
+                          setValue(`paiements.${index}.id_lc`, null);
+                          if (event.target.value === 'lc') setValue(`paiements.${index}.montant`, '');
+                        }}
                         value={type || 'cash'}
                         select
                         size="small"
@@ -231,6 +246,8 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         type="number"
                         size="small"
                         fullWidth
+                        InputProps={{ readOnly: type === 'lc' }}
+                        placeholder={type === 'lc' ? 'Sélectionnez une LC' : undefined}
                         inputProps={{ step: '0.01', min: '0.01', 'aria-label': `Montant du paiement ${index + 1}` }}
                         error={!!errors?.paiements?.[index]?.montant}
                         helperText={errors?.paiements?.[index]?.montant?.message}

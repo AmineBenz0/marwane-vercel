@@ -218,10 +218,13 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
   const typeEntite = watch('type_entite');
   const clientId = watch('id_client');
   const fournisseurId = watch('id_fournisseur');
+  const selectedLcId = watch(`lignes.${index}.paiements.${paymentIndex}.id_lc`);
 
   React.useEffect(() => {
+    let active = true;
     const fetchLcs = async () => {
       setFetching(true);
+      setLcs([]);
       try {
         const params = {};
         if (typeEntite === 'client') {
@@ -240,17 +243,24 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
           }
         }
         const data = await get('/lettres-credit/disponibles', { params });
-        setLcs(data || []);
+        if (active) setLcs(data || []);
       } catch (err) {
         console.error('Erreur chargement LC:', err);
-        setLcs([]);
+        if (active) setLcs([]);
       } finally {
-        setFetching(false);
+        if (active) setFetching(false);
       }
     };
 
     fetchLcs();
+    return () => { active = false; };
   }, [typeEntite, clientId, fournisseurId]);
+
+  React.useEffect(() => {
+    if (loading) return;
+    const selectedLc = lcs.find(lc => Number(lc.id_lc) === Number(selectedLcId));
+    setValue(`lignes.${index}.paiements.${paymentIndex}.montant`, selectedLc ? Number(selectedLc.montant) : '');
+  }, [lcs, selectedLcId, index, paymentIndex, setValue, loading]);
 
   return (
     <Controller
@@ -270,12 +280,11 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
           size="small"
           value={field.value || ''}
           onChange={(e) => {
-            field.onChange(e.target.value);
+            const selectedId = e.target.value === '' ? '' : Number(e.target.value);
+            field.onChange(selectedId);
             // Auto-remplissage du montant avec le montant de la LC
-            const selectedLc = lcs.find(l => l.id_lc === e.target.value);
-            if (selectedLc) {
-              setValue(`lignes.${index}.paiements.${paymentIndex}.montant`, parseFloat(selectedLc.montant));
-            }
+            const selectedLc = lcs.find(l => Number(l.id_lc) === selectedId);
+            setValue(`lignes.${index}.paiements.${paymentIndex}.montant`, selectedLc ? Number(selectedLc.montant) : '');
           }}
         >
           {lcs.map((l) => (
@@ -844,7 +853,9 @@ function UnpaidTransactionForm({
                     ]);
                     setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal).toFixed(2));
                   } else {
-                    setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal).toFixed(2));
+                    if (existingPaiements[0].type !== 'lc') {
+                      setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, ligneTotal).toFixed(2));
+                    }
                     setValue(
                       `lignes.${index}.paiements.0.date`,
                       watch('date_transaction') || today()
@@ -954,12 +965,14 @@ function UnpaidTransactionForm({
                         <TextField
                           {...field}
                           fullWidth
-                          label="Montant (MAD)"
+                          label={paiement.type === 'lc' ? 'Montant de la LC (MAD)' : 'Montant (MAD)'}
                           type="number"
                           error={!!error}
                           sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                           helperText={error?.message}
                           disabled={loading || uncertainCreation}
+                          InputProps={{ readOnly: paiement.type === 'lc' }}
+                          placeholder={paiement.type === 'lc' ? 'Sélectionnez une LC' : undefined}
                           inputProps={{ step: '0.01', min: '0.01' }}
                           InputLabelProps={{ shrink: true }}
                           size="small"
@@ -986,6 +999,8 @@ function UnpaidTransactionForm({
                           size="small"
                           onChange={(event) => {
                             field.onChange(event);
+                            setValue(`lignes.${index}.paiements.${pIndex}.id_lc`, '');
+                            if (event.target.value === 'lc') setValue(`lignes.${index}.paiements.${pIndex}.montant`, '');
                             if (event.target.value !== 'virement' && paiement.source_reglement !== 'banque') {
                               setValue(`lignes.${index}.paiements.${pIndex}.id_compte`, '');
                             }
@@ -1627,7 +1642,7 @@ function UnpaidTransactionForm({
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
                                       // Mettre à jour le montant du paiement si paiement activé
-                                      if (ligne.ajouter_paiement) {
+                                      if (ligne.ajouter_paiement && ligne.paiements?.[0]?.type !== 'lc') {
                                         const newTotal = (parseFloat(value) || 0) * (parseFloat(ligne.prix_unitaire) || 0);
                                         setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal).toFixed(2));
                                       }
@@ -1660,7 +1675,7 @@ function UnpaidTransactionForm({
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
                                       // Mettre à jour le montant du paiement si paiement activé
-                                      if (ligne.ajouter_paiement) {
+                                      if (ligne.ajouter_paiement && ligne.paiements?.[0]?.type !== 'lc') {
                                         const newTotal = (parseFloat(ligne.quantite) || 0) * (parseFloat(value) || 0);
                                         setValue(`lignes.${index}.paiements.0.montant`, Math.max(0, newTotal).toFixed(2));
                                       }
