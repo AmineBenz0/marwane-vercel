@@ -58,7 +58,6 @@ function BatimentProductionPage() {
   const [editingProduction, setEditingProduction] = useState(null);
   const [preselectedEggType, setPreselectedEggType] = useState('normal');
   const [formTitle, setFormTitle] = useState('');
-  const [formDescription, setFormDescription] = useState('');
 
   const selectedBatimentId = Number(id);
   const batiment = batiments.find((item) => Number(item.id_batiment) === selectedBatimentId);
@@ -134,7 +133,6 @@ function BatimentProductionPage() {
     setEditingProduction(null);
     setPreselectedEggType('normal');
     setFormTitle('Saisir la production');
-    setFormDescription('Ajoutez la collecte de ce batiment pour la journee choisie.');
     setOpenForm(true);
   };
 
@@ -142,7 +140,6 @@ function BatimentProductionPage() {
     setEditingProduction(production);
     setPreselectedEggType(production.type_oeuf || 'normal');
     setFormTitle('Modifier la saisie');
-    setFormDescription('Mettez à jour les quantités par type et le poids du plateau de cette journée.');
     setOpenForm(true);
   };
 
@@ -265,7 +262,6 @@ function BatimentProductionPage() {
           preselectedEggType={preselectedEggType}
           preselectedDate={selectedDate}
           title={formTitle}
-          description={formDescription}
         />
       )}
 
@@ -287,7 +283,6 @@ function HistoryCard({ days, onEdit, onDelete }) {
     <Card variant="outlined" component="section" aria-label="Historique des saisies" sx={{ mt: 3, borderRadius: 3, minWidth: 0 }}>
       <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Typography component="h2" variant="h6" fontWeight={800}>Historique des saisies</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>Une ligne par journée, jusqu’à la date consultée.</Typography>
         {!days.length ? <Typography color="text.secondary">Aucune saisie pour ce bâtiment.</Typography> : <>
           <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
             <Table size="small" aria-label="Saisies quotidiennes" sx={{ minWidth: 690 }}>

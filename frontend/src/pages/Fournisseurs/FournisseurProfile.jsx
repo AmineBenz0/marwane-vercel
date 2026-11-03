@@ -677,10 +677,7 @@ function FournisseurProfile() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
             <Box>
               <Typography variant="h6" component="h2" fontWeight={900}>
-                Tableau des soldes
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Montants des achats de la période. Les avances sont prises en compte dans le solde net du fournisseur.
+                Achats de la période
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -946,9 +943,9 @@ function FournisseurProfile() {
           formatMontant={(value) => formatMontant(value, { useCompactNotation: false })}
           onView={handleViewTransaction}
           title="Historique des transactions"
-          description="Achats, règlements et soldes de ce fournisseur."
+          description=""
           emptyTitle="Aucune transaction disponible"
-          emptyDescription="Ce fournisseur n'a pas encore de transaction."
+          emptyDescription=""
         />
       </Box>
 

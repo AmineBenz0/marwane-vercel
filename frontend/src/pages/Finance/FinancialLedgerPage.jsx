@@ -140,11 +140,11 @@ PaymentDialog.propTypes = {
   onSaved: PropTypes.func.isRequired,
 };
 
-function SummaryCards({ summary }) {
+function SummaryCards({ summary, isReceivable }) {
   const cards = [
-    ['Total', summary?.total, 'text.primary'],
-    ['Payé', summary?.paye, 'success.main'],
-    ['Reste', summary?.reste, 'warning.main'],
+    [isReceivable ? 'Total des ventes' : 'Total des achats', summary?.total, 'text.primary'],
+    ['Déjà réglé', summary?.paye, 'success.main'],
+    [isReceivable ? 'Reste sur les ventes' : 'Reste sur les achats', summary?.reste, 'warning.main'],
     ['En retard', summary?.overdue_count || 0, 'error.main', true],
   ];
   return (
@@ -164,6 +164,7 @@ function SummaryCards({ summary }) {
 }
 
 SummaryCards.propTypes = {
+  isReceivable: PropTypes.bool.isRequired,
   summary: PropTypes.shape({
     total: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     paye: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
@@ -325,12 +326,11 @@ function FinancialLedgerPage({ direction }) {
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" fontWeight={700}>{title}</Typography>
-          <Typography color="text.secondary">Soldes par transaction et échéances. Le solde net après avances figure sur la fiche du contact.</Typography>
         </Box>
         <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualiser</Button>
       </Stack>
 
-      <SummaryCards summary={data.summary} />
+      <SummaryCards summary={data.summary} isReceivable={isReceivable} />
       <SmartFilterPanel
         pageKey={`financial-ledger-${direction}`}
         filterDefinitions={filterDefinitions}

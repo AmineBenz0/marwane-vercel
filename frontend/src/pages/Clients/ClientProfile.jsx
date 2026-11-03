@@ -676,10 +676,7 @@ function ClientProfile() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
             <Box>
               <Typography variant="h6" component="h2" fontWeight={900}>
-                Tableau des créances
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Ventes, règlements et reste à encaisser pour ce client.
+                Ventes de la période
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1005,7 +1002,7 @@ function ClientProfile() {
           title="Historique des transactions"
           description=""
           emptyTitle="Aucune transaction disponible"
-          emptyDescription="Ce client n'a pas encore de transaction."
+          emptyDescription=""
         />
       </Box>
 

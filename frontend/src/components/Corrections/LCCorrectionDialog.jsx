@@ -81,8 +81,6 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
             : preview.money_effect === 'replaced' ? 'Le mouvement lié sera annulé et remplacé une seule fois, avec les nouveaux montant, date et compte.' : 'Aucun changement de caisse ou de banque.'}</Alert>
         <Typography variant="body2">{values.reason}</Typography>
       </> : context && <>
-        <Alert severity={cancelUsage ? 'warning' : 'info'}>{cancelUsage ? 'Annulez uniquement une utilisation enregistrée par erreur.'
-          : 'Les changements seront appliqués à la LC et à son paiement, sa cession ou son versement lié dans une seule opération.'}</Alert>
         {!cancelUsage && <>
           {Object.entries(metadataLabels).map(([field, label]) => <TextField key={field} label={label} value={values[field]} onChange={update(field)}
             required={field === 'numero_reference'} inputProps={{ maxLength: field === 'banque_emettrice' ? 100 : 50 }} disabled={flow.busy} />)}

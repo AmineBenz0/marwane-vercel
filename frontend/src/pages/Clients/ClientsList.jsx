@@ -189,9 +189,6 @@ function ClientsList() {
           <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' }, fontWeight: 900 }}>
             Clients
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Retrouvez rapidement un client, consultez son profil ou ajoutez-en un nouveau.
-          </Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1.5 }}>
           <Button

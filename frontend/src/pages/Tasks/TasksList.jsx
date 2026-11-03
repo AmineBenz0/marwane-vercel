@@ -43,7 +43,7 @@ const FILTERS = [
   { key: 'aujourdhui', label: "Aujourd'hui" },
   { key: 'en_attente', label: 'En attente' },
   { key: 'urgentes', label: 'Urgentes' },
-  { key: 'terminees', label: 'Terminees' },
+  { key: 'terminees', label: 'Clôturées' },
 ];
 
 const formatTaskDate = (task) => {
@@ -136,10 +136,10 @@ function TasksList() {
   }, [activeFilter, sortedTasks, todayTasks, allTasksInActionOrder]);
 
   const stats = [
-    { label: "Aujourd'hui", value: taskCounts.aujourdhui, helper: 'A traiter dans la journee' },
-    { label: 'En attente', value: taskCounts.en_attente, helper: 'Encore ouvertes' },
-    { label: 'Urgentes', value: taskCounts.urgentes, helper: 'A regarder en premier' },
-    { label: 'Terminees', value: taskCounts.terminees, helper: 'Archivees ou annulees' },
+    { label: "Aujourd'hui", value: taskCounts.aujourdhui },
+    { label: 'En attente', value: taskCounts.en_attente },
+    { label: 'Urgentes', value: taskCounts.urgentes },
+    { label: 'Clôturées', value: taskCounts.terminees, helper: 'Terminées ou annulées' },
   ];
 
   const filterOptions = FILTERS.map((filter) => ({
@@ -188,13 +188,13 @@ function TasksList() {
                 <Typography sx={{ mt: 1, fontSize: { xs: '1.75rem', md: '2.1rem' }, fontWeight: 900, lineHeight: 1 }}>
                   {stat.value}
                 </Typography>
-                <Typography
+                {stat.helper && <Typography
                   variant="caption"
                   color="text.secondary"
                   sx={{ mt: 0.75, display: { xs: 'none', sm: 'block' } }}
                 >
                   {stat.helper}
-                </Typography>
+                </Typography>}
               </CardContent>
             </Card>
           </Grid>
@@ -278,7 +278,6 @@ function TasksList() {
         <Stack spacing={2.5}>
           {overdueTasks.length > 0 && <TaskPanel
             title="En retard"
-            subtitle="À traiter en priorité."
             tasks={overdueTasks}
             emptyText="Aucune tâche en retard."
             onCreate={handleCreate}
@@ -287,7 +286,6 @@ function TasksList() {
           />}
           {todayTasks.length > 0 && <TaskPanel
             title="À faire aujourd'hui"
-            subtitle="Les actions prévues pour aujourd'hui."
             tasks={todayTasks}
             emptyText="Aucune tâche aujourd'hui."
             onCreate={overdueTasks.length === 0 ? handleCreate : undefined}
@@ -296,7 +294,6 @@ function TasksList() {
           />}
           {upcomingTasks.length > 0 && <TaskPanel
             title="Prochaines tâches"
-            subtitle="Ce qui est prévu ensuite."
             tasks={upcomingTasks}
             emptyText="Aucune prochaine tâche prévue."
             onCreate={overdueTasks.length === 0 && todayTasks.length === 0 ? handleCreate : undefined}
@@ -305,7 +302,6 @@ function TasksList() {
           />}
           {unscheduledTasks.length > 0 && <TaskPanel
             title="Sans date prévue"
-            subtitle="Les tâches ouvertes sans échéance."
             tasks={unscheduledTasks}
             emptyText="Aucune tâche sans date prévue."
             onEdit={handleEdit}
@@ -355,9 +351,9 @@ function TaskPanel({ title, subtitle, tasks, emptyText, onCreate, onEdit, onDele
             <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.25rem' }}>
               {title}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            {subtitle && <Typography variant="body2" color="text.secondary">
               {subtitle}
-            </Typography>
+            </Typography>}
           </Box>
           {onCreate && (
             <IconButton

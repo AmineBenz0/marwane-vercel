@@ -55,7 +55,6 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
           : <Alert severity={cancel ? 'warning' : 'info'}>{cancel ? 'Les mouvements de cet enregistrement erroné seront annulés. L’historique sera conservé.'
             : `${flow.review.direction === 'ENTREE' ? 'Argent reçu' : 'Argent versé'} · ${values.type_paiement === 'cash' ? 'Espèces' : `Compte : ${accounts.find(a => a.id_compte === Number(values.id_compte))?.nom_banque || 'Compte bancaire'}`}`}</Alert>}
       </> : <>
-        {cancel && <Alert severity="warning">Annulez uniquement un enregistrement erroné. Les conséquences seront présentées avant confirmation.</Alert>}
         {!cancel && <>
           <TextField required label="Montant (MAD)" type="number" value={values.montant} onChange={update('montant')} disabled={flow.busy} inputProps={{ min: '0.01', step: '0.01' }} />
           <DateField required label="Date de l’opération" value={values.date_effet} onChange={update('date_effet')} disabled={flow.busy} fullWidth />

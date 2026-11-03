@@ -284,9 +284,6 @@ function CompteBancaireList() {
           <Typography variant="h4" component="h1" fontWeight={900}>
             Comptes bancaires
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Voir l'argent disponible en banque, par compte, avec les derniers mouvements visibles directement.
-          </Typography>
         </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
@@ -316,7 +313,7 @@ function CompteBancaireList() {
           mb: 2.5,
         }}
       >
-        <BigBalanceCard value={totalSolde} comptesCount={comptes.length} loading={loading} />
+        <BigBalanceCard value={totalSolde} loading={loading} />
         <SummaryCard
           label="Comptes actifs"
           value={comptes.length}
@@ -491,15 +488,12 @@ function getInitialMovementForm(idCompte = '') {
   };
 }
 
-function BigBalanceCard({ value, comptesCount, loading }) {
+function BigBalanceCard({ value, loading }) {
   const amount = parseAmount(value);
   const formattedAmount = new Intl.NumberFormat('fr-FR', {
     maximumFractionDigits: 2,
     minimumFractionDigits: 0,
   }).format(amount);
-  const helper = comptesCount === 0
-    ? 'Ajoutez votre premier compte pour commencer le suivi bancaire.'
-    : `Somme de ${comptesCount} compte(s). Les LC déposées en banque apparaissent ici après versement.`;
 
   return (
     <Card
@@ -551,9 +545,6 @@ function BigBalanceCard({ value, comptesCount, loading }) {
           {!loading && 'MAD'}
           </Typography>
         </Stack>
-        <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, maxWidth: 420 }}>
-          {loading ? <Skeleton width="85%" sx={{ bgcolor: 'rgba(255,255,255,0.22)' }} /> : helper}
-        </Typography>
       </CardContent>
     </Card>
   );
@@ -744,7 +735,6 @@ function AddAccountDialog({ open, form, setForm, submitting, onClose, onSubmit }
               value={form.solde_initial}
               onChange={(event) => setForm({ ...form, solde_initial: event.target.value })}
               inputProps={{ step: '0.01' }}
-              helperText="Mettez 0 si vous voulez commencer sans solde."
             />
           </Stack>
         </Box>
@@ -852,7 +842,6 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
                 onChange={(event) => setForm({ ...form, montant: event.target.value })}
                 inputProps={{ min: 0, step: '0.01' }}
                 disabled={form.source === 'lc'}
-                helperText={form.source === 'lc' ? 'Le montant est défini par la lettre de crédit sélectionnée' : ''}
               />
               {form.source === 'lc' ? (
                 <TextField

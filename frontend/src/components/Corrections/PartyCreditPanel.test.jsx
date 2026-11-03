@@ -47,14 +47,14 @@ it('shows a retrieval failure without invented zero balances and supports retry'
   expect(screen.queryByText(/^0(?:,00)?\s*MAD$/)).not.toBeInTheDocument();
   expect(screen.getAllByText('—')).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
-  await screen.findByText('Après les règlements enregistrés');
+  await waitFor(() => expect(screen.queryByText('Vérification du solde…')).not.toBeInTheDocument());
   expect(screen.queryByRole('button', { name: /Avances au compte/ })).not.toBeInTheDocument();
 });
 
 it('keeps an operation mounted during a balance refresh and prevents closing its drawer', async () => {
   get.mockResolvedValue(empty);
   render(<Profile />);
-  await screen.findByText('Après les règlements enregistrés');
+  await waitFor(() => expect(screen.queryByText('Vérification du solde…')).not.toBeInTheDocument());
   const drawer = await openFromMenu();
   fireEvent.click(within(drawer).getByRole('button', { name: 'Enregistrer une avance reçue' }));
   fireEvent(window, new Event(CORRECTION_EVENT));
@@ -71,7 +71,7 @@ it('groups canceled usages in the collapsed history inside the secondary drawer'
   get.mockResolvedValue({ balance: '2000', available: '0', advances: [{ id_avance: 'old', nature: 'avance', date_effet: '2026-11-01', montant: '0.50', available: '0', statut: 'annule', reason: 'Avance de test', type_paiement: 'cash' }],
     allocations: [{ id_affectation: 'usage', id_avance: 'old', id_transaction_cible: 14, montant: '0.20', date_effet: '2026-11-01', statut: 'annule' }] });
   render(<Profile partyType="fournisseur" partyId={2} totalActivity={2500} totalTransactions={2} />);
-  await screen.findByText('Après les règlements enregistrés');
+  await waitFor(() => expect(screen.queryByText('Vérification du solde…')).not.toBeInTheDocument());
   expect(screen.queryByText('Historique')).not.toBeInTheDocument();
   const drawer = await openFromMenu();
   const history = within(drawer).getByRole('button', { name: 'Historique', exact: true });
@@ -115,7 +115,7 @@ it('removes the available-advance hint when the last advance is used and balance
   render(<Profile />);
   expect(await screen.findByRole('button', { name: /Avances au compte/ })).toBeVisible();
   fireEvent(window, new Event(CORRECTION_EVENT));
-  await screen.findByText('Après les règlements enregistrés');
+  await waitFor(() => expect(screen.queryByText('Vérification du solde…')).not.toBeInTheDocument());
   expect(screen.queryByRole('button', { name: /Avances au compte/ })).not.toBeInTheDocument();
   expect(screen.queryByText('Aucune avance au compte actuellement.')).not.toBeInTheDocument();
 });

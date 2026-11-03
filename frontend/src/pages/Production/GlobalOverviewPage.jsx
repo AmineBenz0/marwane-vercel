@@ -699,7 +699,6 @@ function GlobalOverviewPage() {
             <Popover id="global-overview-columns" open={Boolean(columnAnchor)} anchorEl={columnAnchor} onClose={() => setColumnAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }} PaperProps={{ role: 'dialog', 'aria-label': 'Choisir les colonnes', sx: { width: 390, maxWidth: 'calc(100vw - 32px)' } }}>
               <Box sx={{ p: 2 }}>
                 <Typography variant="subtitle1" fontWeight={800}>Colonnes du registre</Typography>
-                <Typography variant="body2" color="text.secondary">Afficher uniquement les indicateurs utiles.</Typography>
                 <Stack direction="row" gap={1} sx={{ mt: 1 }} flexWrap="wrap">
                   <Button size="small" onClick={() => setCustomColumns(columns.map((column) => column.key))}>Tout afficher</Button>
                   <Button size="small" onClick={() => applyPreset('register')}>Rétablir Registre</Button>

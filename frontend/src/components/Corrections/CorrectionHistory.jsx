@@ -55,7 +55,6 @@ export default function CorrectionHistory({ transactionId, revision, names = {},
       </Box>)}
       {busy && <CircularProgress size={24} aria-label="Chargement des corrections" />}
       {!busy && page.has_more && <Button onClick={more}>Voir les corrections précédentes</Button>}
-      <Typography variant="caption" color="text.secondary">Reprendre des valeurs prépare une nouvelle correction, à vérifier avant de l’enregistrer.</Typography>
     </Stack>
   </ExpandableDetails>;
 }

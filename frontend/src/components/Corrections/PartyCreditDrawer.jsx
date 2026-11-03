@@ -73,7 +73,6 @@ export default function PartyCreditDrawer({ partyType, partyId, partyName, open,
               <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>{money(data.available)}</Typography></Box>
             <AccountBalanceWalletOutlined color="primary" />
           </Stack>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>Ces avances sont déjà déduites du solde global du contact.</Typography>
         </Box>}
         <Button variant="contained" fullWidth sx={{ mb: 2 }} onClick={() => setAction({ action: 'advance' })}>{client ? 'Enregistrer une avance reçue' : 'Enregistrer une avance versée'}</Button>
         {data && <>

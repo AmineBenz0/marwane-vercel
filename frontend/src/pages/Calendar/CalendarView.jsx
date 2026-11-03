@@ -244,11 +244,6 @@ function CalendarView() {
           <Typography variant="h4" sx={{ fontWeight: 900, color: '#17211D' }}>
             Calendrier
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            {isMobile
-              ? 'Les prochaines taches, date par date.'
-              : 'Vue mensuelle complete avec les prochaines taches a cote.'}
-          </Typography>
         </Box>
         <Button
           variant="contained"
@@ -284,9 +279,6 @@ function CalendarView() {
                 <Box>
                   <Typography sx={{ fontWeight: 900, fontSize: '1.45rem', color: '#17211D' }}>
                     {currentTitle || 'Mois en cours'}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Cliquez sur une date pour ajouter une tache.
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -404,9 +396,6 @@ function UpcomingPanel({ tasks, onTaskClick, onNewTask }) {
           <Box>
             <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.25rem' }}>
               A venir
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Les prochaines taches.
             </Typography>
           </Box>
           <EventAvailableIcon sx={{ color: '#315F85' }} />

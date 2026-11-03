@@ -197,7 +197,6 @@ function LCFormModal({ open, onClose, onSuccess }) {
                 fullWidth
                 required
                 InputLabelProps={{ shrink: true }}
-                helperText="Date à partir de laquelle la LC peut être utilisée"
                 disabled={isSubmitting}
               />
             </Grid>

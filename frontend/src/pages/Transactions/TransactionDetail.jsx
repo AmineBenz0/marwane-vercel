@@ -34,7 +34,7 @@ import {
   Add as AddIcon,
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
+  Undo as UndoIcon,
 } from '@mui/icons-material';
 import { IconButton, Tooltip } from '@mui/material';
 import { get, post, patch, del } from '../../services/api';
@@ -447,10 +447,10 @@ function TransactionDetail() {
       setDeletePaiementDialogOpen(false);
       setPaiementToDelete(null);
       
-      notification.success('Paiement supprimé avec succès');
+      notification.success('Paiement annulé');
     } catch (err) {
       console.error('Erreur lors de la suppression du paiement:', err);
-      notification.error(err?.message || 'Une erreur est survenue lors de la suppression du paiement');
+      notification.error(err?.message || 'Le paiement n’a pas pu être annulé');
     } finally {
       setDeleteLoading(false);
     }
@@ -718,7 +718,6 @@ function TransactionDetail() {
           </> : <Alert severity="warning" sx={{ mt: 2 }} action={<Button onClick={fetchStatutPaiement}>Réessayer</Button>}>
             Le solde du paiement est indisponible.
           </Alert>}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>Les avances au compte sont prises en compte dans le solde global du contact.</Typography>
           <TransactionCreditPanel transaction={transaction} />
         </CardContent></Card>
       </Box>
@@ -743,7 +742,7 @@ function TransactionDetail() {
                 <Typography fontWeight={700} sx={moneySx}>{formatMontant(paiement.montant)}</Typography>
                 {!inactiveTransaction && !isAllocation && paiement.statut !== 'annule' && <Stack direction="row" spacing={0.5}>
                   {paiement.nature !== 'remboursement' && <Tooltip title="Modifier le paiement"><IconButton aria-label="Modifier le paiement" size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} onClick={() => handleEditPaiement(paiement)}><EditIcon fontSize="small" /></IconButton></Tooltip>}
-                  <Tooltip title={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Supprimer le paiement'}><IconButton aria-label={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Supprimer le paiement'} size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} color="error" onClick={() => handleDeletePaiementClick(paiement)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Annuler le paiement'}><IconButton aria-label={paiement.nature === 'remboursement' ? 'Annuler l’enregistrement du remboursement' : 'Annuler le paiement'} size="small" sx={{ width: { xs: 44, sm: 36 }, height: { xs: 44, sm: 36 } }} color="error" onClick={() => handleDeletePaiementClick(paiement)}><UndoIcon fontSize="small" /></IconButton></Tooltip>
                 </Stack>}
               </Stack>
             </Box>;
@@ -870,10 +869,10 @@ function TransactionDetail() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>{paiementToDelete?.nature === 'remboursement' ? 'Annuler un remboursement erroné' : 'Confirmer la suppression'}</DialogTitle>
+        <DialogTitle>{paiementToDelete?.nature === 'remboursement' ? 'Annuler un remboursement erroné' : 'Annuler ce paiement ?'}</DialogTitle>
         <DialogContent>
           <Typography>
-            {paiementToDelete?.nature === 'remboursement' ? 'Annuler cet enregistrement de remboursement erroné ?' : 'Êtes-vous sûr de vouloir supprimer ce paiement ?'}
+            {paiementToDelete?.nature === 'remboursement' ? 'Annuler cet enregistrement de remboursement erroné ?' : 'Le paiement et ses mouvements de caisse ou de banque seront annulés. Le solde sera recalculé et l’historique conservé.'}
           </Typography>
           {paiementToDelete && (
             <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
@@ -884,20 +883,20 @@ function TransactionDetail() {
                 <strong>Date :</strong> {formatDate(paiementToDelete.date_paiement)}
               </Typography>
               <Typography variant="body2">
-                <strong>Type :</strong> {paiementToDelete.type_paiement}
+                <strong>Mode :</strong> {paymentTypeLabels[paiementToDelete.type_paiement] || paiementToDelete.type_paiement}
               </Typography>
             </Box>
           )}
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            {paiementToDelete?.nature === 'remboursement' ? 'Le crédit sera rétabli et l’historique conservé. Cette action ne représente pas un nouveau mouvement d’argent réel.' : 'Cette action est irréversible. Le montant restant sera recalculé automatiquement.'}
-          </Alert>
+          {paiementToDelete?.nature === 'remboursement' && <Alert severity="warning" sx={{ mt: 2 }}>
+            Le crédit sera rétabli et l’historique conservé.
+          </Alert>}
         </DialogContent>
         <DialogActions>
           <Button 
             onClick={() => setDeletePaiementDialogOpen(false)}
             disabled={deleteLoading}
           >
-            Annuler
+            Retour
           </Button>
           <Button
             onClick={handleConfirmDeletePaiement}
@@ -905,7 +904,7 @@ function TransactionDetail() {
             variant="contained"
             disabled={deleteLoading}
           >
-            {deleteLoading ? 'Suppression...' : 'Supprimer'}
+            {deleteLoading ? 'Annulation...' : paiementToDelete?.nature === 'remboursement' ? 'Annuler le remboursement' : 'Annuler le paiement'}
           </Button>
         </DialogActions>
       </Dialog>

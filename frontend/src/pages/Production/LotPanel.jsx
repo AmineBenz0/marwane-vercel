@@ -354,7 +354,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                 </TextField>
                 <DateField label="Date de mise en place" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
                 <TextField label="Effectif de départ" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
-                <TextField label="Âge à l'arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="L'âge est propre à ce lot." />
+                <TextField label="Âge à l'arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} />
                 <TextField label="Durée prévue (semaines)" required type="number" inputProps={{ min: 1, step: 1 }} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)} />
                 <DateField label="Date de fin prévue (facultatif)" value={values.date_fin_prevue || ''} onChange={(event) => field('date_fin_prevue', event.target.value)} helperText="Cette date est indicative. La clôture reste une action manuelle." />
                 <TextField label="Souche (facultatif)" inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />

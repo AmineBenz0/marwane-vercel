@@ -1268,9 +1268,6 @@ function UnpaidTransactionForm({
               >
                 {isEditing ? 'Modifier la transaction' : 'Nouvelle transaction'}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Choisissez le partenaire et les lignes de vente ou d’achat, puis validez.
-              </Typography>
             </Box>
             <IconButton onClick={handleClose} disabled={loading || uncertainCreation} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
               <CloseIcon />
@@ -1454,7 +1451,7 @@ function UnpaidTransactionForm({
                     size="small"
                     error={!!error}
                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                    helperText={error?.message || 'Date limite pour le paiement'}
+                    helperText={error?.message}
                     disabled={loading || uncertainCreation}
                     margin="dense"
                     variant="outlined"
@@ -1588,7 +1585,6 @@ function UnpaidTransactionForm({
                     <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
                     <Box>
                       <Typography variant="subtitle1" fontWeight={800}>Produits</Typography>
-                      <Typography variant="caption" color="text.secondary">Sélectionnez l’origine des œufs pour une vente ou les produits pour un achat.</Typography>
                     </Box>
                   </Box>
                   {!isEditing && (

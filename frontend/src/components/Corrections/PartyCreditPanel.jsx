@@ -30,10 +30,10 @@ export default function PartyCreditPanel({ partyType, partyId, partyName, totalA
         <Grid item xs={12} sm={6}><StatCard title={client ? 'Total ventes' : 'Total achats'} value={totalActivity} icon={<ReceiptLongOutlined />} valueFormat="currency" useCompactNotation={false}
           subtitle={totalTransactions === null ? 'Depuis le début' : `Depuis le début · ${totalTransactions} ${totalTransactions === 1 ? 'transaction' : 'transactions'}`} /></Grid>
         <Grid item xs={12} sm={6}><StatCard title={balanceLabel} value={data ? Math.abs(Number(data.balance)) : null} icon={<AccountBalanceWalletOutlined />} valueFormat="currency" color="primary" useCompactNotation={false}
-          subtitle={<><Box component="span" sx={{ display: 'block' }}>{data ? available > 0 ? 'Après règlements et avances au compte' : 'Après les règlements enregistrés' : 'Vérification du solde…'}</Box>
-            {available > 0 && <Button size="small" onClick={onOpen} aria-haspopup="dialog" endIcon={<ChevronRight />} sx={{ display: 'flex', px: 0, py: 0.5, mt: 0.5, minWidth: 0, justifyContent: 'flex-start', textAlign: 'left', fontWeight: 500, fontSize: '0.75rem' }}>
+          subtitle={!data ? 'Vérification du solde…' : available > 0 ?
+            <Button size="small" onClick={onOpen} aria-haspopup="dialog" endIcon={<ChevronRight />} sx={{ display: 'flex', px: 0, py: 0.5, mt: 0.5, minWidth: 0, justifyContent: 'flex-start', textAlign: 'left', fontWeight: 500, fontSize: '0.75rem' }}>
               Avances au compte : {formatMontant(available, { useCompactNotation: false, minimumFractionDigits: 2 })}
-            </Button>}</>} /></Grid>
+            </Button> : undefined} /></Grid>
       </Grid>
       {error && !open && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={retry}>Réessayer</Button>}>{error}</Alert>}
     </Box>}

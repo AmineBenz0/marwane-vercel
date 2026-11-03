@@ -94,7 +94,7 @@ it('keeps canceled sale payments visible as read-only history', async () => {
   expect(await screen.findByText(/Annulé/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Ajouter un paiement' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Modifier le paiement' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Supprimer le paiement' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Annuler le paiement' })).not.toBeInTheDocument();
 });
 
 it('explains unavailable completion and keeps payment separate from stock', async () => {

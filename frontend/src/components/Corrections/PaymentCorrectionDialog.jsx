@@ -58,7 +58,6 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
     <DialogTitle id="payment-correction-title">Modifier le paiement n° {payment.id_paiement}</DialogTitle>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
-        {!financial && !cheque && <Alert severity="info">Les notes peuvent être corrigées ici. Les changements financiers de ce paiement nécessitent son action dédiée.</Alert>}
         {(error || flow.error) && <Alert severity="error" role="alert">{error || flow.error}</Alert>}
         <DateField label="Date du paiement" value={values.date_paiement} onChange={update('date_paiement')} disabled={!(financial || cheque) || flow.busy} fullWidth required />
         {cheque && <>

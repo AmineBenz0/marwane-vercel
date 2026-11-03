@@ -277,9 +277,6 @@ function ProduitsList() {
           >
             Produits
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Chaque produit est vendu à un client ou acheté chez un fournisseur.
-          </Typography>
         </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>

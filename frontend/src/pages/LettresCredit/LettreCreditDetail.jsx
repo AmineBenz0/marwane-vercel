@@ -138,9 +138,6 @@ function LettreCreditDetail() {
                 <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
                   {lc.detenteur_nom || '-'}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                  Cette LC reste disponible jusqu'à son versement en banque ou son utilisation pour payer un fournisseur.
-                </Typography>
               </Box>
             </CardContent>
           </Card>

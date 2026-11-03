@@ -272,9 +272,6 @@ function Caisse() {
           <Typography variant="h4" component="h1" fontWeight={900}>
             Caisse
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Voir l'argent disponible maintenant, sans répéter les détails déjà présents dans transactions, LC ou comptes bancaires.
-          </Typography>
         </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
@@ -306,16 +303,15 @@ function Caisse() {
       >
         <MainBalanceCard value={stats.totalDisponible} />
         <SmallMoneyCard
-          label="Cash en caisse"
+          label="Espèces en caisse"
           value={stats.cashEnCaisse}
-          helper="Paiements réellement encaissés, hors LC."
           tone="success"
           icon={<WalletIcon />}
         />
         <SmallMoneyCard
           label="LC disponibles"
           value={stats.lcDisponibles}
-          helper={`${stats.lcCount} LC comptée(s) dans la caisse.`}
+          helper={`${stats.lcCount} LC`}
           tone="info"
           icon={<LcIcon />}
         />
@@ -335,20 +331,15 @@ function Caisse() {
               <WarningIcon color="warning" />
               <Typography variant="h6" fontWeight={900}>À surveiller</Typography>
             </Stack>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              Résumé court. Les détails restent dans les fiches clients, fournisseurs et transactions.
-            </Typography>
 
             <Stack spacing={1.5}>
               <WatchItem
-                label="À encaisser"
-                helper="Clients qui doivent encore payer."
+                label="À encaisser des clients"
                 value={stats.aEncaisser}
                 color="warning.main"
               />
               <WatchItem
-                label="À payer"
-                helper="Fournisseurs pas encore réglés."
+                label="À payer aux fournisseurs"
                 value={stats.aPayer}
                 color="error.main"
               />
@@ -466,7 +457,7 @@ function MainBalanceCard({ value }) {
     >
       <CardContent sx={{ p: { xs: 2.5, md: 3.25 }, '&:last-child': { pb: { xs: 2.5, md: 3.25 } } }}>
         <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.78)', fontWeight: 900, letterSpacing: 1 }}>
-          Total disponible
+          Total disponible · espèces et LC
         </Typography>
         <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
           <Typography
@@ -493,9 +484,6 @@ function MainBalanceCard({ value }) {
             MAD
           </Typography>
         </Stack>
-        <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, maxWidth: 560 }}>
-          Argent disponible maintenant: cash en caisse + LC disponibles. C'est le chiffre principal à regarder.
-        </Typography>
       </CardContent>
     </Card>
   );
@@ -518,9 +506,9 @@ function SmallMoneyCard({ label, value, helper, icon, tone }) {
             <Typography variant="h4" sx={{ fontWeight: 950, mt: 1, letterSpacing: '-0.05em' }}>
               {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 2 })}
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+            {helper && <Typography color="text.secondary" sx={{ mt: 0.75 }}>
               {helper}
-            </Typography>
+            </Typography>}
           </Box>
           <Box
             sx={{
@@ -542,13 +530,12 @@ function SmallMoneyCard({ label, value, helper, icon, tone }) {
   );
 }
 
-function WatchItem({ label, helper, value, color }) {
+function WatchItem({ label, value, color }) {
   return (
     <Box sx={{ p: 1.75, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: '#fffdfa' }}>
       <Stack direction={{ xs: 'column', sm: 'row', lg: 'column', xl: 'row' }} justifyContent="space-between" spacing={1.25}>
         <Box>
           <Typography fontWeight={900}>{label}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{helper}</Typography>
         </Box>
         <Typography fontWeight={950} color={color} sx={{ whiteSpace: 'nowrap' }}>
           {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 2 })}

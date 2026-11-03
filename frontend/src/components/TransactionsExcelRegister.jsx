@@ -150,7 +150,7 @@ function TransactionsExcelRegister({
   formatMontant,
   onView,
   title = 'Registre type Excel',
-  description = 'Les ventes et achats sont groupés par jour avec un total visible directement dans le tableau.',
+  description = '',
   emptyTitle = 'Aucune transaction trouvée',
   emptyDescription = "Essayez d'élargir la période ou de supprimer certains filtres.",
 }) {

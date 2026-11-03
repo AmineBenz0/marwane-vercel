@@ -1,8 +1,8 @@
 import {
-  Box, Card, CardContent, Tooltip,
+  Box, Card, CardContent,
   Button, Divider, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
-import { HistoryOutlined, LayersOutlined, InfoOutlined } from '@mui/icons-material';
+import { HistoryOutlined, LayersOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import ExpandableDetails from '../../components/ExpandableDetails';
 import { formatShortDate } from '../../utils/dateFormatting';
@@ -10,6 +10,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 
 export function StockSummary({ available, categories = [], reserved, physical, promisedPending = 0, balanceAfterPromises, embedded = false, asOf, onViewReservations }) {
+  const stockAfterOrders = Number(balanceAfterPromises ?? (Number(available || 0) - Number(promisedPending || 0)));
   const sellable = categories.filter(category => !['casse', 'perdu'].includes(category.type_oeuf));
   const content = <Stack spacing={1.5}>
     {asOf && <Typography variant="caption" color="text.secondary">Au {formatShortDate(asOf)}</Typography>}
@@ -25,9 +26,8 @@ export function StockSummary({ available, categories = [], reserved, physical, p
       </Box>
     </Stack>
     {Number(promisedPending) > 0 && <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
-      <Box sx={{ flex: 1, minWidth: 0 }}><Typography fontWeight={700}>Solde après promesses</Typography><Typography variant="caption" color="text.secondary">{Number(balanceAfterPromises ?? (Number(available || 0) - Number(promisedPending || 0))) < 0 ? `Les promesses dépassent le stock disponible de ${number(Math.abs(Number(balanceAfterPromises ?? (Number(available || 0) - Number(promisedPending || 0)))))} œufs : c’est la quantité qu’il reste à produire.` : 'Stock disponible moins les quantités promises encore à fournir.'}</Typography></Box>
-      <Typography fontWeight={800} color={Number(balanceAfterPromises ?? (Number(available || 0) - Number(promisedPending || 0))) < 0 ? 'error.main' : 'text.primary'} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{number(balanceAfterPromises ?? (Number(available || 0) - Number(promisedPending || 0)))} œufs</Typography>
-      <Tooltip title="Ce solde compare le stock disponible aux promesses encore à fournir. Un résultat négatif indique un manque à produire."><InfoOutlined fontSize="small" color="action" /></Tooltip>
+      <Typography fontWeight={700} sx={{ flex: 1, minWidth: 0 }}>{stockAfterOrders < 0 ? 'À produire pour les commandes' : 'Stock après les commandes'}</Typography>
+      <Typography fontWeight={800} color={stockAfterOrders < 0 ? 'error.main' : 'text.primary'} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{number(Math.abs(stockAfterOrders))} œufs</Typography>
     </Stack>}
     <ExpandableDetails label="Détail du stock" icon={<LayersOutlined />} meta={`${sellable.length} produits`} contentSx={{ p: 0 }}>
       {sellable.length > 0 && <Box sx={{ px: { xs: 1, sm: 2 }, py: 1 }}><Table size="small" aria-label="Stock par produit" sx={{ tableLayout: 'fixed', '& th, & td': { px: { xs: 0.75, sm: 1.25 }, py: 1.25, overflowWrap: 'anywhere' }, '& th': { textTransform: 'none', fontSize: '0.75rem' }, '& td:not(:first-of-type)': { fontVariantNumeric: 'tabular-nums' } }}>

@@ -71,7 +71,7 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
         <Typography>Crédit restant après remboursement : <strong>{formatMontant(review.credit_after)}</strong></Typography>
         <Alert severity="info">La vente ou l’achat et les paiements d’origine restent dans l’historique.</Alert>
       </> : <>
-        <Alert severity="info">Enregistrez uniquement un remboursement réellement effectué. Crédit actuel : {formatMontant(credit)}.</Alert>
+        <Typography>Crédit disponible : <strong>{formatMontant(credit)}</strong></Typography>
         <TextField required label="Montant remboursé (MAD)" type="number" value={values.montant} onChange={update('montant')}
           disabled={busy} inputProps={{ min: '0.01', max: credit, step: '0.01' }} />
         <DateField required label="Date du remboursement" value={values.date_paiement} onChange={update('date_paiement')} disabled={busy} fullWidth />

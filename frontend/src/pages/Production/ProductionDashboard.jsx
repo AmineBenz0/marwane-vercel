@@ -87,7 +87,6 @@ function ProductionDashboard() {
       <ProductionDeferredNotice savedProduction={savedProduction} />
       <Box sx={{ mb: 3 }}>
         <Typography component="h1" variant="h3" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, letterSpacing: '-0.04em' }}>Production & stock</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1 }}>Le stock disponible, la collecte et les saisies de vos bâtiments.</Typography>
       </Box>
       <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
         {stockLoading ? <Box sx={{ p: 3 }}><CircularProgress size={24} aria-label="Chargement du stock actuel" /></Box>

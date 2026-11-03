@@ -1,7 +1,6 @@
 import DateField from '../../utils/DateField';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -305,9 +304,6 @@ function ChargesList() {
           <Typography variant="h4" component="h1" fontWeight={900}>
             Dépenses
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Enregistrer les sorties hors achats fournisseurs: loyer, salaire, électricité, réparation, taxes ou divers.
-          </Typography>
         </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
@@ -338,8 +334,8 @@ function ChargesList() {
         }}
       >
         <SummaryCard label="Total du mois" value={formatMontant(stats.totalMonth, { maximumFractionDigits: 0 })} helper={`${stats.countMonth} dépense(s)`} tone="error" />
-        <SummaryCard label="Aujourd'hui" value={formatMontant(stats.totalToday, { maximumFractionDigits: 0 })} helper="Sorties enregistrées" tone="warning" />
-        <SummaryCard label="Plus grosse catégorie" value={stats.biggestCategory} helper="Sur le mois" tone="primary" />
+        <SummaryCard label="Aujourd'hui" value={formatMontant(stats.totalToday, { maximumFractionDigits: 0 })} tone="warning" />
+        <SummaryCard label="Principale catégorie du mois" value={stats.biggestCategory} tone="primary" />
         <SummaryCard label="Payé depuis" value={`${stats.cashCount} caisse`} helper={`${stats.bankCount} banque(s)`} tone="success" />
       </Box>
 
@@ -533,9 +529,9 @@ function SummaryCard({ label, value, helper, tone }) {
         <Typography fontWeight={900} fontSize="1.5rem" sx={{ mt: 1, color: `${tone}.main`, lineHeight: 1.15 }}>
           {value}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+        {helper && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
           {helper}
-        </Typography>
+        </Typography>}
       </CardContent>
     </Card>
   );
@@ -598,13 +594,11 @@ function EmptyState({ hasFilters, onCreate }) {
       <Typography variant="h5" fontWeight={900}>
         {hasFilters ? 'Aucune dépense trouvée' : 'Aucune dépense enregistrée'}
       </Typography>
-      <Typography color="text.secondary" sx={{ mt: 1, mb: 3, maxWidth: 560, mx: 'auto' }}>
-        {hasFilters
-          ? 'Essayez une autre période, catégorie ou recherche.'
-          : 'Les dépenses sont les sorties qui ne sont pas des achats fournisseurs. Commencez avec une seule dépense.'}
-      </Typography>
+      {hasFilters && <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 560, mx: 'auto' }}>
+        Essayez une autre période, catégorie ou recherche.
+      </Typography>}
       {!hasFilters && (
-        <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate} sx={{ mt: 3 }}>
           Créer la première dépense
         </Button>
       )}
@@ -694,9 +688,6 @@ function ChargeDialog({
               value={formData.notes}
               onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
             />
-            <Alert severity="info">
-              La dépense sera automatiquement ajoutée comme sortie dans la caisse ou le compte bancaire choisi.
-            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>

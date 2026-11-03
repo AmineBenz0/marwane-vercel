@@ -972,9 +972,8 @@ function TransactionsList() {
       <Grid container spacing={2} sx={{ mb: 2.5 }}>
         <Grid item xs={12} sm={6} lg={3}>
           <TransactionMetric
-            label="Toutes les opérations"
+            label="Opérations"
             value={transactionSummary.total}
-            helper="Dans le résultat actuel"
             loading={loading}
             icon={<ReceiptLongIcon />}
             color="#315F85"
@@ -1099,9 +1098,9 @@ function TransactionMetric({ label, value, helper, icon, color, loading = false 
             <Typography sx={{ mt: 0.5, fontWeight: 900, fontSize: '1.5rem', letterSpacing: 0 }}>
               {loading ? 'Chargement…' : value}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {loading ? 'Chargement des données…' : helper}
-            </Typography>
+            {!loading && helper && <Typography variant="caption" color="text.secondary">
+              {helper}
+            </Typography>}
           </Box>
           <Box
             sx={{

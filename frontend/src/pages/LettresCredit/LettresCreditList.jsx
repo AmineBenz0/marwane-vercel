@@ -43,7 +43,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import LCFormModal from './LCFormModal';
 
 const FILTERS = [
-  { value: 'disponibles', label: 'Disponibles' },
+  { value: 'disponibles', label: 'Non utilisées' },
   { value: 'utilisees', label: 'Utilisées' },
   { value: 'toutes', label: 'Toutes' },
 ];
@@ -257,9 +257,6 @@ function LettresCreditList() {
           <Typography variant="h4" component="h1" sx={{ fontWeight: 900, letterSpacing: '-0.04em' }}>
             Lettres de crédit
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 720, lineHeight: 1.6 }}>
-            Les LC disponibles sont comptées dans la caisse jusqu'à leur versement en banque ou leur utilisation pour payer un fournisseur.
-          </Typography>
         </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
@@ -293,9 +290,9 @@ function LettresCreditList() {
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <SummaryCard
-            title="LC disponibles"
+            title="LC non utilisées"
             value={stats.activeCount}
-            helper={stats.futureCount > 0 ? `${stats.futureCount} à venir` : 'Prêtes à suivre'}
+            helper={stats.futureCount > 0 ? `${stats.futureCount} à venir` : ''}
             tone="info"
             icon={<BankIcon />}
           />
@@ -374,12 +371,9 @@ function LettresCreditList() {
                 Registre des LC
               </Typography>
               <Typography color="text.secondary">
-                {filteredLcs.length} résultat(s), avec le montant visible sur chaque LC.
+                {filteredLcs.length} LC
               </Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 360 }}>
-              Une LC active reste dans la caisse. Dès qu'elle est versée ou utilisée, elle passe en utilisée.
-            </Typography>
           </Stack>
         </Box>
 
@@ -493,9 +487,9 @@ function SummaryCard({ title, value, helper, icon, tone }) {
             <Typography variant="h4" sx={{ fontWeight: 900, mt: 1, letterSpacing: '-0.04em' }}>
               {value}
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            {helper && <Typography color="text.secondary" sx={{ mt: 0.5 }}>
               {helper}
-            </Typography>
+            </Typography>}
           </Box>
           <Box
             sx={{
@@ -581,7 +575,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
 
           {isActiveLc(lc) && !usable && (
             <Alert severity="info" sx={{ borderRadius: 3 }}>
-              Cette LC est enregistrée, mais pas encore utilisable.
+              Utilisable à partir du {formatDate(lc.date_disponibilite)}.
             </Alert>
           )}
 

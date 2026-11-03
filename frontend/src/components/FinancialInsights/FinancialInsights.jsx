@@ -123,8 +123,7 @@ function FinancialInsights({
   };
 
   return (
-    <ExpandableDetails label="Santé financière" icon={<SpeedIcon />}
-      description="Paiement, retards et rythme d'activité"
+    <ExpandableDetails label="Règlements et activité" icon={<SpeedIcon />}
       expanded={expanded} onChange={(_, next) => setExpanded(next)}
       sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}
       meta={!expanded ? <Box>

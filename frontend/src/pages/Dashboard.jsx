@@ -277,9 +277,6 @@ function Dashboard() {
         >
           Accueil quotidien
         </Typography>
-        <Typography sx={{ maxWidth: 760, color: '#69736D', lineHeight: 1.55 }}>
-          Les priorit&eacute;s du jour, la production et les actions rapides au m&ecirc;me endroit.
-        </Typography>
       </Stack>
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -298,9 +295,6 @@ function Dashboard() {
                 <Box>
                   <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.45rem' }}>
                     &Agrave; traiter maintenant
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Les points importants avant de continuer la journ&eacute;e.
                   </Typography>
                 </Box>
                 <WarningIcon sx={{ color: '#A96522' }} />
@@ -371,9 +365,6 @@ function Dashboard() {
                   <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.45rem' }}>
                     Production aujourd&apos;hui
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    R&eacute;sum&eacute; de la collecte du jour.
-                  </Typography>
                 </Box>
                 <FactoryIcon sx={{ color: '#A96522' }} />
               </Stack>
@@ -427,25 +418,22 @@ function Dashboard() {
           <MetricCard
             label="Transactions du mois"
             value={formatSimpleNumber(nbTransactionsMois)}
-            helper="Opérations enregistrées"
             icon={<ReceiptIcon />}
             color="#315F85"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
-            label="Ventes"
+            label="Ventes du mois"
             value={formatMontant(totalVentes, { useCompactNotation: false })}
-            helper="Total client ce mois"
             icon={<TrendingUpIcon />}
             color="#1D6F50"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
-            label="Achats"
+            label="Achats du mois"
             value={formatMontant(totalAchats, { useCompactNotation: false })}
-            helper="Total fournisseur ce mois"
             icon={<TrendingDownIcon />}
             color="#A84435"
           />
@@ -463,9 +451,6 @@ function Dashboard() {
             <Box>
               <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.25rem' }}>
                 Actions rapides
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Les op&eacute;rations les plus utilis&eacute;es.
               </Typography>
             </Box>
             <Box
@@ -548,9 +533,6 @@ function Dashboard() {
                   <Typography component="h2" sx={{ fontWeight: 800, fontSize: '1.35rem' }}>
                     Activit&eacute; des 30 derniers jours
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Volume et montant des transactions r&eacute;centes.
-                  </Typography>
                 </Box>
                 <Button variant="outlined" onClick={() => navigate('/transactions')}>
                   Voir transactions
@@ -610,9 +592,6 @@ function Dashboard() {
                 <Box>
                   <Typography component="h2" sx={{ fontWeight: 800, fontSize: '1.35rem' }}>
                     Derni&egrave;res op&eacute;rations
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Les transactions les plus r&eacute;centes.
                   </Typography>
                 </Box>
                 <TaskIcon sx={{ color: '#315F85' }} />
@@ -692,9 +671,9 @@ function MetricCard({ label, value, helper, icon, color }) {
             >
               {value}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+            {helper && <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
               {helper}
-            </Typography>
+            </Typography>}
           </Box>
           <Box
             sx={{

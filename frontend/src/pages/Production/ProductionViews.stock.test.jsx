@@ -16,9 +16,8 @@ it('shows free and reserved stock, keeps the combined balance in details, and li
   expect(screen.getByRole('table', { name: 'Stock par produit' })).toBeVisible();
 });
 
-it('explains a negative balance after outstanding promises', () => {
+it('shows the outstanding production need as a positive quantity', () => {
   render(<StockSummary available={100} reserved={300} physical={400} promisedPending={150} balanceAfterPromises={-50} />);
-  expect(screen.getByText('Solde après promesses')).toBeVisible();
-  expect(screen.getByText('-50 œufs')).toBeVisible();
-  expect(screen.getByText(/c’est la quantité qu’il reste à produire/i)).toBeVisible();
+  expect(screen.getByText('À produire pour les commandes')).toBeVisible();
+  expect(screen.getByText('50 œufs')).toBeVisible();
 });
