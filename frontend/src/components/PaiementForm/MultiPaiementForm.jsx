@@ -205,8 +205,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         select
                         size="small"
                         fullWidth
-                        error={!!errors?.paiements?.[index]?.type_paiement || !!errors?.paiements?.[index]?.id_lc}
-                        helperText={errors?.paiements?.[index]?.id_lc?.message}
+                        error={!!errors?.paiements?.[index]?.type_paiement}
                       >
                         {TYPES_PAIEMENT.map(t => (
                           <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
@@ -237,7 +236,26 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                       )}
                     </TableCell>
                     <TableCell>
+                      {type === 'lc' ? <>
+                      <input type="hidden" {...register(`paiements.${index}.montant`, { valueAsNumber: true, validate: value => Number.isFinite(value) && value > 0 || 'Le montant doit être supérieur à 0' })} />
                       <TextField
+                        {...lcRegistration}
+                        select
+                        value={watch(`paiements.${index}.id_lc`) || ''}
+                        onChange={(event) => handleLcChange(index, event.target.value)}
+                        size="small"
+                        fullWidth
+                        SelectProps={{ displayEmpty: true, inputProps: { 'aria-label': `Lettre de crédit du paiement ${index + 1}` }, renderValue: value => {
+                          const selected = availableLcs.find(lc => Number(lc.id_lc) === Number(value));
+                          return selected ? `${selected.numero_reference} (${formatMontant(selected.montant)})` : 'Sélectionnez une LC';
+                        } }}
+                        disabled={loadingLcs}
+                        error={!!errors?.paiements?.[index]?.id_lc}
+                        helperText={errors?.paiements?.[index]?.id_lc?.message || (!loadingLcs && availableLcs.length === 0 ? 'Aucune LC disponible pour ce partenaire' : '')}
+                      >
+                        {availableLcs.map(lc => <MenuItem key={lc.id_lc} value={lc.id_lc}>{lc.numero_reference} ({formatMontant(lc.montant)})</MenuItem>)}
+                      </TextField>
+                      </> : <TextField
                         {...register(`paiements.${index}.montant`, {
                           valueAsNumber: true,
                           required: 'Le montant est requis',
@@ -246,12 +264,10 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         type="number"
                         size="small"
                         fullWidth
-                        InputProps={{ readOnly: type === 'lc' }}
-                        placeholder={type === 'lc' ? 'Sélectionnez une LC' : undefined}
                         inputProps={{ step: '0.01', min: '0.01', 'aria-label': `Montant du paiement ${index + 1}` }}
                         error={!!errors?.paiements?.[index]?.montant}
                         helperText={errors?.paiements?.[index]?.montant?.message}
-                      />
+                      />}
                     </TableCell>
                     <TableCell align="right">
                       <IconButton 
@@ -328,30 +344,6 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                                   size="small"
                                   fullWidth
                                 />
-                              </Grid>
-                            )}
-
-                            {/* Détails LC */}
-                            {type === 'lc' && (
-                              <Grid item xs={12} sm={6}>
-                                <TextField
-                                  {...lcRegistration}
-                                  value={watch(`paiements.${index}.id_lc`) || ''}
-                                  select
-                                  label="Lettre de Crédit"
-                                  size="small"
-                                  fullWidth
-                                  onChange={(e) => handleLcChange(index, e.target.value)}
-                                  error={!!errors?.paiements?.[index]?.id_lc}
-                                  helperText={errors?.paiements?.[index]?.id_lc?.message || (availableLcs.length === 0 && !loadingLcs ? 'Aucune LC disponible pour ce partenaire' : '')}
-                                  disabled={loadingLcs}
-                                >
-                                  {availableLcs.map((l) => (
-                                    <MenuItem key={l.id_lc} value={l.id_lc}>
-                                      {l.numero_reference} ({formatMontant(l.montant)})
-                                    </MenuItem>
-                                  ))}
-                                </TextField>
                               </Grid>
                             )}
 

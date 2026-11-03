@@ -91,31 +91,25 @@ describe('Unpaid transaction payment forms', () => {
     expect(submit.mock.calls[1][0]).toMatchObject({ id_lc: null, montant: 12.5, type_paiement: 'cash' });
   });
 
-  it('synchronizes a preselected LC in a payment row and clears it when switching methods', async () => {
+  it('selects the full LC amount in the payment row and clears it on method changes', async () => {
     const submit = vi.fn();
     render(<BatchForm onSubmit={submit} payments={[{ ...payment, type_paiement: 'lc', id_lc: 7, montant: 1 }]}
       lcs={[lc, { id_lc: 8, numero_reference: 'LC-8', montant: '125.50' }]} />);
-    const amount = screen.getByRole('spinbutton', { name: 'Montant du paiement 1' });
-    await waitFor(() => expect(amount).toHaveValue(100));
-    expect(amount).toHaveAttribute('readonly');
-    fireEvent.click(screen.getByRole('button', { name: 'Développer le paiement 1' }));
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Lettre de Crédit' }));
+    const select = screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' });
+    expect(select).toHaveTextContent('LC-7');
+    fireEvent.mouseDown(select);
     fireEvent.click(await screen.findByRole('option', { name: /LC-8/ }));
-    expect(amount).toHaveValue(125.5);
+    expect(select).toHaveTextContent('LC-8');
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
     await waitFor(() => expect(submit).toHaveBeenCalledOnce());
     expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({ type_paiement: 'lc', id_lc: 8, montant: 125.5 });
     fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
     fireEvent.click(await screen.findByRole('option', { name: 'Espèces' }));
-    expect(amount).not.toHaveAttribute('readonly');
+    const amount = screen.getByRole('spinbutton', { name: 'Montant du paiement 1' });
     fireEvent.change(amount, { target: { value: '30' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
-    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
-    expect(submit.mock.calls[1][0].paiements[0]).toMatchObject({ type_paiement: 'cash', id_lc: null, montant: 30 });
     fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
     fireEvent.click(await screen.findByRole('option', { name: 'Lettre de crédit' }));
-    await waitFor(() => expect(amount).toHaveValue(null));
-    expect(amount).toHaveAttribute('readonly');
+    expect(screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' })).toHaveTextContent('Sélectionnez une LC');
   });
 
   it('keeps bank funding and the chosen account when the supplier payment method changes to cash', async () => {
@@ -160,12 +154,11 @@ describe('Unpaid transaction payment forms', () => {
   it('persists the selected LC and its full amount in the submitted form', async () => {
     const submit = vi.fn();
     render(<BatchForm onSubmit={submit} payments={[{ ...payment, type_paiement: 'lc', id_lc: null }]} />);
-    expect(screen.getByRole('spinbutton', { name: 'Montant du paiement 1' })).toHaveAttribute('readonly');
-    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Montant du paiement 1' })).toHaveValue(null));
-    fireEvent.click(screen.getByRole('button', { name: 'Développer le paiement 1' }));
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Lettre de Crédit' }));
+    const select = screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' });
+    expect(select).toHaveTextContent('Sélectionnez une LC');
+    fireEvent.mouseDown(select);
     fireEvent.click(await screen.findByRole('option', { name: /LC-7/ }));
-    expect(screen.getByRole('spinbutton', { name: 'Montant du paiement 1' })).toHaveValue(100);
+    expect(select).toHaveTextContent('LC-7');
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({ id_lc: 7, montant: 100, type_paiement: 'lc' });
