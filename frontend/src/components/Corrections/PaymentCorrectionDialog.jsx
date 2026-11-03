@@ -74,7 +74,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
         <TextField select label="Mode de paiement" value={values.type_paiement} disabled={!financial || flow.busy} onChange={event => setValues(v => ({ ...v,
           type_paiement: event.target.value, ...(!supplier && event.target.value !== 'virement' ? { id_compte: '' } : {}),
           ...(supplier && !v.source_reglement && event.target.value === 'virement' && v.type_paiement !== 'virement' ? { source_reglement: 'caisse', id_compte: '' } : {}) }))}>
-          {Object.entries(methods).filter(([key]) => !['cheque', 'lc', 'compensation'].includes(key) || key === payment.type_paiement).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}
+          {Object.entries(methods).filter(([key]) => !['cheque', 'lc', 'compensation', 'carte', 'autre'].includes(key) || key === payment.type_paiement).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}
         </TextField>
         {supplier && financial && <TextField select label="Source du règlement" value={values.source_reglement} onChange={event => setValues(v => ({ ...v,
           source_reglement: event.target.value, ...(event.target.value === 'caisse' ? { id_compte: '' } : {}) }))} disabled={flow.busy}>

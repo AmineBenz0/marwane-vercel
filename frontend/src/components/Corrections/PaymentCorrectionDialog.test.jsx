@@ -13,6 +13,22 @@ beforeEach(() => {
     dependency_fingerprint: 'a'.repeat(64), impact: {} }));
 });
 afterEach(cleanup);
+it('offers only active methods when correcting an ordinary payment', async () => {
+  render(<PaymentCorrectionDialog payment={payment} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Mode de paiement' }));
+  expect(await screen.findByRole('option', { name: 'Espèces' })).toBeVisible();
+  expect(screen.getByRole('option', { name: 'Virement' })).toBeVisible();
+  expect(screen.queryByRole('option', { name: 'Carte bancaire' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Autre' })).not.toBeInTheDocument();
+});
+
+it.each(['carte', 'autre'])('preserves the existing %s method when correcting historical notes', async method => {
+  render(<PaymentCorrectionDialog payment={{ ...payment, type_paiement: method }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText('Notes (optionnel)'), { target: { value: 'Précision historique' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
+  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ notes: 'Précision historique' }));
+});
+
 it('previews bank-to-cash funding and explicitly clears the old account', async () => {
   const saved = vi.fn();
   render(<PaymentCorrectionDialog payment={payment} transaction={transaction} onClose={vi.fn()} onSaved={saved} />);

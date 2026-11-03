@@ -33,9 +33,7 @@ const TYPES_PAIEMENT = [
   { value: 'cash', label: 'Espèces' },
   { value: 'cheque', label: 'Chèque' },
   { value: 'virement', label: 'Virement' },
-  { value: 'carte', label: 'Carte bancaire' },
   { value: 'lc', label: 'Lettre de crédit' },
-  { value: 'autre', label: 'Autre' },
 ];
 
 /**

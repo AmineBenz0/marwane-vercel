@@ -25,7 +25,7 @@ const paymentSchema = yup.object().shape({
   type: yup
     .string()
     .required('Le type est requis')
-    .oneOf(['cash', 'cheque', 'virement', 'carte', 'lc', 'autre']),
+    .oneOf(['cash', 'cheque', 'virement', 'lc']),
   numero_cheque: yup.string().nullable(),
   banque: yup.string().nullable(),
   reference: yup.string().nullable(),

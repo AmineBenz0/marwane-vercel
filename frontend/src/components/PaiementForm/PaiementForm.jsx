@@ -4,7 +4,7 @@ import DateField from '../../utils/DateField';
  * 
  * Permet de créer un paiement avec :
  * - Montant et date
- * - Type de paiement (cash, chèque, virement, carte, etc.)
+ * - Type de paiement (espèces, chèque, virement, lettre de crédit)
  * - Informations spécifiques selon le type (chèque, virement)
  * - Validation du montant (ne doit pas dépasser le montant restant)
  */
@@ -29,9 +29,7 @@ const TYPES_PAIEMENT = [
   { value: 'cash', label: '💵 Espèces' },
   { value: 'cheque', label: '💳 Chèque' },
   { value: 'virement', label: '🏦 Virement' },
-  { value: 'carte', label: '💳 Carte bancaire' },
   { value: 'lc', label: '📜 Lettre de Crédit' },
-  { value: 'autre', label: '📄 Autre' },
 ];
 
 /**
@@ -168,8 +166,8 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
             error={!!errors.type_paiement}
             helperText={errors.type_paiement?.message}
           >
-            {(isEditing && defaultValues.type_paiement === 'compensation'
-              ? [...TYPES_PAIEMENT, { value: 'compensation', label: 'Compensation (historique)' }]
+            {(isEditing && ['compensation', 'carte', 'autre'].includes(defaultValues.type_paiement)
+              ? [...TYPES_PAIEMENT, { value: defaultValues.type_paiement, label: `${({ compensation: 'Compensation', carte: 'Carte bancaire', autre: 'Autre' })[defaultValues.type_paiement]} (historique)` }]
               : TYPES_PAIEMENT).map((type) => (
               <MenuItem key={type.value} value={type.value}>
                 {type.label}

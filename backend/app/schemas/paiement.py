@@ -17,7 +17,7 @@ class PaiementBase(BaseModel):
     montant: Decimal = Field(..., gt=0, description="Montant du paiement (doit être > 0)")
     type_paiement: str = Field(
         ...,
-        description="Type de paiement (cash, cheque, virement, carte, compensation, lc, autre)"
+        description="Moyen de paiement ; nouveaux règlements : cash, cheque, virement, lc. Les anciens moyens restent lisibles dans l’historique."
     )
     
     # Informations pour les chèques

@@ -8,6 +8,7 @@ from app.utils.business_date import business_date
 from app.models.credit import AffectationCredit, Avance
 from app.models.paiement import Paiement
 from app.models.caisse import Caisse
+from app.models.transaction import Transaction
 from app.services.financial import contact_balances
 from tests.test_credits import credit_pair, cmd, apply
 from tests.test_correction_contract import correction_sale, correction_transaction
@@ -21,15 +22,45 @@ def actor(client, test_user):
 
 
 @pytest.mark.parametrize('batch', [False, True])
-def test_manual_compensation_is_rejected_without_ledger_changes(client, db_session, credit_pair, actor, batch):
+@pytest.mark.parametrize('method', ['compensation', 'carte', 'autre'])
+def test_retired_payment_method_is_rejected_without_ledger_changes(client, db_session, credit_pair, actor, batch, method):
     target = credit_pair[1]
     payment = {'id_transaction': target.id_transaction, 'montant': '1',
-        'date_paiement': business_date().isoformat(), 'type_paiement': 'compensation'}
+        'date_paiement': business_date().isoformat(), 'type_paiement': method}
     before = (db_session.query(Paiement).count(), db_session.query(Caisse).count())
     path = '/api/v1/paiements/batch' if batch else '/api/v1/paiements'
     response = client.post(path, json={'paiements': [payment]} if batch else payment)
     assert response.status_code == 422, response.text
     assert (db_session.query(Paiement).count(), db_session.query(Caisse).count()) == before
+
+
+@pytest.mark.parametrize('method', ['carte', 'autre'])
+def test_retired_method_cannot_be_created_with_a_transaction(client, db_session, correction_transaction, actor, method):
+    tx = correction_transaction
+    before = (db_session.query(Transaction).count(), db_session.query(Paiement).count(), db_session.query(Caisse).count())
+    response = client.post('/api/v1/transactions/batch-with-payments', json={'items': [{
+        'client_ref': 'retired-method', 'transaction': {'date_transaction': business_date().isoformat(),
+            'id_produit': tx.id_produit, 'id_fournisseur': tx.id_fournisseur, 'quantite': 1, 'prix_unitaire': '1'},
+        'paiements': [{'date_paiement': business_date().isoformat(), 'montant': '1', 'type_paiement': method}]}]})
+    assert response.status_code == 422, response.text
+    assert (db_session.query(Transaction).count(), db_session.query(Paiement).count(), db_session.query(Caisse).count()) == before
+
+
+@pytest.mark.parametrize('method', ['carte', 'autre'])
+def test_retired_method_cannot_be_selected_by_correction_but_history_is_readable(client, db_session, correction_sale, actor, method):
+    tx, payment = correction_sale
+    command = {'operation_id': str(uuid4()), 'reason': 'Correction du moyen de paiement',
+        'target': {'entity_type': 'paiement', 'entity_id': payment.id_paiement, 'expected_version': payment.row_version},
+        'changes': {'type_paiement': method}}
+    assert client.post('/api/v1/corrections/preview', json=command).status_code == 422
+    assert client.post('/api/v1/corrections/apply', json={**command, 'dependency_fingerprint': 'a'*64}).status_code == 422
+    db_session.refresh(payment)
+    assert payment.type_paiement == 'cash'
+    payment.type_paiement = method  # existing historical record from before removal
+    db_session.commit()
+    response = client.get(f'/api/v1/paiements/{payment.id_paiement}')
+    assert response.status_code == 200, response.text
+    assert response.json()['type_paiement'] == method
 
 
 def test_retired_settlement_rejects_new_use_but_replays_saved_history(client, db_session, credit_pair, actor):

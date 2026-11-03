@@ -107,9 +107,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
           <TextField label="Mode de paiement" select value={type} onChange={(event) => setType(event.target.value)} fullWidth>
             <MenuItem value="cash">Espèces</MenuItem>
             <MenuItem value="virement">Virement</MenuItem>
-            <MenuItem value="carte">Carte bancaire</MenuItem>
             <MenuItem value="cheque">Chèque</MenuItem>
-            <MenuItem value="autre">Autre</MenuItem>
           </TextField>
           <TextField label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} fullWidth />
         </Stack>

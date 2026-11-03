@@ -454,8 +454,8 @@ def create_transactions_with_payments_batch(
             return replay['items']
     if any(item.montant_avance > 0 for item in batch_data.items):
         raise HTTPException(410, 'Les avances sont comptabilisées dans le solde global du contact, sans affectation aux nouvelles transactions.')
-    if any(p.type_paiement == 'compensation' for item in batch_data.items for p in item.paiements):
-        raise HTTPException(422, 'La compensation ne peut plus être saisie comme un paiement.')
+    if any(p.type_paiement in {'compensation', 'carte', 'autre'} for item in batch_data.items for p in item.paiements):
+        raise HTTPException(422, 'Choisissez un paiement par espèces, chèque, virement ou lettre de crédit.')
     results = []
     try:
         for item in batch_data.items:
