@@ -206,7 +206,6 @@ function ChargesList() {
         montant: charge.montant || '',
         date_charge: charge.date_charge || toDateKey(new Date()),
         categorie: cleanText(charge.categorie || 'Divers'),
-        notes: charge.notes || '',
         payeDepuis: charge.id_compte ? String(charge.id_compte) : 'caisse',
       });
     } else {
@@ -229,7 +228,6 @@ function ChargesList() {
       montant: formData.montant,
       date_charge: formData.date_charge,
       categorie: formData.categorie,
-      notes: formData.notes.trim() || null,
       id_compte: formData.payeDepuis === 'caisse' ? null : Number(formData.payeDepuis),
     };
 
@@ -499,7 +497,6 @@ function getInitialFormData() {
     montant: '',
     date_charge: toDateKey(new Date()),
     categorie: 'Divers',
-    notes: '',
     payeDepuis: 'caisse',
   };
 }
@@ -679,15 +676,6 @@ function ChargeDialog({
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              fullWidth
-              label="Notes"
-              multiline
-              rows={3}
-              placeholder="Optionnel"
-              value={formData.notes}
-              onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
-            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -702,3 +690,4 @@ function ChargeDialog({
 }
 
 export default ChargesList;
+

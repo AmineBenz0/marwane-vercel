@@ -87,7 +87,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     setValues(kind === 'create' ? {
       nom_lot: makeLotName(defaultBuilding?.nom, localToday(), ''), date_debut: localToday(),
       id_batiment: defaultBuilding?.id_batiment || '', effectif_initial: '',
-      age_depart_semaines: 0, souche: '', notes: '', duree_semaines: 100, date_fin_prevue: '',
+      age_depart_semaines: 0, souche: '', duree_semaines: 100, date_fin_prevue: '',
     } : kind === 'edit' ? {
       ...selected, id_batiment: selectedCycle?.id_batiment,
       effectif_initial: selected?.effectif_initial ?? '',
@@ -142,7 +142,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         const data = {
           nom_lot: values.nom_lot.trim(), date_debut: values.date_debut,
           age_depart_semaines: Number(values.age_depart_semaines ?? 0), effectif_initial: count,
-          souche: values.souche || null, notes: values.notes || null,
+          souche: values.souche || null,
           duree_semaines: Number(values.duree_semaines || 100),
           date_fin_prevue: values.date_fin_prevue || null,
           repartitions: [{ id_batiment: Number(values.id_batiment), effectif_initial: count }],
@@ -338,7 +338,6 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                   <TextField label="Effectif de départ" required fullWidth type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
                   <TextField label="Souche (facultatif)" fullWidth inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
                 </Box>
-                <TextField label="Notes (facultatif)" multiline minRows={2} fullWidth value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
                 <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
                     <Typography variant="body2" color="text.secondary">Fin estimée</Typography>
@@ -358,7 +357,6 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                 <TextField label="Durée prévue (semaines)" required type="number" inputProps={{ min: 1, step: 1 }} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)} />
                 <DateField label="Date de fin prévue (facultatif)" value={values.date_fin_prevue || ''} onChange={(event) => field('date_fin_prevue', event.target.value)} helperText="Cette date est indicative. La clôture reste une action manuelle." />
                 <TextField label="Souche (facultatif)" inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
-                <TextField label="Notes (facultatif)" multiline minRows={2} value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
               </>}
             </Stack>
           </DialogContent>
@@ -381,4 +379,5 @@ function Fact({ label, value, detail, color = 'text.primary' }) {
     {detail && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{detail}</Typography>}
   </Box>;
 }
+
 

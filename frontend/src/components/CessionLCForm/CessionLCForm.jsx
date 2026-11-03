@@ -123,18 +123,10 @@ function CessionLCForm({ register, errors, watch, lc }) {
           />
         </Grid>
 
-        <Grid item xs={12}>
-          <TextField
-            {...register('motif')}
-            label="Motif du transfert (Optionnel)"
-            fullWidth
-            multiline
-            rows={2}
-          />
-        </Grid>
       </Grid>
     </Box>
   );
 }
 
 export default CessionLCForm;
+

@@ -315,18 +315,6 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
           </Grid>
         </Collapse>
 
-        {/* Notes */}
-        <Grid item xs={12}>
-          <TextField
-            {...register('notes')}
-            label="Notes (optionnel)"
-            fullWidth
-            multiline
-            rows={3}
-            error={!!errors.notes}
-            helperText={errors.notes?.message || 'Ajoutez des notes ou commentaires'}
-          />
-        </Grid>
       </Grid>
     </Box>
   );

@@ -6,7 +6,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useCreditFlow from './useCreditFlow';
 
-const metadataLabels = { numero_reference: 'Référence LC', numero_serie: 'Numéro de série', banque_emettrice: 'Banque émettrice' };
+const metadataLabels = { numero_reference: 'Référence LC', banque_emettrice: 'Banque émettrice' };
 
 export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, onClose, onSaved }) {
   const [lc] = useState(sourceLc);
@@ -17,9 +17,9 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const [loadError, setLoadError] = useState('');
   const [reload, setReload] = useState(0);
   const [values, setValues] = useState({ montant: String(lc.montant), date_emission: lc.date_emission,
-    numero_reference: lc.numero_reference || '', numero_serie: lc.numero_serie || '', banque_emettrice: lc.banque_emettrice || '',
-    date_disponibilite: lc.date_disponibilite, notes: lc.notes || '', date_effet: '', id_compte: '',
-    holder: `${lc.type_detenteur}:${lc.id_client || lc.id_fournisseur}`, reason: '' });
+    numero_reference: lc.numero_reference || '', banque_emettrice: lc.banque_emettrice || '',
+    date_disponibilite: lc.date_disponibilite, date_effet: '', id_compte: '',
+    holder: `${lc.type_detenteur}:${lc.id_client || lc.id_fournisseur}` });
   const flow = useCreditFlow(onSaved, '/lettres-credit/corrections');
   useEffect(() => {
     let active = true;
@@ -38,8 +38,8 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
     event.preventDefault();
     const changes = {};
     if (!cancelUsage) {
-      for (const field of [...Object.keys(metadataLabels), 'montant', 'date_emission', 'date_disponibilite', 'notes']) {
-        const value = ['notes', 'numero_serie', 'banque_emettrice'].includes(field) ? values[field] || null : values[field];
+      for (const field of [...Object.keys(metadataLabels), 'montant', 'date_emission', 'date_disponibilite']) {
+        const value = field === 'banque_emettrice' ? values[field] || null : values[field];
         if (field === 'montant' ? Number(value) !== Number(lc[field]) : value !== (lc[field] ?? null)) changes[field] = value;
       }
       if (context.date_effet && values.date_effet !== context.date_effet) changes.date_effet = values.date_effet;
@@ -50,13 +50,14 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
         changes.id_fournisseur = kind === 'fournisseur' ? Number(id) : null;
       }
     }
-    flow.prepare({ id_lc: lc.id_lc, expected_version: lc.version_utilisation, action: cancelUsage ? 'cancel_usage' : 'correct', reason: values.reason, changes });
+    flow.prepare({ id_lc: lc.id_lc, expected_version: lc.version_utilisation, action: cancelUsage ? 'cancel_usage' : 'correct',
+      reason: cancelUsage ? 'Annulation de l’utilisation de la LC' : 'Modification des informations de la LC', changes });
   };
   const preview = flow.review;
   const accountLabel = id => accounts.find(a => a.id_compte === id)?.nom_banque || `Compte n° ${id}`;
   return <Dialog open maxWidth="sm" fullWidth aria-labelledby="lc-correction-title"
     onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', onSubmit: submit }}>
-    <DialogTitle id="lc-correction-title">{cancelUsage ? 'Annuler l’utilisation de la LC' : 'Corriger la lettre de crédit'}</DialogTitle>
+    <DialogTitle id="lc-correction-title">{cancelUsage ? 'Annuler l’utilisation de la LC' : 'Modifier la lettre de crédit'}</DialogTitle>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {(loadError || flow.error) && <Alert severity="error">{loadError || flow.error}</Alert>}
       {loadError && <Button onClick={() => setReload(v => v + 1)}>Réessayer le chargement</Button>}
@@ -71,7 +72,6 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
         </Typography>)}
         {preview.date_effet && <Typography>Date de l’utilisation : {preview.usage_before?.date_effet ? `${formatShortDate(preview.usage_before.date_effet)} → ` : ''}{formatShortDate(preview.date_effet)}</Typography>}
         {(preview.before.id_client !== preview.after.id_client || preview.before.id_fournisseur !== preview.after.id_fournisseur) && <Typography>Détenteur : {preview.after.id_client ? clients.find(c => c.id_client === preview.after.id_client)?.nom_client : suppliers.find(s => s.id_fournisseur === preview.after.id_fournisseur)?.nom_fournisseur}</Typography>}
-        {preview.before.notes !== preview.after.notes && <Typography sx={{ overflowWrap: 'anywhere' }}>Notes : {preview.after.notes || 'Non renseigné'}</Typography>}
         {preview.id_compte && <Typography>Compte après correction : {accountLabel(preview.id_compte)}</Typography>}
         {preview.bank_balances?.map(a => <Typography key={a.id_compte}>Solde de {accountLabel(a.id_compte)} : {formatMontant(a.before)} → <strong>{formatMontant(a.after)}</strong></Typography>)}
         {preview.remaining_after !== null && <Typography>{Number(preview.remaining_after) < 0 ? `Crédit ${preview.balance_side || (lc.id_client ? 'client' : 'fournisseur')} après correction : ` : 'Reste à régler après : '}<strong>{formatMontant(Math.abs(Number(preview.remaining_after)))}</strong></Typography>}
@@ -79,7 +79,6 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
           ? 'L’utilisation et ses mouvements seront annulés ensemble. La LC redeviendra disponible et l’historique sera conservé.'
           : preview.usage === 'cession' ? 'La cession sera remplacée en conservant son historique. Aucun argent supplémentaire en caisse.'
             : preview.money_effect === 'replaced' ? 'Le mouvement lié sera annulé et remplacé une seule fois, avec les nouveaux montant, date et compte.' : 'Aucun changement de caisse ou de banque.'}</Alert>
-        <Typography variant="body2">{values.reason}</Typography>
       </> : context && <>
         {!cancelUsage && <>
           {Object.entries(metadataLabels).map(([field, label]) => <TextField key={field} label={label} value={values[field]} onChange={update(field)}
@@ -95,17 +94,15 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
             {clients.map(c => <MenuItem key={`client:${c.id_client}`} value={`client:${c.id_client}`}>{c.nom_client}</MenuItem>)}
             {context.usage === 'cession' && suppliers.map(s => <MenuItem key={`fournisseur:${s.id_fournisseur}`} value={`fournisseur:${s.id_fournisseur}`}>{s.nom_fournisseur}</MenuItem>)}
           </TextField>}
-          <TextField label="Notes" multiline rows={2} value={values.notes} onChange={update('notes')} inputProps={{ maxLength: 4000 }} disabled={flow.busy} />
         </>}
-        <TextField label="Motif de la correction" required value={values.reason} onChange={update('reason')} inputProps={{ minLength: 3, maxLength: 1000 }} multiline rows={2} disabled={flow.busy} />
       </>}
     </Stack></DialogContent>
     <DialogActions>
       <Button onClick={onClose} disabled={flow.busy || flow.uncertain}>Annuler</Button>
       {preview ? <>
         {!flow.uncertain && <Button onClick={flow.back} disabled={flow.busy}>Revenir aux champs</Button>}
-        <Button variant="contained" onClick={flow.confirm} disabled={flow.busy || flow.stale}>{flow.uncertain ? 'Vérifier l’enregistrement' : 'Confirmer la correction'}</Button>
-      </> : <Button type="submit" variant="contained" disabled={!context || Boolean(loadError) || flow.busy}>Vérifier les modifications</Button>}
+        <Button variant="contained" onClick={flow.confirm} disabled={flow.busy || flow.stale}>{flow.uncertain ? 'Vérifier l’enregistrement' : 'Enregistrer les modifications'}</Button>
+      </> : <Button type="submit" variant="contained" disabled={!context || Boolean(loadError) || flow.busy}>Enregistrer</Button>}
     </DialogActions>
   </Dialog>;
 }

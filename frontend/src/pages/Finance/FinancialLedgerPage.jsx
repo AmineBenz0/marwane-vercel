@@ -49,7 +49,6 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
   const [amount, setAmount] = useState(Number(item?.montant_restant || 0).toFixed(2));
   const [type, setType] = useState('cash');
   const [date, setDate] = useState(getBusinessDateInput);
-  const [notes, setNotes] = useState('');
   const [idempotencyKey, setIdempotencyKey] = useState(createIdempotencyKey);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -59,7 +58,6 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
       setAmount(Number(item?.montant_restant || 0).toFixed(2));
       setType('cash');
       setDate(getBusinessDateInput());
-      setNotes('');
       setIdempotencyKey(createIdempotencyKey());
       setError(null);
     }
@@ -81,7 +79,6 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
         date_paiement: date,
         montant: Number(amount),
         type_paiement: type,
-        notes: notes || null,
         cle_idempotence: idempotencyKey,
       });
       onSaved();
@@ -109,7 +106,6 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
             <MenuItem value="virement">Virement</MenuItem>
             <MenuItem value="cheque">Chèque</MenuItem>
           </TextField>
-          <TextField label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} fullWidth />
         </Stack>
       </DialogContent>
       <DialogActions>

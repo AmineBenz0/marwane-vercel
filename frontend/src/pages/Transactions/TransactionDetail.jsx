@@ -109,7 +109,6 @@ function TransactionDetail() {
   const [newDeliveryDate, setNewDeliveryDate] = useState('');
   const [cancelRemainderDialogOpen, setCancelRemainderDialogOpen] = useState(false);
   const [cancelTransactionDialogOpen, setCancelTransactionDialogOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState('Annulation demandée depuis le détail de la vente');
 
   /**
    * Crée des maps de lookup pour produits, clients et fournisseurs.
@@ -271,7 +270,7 @@ function TransactionDetail() {
   const submitCancelTransaction = async () => {
     setPromiseActionLoading(true);
     try {
-      await del(transaction.est_promesse ? `/transactions/${id}?raison=${encodeURIComponent(cancelReason)}` : `/transactions/${id}`);
+      await del(transaction.est_promesse ? `/transactions/${id}?raison=${encodeURIComponent('Annulation de la vente à terme')}` : `/transactions/${id}`);
       setCancelTransactionDialogOpen(false);
       await Promise.all([fetchTransaction(), refreshPaiements()]);
       notification.success(transaction.est_promesse ? 'La vente et ses paiements ont été annulés et conservés dans l’historique.' : 'La transaction a été retirée du registre actif.');
@@ -798,9 +797,8 @@ function TransactionDetail() {
         <DialogTitle>{transaction.est_promesse ? 'Annuler la vente entière ?' : 'Retirer cette transaction du registre actif ?'}</DialogTitle>
         <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
           <Alert severity="warning">{transaction.est_promesse ? <>La vente sera retirée du registre actif. Ses paiements seront annulés et conservés dans l’historique. Une réactivation ultérieure ne réactive pas les paiements.</> : <>Elle restera consultable dans l’historique et pourra être réactivée plus tard.</>}</Alert>
-          {transaction.est_promesse && <TextField label="Motif" value={cancelReason} onChange={event => setCancelReason(event.target.value)} required inputProps={{ maxLength: 1000 }} />}
         </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setCancelTransactionDialogOpen(false)}>Retour</Button><Button color="error" variant="contained" onClick={submitCancelTransaction} disabled={promiseActionLoading || (transaction.est_promesse && cancelReason.trim().length < 3)}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</Button></DialogActions>
+        <DialogActions><Button onClick={() => setCancelTransactionDialogOpen(false)}>Retour</Button><Button color="error" variant="contained" onClick={submitCancelTransaction} disabled={promiseActionLoading}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</Button></DialogActions>
       </Dialog>
 
       {/* Modal d'ajout/édition de paiement */}

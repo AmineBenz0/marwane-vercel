@@ -215,7 +215,6 @@ function CompteBancaireList() {
       if (movementForm.source === 'lc' && movementForm.id_lc) {
         await lettreCreditService.verserBanque(movementForm.id_lc, {
           id_compte: Number(movementForm.id_compte),
-          notes: movementForm.notes.trim() || null,
         });
       } else {
         await compteBancaireService.createMouvement(movementForm.id_compte, {
@@ -223,7 +222,6 @@ function CompteBancaireList() {
           source: movementForm.source,
           montant: parseAmount(movementForm.montant),
           reference: movementForm.reference.trim() || null,
-          notes: movementForm.notes.trim() || null,
         });
       }
       notification.success('Mouvement bancaire enregistré');
@@ -883,14 +881,6 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
               )}
             </Box>
 
-            <TextField
-              label="Note simple"
-              fullWidth
-              multiline
-              minRows={2}
-              value={form.notes}
-              onChange={(event) => setForm({ ...form, notes: event.target.value })}
-            />
           </Stack>
         </Box>
       </DialogContent>

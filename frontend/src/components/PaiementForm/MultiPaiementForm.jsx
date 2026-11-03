@@ -347,17 +347,6 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                               </Grid>
                             )}
 
-                            {/* Notes */}
-                            <Grid item xs={12}>
-                              <TextField
-                                {...register(`paiements.${index}.notes`)}
-                                label="Notes"
-                                size="small"
-                                fullWidth
-                                multiline
-                                rows={1}
-                              />
-                            </Grid>
                           </Grid>
                         </Box>
                       </Collapse>

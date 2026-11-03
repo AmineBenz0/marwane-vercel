@@ -8,14 +8,13 @@ import { get } from '../../services/api';
 import useCreditFlow from './useCreditFlow';
 
 const titles = { advance: 'Enregistrer une avance', return_advance: 'Restituer une avance',
-  cancel_allocation: 'Annuler une affectation erronée', cancel_advance: 'Annuler un enregistrement erroné' };
+  cancel_allocation: 'Annuler l’affectation', cancel_advance: 'Annuler l’avance' };
 
 export default function CreditOperationDialog({ action, partyType, partyId, advance, allocation, onClose, onSaved }) {
   const cancel = action.startsWith('cancel_');
   const money = ['advance', 'return_advance'].includes(action);
   const [values, setValues] = useState(() => ({ montant: action === 'return_advance' ? String(advance.available) : '',
-    date_effet: getBusinessDateInput(), type_paiement: 'cash', id_compte: '',
-    reason: cancel ? 'Annulation d’un enregistrement erroné' : '' }));
+    date_effet: getBusinessDateInput(), type_paiement: 'cash', id_compte: '' }));
   const [accounts, setAccounts] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +32,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
   const update = key => event => setValues(v => ({ ...v, [key]: event.target.value }));
   const submit = event => {
     event.preventDefault();
-    let payload = { action, reason: values.reason.trim() || titles[action] };
+    let payload = { action, reason: titles[action] };
     if (!cancel) payload = { ...payload, montant: values.montant, date_effet: values.date_effet };
     if (money) payload = { ...payload, type_paiement: values.type_paiement, id_compte: values.type_paiement === 'virement' ? Number(values.id_compte) : null };
     if (action === 'advance') payload[partyType === 'client' ? 'id_client' : 'id_fournisseur'] = Number(partyId);
@@ -67,7 +66,6 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
             <MenuItem value="">Choisir un compte</MenuItem>{accounts.map(a => <MenuItem key={a.id_compte} value={a.id_compte}>{a.nom_banque} · {a.numero_compte}</MenuItem>)}
           </TextField>}
         </>}
-        <TextField label="Commentaire (optionnel)" value={values.reason} onChange={update('reason')} disabled={flow.busy} multiline rows={2} inputProps={{ minLength: 3, maxLength: 1000 }} />
       </>}
     </Stack></DialogContent>
     <DialogActions>

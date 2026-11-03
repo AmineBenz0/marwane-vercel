@@ -8,7 +8,7 @@ import { getBusinessDateInput } from '../../utils/businessDate';
 import { announceCorrection } from './useCorrectionFlow';
 
 export default function RefundDialog({ transaction, credit, onClose, onSaved }) {
-  const [values, setValues] = useState(() => ({ montant: String(credit), date_paiement: getBusinessDateInput(), type_paiement: 'cash', id_compte: '', reason: '' }));
+  const [values, setValues] = useState(() => ({ montant: String(credit), date_paiement: getBusinessDateInput(), type_paiement: 'cash', id_compte: '' }));
   const [accounts, setAccounts] = useState([]);
   const [accountError, setAccountError] = useState('');
   const [reload, setReload] = useState(0);
@@ -34,6 +34,7 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
     running.current = true; setBusy(true); setError(''); setStale(false);
     try {
       const next = { ...values, operation_id: crypto.randomUUID(), id_transaction: transaction.id_transaction,
+        reason: 'Remboursement enregistré',
         id_compte: values.type_paiement === 'virement' ? Number(values.id_compte) : null };
       const preview = await post('/remboursements/preview', next);
       command.current = { ...next, dependency_fingerprint: preview.dependency_fingerprint };
@@ -85,8 +86,6 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
             {accounts.map(a => <MenuItem key={a.id_compte} value={a.id_compte}>{a.nom_banque} · {a.numero_compte}</MenuItem>)}
           </TextField>
         </>}
-        <TextField required label="Motif du remboursement" value={values.reason} onChange={update('reason')} disabled={busy}
-          multiline rows={2} inputProps={{ minLength: 3, maxLength: 1000 }} />
       </>}
     </Stack></DialogContent>
     <DialogActions>

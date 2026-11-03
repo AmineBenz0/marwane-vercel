@@ -19,7 +19,6 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
   const [sourceError, setSourceError] = useState('');
   const [manual, setManual] = useState(false);
   const [allocations, setAllocations] = useState({});
-  const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const flow = useCorrectionFlow({ entityType: 'transaction', record: transaction, onSaved: onCorrected });
@@ -35,7 +34,7 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
     setTransaction(providedRecord);
     setValues({ ...original(providedRecord), ...initialChanges });
     setAllocations(Object.fromEntries((initialChanges.stock_allocations || providedRecord.repartition_stock || []).map(a => [a.id_production, String(a.quantite)])));
-    setManual(Boolean(initialChanges.stock_allocations)); setError(''); setReason(''); flow.reset();
+    setManual(Boolean(initialChanges.stock_allocations)); setError(''); flow.reset();
     // Drafts reset on opening a record, not on background refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, providedRecord.id_transaction]);
@@ -84,7 +83,7 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
       changes.stock_allocations = Object.entries(allocations).filter(([, amount]) => Number(amount) > 0).map(([id, amount]) => ({ id_production: Number(id), quantite: Number(amount) }));
     }
     if (!Object.keys(changes).length) { setError('Aucune valeur n’a changé.'); return; }
-    await flow.prepare(changes, reason);
+    await flow.prepare(changes);
   };
   const products = refs.produits.filter(row => row.id_produit === transaction.id_produit || row.est_actif !== false
     && (row.usage ? row.usage === (transaction.id_client ? 'vendu' : 'achete') : row[transaction.id_client ? 'pour_clients' : 'pour_fournisseurs'])
@@ -94,7 +93,7 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
     <DialogTitle id="transaction-edit-title">Modifier la transaction n° {transaction.id_transaction}</DialogTitle>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
-        <Alert severity="info">{inactive ? 'Réactivez cette transaction depuis son détail avant de la modifier.' : 'Corrigez les informations enregistrées. Les conséquences sur le paiement et le stock seront présentées avant confirmation.'}</Alert>
+      <Alert severity="info">{inactive ? 'Réactivez cette transaction depuis son détail avant de la modifier.' : 'Les conséquences sur le paiement et le stock seront présentées avant confirmation.'}</Alert>
         {referenceError && <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{referenceError}</Alert>}
         {(error || flow.error) && <Alert severity="error" role="alert">{error || flow.error}</Alert>}
         <DateField label="Date de la transaction" value={values.date_transaction} onChange={update('date_transaction')} disabled={flow.busy || inactive} fullWidth required />
@@ -124,7 +123,6 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
               onChange={event => setAllocations(v => ({ ...v, [row.id_production]: event.target.value }))} helperText={row.disponible === undefined ? 'Origine enregistrée précédemment' : `${row.disponible} œufs proposés · la disponibilité finale sera vérifiée`} />)}
           </>}
         </>}
-        <TextField label="Commentaire (optionnel)" value={reason} onChange={event => setReason(event.target.value)} inputProps={{ maxLength: 1000 }} disabled={flow.busy || inactive} multiline maxRows={3} />
       </>}
     </Stack></DialogContent>
     {!flow.review && <DialogActions><Button onClick={onClose} disabled={flow.busy}>Annuler</Button>

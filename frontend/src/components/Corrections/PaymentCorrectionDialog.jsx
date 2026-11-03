@@ -8,13 +8,12 @@ import { changedValues, methods } from './correctionValues';
 
 const initial = payment => ({ date_paiement: payment.date_paiement?.slice(0, 10) || '', montant: String(payment.montant),
   date_encaissement_effective: payment.date_encaissement_effective?.slice(0, 10) || '', statut_cheque: payment.statut_cheque || '',
-  type_paiement: payment.type_paiement, id_compte: payment.id_compte || '', source_reglement: payment.source_reglement || '', notes: payment.notes || '' });
+  type_paiement: payment.type_paiement, id_compte: payment.id_compte || '', source_reglement: payment.source_reglement || '' });
 export default function PaymentCorrectionDialog({ payment, transaction, initialChanges = {}, onClose, onSaved }) {
   const fundingOriginal = transaction.id_fournisseur ? payment.source_reglement || (payment.type_paiement === 'virement' && payment.id_compte ? 'banque' : 'caisse') : '';
   const [values, setValues] = useState(() => ({ ...initial(payment), source_reglement: fundingOriginal }));
   const [accounts, setAccounts] = useState([]);
   const [accountError, setAccountError] = useState('');
-  const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const flow = useCorrectionFlow({ entityType: 'paiement', record: payment, onSaved });
@@ -25,7 +24,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
   const bank = supplier ? values.source_reglement === 'banque' || !values.source_reglement && values.type_paiement === 'virement' && Boolean(values.id_compte)
     : values.type_paiement === 'virement';
   useEffect(() => {
-    setValues({ ...initial(payment), source_reglement: fundingOriginal, ...initialChanges }); setReason(''); setError(''); flow.reset();
+    setValues({ ...initial(payment), source_reglement: fundingOriginal, ...initialChanges }); setError(''); flow.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payment.id_paiement]);
   useEffect(() => {
@@ -38,7 +37,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
   const update = field => event => setValues(v => ({ ...v, [field]: event.target.value }));
   const submit = async event => {
     event.preventDefault(); setError('');
-    let payload = { notes: values.notes || null };
+    let payload = {};
     if (financial) {
       if (!values.date_paiement || !Number.isFinite(Number(values.montant)) || Number(values.montant) <= 0) { setError('Indiquez une date et un montant positif.'); return; }
       if (bank && !values.id_compte) { setError('Sélectionnez le compte bancaire utilisé.'); return; }
@@ -50,7 +49,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
       ...(values.statut_cheque ? { statut_cheque: values.statut_cheque, date_encaissement_effective: values.statut_cheque === 'encaisse' ? values.date_encaissement_effective || null : null } : {}) };
     const changes = changedValues(payload, payment);
     if (!Object.keys(changes).length) { setError('Aucune valeur n’a changé.'); return; }
-    await flow.prepare(changes, reason);
+    await flow.prepare(changes, 'Modification du paiement');
   };
   const names = { id_compte: Object.fromEntries(accounts.map(row => [row.id_compte, `${row.nom_banque} · ${row.numero_compte}`])) };
   return <Dialog open onClose={() => !flow.busy && !flow.uncertain && onClose()} maxWidth="sm" fullWidth
@@ -68,7 +67,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
           </TextField>
           {values.statut_cheque === 'encaisse' && <DateField required fullWidth label="Date d’encaissement effective" value={values.date_encaissement_effective} onChange={update('date_encaissement_effective')} disabled={flow.busy} />}
         </>}
-        {payment.id_lc && <Button component="a" href={`/lettres-credit/${payment.id_lc}`}>Corriger la lettre de crédit et ses opérations liées</Button>}
+        {payment.id_lc && <Button component="a" href={`/lettres-credit/${payment.id_lc}`}>Modifier la lettre de crédit liée</Button>}
         <TextField label="Montant (MAD)" type="number" value={values.montant} onChange={update('montant')} disabled={!financial || flow.busy} inputProps={{ min: 0.01, step: '0.01' }} required />
         <TextField select label="Mode de paiement" value={values.type_paiement} disabled={!financial || flow.busy} onChange={event => setValues(v => ({ ...v,
           type_paiement: event.target.value, ...(!supplier && event.target.value !== 'virement' ? { id_compte: '' } : {}),
@@ -87,8 +86,6 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
             {accounts.map(row => <MenuItem key={row.id_compte} value={row.id_compte}>{names.id_compte[row.id_compte]}</MenuItem>)}
           </TextField>
         </>}
-        <TextField label="Notes (optionnel)" value={values.notes || ''} onChange={update('notes')} multiline rows={3} inputProps={{ maxLength: 4000 }} disabled={flow.busy} />
-        <TextField label="Commentaire de correction (optionnel)" value={reason} onChange={event => setReason(event.target.value)} inputProps={{ maxLength: 1000 }} disabled={flow.busy} />
       </>}
     </Stack></DialogContent>
     {!flow.review && <DialogActions><Button onClick={onClose} disabled={flow.busy}>Annuler</Button>

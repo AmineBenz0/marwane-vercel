@@ -95,7 +95,7 @@ function LettreCreditDetail() {
           LC: {lc.numero_reference}
         </Typography>
         <LCStatusBadge statut={lc.statut} statutCycle={lc.statut_cycle} estDisponible={lc.est_disponible} />
-        <Button variant="outlined" onClick={() => setCorrection('correct')}>Corriger la LC</Button>
+        <Button variant="outlined" onClick={() => setCorrection('correct')}>Modifier</Button>
         {['transferee', 'deposee'].includes(lc.statut_cycle) && <Button color="error" onClick={() => setCorrection('cancel_usage')}>Annuler l’utilisation</Button>}
       </Stack>
 
@@ -207,7 +207,7 @@ function LettreCreditDetail() {
         )}
       </Grid>
       <Box sx={{ mt: 3 }}>
-        <Typography component="h2" variant="h6">Historique des corrections</Typography>
+        <Typography component="h2" variant="h6">Historique des modifications</Typography>
         {historyError && <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{historyError}</Alert>}
         {history.map(row => <Paper variant="outlined" key={row.operation_id} sx={{ p: 2, mt: 1 }}>
           <Typography>{formatDate(row.recorded_at)} · Utilisateur n° {row.actor_id}</Typography>

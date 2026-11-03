@@ -55,8 +55,10 @@ const formatDate = (value) => {
   return new Date(`${value}T00:00:00`).toLocaleDateString('fr-FR');
 };
 
-const isActiveLc = (lc) => (lc?.statut_cycle ? lc.statut_cycle === 'detenue' : lc?.statut === 'active');
-const isUsedLc = (lc) => ['transferee', 'deposee', 'annulee'].includes(lc?.statut_cycle) || (!lc?.statut_cycle && lc?.statut === 'utilisee');
+const isActiveLc = (lc) => lc?.statut_cycle === 'detenue'
+  || (lc?.statut_cycle === 'a_verifier' ? lc?.statut === 'active' : !lc?.statut_cycle && lc?.statut === 'active');
+const isUsedLc = (lc) => ['transferee', 'deposee', 'annulee'].includes(lc?.statut_cycle)
+  || (lc?.statut_cycle === 'a_verifier' ? lc?.statut === 'utilisee' : !lc?.statut_cycle && lc?.statut === 'utilisee');
 const canUseLc = (lc) => isActiveLc(lc) && Boolean(lc?.est_disponible);
 
 const getLcState = (lc) => {
@@ -67,7 +69,8 @@ const getLcState = (lc) => {
   if (lc?.statut_cycle === 'transferee') return { label: 'Transférée au fournisseur', tone: 'default' };
   if (lc?.statut_cycle === 'deposee') return { label: 'Déposée en banque', tone: 'info' };
   if (lc?.statut_cycle === 'annulee') return { label: 'Annulée', tone: 'error' };
-  if (lc?.statut_cycle === 'a_verifier') return { label: 'À vérifier', tone: 'warning' };
+  if (lc?.statut_cycle === 'a_verifier') return lc.statut === 'active'
+    ? { label: 'Non utilisée', tone: 'default' } : { label: 'Utilisée', tone: 'default' };
 
   if (isActiveLc(lc)) {
     return { label: `Le ${formatDate(lc.date_disponibilite)}`, tone: 'warning' };
@@ -91,7 +94,6 @@ function LettresCreditList() {
   const [activeFilter, setActiveFilter] = useState('disponibles');
   const [actionDialog, setActionDialog] = useState(null);
   const [targetId, setTargetId] = useState('');
-  const [notes, setNotes] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [cancelDialogLc, setCancelDialogLc] = useState(null);
@@ -161,14 +163,12 @@ function LettresCreditList() {
   const openActionDialog = (type, lc) => {
     setActionDialog({ type, lc });
     setTargetId('');
-    setNotes('');
   };
 
   const closeActionDialog = () => {
     if (actionLoading) return;
     setActionDialog(null);
     setTargetId('');
-    setNotes('');
   };
 
   const handleConfirmAction = async () => {
@@ -176,11 +176,9 @@ function LettresCreditList() {
 
     setActionLoading(true);
     try {
-      const payloadNotes = notes.trim() || null;
       if (actionDialog.type === 'bank') {
         await lettreCreditService.verserBanque(actionDialog.lc.id_lc, {
           id_compte: Number(targetId),
-          notes: payloadNotes,
           version_utilisation: actionDialog.lc.version_utilisation,
         });
         notification.success('LC versée en banque');
@@ -188,7 +186,6 @@ function LettresCreditList() {
         await lettreCreditService.payerFournisseur(actionDialog.lc.id_lc, {
           id_fournisseur: Number(targetId),
           date_cession: format(new Date(), 'yyyy-MM-dd'),
-          notes: payloadNotes,
           version_utilisation: actionDialog.lc.version_utilisation,
         });
         notification.success('Fournisseur payé avec la LC');
@@ -416,7 +413,6 @@ function LettresCreditList() {
         targetId={targetId}
         setTargetId={setTargetId}
         notes={notes}
-        setNotes={setNotes}
         loading={actionLoading}
         onClose={closeActionDialog}
         onConfirm={handleConfirmAction}
@@ -711,8 +707,6 @@ function ActionDialog({
   fournisseurs,
   targetId,
   setTargetId,
-  notes,
-  setNotes,
   loading,
   onClose,
   onConfirm,
@@ -768,15 +762,6 @@ function ActionDialog({
               ))}
             </TextField>
 
-            <TextField
-              label="Note optionnelle"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-              placeholder="Ex: dépôt du matin, paiement aliment..."
-            />
           </Stack>
         )}
       </DialogContent>
