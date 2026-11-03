@@ -275,7 +275,7 @@ const LcPaymentSelector = ({ index, paymentIndex, control, watch, setValue, load
           label="Choisir une Lettre de Crédit"
           error={!!error}
           sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-          helperText={error?.message || (lcs.length === 0 && !fetching ? 'Aucune LC disponible pour ce partenaire' : '')}
+          helperText={error?.message || ''}
           disabled={loading || fetching}
           size="small"
           value={field.value || ''}

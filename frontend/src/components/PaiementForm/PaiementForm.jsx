@@ -289,7 +289,7 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
                 value={selectedLcId || ''}
                 fullWidth
                 error={!!errors.id_lc}
-                helperText={errors.id_lc?.message || (availableLcs.length === 0 && !loadingLcs ? 'Aucune LC disponible pour ce partenaire' : '')}
+                helperText={errors.id_lc?.message || ''}
                 disabled={loadingLcs || isEditing}
               >
                 {isEditing && defaultValues.id_lc && (

@@ -251,7 +251,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         } }}
                         disabled={loadingLcs}
                         error={!!errors?.paiements?.[index]?.id_lc}
-                        helperText={errors?.paiements?.[index]?.id_lc?.message || (!loadingLcs && availableLcs.length === 0 ? 'Aucune LC disponible pour ce partenaire' : '')}
+                        helperText={errors?.paiements?.[index]?.id_lc?.message || ''}
                       >
                         {availableLcs.map(lc => <MenuItem key={lc.id_lc} value={lc.id_lc}>{lc.numero_reference} ({formatMontant(lc.montant)})</MenuItem>)}
                       </TextField>
