@@ -46,10 +46,10 @@ describe('ContactCard', () => {
   });
 
   it.each([
-    ['client', '42.50', 'Reste à encaisser'],
-    ['fournisseur', '42.50', 'Reste à payer'],
-    ['client', '-42.50', 'Avance reçue'],
-    ['fournisseur', '-42.50', 'Avance versée'],
+    ['client', '42.50', 'Reste net à encaisser'],
+    ['fournisseur', '42.50', 'Reste net à payer'],
+    ['client', '-42.50', 'Crédit du client'],
+    ['fournisseur', '-42.50', 'Crédit chez le fournisseur'],
   ])('labels the %s net balance %s correctly', (type, balance, label) => {
     renderCard({ type, balance });
     expect(screen.getByText(label)).toBeVisible();
@@ -63,3 +63,4 @@ describe('ContactCard', () => {
     expect(screen.getByText(formatMontantComplet(9999999999999.99), { normalizer: (value) => value })).toBeVisible();
   });
 });
+

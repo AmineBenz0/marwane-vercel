@@ -8,10 +8,10 @@ export default function ContactCard({ to, name, balance, type }) {
   const hasBalance = (typeof balance === 'number' || typeof balance === 'string')
     && String(balance).trim() !== '' && Number.isFinite(Number(balance));
   const amount = hasBalance ? Number(balance) : null;
-  const isAdvance = hasBalance && amount < 0;
+  const hasCredit = hasBalance && amount < 0;
   const label = type === 'client'
-    ? (isAdvance ? 'Avance reçue' : 'Reste à encaisser')
-    : (isAdvance ? 'Avance versée' : 'Reste à payer');
+    ? (hasCredit ? 'Crédit du client' : 'Reste net à encaisser')
+    : (hasCredit ? 'Crédit chez le fournisseur' : 'Reste net à payer');
 
   return (
     <Card
@@ -73,3 +73,4 @@ export default function ContactCard({ to, name, balance, type }) {
     </Card>
   );
 }
+

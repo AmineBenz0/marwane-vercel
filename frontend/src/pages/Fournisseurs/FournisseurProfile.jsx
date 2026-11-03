@@ -680,7 +680,7 @@ function FournisseurProfile() {
                 Tableau des soldes
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Achats, règlements et solde restant pour ce fournisseur.
+                Montants des achats de la période. Les avances sont prises en compte dans le solde net du fournisseur.
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -704,13 +704,13 @@ function FournisseurProfile() {
 
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={12} sm={4}>
-              <MiniBalanceCard label="Montant à payer" value={fournisseurSoldeSummary.total} color="error.main" />
+              <MiniBalanceCard label="Total des achats" value={fournisseurSoldeSummary.total} color="error.main" />
             </Grid>
             <Grid item xs={12} sm={4}>
               <MiniBalanceCard label="Déjà réglé" value={fournisseurSoldeSummary.paye} color="success.main" />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <MiniBalanceCard label="Solde" value={fournisseurSoldeSummary.solde} color="warning.main" />
+              <MiniBalanceCard label="Reste sur les achats" value={fournisseurSoldeSummary.solde} color="warning.main" />
             </Grid>
           </Grid>
 
