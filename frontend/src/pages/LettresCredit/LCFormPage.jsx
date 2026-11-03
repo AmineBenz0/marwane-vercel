@@ -11,7 +11,6 @@ import {
   MenuItem,
   Stack,
   CircularProgress,
-  Divider,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
@@ -72,14 +71,12 @@ function LCFormPage() {
     try {
       const payload = {
         numero_reference: data.numero_reference,
-        numero_serie: data.numero_serie || null,
         banque_emettrice: data.banque_emettrice || null,
         montant: parseFloat(data.montant),
         date_emission: data.date_emission,
         date_reception: data.date_reception,
         date_disponibilite: data.date_disponibilite,
         id_client: data.id_client,
-        notes: data.notes || null,
       };
 
       if (isEdit) {
@@ -124,24 +121,6 @@ function LCFormPage() {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                {...register('numero_serie')}
-                label="Numéro de série"
-                fullWidth
-                error={!!errors.numero_serie}
-                helperText={errors.numero_serie?.message}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('banque_emettrice')}
-                label="Banque Émettrice (optionnel)"
-                fullWidth
-                error={!!errors.banque_emettrice}
-                helperText={errors.banque_emettrice?.message}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
                 {...register('montant', { required: 'Le montant est requis', valueAsNumber: true })}
                 label="Montant (MAD)"
                 type="number"
@@ -151,41 +130,6 @@ function LCFormPage() {
                 inputProps={{ step: '0.01' }}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_reception', { required: 'Requis' })}
-                label="Date de réception"
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_emission', { required: 'Requis' })}
-                label="Date d'émission"
-
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_disponibilite', { required: 'Requis' })}
-                label="Date de disponibilité"
-
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-                helperText="Date à partir de laquelle la LC peut être utilisée"
-              />
-            </Grid>
-
-            <Grid item xs={12}><Divider sx={{ my: 1 }}>Client d'origine</Divider></Grid>
-
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('id_client', { required: 'Le client est requis' })}
@@ -200,14 +144,41 @@ function LCFormPage() {
                 {clients.map(c => <MenuItem key={c.id_client} value={c.id_client}>{c.nom_client}</MenuItem>)}
               </TextField>
             </Grid>
-
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
-                {...register('notes')}
-                label="Notes"
+                {...register('banque_emettrice')}
+                label="Banque Émettrice (optionnel)"
                 fullWidth
-                multiline
-                rows={3}
+                error={!!errors.banque_emettrice}
+                helperText={errors.banque_emettrice?.message}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_emission', { required: 'Requis' })}
+                label="Date d'émission"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_reception', { required: 'Requis' })}
+                label="Date de réception"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_disponibilite', { required: 'Requis' })}
+                label="Date de disponibilité"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+                helperText="Date à partir de laquelle la LC peut être utilisée"
               />
             </Grid>
 

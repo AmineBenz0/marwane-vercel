@@ -10,7 +10,6 @@ import {
   TextField,
   MenuItem,
   CircularProgress,
-  Divider,
   IconButton,
   Box,
   Typography,
@@ -35,14 +34,12 @@ function LCFormModal({ open, onClose, onSuccess }) {
   } = useForm({
     defaultValues: {
       numero_reference: '',
-      numero_serie: '',
       banque_emettrice: '',
       montant: '',
       date_emission: format(new Date(), 'yyyy-MM-dd'),
       date_reception: format(new Date(), 'yyyy-MM-dd'),
       date_disponibilite: format(new Date(), 'yyyy-MM-dd'),
       id_client: '',
-      notes: '',
     }
   });
 
@@ -51,14 +48,12 @@ function LCFormModal({ open, onClose, onSuccess }) {
     if (open) {
       reset({
         numero_reference: '',
-        numero_serie: '',
         banque_emettrice: '',
         montant: '',
         date_emission: format(new Date(), 'yyyy-MM-dd'),
         date_reception: format(new Date(), 'yyyy-MM-dd'),
         date_disponibilite: format(new Date(), 'yyyy-MM-dd'),
         id_client: '',
-        notes: '',
       });
       
       const fetchClients = async () => {
@@ -81,14 +76,12 @@ function LCFormModal({ open, onClose, onSuccess }) {
     try {
       const payload = {
         numero_reference: data.numero_reference,
-        numero_serie: data.numero_serie || null,
         banque_emettrice: data.banque_emettrice || null,
         montant: parseFloat(data.montant),
         date_emission: data.date_emission,
         date_reception: data.date_reception,
         date_disponibilite: data.date_disponibilite,
         id_client: Number(data.id_client),
-        notes: data.notes || null,
       };
 
       await lettreCreditService.create(payload);
@@ -150,26 +143,6 @@ function LCFormModal({ open, onClose, onSuccess }) {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                {...register('numero_serie')}
-                label="Numéro de série"
-                fullWidth
-                error={!!errors.numero_serie}
-                helperText={errors.numero_serie?.message}
-                disabled={isSubmitting}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('banque_emettrice')}
-                label="Banque Émettrice (optionnel)"
-                fullWidth
-                error={!!errors.banque_emettrice}
-                helperText={errors.banque_emettrice?.message}
-                disabled={isSubmitting}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
                 {...register('montant', { required: 'Le montant est requis', valueAsNumber: true })}
                 label="Montant (MAD)"
                 type="number"
@@ -181,45 +154,6 @@ function LCFormModal({ open, onClose, onSuccess }) {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_reception', { required: 'Requis' })}
-                label="Date de réception"
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-                disabled={isSubmitting}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_emission', { required: 'Requis' })}
-                label="Date d'émission"
-
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-                disabled={isSubmitting}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_disponibilite', { required: 'Requis' })}
-                label="Date de disponibilité"
-
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-                disabled={isSubmitting}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <Divider sx={{ my: 1 }}>Client d'origine</Divider>
-            </Grid>
-
-            <Grid item xs={12}>
               <TextField
                 {...register('id_client', { required: 'Le client est requis' })}
                 select
@@ -238,14 +172,43 @@ function LCFormModal({ open, onClose, onSuccess }) {
                 ))}
               </TextField>
             </Grid>
-
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
-                {...register('notes')}
-                label="Notes"
+                {...register('banque_emettrice')}
+                label="Banque Émettrice (optionnel)"
                 fullWidth
-                multiline
-                rows={3}
+                error={!!errors.banque_emettrice}
+                helperText={errors.banque_emettrice?.message}
+                disabled={isSubmitting}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_emission', { required: 'Requis' })}
+                label="Date d'émission"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+                disabled={isSubmitting}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_reception', { required: 'Requis' })}
+                label="Date de réception"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+                disabled={isSubmitting}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_disponibilite', { required: 'Requis' })}
+                label="Date de disponibilité"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
                 disabled={isSubmitting}
               />
             </Grid>
