@@ -40,7 +40,6 @@ function LettreCreditDetail() {
   const [cessions, setCessions] = useState([]);
   const [correction, setCorrection] = useState(null);
   const [history, setHistory] = useState([]);
-  const [usage, setUsage] = useState(null);
   const [historyError, setHistoryError] = useState('');
   const [reload, setReload] = useState(0);
   useCorrectionRefresh(() => setReload(v => v + 1));
@@ -54,7 +53,7 @@ function LettreCreditDetail() {
           get(`/lettres-credit/${id}/correction-context`).catch(err => ({ error: err.message }))]);
         if (!active) return;
         setLc(data);
-        setHistory(context.history || []); setUsage(context.plan || null); setHistoryError(context.error || '');
+        setHistory(context.history || []); setHistoryError(context.error || '');
         setCessions(allCessions.filter((cession) => cession.id_lc === parseInt(id, 10)));
       } catch (err) {
         if (!active) return;
