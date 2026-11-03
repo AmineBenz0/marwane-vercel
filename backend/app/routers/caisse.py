@@ -33,6 +33,7 @@ def _get_lc_disponibles_total(db: Session, as_of: Optional[date] = None) -> Deci
     as_of = as_of or business_date()
     total = db.query(func.coalesce(func.sum(LettreDeCredit.montant), 0)).filter(
         LettreDeCredit.statut == 'active',
+        LettreDeCredit.statut_cycle == 'detenue',
         LettreDeCredit.date_disponibilite <= as_of
     ).scalar() or Decimal('0.00')
     return Decimal(str(total))

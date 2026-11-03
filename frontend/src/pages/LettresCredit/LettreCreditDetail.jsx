@@ -95,9 +95,9 @@ function LettreCreditDetail() {
         <Typography variant="h4" component="h1" sx={{ fontWeight: 900 }}>
           LC: {lc.numero_reference}
         </Typography>
-        <LCStatusBadge statut={lc.statut} estDisponible={lc.est_disponible} />
+        <LCStatusBadge statut={lc.statut} statutCycle={lc.statut_cycle} estDisponible={lc.est_disponible} />
         <Button variant="outlined" onClick={() => setCorrection('correct')}>Corriger la LC</Button>
-        {lc.statut === 'utilisee' && <Button color="error" onClick={() => setCorrection('cancel_usage')}>Annuler l’utilisation</Button>}
+        {['transferee', 'deposee'].includes(lc.statut_cycle) && <Button color="error" onClick={() => setCorrection('cancel_usage')}>Annuler l’utilisation</Button>}
       </Stack>
 
       <Grid container spacing={3}>
@@ -120,6 +120,10 @@ function LettreCreditDetail() {
                   <Typography>{formatDate(lc.date_emission)}</Typography>
                 </Grid>
                 <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">Date de réception</Typography>
+                  <Typography>{formatDate(lc.date_reception)}</Typography>
+                </Grid>
+                <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary">Disponible le</Typography>
                   <Typography sx={{ fontWeight: 800 }}>{formatDate(lc.date_disponibilite)}</Typography>
                 </Grid>
@@ -134,9 +138,9 @@ function LettreCreditDetail() {
               <Typography variant="h6" gutterBottom>Situation actuelle</Typography>
               <Divider sx={{ mb: 2 }} />
               <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">Client / détenteur</Typography>
+                <Typography variant="caption" color="text.secondary">Client d'origine</Typography>
                 <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
-                  {lc.detenteur_nom || '-'}
+                  {lc.client_origine_nom || lc.detenteur_nom || '-'}
                 </Typography>
               </Box>
             </CardContent>
@@ -144,9 +148,20 @@ function LettreCreditDetail() {
         </Grid>
 
         <Grid item xs={12}>
-          <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Historique d'utilisation</Typography>
-          {usage?.usage === 'payment' && <Alert severity="info" sx={{ mb: 1 }}>Paiement n° {usage.payment_id} · {formatMontant(lc.montant)} · {formatDate(usage.date_effet)}</Alert>}
-          {usage?.usage === 'deposit' && <Alert severity="info" sx={{ mb: 1 }}>Versement bancaire · Compte n° {usage.id_compte} · {formatMontant(lc.montant)} · {formatDate(usage.date_effet)}</Alert>}
+          <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Réception et utilisation</Typography>
+          {(lc.receptions || []).map((receipt) => (
+            <Alert key={`receipt-${receipt.id_paiement}`} severity={receipt.statut === 'annule' ? 'warning' : 'success'} sx={{ mb: 1 }}>
+              Reçue du client d'origine · {formatDate(receipt.date_paiement)} · Paiement n° {receipt.id_paiement} · {receipt.statut}
+            </Alert>
+          ))}
+          {(lc.utilisations || []).map((use) => (
+            <Alert key={`use-${use.id_utilisation}`} severity={use.statut === 'annulee' ? 'warning' : 'info'} sx={{ mb: 1 }}>
+              {use.type_utilisation === 'banque' ? `Déposée sur ${use.compte_banque_nom || `compte n° ${use.id_compte}`}` : `Transférée à ${use.fournisseur_nom || `fournisseur n° ${use.id_fournisseur}`}`}
+              {' · '}{formatDate(use.date_utilisation)} · {formatMontant(lc.montant)} · {use.statut === 'annulee' ? 'Annulée' : 'Active'}
+            </Alert>
+          ))}
+          {!lc.receptions?.length && <Alert severity="warning" sx={{ mb: 1 }}>Aucun paiement client par LC n'est lié à cette réception.</Alert>}
+          {!lc.utilisations?.length && <Alert severity="info" sx={{ mb: 1 }}>Aucune utilisation sortante enregistrée.</Alert>}
           <TableContainer component={Paper}>
             <Table size="small">
               <TableHead>

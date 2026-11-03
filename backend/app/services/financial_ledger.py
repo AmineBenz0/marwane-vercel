@@ -20,6 +20,7 @@ from app.models.charge import Charge
 from app.models.cession_lc import CessionLC
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.lettre_credit import LettreDeCredit
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
@@ -27,7 +28,7 @@ from app.services.ledger import record_correction, void_bank_movement, void_cash
 
 
 IMMEDIATE_PAYMENT_TYPES = frozenset(
-    {"cash", "virement", "lc", "carte", "compensation", "autre"}
+    {"cash", "virement", "carte", "compensation", "autre"}
 )
 
 
@@ -44,6 +45,7 @@ def release_letter_of_credit_if_unused(
 
     query = db.query(Paiement).filter(
         Paiement.id_lc == id_lc,
+        Paiement.role_lc == "utilisation",
         Paiement.statut != "annule",
     )
     if exclude_payment_id is not None:
@@ -58,12 +60,20 @@ def release_letter_of_credit_if_unused(
         source_cession.id_cession_origine.is_(None),
         ~has_reversal,
     ).first()
-    if query.first() or active_cession:
+    active_usage = db.query(LettreCreditUtilisation.id_utilisation).filter(
+        LettreCreditUtilisation.id_lc == id_lc,
+        LettreCreditUtilisation.statut == "active",
+    ).first()
+    if query.first() or active_cession or active_usage:
         return
 
     lc = db.query(LettreDeCredit).filter(LettreDeCredit.id_lc == id_lc).first()
     if lc and lc.statut == "utilisee":
         lc.statut = "active"
+        lc.statut_cycle = "detenue"
+        lc.type_detenteur = "client"
+        lc.id_client = lc.id_client_origine
+        lc.id_fournisseur = None
         lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
 
 
@@ -88,6 +98,12 @@ def void_payment(
         raise HTTPException(409, 'Traitez les remboursements ou affectations liés avant d’annuler ce paiement.')
     original_status = payment.statut
     original_lc_id = payment.id_lc
+    if original_lc_id and payment.role_lc == "utilisation":
+        db.query(LettreCreditUtilisation).filter(
+            LettreCreditUtilisation.id_lc == original_lc_id,
+            LettreCreditUtilisation.id_paiement == payment.id_paiement,
+            LettreCreditUtilisation.statut == "active",
+        ).update({"statut": "annulee", "motif_annulation": reason[:1000]}, synchronize_session=False)
     payment.statut = "annule"
     payment.motif_annulation = reason[:1000]
     payment.date_annulation = datetime.now(timezone.utc)

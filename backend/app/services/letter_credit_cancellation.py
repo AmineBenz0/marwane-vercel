@@ -7,6 +7,7 @@ from app.models.compte_bancaire import MouvementBancaire
 from app.models.cession_lc import CessionLC
 from app.models.caisse import Caisse
 from app.models.lettre_credit import LettreDeCredit
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.paiement import Paiement
 from app.models.user import Utilisateur
 from app.services.financial_ledger import void_payment
@@ -42,6 +43,7 @@ def cancel_letter_credit(
 
     linked_payments = db.query(Paiement).filter(
         Paiement.id_lc == id_lc,
+        Paiement.role_lc == "utilisation",
         Paiement.statut != "annule",
     ).order_by(Paiement.id_paiement).with_for_update().all()
     source_cession = aliased(CessionLC)
@@ -66,6 +68,8 @@ def cancel_letter_credit(
     if len(deposits) > 1:
         raise HTTPException(409, 'Réconciliez les versements multiples de cette LC avant son annulation.')
     bank_movement = deposits[0] if deposits else None
+    if not linked_payments and not linked_cessions and not bank_movement:
+        raise HTTPException(status_code=409, detail="Aucune utilisation active de cette LC n'est à annuler.")
 
     previous_status = lc.statut
     for payment in linked_payments:
@@ -112,9 +116,9 @@ def cancel_letter_credit(
             )
 
         # Reverse in newest-first order to restore the original LC holder.
-        lc.type_detenteur = cession.type_cedant
-        lc.id_client = cession.id_cedant_client
-        lc.id_fournisseur = cession.id_cedant_fournisseur
+        lc.type_detenteur = "client"
+        lc.id_client = lc.id_client_origine
+        lc.id_fournisseur = None
 
         record_correction(
             db,
@@ -129,7 +133,12 @@ def cancel_letter_credit(
             },
         )
 
+    db.query(LettreCreditUtilisation).filter(
+        LettreCreditUtilisation.id_lc == id_lc,
+        LettreCreditUtilisation.statut == "active",
+    ).update({"statut": "annulee", "motif_annulation": reason[:1000]}, synchronize_session=False)
     lc.statut = "active"
+    lc.statut_cycle = "detenue" if lc.id_client_origine is not None else "a_verifier"
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     record_correction(
         db,

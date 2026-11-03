@@ -38,6 +38,7 @@ function LCFormPage() {
   } = useForm({
     defaultValues: {
       date_emission: format(new Date(), 'yyyy-MM-dd'),
+      date_reception: format(new Date(), 'yyyy-MM-dd'),
       date_disponibilite: format(new Date(), 'yyyy-MM-dd'),
     }
   });
@@ -53,6 +54,7 @@ function LCFormPage() {
           reset({
             ...lcData,
             date_emission: format(new Date(lcData.date_emission), 'yyyy-MM-dd'),
+            date_reception: lcData.date_reception ? format(new Date(lcData.date_reception), 'yyyy-MM-dd') : '',
             date_disponibilite: format(new Date(lcData.date_disponibilite), 'yyyy-MM-dd'),
           });
         }
@@ -74,6 +76,7 @@ function LCFormPage() {
         banque_emettrice: data.banque_emettrice || null,
         montant: parseFloat(data.montant),
         date_emission: data.date_emission,
+        date_reception: data.date_reception,
         date_disponibilite: data.date_disponibilite,
         id_client: data.id_client,
         notes: data.notes || null,
@@ -150,6 +153,16 @@ function LCFormPage() {
             </Grid>
             <Grid item xs={12} sm={6}>
               <DateField
+                {...register('date_reception', { required: 'Requis' })}
+                label="Date de réception"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <DateField
                 {...register('date_emission', { required: 'Requis' })}
                 label="Date d'émission"
 
@@ -171,13 +184,13 @@ function LCFormPage() {
               />
             </Grid>
 
-            <Grid item xs={12}><Divider sx={{ my: 1 }}>Client détenteur de la LC</Divider></Grid>
+            <Grid item xs={12}><Divider sx={{ my: 1 }}>Client d'origine</Divider></Grid>
 
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('id_client', { required: 'Le client est requis' })}
                 select
-                label="Sélectionner le Client"
+                label="Client d'origine"
                 fullWidth
                 required
                 error={!!errors.id_client}

@@ -16,6 +16,7 @@ class LettreCreditBase(BaseModel):
     banque_emettrice: Optional[str] = Field(None, max_length=100, description="Banque émettrice (optionnel)")
     montant: Decimal = Field(..., gt=0, description="Montant total de la LC")
     date_emission: date = Field(..., description="Date d'émission")
+    date_reception: date = Field(..., description="Date à laquelle l'entreprise reçoit l'instrument")
     date_disponibilite: date = Field(..., description="Date à laquelle la LC devient utilisable")
     id_client: Optional[int] = Field(None, description="ID du client détenteur")
     notes: Optional[str] = Field(None, description="Notes additionnelles")
@@ -42,6 +43,34 @@ class LettreCreditUpdate(BaseModel):
     id_client: Optional[int] = Field(None)
     notes: Optional[str] = Field(None)
 
+
+class LettreCreditReceptionRead(BaseModel):
+    id_paiement: int
+    id_transaction: int
+    date_paiement: date
+    montant: Decimal
+    statut: str
+    motif_annulation: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LettreCreditUtilisationRead(BaseModel):
+    id_utilisation: int
+    type_utilisation: str
+    date_utilisation: date
+    id_fournisseur: Optional[int] = None
+    fournisseur_nom: Optional[str] = None
+    id_compte: Optional[int] = None
+    compte_banque_nom: Optional[str] = None
+    id_paiement: Optional[int] = None
+    id_cession: Optional[int] = None
+    id_mouvement_bancaire: Optional[int] = None
+    statut: str
+    motif_annulation: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
 class LettreCreditRead(BaseModel):
     """
     Schéma pour lire une LC.
@@ -52,7 +81,10 @@ class LettreCreditRead(BaseModel):
     banque_emettrice: Optional[str] = None
     montant: Decimal
     date_emission: date
+    date_reception: Optional[date] = None
     date_disponibilite: date
+    id_client_origine: Optional[int] = None
+    statut_cycle: str = 'a_verifier'
     type_detenteur: str = 'client'
     id_client: Optional[int] = None
     id_fournisseur: Optional[int] = None
@@ -67,6 +99,9 @@ class LettreCreditRead(BaseModel):
     # Champs additionnels utiles pour le frontend
     est_disponible: bool = False
     detenteur_nom: Optional[str] = None
+    client_origine_nom: Optional[str] = None
+    receptions: List[LettreCreditReceptionRead] = Field(default_factory=list)
+    utilisations: List[LettreCreditUtilisationRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -83,6 +118,9 @@ class LettreCreditSummary(BaseModel):
     statut: str
     version_utilisation: int = 0
     date_disponibilite: date
+    date_reception: Optional[date] = None
+    id_client_origine: Optional[int] = None
+    statut_cycle: str = 'a_verifier'
     type_detenteur: str = 'client'
     detenteur_nom: Optional[str] = None
     est_disponible: bool = False
@@ -114,3 +152,4 @@ class LettreCreditAnnuler(BaseModel):
         if not value:
             raise ValueError("La raison de l'annulation est obligatoire")
         return value
+

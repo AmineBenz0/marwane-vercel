@@ -39,6 +39,7 @@ function LCFormModal({ open, onClose, onSuccess }) {
       banque_emettrice: '',
       montant: '',
       date_emission: format(new Date(), 'yyyy-MM-dd'),
+      date_reception: format(new Date(), 'yyyy-MM-dd'),
       date_disponibilite: format(new Date(), 'yyyy-MM-dd'),
       id_client: '',
       notes: '',
@@ -54,6 +55,7 @@ function LCFormModal({ open, onClose, onSuccess }) {
         banque_emettrice: '',
         montant: '',
         date_emission: format(new Date(), 'yyyy-MM-dd'),
+        date_reception: format(new Date(), 'yyyy-MM-dd'),
         date_disponibilite: format(new Date(), 'yyyy-MM-dd'),
         id_client: '',
         notes: '',
@@ -83,6 +85,7 @@ function LCFormModal({ open, onClose, onSuccess }) {
         banque_emettrice: data.banque_emettrice || null,
         montant: parseFloat(data.montant),
         date_emission: data.date_emission,
+        date_reception: data.date_reception,
         date_disponibilite: data.date_disponibilite,
         id_client: Number(data.id_client),
         notes: data.notes || null,
@@ -179,6 +182,17 @@ function LCFormModal({ open, onClose, onSuccess }) {
             </Grid>
             <Grid item xs={12} sm={6}>
               <DateField
+                {...register('date_reception', { required: 'Requis' })}
+                label="Date de réception"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+                disabled={isSubmitting}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <DateField
                 {...register('date_emission', { required: 'Requis' })}
                 label="Date d'émission"
 
@@ -202,14 +216,14 @@ function LCFormModal({ open, onClose, onSuccess }) {
             </Grid>
 
             <Grid item xs={12}>
-              <Divider sx={{ my: 1 }}>Client détenteur de la LC</Divider>
+              <Divider sx={{ my: 1 }}>Client d'origine</Divider>
             </Grid>
 
             <Grid item xs={12}>
               <TextField
                 {...register('id_client', { required: 'Le client est requis' })}
                 select
-                label="Sélectionner le Client"
+                label="Client d'origine"
                 fullWidth
                 required
                 error={!!errors.id_client}
@@ -257,3 +271,4 @@ function LCFormModal({ open, onClose, onSuccess }) {
 }
 
 export default LCFormModal;
+

@@ -24,6 +24,7 @@ from app.services.financial_ledger import (
 )
 from app.services.payment_validation import validate_lc_payment as _validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
+from app.services.lc_lifecycle import payment_lc_role, record_lc_payment_event
 from app.utils.business_date import business_date
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
@@ -259,6 +260,7 @@ def create_paiement(
         reference_virement=paiement_data.reference_virement,
         **funding,
         id_lc=paiement_data.id_lc if paiement_data.type_paiement == 'lc' else None,
+        role_lc=payment_lc_role(transaction, paiement_data.type_paiement),
         notes=paiement_data.notes,
         cle_idempotence=paiement_data.cle_idempotence,
         statut=statut_initial,
@@ -268,6 +270,7 @@ def create_paiement(
     db.add(nouveau_paiement)
     try:
         db.flush() # Pour obtenir l'ID
+        record_lc_payment_event(db, nouveau_paiement, transaction, current_user=current_user)
     except IntegrityError as exc:
         db.rollback()
         if paiement_data.cle_idempotence:
@@ -586,11 +589,13 @@ def create_paiements_batch(
             nouveau_paiement = Paiement(
                 **p_data.model_dump(exclude={"source_reglement", "id_compte"}),
                 **funding,
+                role_lc=payment_lc_role(transaction, p_data.type_paiement),
                 statut=statut_initial,
                 id_utilisateur_creation=current_user.id_utilisateur if current_user else None
             )
             db.add(nouveau_paiement)
             db.flush()
+            record_lc_payment_event(db, nouveau_paiement, transaction, current_user=current_user)
             
             # Mouvement de caisse
             sync_payment_cash_movement(

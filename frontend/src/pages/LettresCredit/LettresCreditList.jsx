@@ -55,14 +55,19 @@ const formatDate = (value) => {
   return new Date(`${value}T00:00:00`).toLocaleDateString('fr-FR');
 };
 
-const isActiveLc = (lc) => lc?.statut === 'active';
-const isUsedLc = (lc) => lc?.statut === 'utilisee';
+const isActiveLc = (lc) => (lc?.statut_cycle ? lc.statut_cycle === 'detenue' : lc?.statut === 'active');
+const isUsedLc = (lc) => ['transferee', 'deposee', 'annulee'].includes(lc?.statut_cycle) || (!lc?.statut_cycle && lc?.statut === 'utilisee');
 const canUseLc = (lc) => isActiveLc(lc) && Boolean(lc?.est_disponible);
 
 const getLcState = (lc) => {
   if (canUseLc(lc)) {
     return { label: 'Disponible', tone: 'success' };
   }
+
+  if (lc?.statut_cycle === 'transferee') return { label: 'Transférée au fournisseur', tone: 'default' };
+  if (lc?.statut_cycle === 'deposee') return { label: 'Déposée en banque', tone: 'info' };
+  if (lc?.statut_cycle === 'annulee') return { label: 'Annulée', tone: 'error' };
+  if (lc?.statut_cycle === 'a_verifier') return { label: 'À vérifier', tone: 'warning' };
 
   if (isActiveLc(lc)) {
     return { label: `Le ${formatDate(lc.date_disponibilite)}`, tone: 'warning' };

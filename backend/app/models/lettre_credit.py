@@ -11,8 +11,10 @@ class LettreDeCredit(Base):
     """
     Modèle représentant une Lettre de Crédit (LC).
     
-    Une LC est un instrument financier utilisé comme mode de paiement.
-    Elle est toujours détenue par un client et peut être cédée (transférée).
+    Une LC est reçue d'un client, détenue par l'entreprise, puis éventuellement
+    transférée à un fournisseur ou déposée en banque. Les anciens champs de
+    détenteur restent disponibles pour compatibilité; id_client_origine ne change
+    pas lorsque la LC est utilisée.
     """
     __tablename__ = "lettres_credit"
     
@@ -24,6 +26,11 @@ class LettreDeCredit(Base):
     
     date_emission = Column(Date, nullable=False)
     date_disponibilite = Column(Date, nullable=False, index=True)
+    # Date à laquelle l'entreprise reçoit l'instrument. Distincte de la date
+    # à laquelle la LC devient utilisable.
+    date_reception = Column(Date, nullable=True, index=True)
+    id_client_origine = Column(Integer, ForeignKey("clients.id_client"), nullable=True, index=True)
+    statut_cycle = Column(String(20), nullable=False, default="detenue", server_default="a_verifier", index=True)
     # date_expiration supprimé
     
     # active (available) or utilisee. A canceled use returns the LC to active.
@@ -55,6 +62,10 @@ class LettreDeCredit(Base):
             name='check_lc_type_detenteur_valide'
         ),
         CheckConstraint(
+            "statut_cycle IN ('detenue', 'transferee', 'deposee', 'annulee', 'a_verifier')",
+            name='check_lc_statut_cycle_valide'
+        ),
+        CheckConstraint(
             "(id_client IS NOT NULL AND id_fournisseur IS NULL) OR (id_fournisseur IS NOT NULL AND id_client IS NULL)",
             name='check_lc_detenteur_unifie'
         ),
@@ -62,9 +73,11 @@ class LettreDeCredit(Base):
     
     # Relations
     client = relationship("Client", backref="lettres_credit")
+    client_origine = relationship("Client", foreign_keys=[id_client_origine], backref="lettres_credit_emises")
     fournisseur = relationship("Fournisseur", backref="lettres_credit")
     paiements = relationship("Paiement", back_populates="lettre_credit")
     cessions = relationship("CessionLC", back_populates="lettre_credit", cascade="all, delete-orphan")
+    utilisations = relationship("LettreCreditUtilisation", back_populates="lettre_credit", order_by="LettreCreditUtilisation.date_creation")
     
     utilisateur_creation = relationship(
         "Utilisateur", 
@@ -83,6 +96,8 @@ class LettreDeCredit(Base):
         from app.utils.business_date import business_date
         today = business_date()
         return (
-            self.statut == 'active' and 
+            self.statut == 'active' and
+            self.statut_cycle == 'detenue' and
             self.date_disponibilite <= today
         )
+

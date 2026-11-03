@@ -10,6 +10,7 @@ from app.models.lettre_credit import LettreDeCredit
 from app.models.fournisseur import Fournisseur
 from app.models.compte_bancaire import CompteBancaire
 from app.models.paiement import Paiement
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
 from app.utils.business_date import business_date
@@ -19,6 +20,10 @@ def resolve_payment_funding(db: Session, payment_data, transaction: Transaction)
     """Capture supplier funding independently of the method; preserve client routing."""
     if payment_data.type_paiement in {'compensation', 'carte', 'autre'}:
         raise HTTPException(422, 'Choisissez un paiement par espèces, chèque, virement ou lettre de crédit.')
+    if payment_data.type_paiement == "lc":
+        # An LC transfers a non-cash asset. It must not consume the supplier's
+        # preferred caisse/bank source or create a cash/bank debit.
+        return {"source_reglement": None, "id_compte": None}
     account_id = payment_data.id_compte
     requested_source = payment_data.source_reglement
     if transaction.id_fournisseur is None:
@@ -76,9 +81,13 @@ def validate_lc_payment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Lettre de Crédit avec l'ID {paiement_data.id_lc} introuvable",
         )
+    if not lc.id_client_origine or not lc.date_reception:
+        raise HTTPException(409, "L'origine ou la date de réception de cette LC doit être vérifiée avant utilisation.")
 
+    role = "reception" if transaction.id_client is not None else "utilisation"
     linked_payment = db.query(Paiement).filter(
         Paiement.id_lc == lc.id_lc,
+        Paiement.role_lc == role,
         Paiement.statut != "annule",
     ).first()
     is_same_payment = (
@@ -93,12 +102,30 @@ def validate_lc_payment(
             detail="Cette LC est déjà utilisée par un autre paiement",
         )
 
-    if not is_same_payment:
-        if lc.statut != "active":
+    if role == "reception":
+        if lc.statut_cycle != "detenue" or lc.statut != "active":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"La Lettre de Crédit n'est pas active (Statut: {lc.statut})",
+                detail="Cette LC n'est plus détenue par l'entreprise.",
             )
+        if lc.id_client_origine != transaction.id_client:
+            raise HTTPException(400, "Cette LC n'a pas été reçue de ce client.")
+    else:
+        active_usage = db.query(LettreCreditUtilisation.id_utilisation).filter(
+            LettreCreditUtilisation.id_lc == lc.id_lc,
+            LettreCreditUtilisation.statut == "active",
+        ).first()
+        same_usage = existing_payment_id is not None and db.query(LettreCreditUtilisation.id_utilisation).filter(
+            LettreCreditUtilisation.id_lc == lc.id_lc,
+            LettreCreditUtilisation.id_paiement == existing_payment_id,
+            LettreCreditUtilisation.statut == "active",
+        ).first()
+        if active_usage and not same_usage:
+            raise HTTPException(400, "Cette LC a déjà une utilisation sortante active.")
+        if not is_same_payment and (lc.statut_cycle != "detenue" or lc.statut != "active"):
+            raise HTTPException(400, "Cette LC n'est pas détenue par l'entreprise.")
+
+    if role == "utilisation" and not is_same_payment:
         if not lc.est_disponible and lc.date_disponibilite > business_date():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -108,7 +135,7 @@ def validate_lc_payment(
                 ),
             )
 
-    if paiement_data.date_paiement < lc.date_disponibilite:
+    if role == "utilisation" and paiement_data.date_paiement < lc.date_disponibilite:
         raise HTTPException(422, 'Le paiement ne peut pas précéder la disponibilité de la LC.')
     if Decimal(str(paiement_data.montant)) != Decimal(str(lc.montant)):
         raise HTTPException(
@@ -119,24 +146,20 @@ def validate_lc_payment(
             ),
         )
 
-    if transaction.id_client and (
-        lc.type_detenteur != "client" or lc.id_client != transaction.id_client
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cette LC n'appartient pas au client de cette transaction",
-        )
-    if transaction.id_fournisseur and (
-        lc.type_detenteur != "fournisseur" or lc.id_fournisseur != transaction.id_fournisseur
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cette LC n'appartient pas au fournisseur de cette transaction",
-        )
+    if lc.date_reception and paiement_data.date_paiement < lc.date_reception:
+        raise HTTPException(422, "Le règlement ne peut pas précéder la réception de la LC.")
 
     if not is_same_payment:
         lc.version_utilisation += 1
-    lc.statut = "utilisee"
+    if role == "reception":
+        lc.statut = "active"
+        lc.statut_cycle = "detenue"
+    else:
+        lc.statut = "utilisee"
+        lc.statut_cycle = "transferee"
+        lc.type_detenteur = "fournisseur"
+        lc.id_client = None
+        lc.id_fournisseur = transaction.id_fournisseur
     lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     return lc
 

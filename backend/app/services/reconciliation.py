@@ -231,9 +231,11 @@ def run_integrity_check(db: Session) -> list[dict]:
         elif abs(_money(linked_movements[0].montant) - _money(charge.montant)) > Decimal("0.01") or linked_movements[0].type_mouvement != "SORTIE":
             issues.append(IntegrityIssue("CHARGE_MOVEMENT_VALUE_MISMATCH", "high", "charge", charge.id_charge, "Le montant ou le sens du mouvement ne correspond pas à la charge."))
 
-    duplicate_lcs = db.query(Paiement.id_lc, func.count(Paiement.id_paiement)).filter(Paiement.id_lc.isnot(None), Paiement.statut != "annule").group_by(Paiement.id_lc).having(func.count(Paiement.id_paiement) > 1).all()
-    for id_lc, _ in duplicate_lcs:
-        issues.append(IntegrityIssue("LC_REUSED", "high", "lettre_credit", id_lc, "Une lettre de crédit active est liée à plusieurs paiements."))
+    duplicate_lcs = db.query(Paiement.id_lc, Paiement.role_lc, func.count(Paiement.id_paiement)).filter(
+        Paiement.id_lc.isnot(None), Paiement.role_lc.isnot(None), Paiement.statut != "annule"
+    ).group_by(Paiement.id_lc, Paiement.role_lc).having(func.count(Paiement.id_paiement) > 1).all()
+    for id_lc, role_lc, _ in duplicate_lcs:
+        issues.append(IntegrityIssue("LC_REUSED", "high", "lettre_credit", id_lc, f"Une LC a plusieurs paiements actifs pour le rôle {role_lc}."))
 
     cash_balance = db.query(
         func.coalesce(
