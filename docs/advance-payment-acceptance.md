@@ -57,3 +57,15 @@ Validation: focused dialog tests 8/8 passed, ESLint passed, frontend build passe
 
 Screenshot: [Optional comment field](qa/advance-optional-comment.png).
 
+
+## Contact-level advance simplification — 3 November 2026
+
+Code commit: `26320a11365136dd508f82881e1ece904fd71c3f`.
+
+New payments no longer offer Compensation. Profiles and transaction forms no longer offer allocating advances or credits to sales/purchases. Advances, restitutions and their ledger effects remain in the contact's net balance; transaction settlement amounts remain independent. Existing allocation history and cancellation remain supported, including exact retries of previously committed operations. No database migration or historical data rewrite is required.
+
+Validation: backend suite 339 passed, 11 skipped (PostgreSQL-specific checks are not exercised by the isolated SQLite suite); 80 focused frontend checks across nine files and 11 payment-correction/financial-register checks passed. Final frontend build passed; changed-file lint has no errors and one existing TransactionDetail hook-dependency warning. Initial broader frontend runs stalled and were stopped; the reported frontend result is the completed focused set, not a completed full suite.
+
+The original connected browser was unavailable on resume (`originating browser context` required). No manual staging walkthrough or new staging test records were created for this change. Browser verification remains outstanding.
+
+Staging deployment `dpl_FTxCxTtWVqA41H4RxASQ5YZJ8scE` reached READY for the code commit above, and the staging alias was explicitly assigned to it after the project and commit were verified. Vercel's database preflight passed (34 tables, 383 columns).
