@@ -10,7 +10,13 @@ depends_on = None
 
 def upgrade():
     source = Path(__file__).resolve().parents[2] / 'migrations' / 'instrument_corrections.sql'
-    op.get_bind().exec_driver_sql(source.read_text())
+    # psycopg2 interprets PL/pgSQL format markers like %I as DBAPI binds.
+    # Escape driver-level percents, not the stored migration source itself.
+    bind = op.get_bind()
+    sql = source.read_text()
+    if bind.dialect.paramstyle in {"format", "pyformat"}:
+        sql = sql.replace("%", "%%")
+    bind.exec_driver_sql(sql)
 
 
 def downgrade():
