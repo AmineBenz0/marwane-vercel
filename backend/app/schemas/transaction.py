@@ -322,6 +322,8 @@ class TransactionRead(TransactionBase):
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
     row_version: int = Field(default=1, description="Révision pour détecter les modifications concurrentes")
+    id_transaction_origine: Optional[int] = None
+    id_transaction_remplacement: Optional[int] = None
     repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
     quantite_reservee: int = 0
     quantite_couverte: int = 0

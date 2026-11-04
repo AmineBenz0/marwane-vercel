@@ -100,6 +100,9 @@ def build_reactivation_preview(db, tx):
         raise HTTPException(404, "Transaction introuvable.")
     if tx.est_actif:
         raise HTTPException(409, "Cette transaction est déjà active.")
+    from app.services.transaction_conversion import conversion_link
+    if conversion_link(db, tx.id_transaction).get("id_transaction_remplacement"):
+        raise HTTPException(409, "Cette transaction a été convertie : consultez la nouvelle transaction.")
     product = db.get(Produit, tx.id_produit)
     if product is None or not product.est_actif:
         raise HTTPException(409, "Le produit n'est plus actif. Créez une transaction corrigée.")

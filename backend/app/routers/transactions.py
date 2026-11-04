@@ -44,6 +44,8 @@ from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
 from app.services.stock_corrections import lock_stock_scope
 from app.services.transaction_restoration import build_reactivation_preview
+from app.services.transaction_conversion import preview_conversion, apply_conversion, conversion_link
+from app.schemas.conversion import ConversionPreviewCommand, ConversionApplyCommand
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
 from app.services.financial import validate_payment_date, validate_payment_idempotency
 from app.services.payment_validation import validate_lc_payment
@@ -96,9 +98,10 @@ def _lock_transaction_for_write(db, transaction_id, changes=None):
 
 def _transaction_read(db, transaction):
     reservations = deferred_sale_reservations(db) if transaction.est_promesse and transaction.est_actif else {}
-    return TransactionRead.model_validate(transaction).model_copy(update=deferred_stock_quantities(
-        transaction, reservations.get(transaction.id_transaction, 0),
-    ))
+    return TransactionRead.model_validate(transaction).model_copy(update={
+        **deferred_stock_quantities(transaction, reservations.get(transaction.id_transaction, 0)),
+        **conversion_link(db, transaction.id_transaction),
+    })
 
 
 @router.get("/production-sources")
@@ -1293,6 +1296,28 @@ def delete_transaction(
     db.commit()
     
     return None
+
+
+@router.post("/{id}/conversion/preview")
+def preview_transaction_conversion(
+    id: int,
+    command: ConversionPreviewCommand,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Preview a linked, opposite-side replacement without writing effects."""
+    return preview_conversion(db, id, command)
+
+
+@router.post("/{id}/conversion/apply")
+def apply_transaction_conversion(
+    id: int,
+    command: ConversionApplyCommand,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Retire the source and create a new unpaid transaction in one commit."""
+    return apply_conversion(db, id, command, current_user)
 
 
 @router.get("/{id}/reactivate/preview", response_model=ReactivationPreview)
