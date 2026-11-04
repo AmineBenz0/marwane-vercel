@@ -89,7 +89,7 @@ it('previews reference and issuer changes through the audited endpoint', async (
 it('clears optional issuer without changing the reference or hidden serial', async () => {
   render(<LCCorrectionDialog lc={{ ...lc, banque_emettrice: 'Ancienne banque', numero_serie: 'SERIE-OLD' }} onClose={vi.fn()} onSaved={vi.fn()} />);
   expect(screen.queryByLabelText('Numéro de série')).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Banque émettrice'), { target: { value: '' } });
+  fireEvent.change(await screen.findByLabelText('Banque émettrice'), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ banque_emettrice: null }));
 });

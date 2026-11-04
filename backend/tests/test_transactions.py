@@ -231,3 +231,81 @@ class TestTransactionsEndpoints:
         assert history.status_code == 200
         assert len(history.json()) == 1
         assert history.json()[0]["statut"] == "annule"
+
+def test_phase6e_reactivation_requires_preview_and_preserves_cancelled_payments(
+    client, db_session, test_user, test_client, test_produit, auth_headers
+):
+    """Restoration never silently resurrects money or accepts a stale preview."""
+    test_produit.type_produit = "service"
+    tx = Transaction(
+        date_transaction=date.today(), id_produit=test_produit.id_produit,
+        quantite=2, prix_unitaire=Decimal("10.00"), montant_total=Decimal("20.00"),
+        id_client=test_client.id_client, est_actif=False,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(tx)
+    db_session.flush()
+    payment = Paiement(
+        id_transaction=tx.id_transaction, date_paiement=date.today(),
+        montant=Decimal("10.00"), type_paiement="cash", statut="annule",
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(payment)
+    db_session.commit()
+
+    url = f"/api/v1/transactions/{tx.id_transaction}/reactivate"
+    missing = client.patch(url, json={}, headers=auth_headers)
+    assert missing.status_code == 422
+    preview = client.get(url + "/preview", headers=auth_headers)
+    assert preview.status_code == 200
+    review = preview.json()
+    assert review["stock_effect"] == "aucun"
+    assert review["cancelled_payments_count"] == 1
+    assert review["restore_cancelled_payments"] is False
+    assert len(review["dependency_fingerprint"]) == 64
+
+    payload = {
+        "expected_version": review["expected_version"],
+        "dependency_fingerprint": "0" * 64,
+        "restore_stock": True,
+        "restore_cancelled_payments": False,
+    }
+    stale = client.patch(url, json=payload, headers=auth_headers)
+    assert stale.status_code == 409
+    db_session.refresh(tx)
+    assert tx.est_actif is False
+
+    forbidden = client.patch(url, json={**payload,
+        "dependency_fingerprint": review["dependency_fingerprint"],
+        "restore_cancelled_payments": True}, headers=auth_headers)
+    assert forbidden.status_code == 422
+
+    activated = client.patch(url, json={**payload,
+        "dependency_fingerprint": review["dependency_fingerprint"]}, headers=auth_headers)
+    assert activated.status_code == 200
+    db_session.refresh(tx)
+    db_session.refresh(payment)
+    assert tx.est_actif is True
+    assert payment.statut == "annule"
+    assert db_session.query(Paiement).filter(Paiement.id_transaction == tx.id_transaction).count() == 1
+    assert client.get(url + "/preview", headers=auth_headers).status_code == 409
+
+
+def test_phase6e_refuses_untraceable_general_stock_sale(
+    client, db_session, test_user, test_client, test_produit, auth_headers
+):
+    """A legacy no-ledger sale must not be given invented inventory provenance."""
+    tx = Transaction(
+        date_transaction=date.today(), id_produit=test_produit.id_produit,
+        quantite=2, prix_unitaire=Decimal("10.00"), montant_total=Decimal("20.00"),
+        id_client=test_client.id_client, est_actif=False,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(tx)
+    db_session.commit()
+    response = client.get(
+        f"/api/v1/transactions/{tx.id_transaction}/reactivate/preview",
+        headers=auth_headers,
+    )
+    assert response.status_code == 409
+    assert "traçable" in response.json()["detail"]
