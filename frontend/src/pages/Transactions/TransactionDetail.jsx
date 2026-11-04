@@ -47,6 +47,7 @@ import RefundDialog from '../../components/Corrections/RefundDialog';
 import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import TransactionEditForm from './TransactionEditForm';
 import ReactivationReviewDialog from './ReactivationReviewDialog';
+import TransactionConversionDialog from './TransactionConversionDialog';
 import { transactionBalance } from './transactionBalance';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import useNotification from '../../hooks/useNotification';
@@ -111,6 +112,7 @@ function TransactionDetail() {
   const [cancelRemainderDialogOpen, setCancelRemainderDialogOpen] = useState(false);
   const [cancelTransactionDialogOpen, setCancelTransactionDialogOpen] = useState(false);
   const [reactivationOpen, setReactivationOpen] = useState(false);
+  const [conversionOpen, setConversionOpen] = useState(false);
 
   /**
    * Crée des maps de lookup pour produits, clients et fournisseurs.
@@ -278,6 +280,12 @@ function TransactionDetail() {
       notification.success(transaction.est_promesse ? 'La vente et ses paiements ont été annulés et conservés dans l’historique.' : 'La transaction a été retirée du registre actif.');
     } catch (err) { notification.error(err?.message || 'La transaction n’a pas pu être annulée.'); }
     finally { setPromiseActionLoading(false); }
+  };
+
+  const onConverted = result => {
+    setConversionOpen(false);
+    notification.success('Conversion enregistrée. Les anciens règlements restent dans l’historique.');
+    navigate('/transactions/' + result.id_transaction_remplacement);
   };
 
   const onReactivated = async () => {
@@ -579,6 +587,10 @@ function TransactionDetail() {
   }
 
   const inactiveTransaction = transaction.est_actif === false;
+  const sourceProduct = produits.find(item => item.id_produit === transaction.id_produit);
+  const canConvert = !inactiveTransaction && !transaction.est_promesse && !transaction.id_production
+    && !transaction.repartition_stock?.length && sourceProduct &&
+    !/^oeufs\s*-/i.test(sourceProduct.nom_produit || '');
 
   const isSale = Boolean(transaction.id_client);
   const balance = transactionBalance(transaction, statutPaiement?.montant_restant);
@@ -614,6 +626,9 @@ function TransactionDetail() {
               setActionsAnchor(null);
               setReuseChanges({}); setTransactionEditOpen(true);
             }}>Modifier la transaction</MenuItem>}
+            {canConvert && <MenuItem onClick={() => { setActionsAnchor(null); setConversionOpen(true); }}>
+              {isSale ? 'Convertir en achat' : 'Convertir en vente'}
+            </MenuItem>}
             {transaction.est_promesse && transaction.est_actif !== false && pendingQuantity > 0 && <MenuItem onClick={() => {
               setActionsAnchor(null); setNewDeliveryDate(transaction.date_livraison_prevue || ''); setRescheduleDialogOpen(true);
             }}>Changer la date prévue</MenuItem>}
@@ -623,7 +638,7 @@ function TransactionDetail() {
             {transaction.est_actif !== false && <MenuItem sx={{ color: 'error.main' }} onClick={() => {
               setActionsAnchor(null); setCancelTransactionDialogOpen(true);
             }}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</MenuItem>}
-            {transaction.est_actif === false && <MenuItem onClick={() => {
+            {transaction.est_actif === false && !transaction.id_transaction_remplacement && <MenuItem onClick={() => {
               setActionsAnchor(null); setReactivationOpen(true);
             }}>{isSale ? 'Réactiver la vente' : 'Réactiver l’achat'}</MenuItem>}
           </Menu>
@@ -637,6 +652,18 @@ function TransactionDetail() {
         {transaction.nom_batiment_source && ` · ${transaction.nom_batiment_source}`}
       </Typography>
 
+      {transaction.id_transaction_origine && <Alert severity="info" sx={{ mb: 2.5 }}>
+        Transaction créée par conversion de la transaction n° {transaction.id_transaction_origine}.{' '}
+        <Button onClick={() => navigate('/transactions/' + transaction.id_transaction_origine)}>
+          Voir la transaction d’origine
+        </Button>
+      </Alert>}
+      {transaction.id_transaction_remplacement && <Alert severity="info" sx={{ mb: 2.5 }}>
+        Cette transaction a été convertie en transaction n° {transaction.id_transaction_remplacement}.{' '}
+        <Button onClick={() => navigate('/transactions/' + transaction.id_transaction_remplacement)}>
+          Voir la transaction de remplacement
+        </Button>
+      </Alert>}
       {inactiveTransaction && <Alert severity="error" sx={{ mb: 2.5 }}>
         <Typography fontWeight={700}>{isSale ? 'Vente annulée' : 'Achat annulé'}</Typography>
         Les montants et paiements restent consultables dans l’historique.
@@ -791,6 +818,9 @@ function TransactionDetail() {
         <DialogContent><Typography>Les {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} œufs non complétés seront clôturés. Le stock réservé qui n’est plus nécessaire sera libéré pour les autres ventes. Le montant de la vente et ses paiements restent inchangés ; cette action ne crée pas de remboursement.</Typography></DialogContent>
         <DialogActions><Button onClick={() => setCancelRemainderDialogOpen(false)}>Retour</Button><Button color="warning" variant="contained" onClick={submitCancelRemainder} disabled={promiseActionLoading}>Clôturer</Button></DialogActions>
       </Dialog>
+      {conversionOpen && <TransactionConversionDialog transaction={transaction} products={produits}
+        clients={clients} suppliers={fournisseurs} onClose={() => setConversionOpen(false)}
+        onConverted={onConverted} />}
       {reactivationOpen && <ReactivationReviewDialog transaction={transaction}
         onClose={() => setReactivationOpen(false)} onSaved={onReactivated} />}
       <Dialog open={cancelTransactionDialogOpen} onClose={() => setCancelTransactionDialogOpen(false)} fullWidth maxWidth="sm">
