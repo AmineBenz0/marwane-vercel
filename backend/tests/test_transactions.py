@@ -309,3 +309,50 @@ def test_phase6e_refuses_untraceable_general_stock_sale(
     )
     assert response.status_code == 409
     assert "traçable" in response.json()["detail"]
+
+def test_phase6e_restoring_a_cancelled_sale_does_not_double_count_its_old_stock_pair(
+    db_session, test_user, test_client, test_produit
+):
+    """Original sale and reversal remain immutable; the new effect is counted once."""
+    from datetime import datetime, timezone
+    from app.models.inventory import MouvementStock
+    from app.services.transaction_restoration import build_reactivation_preview
+
+    tx = Transaction(
+        date_transaction=date(2026, 10, 20), id_produit=test_produit.id_produit,
+        quantite=60, prix_unitaire=Decimal("2.00"), montant_total=Decimal("120.00"),
+        id_client=test_client.id_client, est_actif=False,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(tx)
+    db_session.flush()
+    incoming = MouvementStock(
+        id_produit=test_produit.id_produit, quantite_delta=Decimal("100"),
+        cout_unitaire=Decimal("2"), type_mouvement="achat",
+        source_type="transaction", source_id=999,
+        date_mouvement=datetime(2026, 10, 19, tzinfo=timezone.utc),
+    )
+    outgoing = MouvementStock(
+        id_produit=test_produit.id_produit, quantite_delta=Decimal("-60"),
+        cout_unitaire=Decimal("2"), type_mouvement="vente",
+        source_type="transaction", source_id=tx.id_transaction,
+        date_mouvement=datetime(2026, 10, 20, tzinfo=timezone.utc),
+    )
+    db_session.add_all([incoming, outgoing])
+    db_session.flush()
+    inverse = MouvementStock(
+        id_produit=test_produit.id_produit, quantite_delta=Decimal("60"),
+        cout_unitaire=Decimal("2"), type_mouvement="reversal",
+        source_type="transaction_reversal", source_id=tx.id_transaction,
+        id_mouvement_inverse=outgoing.id_mouvement_stock,
+        date_mouvement=datetime(2026, 11, 1, tzinfo=timezone.utc),
+    )
+    db_session.add(inverse)
+    db_session.flush()
+    outgoing.id_mouvement_inverse = inverse.id_mouvement_stock
+    db_session.commit()
+
+    review = build_reactivation_preview(db_session, tx)
+    assert review["stock_effect"] == "sortie"
+    assert review["stock_quantity"] == 60
+    assert review["restore_cancelled_payments"] is False

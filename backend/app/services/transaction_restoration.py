@@ -43,8 +43,19 @@ def _check_general_stock(db, tx, product):
         raise HTTPException(409, "Le stock de cette ancienne vente n'est pas traçable. Créez une vente corrigée.")
     if get_stock_quantity(db, product.id_produit) < quantity:
         raise HTTPException(409, "Le stock disponible ne suffit plus pour réactiver cette vente.")
+    # A withdrawn sale's original movement and its reversal cancel each
+    # other. Exclude both from the proposed active timeline: otherwise
+    # reactivating that exact sale counts it twice before the reversal date.
+    old_sources = [row for row in movements if row.source_type == "transaction"
+                   and row.source_id == tx.id_transaction]
+    if any(row.id_mouvement_inverse is None for row in old_sources):
+        raise HTTPException(409, "Un ancien mouvement de cette transaction est encore actif.")
+    excluded = {row.id_mouvement_stock for row in old_sources}
+    excluded.update(row.id_mouvement_inverse for row in old_sources)
     timeline = {}
     for row in movements:
+        if row.id_mouvement_stock in excluded:
+            continue
         when = _utc(row.date_mouvement)
         timeline[when] = timeline.get(when, Decimal(0)) + Decimal(str(row.quantite_delta))
     when = datetime.combine(tx.date_transaction, time.min, tzinfo=timezone.utc)
@@ -73,7 +84,7 @@ def _check_egg_sources(db, tx, product):
     for source_id, count in allocations:
         source = available_sources.get(source_id)
         if (not source or not source.est_actif or source.type_oeuf in {"casse", "perdu"}
-                or (source.type_oeuf, source.calibre) != category
+                or (source.type_oeuf, source.calibre if source.type_oeuf == "normal" else None) != category
                 or source.id_batiment != tx.id_batiment
                 or (not tx.est_promesse and source.date_production > tx.date_transaction)):
             raise HTTPException(409, "Une origine d'œufs n'est plus valide. Créez une vente corrigée.")
