@@ -13,9 +13,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from app.models.caisse import Caisse
 from app.models.client import Client
-from app.models.compte_bancaire import MouvementBancaire
 from app.models.correction_operation import CorrectionOperation
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.fournisseur import Fournisseur
