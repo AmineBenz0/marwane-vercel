@@ -46,6 +46,7 @@ import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrect
 import RefundDialog from '../../components/Corrections/RefundDialog';
 import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import TransactionEditForm from './TransactionEditForm';
+import ReactivationReviewDialog from './ReactivationReviewDialog';
 import { transactionBalance } from './transactionBalance';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import useNotification from '../../hooks/useNotification';
@@ -109,6 +110,7 @@ function TransactionDetail() {
   const [newDeliveryDate, setNewDeliveryDate] = useState('');
   const [cancelRemainderDialogOpen, setCancelRemainderDialogOpen] = useState(false);
   const [cancelTransactionDialogOpen, setCancelTransactionDialogOpen] = useState(false);
+  const [reactivationOpen, setReactivationOpen] = useState(false);
 
   /**
    * Crée des maps de lookup pour produits, clients et fournisseurs.
@@ -278,14 +280,10 @@ function TransactionDetail() {
     finally { setPromiseActionLoading(false); }
   };
 
-  const reactivateTransaction = async () => {
-    setPromiseActionLoading(true);
-    try {
-      await patch(`/transactions/${id}/reactivate`, {});
-      await Promise.all([fetchTransaction(), refreshPaiements()]);
-      notification.success(transaction.est_promesse ? 'La vente est réactivée. Les paiements annulés ne sont pas réactivés automatiquement.' : 'La transaction est réactivée.');
-    } catch (err) { notification.error(err?.message || 'La transaction n’a pas pu être réactivée.'); }
-    finally { setPromiseActionLoading(false); }
+  const onReactivated = async () => {
+    setReactivationOpen(false);
+    await Promise.all([fetchTransaction(), refreshPaiements()]);
+    notification.success('La transaction est réactivée. Ses paiements annulés restent dans l’historique.');
   };
 
 
@@ -626,7 +624,7 @@ function TransactionDetail() {
               setActionsAnchor(null); setCancelTransactionDialogOpen(true);
             }}>{transaction.est_promesse ? 'Annuler la vente' : 'Retirer du registre'}</MenuItem>}
             {transaction.est_actif === false && <MenuItem onClick={() => {
-              setActionsAnchor(null); reactivateTransaction();
+              setActionsAnchor(null); setReactivationOpen(true);
             }}>{isSale ? 'Réactiver la vente' : 'Réactiver l’achat'}</MenuItem>}
           </Menu>
         </>
@@ -793,6 +791,8 @@ function TransactionDetail() {
         <DialogContent><Typography>Les {Number(transaction.quantite_en_attente || 0).toLocaleString('fr-FR')} œufs non complétés seront clôturés. Le stock réservé qui n’est plus nécessaire sera libéré pour les autres ventes. Le montant de la vente et ses paiements restent inchangés ; cette action ne crée pas de remboursement.</Typography></DialogContent>
         <DialogActions><Button onClick={() => setCancelRemainderDialogOpen(false)}>Retour</Button><Button color="warning" variant="contained" onClick={submitCancelRemainder} disabled={promiseActionLoading}>Clôturer</Button></DialogActions>
       </Dialog>
+      {reactivationOpen && <ReactivationReviewDialog transaction={transaction}
+        onClose={() => setReactivationOpen(false)} onSaved={onReactivated} />}
       <Dialog open={cancelTransactionDialogOpen} onClose={() => setCancelTransactionDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{transaction.est_promesse ? 'Annuler la vente entière ?' : 'Retirer cette transaction du registre actif ?'}</DialogTitle>
         <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>

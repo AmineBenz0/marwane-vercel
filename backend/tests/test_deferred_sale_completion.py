@@ -298,7 +298,15 @@ def test_whole_cancel_and_reactivation_preserve_completed_stock_and_void_payment
     delete_transaction(tx.id_transaction, 'Correction du client', db_session, test_user)
     assert tx.est_actif is False
     assert payment.statut == 'annule'
-    reactivate_transaction(tx.id_transaction, db_session, test_user)
+    from app.schemas.transaction import ReactivationApply
+    from app.services.transaction_restoration import build_reactivation_preview
+    review = build_reactivation_preview(db_session, tx)
+    reactivate_transaction(tx.id_transaction, db_session, test_user, ReactivationApply(
+        expected_version=review["expected_version"],
+        dependency_fingerprint=review["dependency_fingerprint"],
+        restore_stock=True,
+        restore_cancelled_payments=False,
+    ))
     db_session.refresh(tx)
 
     assert tx.est_actif is True

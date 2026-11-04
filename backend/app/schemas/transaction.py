@@ -3,7 +3,7 @@ Schémas Pydantic pour la validation des données transactions.
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict, computed_field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date, datetime
 from decimal import Decimal
 from app.schemas.paiement import PaiementRead
@@ -383,3 +383,24 @@ class TransactionAuditRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+
+class ReactivationApply(BaseModel):
+    """Explicit, dependency-checked owner confirmation; no payment resurrection."""
+    expected_version: int = Field(gt=0)
+    dependency_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    restore_stock: Literal[True]
+    restore_cancelled_payments: Literal[False] = False
+
+
+class ReactivationPreview(BaseModel):
+    id_transaction: int
+    expected_version: int
+    dependency_fingerprint: str
+    nature: Literal["vente", "achat"]
+    product_name: str
+    stock_kind: Literal["oeufs", "general", "aucun"]
+    stock_effect: Literal["entree", "sortie", "aucun"]
+    stock_quantity: int
+    cancelled_payments_count: int
+    restore_cancelled_payments: Literal[False] = False

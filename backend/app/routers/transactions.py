@@ -3,7 +3,7 @@ Router FastAPI pour la gestion des transactions.
 Gère les endpoints CRUD pour les transactions.
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload, selectinload
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -29,7 +29,9 @@ from app.schemas.transaction import (
     DeferredSalePreview,
     DeferredSaleSummary,
     DeferredSaleReschedule,
-    TransactionAuditRead
+    TransactionAuditRead,
+    ReactivationApply,
+    ReactivationPreview,
 )
 from app.schemas.paiement import PaiementCreate, PaiementRead
 from app.schemas.transaction_payment import (
@@ -40,6 +42,8 @@ from app.utils.dependencies import get_current_active_user
 from app.utils.production_cycles import cycle_schedule
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
+from app.services.stock_corrections import lock_stock_scope
+from app.services.transaction_restoration import build_reactivation_preview
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
 from app.services.financial import validate_payment_date, validate_payment_idempotency
 from app.services.payment_validation import validate_lc_payment
@@ -1291,11 +1295,23 @@ def delete_transaction(
     return None
 
 
+@router.get("/{id}/reactivate/preview", response_model=ReactivationPreview)
+def preview_transaction_reactivation(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Read-only review of stock restoration and canceled payment history."""
+    transaction = db.get(Transaction, id)
+    return build_reactivation_preview(db, transaction)
+
+
 @router.patch("/{id}/reactivate", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def reactivate_transaction(
     id: int,
     db: Session = Depends(get_db),
-    current_user: Utilisateur = Depends(get_current_active_user)
+    current_user: Utilisateur = Depends(get_current_active_user),
+    confirmation: ReactivationApply = Body(...),
 ):
     """
     Réactive une transaction inactive.
@@ -1315,6 +1331,7 @@ def reactivate_transaction(
         HTTPException 404: Si la transaction n'existe pas
         HTTPException 400: Si la transaction est déjà active
     """
+    lock_stock_scope(db)
     transaction = _lock_transaction_for_write(db, id, None)
 
     # Vérifier si la transaction est déjà active
@@ -1324,7 +1341,13 @@ def reactivate_transaction(
             detail=f"La transaction avec l'ID {id} est déjà active"
         )
     
-    # Réactiver : mettre est_actif à True
+    if transaction.row_version != confirmation.expected_version:
+        raise HTTPException(409, "La transaction a changé. Actualisez l'aperçu.")
+    review = build_reactivation_preview(db, transaction)
+    if review["dependency_fingerprint"] != confirmation.dependency_fingerprint:
+        raise HTTPException(409, "Le stock ou les règlements ont changé. Actualisez l'aperçu.")
+
+    # Réactiver : restaurer le stock, jamais les paiements annulés.
     if transaction.est_promesse:
         db.query(Batiment).filter(
             Batiment.id_batiment == transaction.id_batiment,
@@ -1370,6 +1393,8 @@ def reactivate_transaction(
         action="reactivation",
         raison="Réactivation de la transaction",
         current_user=current_user,
+        details={"stock_restaure": review["stock_effect"], "quantite_stock": review["stock_quantity"],
+                 "paiements_annules_conserves": review["cancelled_payments_count"]},
     )
     
     db.commit()

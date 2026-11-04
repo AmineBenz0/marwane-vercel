@@ -188,11 +188,27 @@ it('requires confirmation before removing an ordinary transaction', async () => 
 
 it('offers reactivation for an inactive purchase', async () => {
   const original = get.getMockImplementation();
-  get.mockImplementation(path => path === '/transactions/7' ? Promise.resolve({ ...sale, est_actif: false, id_client: null, id_fournisseur: 2, est_promesse: false }) : original(path));
+  get.mockImplementation(path => {
+    if (path === '/transactions/7') return Promise.resolve({ ...sale, est_actif: false, id_client: null, id_fournisseur: 2, est_promesse: false });
+    if (path === '/transactions/7/reactivate/preview') return Promise.resolve({
+      id_transaction: 7, expected_version: 4, dependency_fingerprint: 'a'.repeat(64),
+      nature: 'achat', stock_kind: 'general', stock_effect: 'entree',
+      stock_quantity: 1000, product_name: 'Produit test', cancelled_payments_count: 1,
+    });
+    return original(path);
+  });
   patch.mockResolvedValue({});
   render(<TransactionDetail />);
   fireEvent.click(await screen.findByRole('button', { name: 'Autres actions' }));
   expect(screen.queryByRole('menuitem', { name: 'Modifier la transaction' })).not.toBeInTheDocument();
   await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Réactiver l’achat' })));
-  expect(patch).toHaveBeenCalledExactlyOnceWith('/transactions/7/reactivate', {});
+  expect(patch).not.toHaveBeenCalled();
+  expect(await screen.findByRole('dialog', { name: 'Réactiver l’achat ?' })).toBeVisible();
+  expect(screen.getByText(/Aucun paiement ni mouvement de caisse/)).toBeVisible();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmer la restauration de ce stock' }));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirmer la réactivation' })));
+  expect(patch).toHaveBeenCalledExactlyOnceWith('/transactions/7/reactivate', {
+    expected_version: 4, dependency_fingerprint: 'a'.repeat(64),
+    restore_stock: true, restore_cancelled_payments: false,
+  });
 });
