@@ -12,15 +12,13 @@ afterEach(cleanup);
 it.each([
   { action: 'advance', reason: 'Enregistrer une avance', props: { partyType: 'client', partyId: 7 } },
   { action: 'return_advance', reason: 'Restituer une avance', props: { advance: { id_avance: 'advance-id', available: '0.01' } } },
-  { action: 'cancel_advance', reason: 'Annuler un enregistrement erroné', props: { advance: { id_avance: 'advance-id' } } },
-  { action: 'cancel_allocation', reason: 'Annuler une affectation erronée', props: { allocation: { id_affectation: 'allocation-id' } } },
-])('saves $action without requiring a user comment and preserves an audit description', async ({ action, reason, props }) => {
+  { action: 'cancel_advance', reason: 'Annuler l’avance', props: { advance: { id_avance: 'advance-id' } } },
+  { action: 'cancel_allocation', reason: 'Annuler l’affectation', props: { allocation: { id_affectation: 'allocation-id' } } },
+])('saves $action without a user comment and preserves the generated audit description', async ({ action, reason, props }) => {
   post.mockResolvedValueOnce(preview).mockResolvedValueOnce({ replayed: false });
   const saved = vi.fn();
   render(<CreditOperationDialog action={action} onClose={vi.fn()} onSaved={saved} {...props} />);
-  const comment = screen.getByRole('textbox', { name: 'Commentaire (optionnel)' });
-  expect(comment).not.toBeRequired();
-  fireEvent.change(comment, { target: { value: action === 'advance' ? '   ' : '' } });
+  expect(screen.queryByRole('textbox', { name: /Commentaire/ })).not.toBeInTheDocument();
   if (action === 'advance') fireEvent.change(screen.getByLabelText(/Montant/), { target: { value: '0.01' } });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Vérifier' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier' }));
@@ -35,7 +33,6 @@ async function prepare(props = {}) {
   const saved = vi.fn();
   render(<CreditOperationDialog action="advance" partyType="client" partyId={7} onClose={vi.fn()} onSaved={saved} {...props} />);
   fireEvent.change(screen.getByLabelText(/Montant/), { target: { value: '0.01' } });
-  fireEvent.change(screen.getByLabelText(/Commentaire/), { target: { value: 'Avance réellement reçue' } });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Vérifier' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier' }));
   await screen.findByRole('button', { name: 'Confirmer' });
@@ -47,7 +44,7 @@ it('previews a one-cent advance before saving and broadcasts fresh balances', as
   const saved = await prepare();
   expect(post).toHaveBeenCalledTimes(1);
   expect(post.mock.calls[0][1]).toMatchObject({ action: 'advance', id_client: 7, montant: '0.01', type_paiement: 'cash', id_compte: null });
-  expect(post.mock.calls[0][1].reason).toBe('Avance réellement reçue');
+  expect(post.mock.calls[0][1].reason).toBe('Enregistrer une avance');
   expect(screen.getByText(/Argent reçu/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
   await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));

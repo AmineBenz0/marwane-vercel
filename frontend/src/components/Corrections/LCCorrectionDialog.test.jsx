@@ -23,25 +23,23 @@ it('previews the linked deposit, freezes the opening version and confirms separa
   const view = render(<LCCorrectionDialog lc={lc} onClose={vi.fn()} onSaved={saved} />);
   const amount = await screen.findByRole('spinbutton', { name: 'Montant de la LC (MAD)' });
   fireEvent.change(amount, { target: { value: '6.50' } });
-  fireEvent.change(screen.getByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Montant corrigé' } });
   view.rerender(<LCCorrectionDialog lc={{ ...lc, version_utilisation: 9 }} onClose={vi.fn()} onSaved={saved} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await screen.findByRole('button', { name: 'Confirmer la correction' });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await screen.findByRole('button', { name: 'Enregistrer les modifications' });
   expect(post.mock.calls[0]).toEqual(['/lettres-credit/corrections/preview', expect.objectContaining({ expected_version: 2, changes: { montant: '6.50' } })]);
   expect(saved).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmer la correction' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
 });
 
 it('retries an uncertain save using the same operation and payload', async () => {
   const saved = vi.fn();
   render(<LCCorrectionDialog lc={lc} cancelUsage onClose={vi.fn()} onSaved={saved} />);
-  await screen.findByLabelText('Motif de la correction', { exact: false });
-  fireEvent.change(screen.getByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Annulation erreur' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await screen.findByRole('button', { name: 'Confirmer la correction' });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await screen.findByRole('button', { name: 'Enregistrer les modifications' });
   post.mockRejectedValueOnce(Object.assign(new Error('Timeout'), { status: 504 }));
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmer la correction' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
   const retry = await screen.findByRole('button', { name: 'Vérifier l’enregistrement' });
   expect(screen.getByRole('button', { name: 'Annuler', exact: true })).toBeDisabled();
   fireEvent.click(retry);
@@ -52,47 +50,46 @@ it('retries an uncertain save using the same operation and payload', async () =>
 
 it('keeps the preview visible and disables confirmation after a conflict', async () => {
   render(<LCCorrectionDialog lc={lc} cancelUsage onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(await screen.findByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Annulation erreur' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await screen.findByRole('button', { name: 'Confirmer la correction' });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await screen.findByRole('button', { name: 'Enregistrer les modifications' });
   post.mockRejectedValueOnce(Object.assign(new Error('Aperçu périmé'), { status: 409 }));
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmer la correction' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
   await screen.findByText('Aperçu périmé');
-  expect(screen.getByRole('button', { name: 'Confirmer la correction' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Enregistrer les modifications' })).toBeDisabled();
 });
 
 it('labels surplus as credit instead of a negative amount due', async () => {
   post.mockResolvedValue({ before: lc, after: { ...lc, montant: '6.00' }, usage: 'payment',
     remaining_after: '-1.00', balance_side: 'client', money_effect: 'replaced', dependency_fingerprint: 'a'.repeat(64) });
   render(<LCCorrectionDialog lc={lc} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(await screen.findByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Corriger crédit' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
+  fireEvent.change(await screen.findByRole('spinbutton', { name: 'Montant de la LC (MAD)' }), { target: { value: '6.00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect(await screen.findByText(/Crédit client après correction/)).toHaveTextContent('1 MAD');
   expect(screen.queryByText(/Reste à régler après/)).not.toBeInTheDocument();
 });
 
-it('previews metadata changes and confirms the frozen correction through the audited endpoint', async () => {
+it('previews reference and issuer changes through the audited endpoint', async () => {
   const saved = vi.fn();
   render(<LCCorrectionDialog lc={lc} onClose={vi.fn()} onSaved={saved} />);
   fireEvent.change(await screen.findByLabelText('Référence LC', { exact: false }), { target: { value: 'LC-CORRECTED' } });
-  fireEvent.change(screen.getByLabelText('Numéro de série'), { target: { value: 'SERIE-123' } });
+  expect(screen.queryByLabelText('Numéro de série')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Banque émettrice'), { target: { value: 'Banque corrigée' } });
-  fireEvent.change(screen.getByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Informations corrigées' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await screen.findByRole('button', { name: 'Confirmer la correction' });
-  expect(post.mock.calls[0][1].changes).toEqual({ numero_reference: 'LC-CORRECTED', numero_serie: 'SERIE-123', banque_emettrice: 'Banque corrigée' });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await screen.findByRole('button', { name: 'Enregistrer les modifications' });
+  expect(post.mock.calls[0][1].changes).toEqual({ numero_reference: 'LC-CORRECTED', banque_emettrice: 'Banque corrigée' });
   expect(screen.getByText(/Référence LC : LC-TEST/)).toHaveTextContent('LC-CORRECTED');
   expect(screen.getByText(/Banque émettrice : Non renseigné/)).toHaveTextContent('Banque corrigée');
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmer la correction' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(post.mock.calls[1][1].command).toEqual(post.mock.calls[0][1]);
+  expect(post.mock.calls[0][1].reason).toBe('Modification des informations de la LC');
 });
 
-it('allows optional issuer and serial values to be cleared without clearing the reference', async () => {
+it('clears optional issuer without changing the reference or hidden serial', async () => {
   render(<LCCorrectionDialog lc={{ ...lc, banque_emettrice: 'Ancienne banque', numero_serie: 'SERIE-OLD' }} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(await screen.findByLabelText('Numéro de série'), { target: { value: '' } });
+  expect(screen.queryByLabelText('Numéro de série')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Banque émettrice'), { target: { value: '' } });
-  fireEvent.change(screen.getByLabelText('Motif de la correction', { exact: false }), { target: { value: 'Retirer les valeurs erronées' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ numero_serie: null, banque_emettrice: null }));
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ banque_emettrice: null }));
 });

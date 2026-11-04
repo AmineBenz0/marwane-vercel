@@ -16,7 +16,7 @@ async function prepare(supplier = false) {
   render(<RefundDialog transaction={{ id_transaction: 27, id_client: supplier ? null : 7, id_fournisseur: supplier ? 2 : null }}
     credit={5} onClose={closed} onSaved={saved} />);
   fireEvent.change(screen.getByLabelText(/Montant remboursé/), { target: { value: '2.50' } });
-  fireEvent.change(screen.getByLabelText(/Motif du remboursement/), { target: { value: 'Trop-perçu réellement restitué' } });
+  expect(screen.queryByLabelText(/Motif du remboursement/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier le remboursement' }));
   await screen.findByText(/Crédit restant après remboursement/);
   return { saved, closed };
@@ -27,6 +27,7 @@ it.each([false, true])('reviews the money direction and saves only on confirmati
   const { saved } = await prepare(supplier);
   expect(screen.getByText(supplier ? 'Entrée en caisse' : 'Sortie de caisse')).toBeVisible();
   expect(post).toHaveBeenCalledTimes(1);
+  expect(post.mock.calls[0][1].reason).toBe('Remboursement enregistré');
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer le remboursement' }));
   await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
   expect(post.mock.calls[1][1]).toMatchObject({ id_transaction: 27, montant: '2.50', dependency_fingerprint: preview.dependency_fingerprint });

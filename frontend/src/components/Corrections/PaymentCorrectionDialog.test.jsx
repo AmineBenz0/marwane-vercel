@@ -22,12 +22,14 @@ it('offers only active methods when correcting an ordinary payment', async () =>
   expect(screen.queryByRole('option', { name: 'Autre' })).not.toBeInTheDocument();
 });
 
-it.each(['carte', 'autre'])('preserves the existing %s method when correcting historical notes', async method => {
+it.each(['carte', 'autre'])('preserves the existing %s method during an ordinary date correction', async method => {
   render(<PaymentCorrectionDialog payment={{ ...payment, type_paiement: method }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(screen.getByLabelText('Notes (optionnel)'), { target: { value: 'Précision historique' } });
+  expect(screen.queryByLabelText('Notes (optionnel)')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Date du paiement' }), { target: { value: '21/10/26' } });
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ notes: 'Précision historique' }));
+  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ date_paiement: '2026-10-21' }));
 });
+
 
 it('previews bank-to-cash funding and explicitly clears the old account', async () => {
   const saved = vi.fn();
@@ -42,14 +44,15 @@ it('previews bank-to-cash funding and explicitly clears the old account', async 
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer la correction' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
 });
-it.each(['cheque', 'lc'])('gates %s financial edits while allowing notes through the audited path', async method => {
-  render(<PaymentCorrectionDialog payment={{ ...payment, type_paiement: method, id_compte: null, source_reglement: null }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
+it.each(['cheque', 'lc'])('keeps the %s amount and method locked without an optional notes field', async method => {
+  render(<PaymentCorrectionDialog payment={{ ...payment, type_paiement: method, id_lc: method === 'lc' ? 3 : null,
+    id_compte: null, source_reglement: null }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
   expect(screen.getByRole('spinbutton', { name: /^Montant/ })).toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Mode de paiement' })).toHaveAttribute('aria-disabled', 'true');
-  fireEvent.change(screen.getByLabelText('Notes (optionnel)'), { target: { value: 'Note corrigée' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ notes: 'Note corrigée' }));
+  expect(screen.queryByLabelText('Notes (optionnel)')).not.toBeInTheDocument();
+  if (method === 'lc') expect(screen.getByRole('link', { name: 'Modifier la lettre de crédit liée' })).toHaveAttribute('href', '/lettres-credit/3');
 });
+
 
 it('preserves legacy supplier bank funding when changing only the payment method', async () => {
   render(<PaymentCorrectionDialog payment={{ ...payment, source_reglement: null }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
@@ -70,11 +73,14 @@ it('previews a cleared-cheque status correction while preserving amount and fund
   await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ statut_cheque: 'rejete', date_encaissement_effective: null }));
 });
 
-it('submits only notes for a cancelled cheque and keeps its financial controls disabled', async () => {
-  render(<PaymentCorrectionDialog payment={{ ...payment, type_paiement: 'cheque', statut: 'annule', statut_cheque: 'encaisse', date_encaissement_effective: '2026-10-21' }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
+it('does not offer an editable correction for a cancelled cheque', async () => {
+  render(<PaymentCorrectionDialog payment={{ ...payment, type_paiement: 'cheque', statut: 'annule',
+    statut_cheque: 'encaisse', date_encaissement_effective: '2026-10-21' }} transaction={transaction} onClose={vi.fn()} onSaved={vi.fn()} />);
   expect(screen.getByRole('textbox', { name: /^Date du paiement/ })).toBeDisabled();
   expect(screen.getByRole('spinbutton', { name: /^Montant/ })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Notes (optionnel)'), { target: { value: 'Précision après annulation' } });
+  expect(screen.queryByLabelText('Notes (optionnel)')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-  await waitFor(() => expect(post.mock.calls[0][1].changes).toEqual({ notes: 'Précision après annulation' }));
+  expect(await screen.findByText('Aucune valeur n’a changé.')).toBeVisible();
+  expect(post).not.toHaveBeenCalled();
+
 });

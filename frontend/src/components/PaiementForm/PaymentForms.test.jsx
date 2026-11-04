@@ -215,10 +215,10 @@ describe('Unpaid transaction payment forms', () => {
     expect(screen.getByLabelText(/Date du paiement/)).toHaveValue('13/10/26');
     expect(screen.getByLabelText(/Date du paiement/)).toBeDisabled();
     expect(screen.getByRole('combobox', { name: /Type de paiement/ })).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.change(screen.getByLabelText(/Notes \(optionnel\)/), { target: { value: 'Reçu confirmé' } });
+    expect(screen.queryByLabelText(/Notes \(optionnel\)/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les détails' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
-    expect(submit.mock.calls[0][0]).toMatchObject({ montant: 40, notes: 'Reçu confirmé' });
+    expect(submit.mock.calls[0][0]).toMatchObject({ montant: 40, type_paiement: 'cash', date_paiement: '2026-10-13' });
   });
 
   it('displays the existing LC when editing even though it is no longer available', () => {
