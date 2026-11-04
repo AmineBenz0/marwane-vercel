@@ -266,8 +266,10 @@ def apply_lc_correction(db, command, fingerprint, actor):
             db.execute(text("SELECT set_config('app.correction_operation_id', :op, true)"), {'op': str(command.operation_id)})
         for field in ('numero_reference', 'numero_serie', 'banque_emettrice', 'montant', 'date_emission', 'date_disponibilite', 'notes', 'type_detenteur', 'id_client', 'id_fournisseur', 'statut'):
             value = after[field]
-            if field == 'montant': value = Decimal(value)
-            if field.startswith('date_'): value = datetime.fromisoformat(value).date()
+            if field == 'montant':
+                value = Decimal(value)
+            if field.startswith('date_'):
+                value = datetime.fromisoformat(value).date()
             setattr(lc, field, value)
         lc.version_utilisation = after['version_utilisation']
         lc.id_utilisateur_modification = actor.id_utilisateur

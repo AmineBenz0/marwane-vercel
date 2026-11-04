@@ -4,7 +4,6 @@ from datetime import datetime, time, timezone
 from decimal import Decimal
 from hashlib import sha256
 import json
-from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import or_

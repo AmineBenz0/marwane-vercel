@@ -383,7 +383,7 @@ def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, 
             )
 
     normalized = {key: _json_value(value) for key, value in requested.items()}
-    stock_plan = _stock_plan(db, command, record, normalized)
+    _stock_plan(db, command, record, normalized)
     return normalized
 
 
