@@ -84,6 +84,18 @@ export const groupCycles = (cycles) => {
   return [...grouped.values()].map((group) => ({ ...group, cycle: group.cycles[0] }));
 };
 
+// Common charges or sales can be attributed by date only when that date
+// belongs to exactly one lot. Overlapping lots have no defensible allocation.
+export const belongsToUniqueLotOnDate = (allCycles, selectedLotKey, targetDate) => {
+  if (!isValidIsoDate(targetDate)) return false;
+  const activeLots = new Set(allCycles.filter(cycle => {
+    const start = isoDate(cycle.date_debut);
+    const end = isoDate(cycle.date_fin_reelle);
+    return start && start <= targetDate && (!end || targetDate <= end);
+  }).map(cycle => String(cycle.id_lot || 'cycle-' + cycle.id_cycle)));
+  return activeLots.size === 1 && activeLots.has(String(selectedLotKey));
+};
+
 export function aggregateDays(dayRows, label, rowType = 'summary') {
   if (!dayRows.length) return null;
   const sum = (key) => dayRows.reduce((total, row) => total + Number(row[key] || 0), 0);

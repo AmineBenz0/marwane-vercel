@@ -11,6 +11,7 @@ import { DEMO_LOTS, buildDemoDays } from './globalOverviewDemo';
 import {
   aggregateDays,
   aggregateDemoDays,
+  belongsToUniqueLotOnDate,
   chargeBucket,
   dateLabel,
   fmt,
@@ -142,10 +143,26 @@ function GlobalOverviewPage() {
         loadPages('/produits'),
       ]);
       const buildingIds = selected.cycles.map((cycle) => Number(cycle.id_batiment));
+      const uniquelyOwnedBySelectedLot = date => belongsToUniqueLotOnDate(
+        normalized, selected.key, date
+      );
+      const isUnassigned = row => !row.id_cycle && !row.id_batiment;
       const relevantCharges = (charges || []).filter((charge) => {
-        if (!charge.id_cycle && !charge.id_batiment) return true;
+        if (isUnassigned(charge)) return uniquelyOwnedBySelectedLot(isoDate(charge.date_charge));
         return charge.id_cycle ? cycleIds.includes(Number(charge.id_cycle)) : buildingIds.includes(Number(charge.id_batiment));
       });
+      const relevantTransactions = (transactions || []).filter(transaction => (
+        !isUnassigned(transaction) || transaction.repartition_stock?.length
+        || uniquelyOwnedBySelectedLot(isoDate(transaction.date_transaction))
+      ));
+      const relevantPromises = (promiseTransactions || []).filter(transaction => (
+        !isUnassigned(transaction) || transaction.repartition_stock?.length
+        || uniquelyOwnedBySelectedLot(isoDate(transaction.date_transaction))
+      ));
+      const unassignedExcluded = (charges || []).some(row => isUnassigned(row)
+        && !uniquelyOwnedBySelectedLot(isoDate(row.date_charge)))
+        || (transactions || []).some(row => isUnassigned(row)
+          && !row.repartition_stock?.length && !uniquelyOwnedBySelectedLot(isoDate(row.date_transaction)));
       const rows = performances.flatMap((performance, index) => (performance.rows || [])
         .filter((row) => row.rowType === 'day')
         .map((row) => ({ ...row, id_cycle: selected.cycles[index].id_cycle, id_batiment: selected.cycles[index].id_batiment, nom_batiment: selected.cycles[index].nom_batiment })));
@@ -156,10 +173,11 @@ function GlobalOverviewPage() {
         rows,
         charges: relevantCharges,
         transactions: [
-          ...(transactions || []),
-          ...(promiseTransactions || []).filter((promise) => promise.id_transaction != null
-            && !(transactions || []).some((transaction) => transaction.id_transaction === promise.id_transaction)),
+          ...relevantTransactions,
+          ...relevantPromises.filter((promise) => promise.id_transaction != null
+            && !relevantTransactions.some((transaction) => transaction.id_transaction === promise.id_transaction)),
         ],
+        unassignedExcluded,
         products: products || [],
       });
     } catch (err) {
@@ -555,6 +573,11 @@ function GlobalOverviewPage() {
           </Menu>
         </Stack>
       </Stack>
+      {!demoMode && data?.unassignedExcluded && (
+        <Alert severity="info" sx={{ mb: 1.5 }}>
+          Les charges et ventes sans lot ni bâtiment ne sont pas réparties entre plusieurs lots actifs. Elles restent dans les rapports financiers généraux.
+        </Alert>
+      )}
       <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ px: 1.5, py: 1 }}>
           <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}>

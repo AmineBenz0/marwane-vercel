@@ -151,6 +151,33 @@ describe('Suivi global release checks',()=>{
   expect(exported.at(-1).sales).toBe(40);
   expect(exported.at(-1).cost).toBe(0);
  });
+ it('does not include a shared unassigned expense or sale in two overlapping lot totals', async () => {
+  const other = {...cycles[0], id_cycle:2, id_lot:2, id_batiment:2, nom_cycle:'Autre lot', date_debut:'2026-10-01', date_fin_reelle:'2026-10-02'};
+  mocks.cycles.mockResolvedValue([{...cycles[0],id_lot:1}, other]);
+  mocks.performance.mockResolvedValue({ rows: [{...rows[1], date:'01/10/2026', aliment_kg:0}] });
+  mocks.get.mockImplementation(async(path,options) => {
+    if (path === '/produits') return [{id_produit:1,nom_produit:'Œufs normaux'}];
+    if (path === '/charges') return [
+      {date_charge:'2026-10-01',montant:100,libelle:'Salaires'},
+      {id_batiment:1,date_charge:'2026-10-01',montant:10,libelle:'Entretien'}];
+    if (path === '/transactions' && options?.params?.est_promesse) return [];
+    if (path === '/transactions') return [
+      {id_transaction:2,id_client:1,id_produit:1,date_transaction:'2026-10-01',quantite:10,montant_total:100,est_actif:true},
+      {id_transaction:3,id_client:1,id_produit:1,id_batiment:1,date_transaction:'2026-10-01',quantite:1,montant_total:20,est_actif:true},
+    ];
+    return [];
+  });
+  render(<GlobalOverviewPage/>);
+  await screen.findByText(/sans lot ni bâtiment ne sont pas réparties/);
+  const first = await exportRows();
+  expect(first.at(-1).cost).toBe(10);
+  expect(first.at(-1).sales).toBe(20);
+  mocks.export.mockClear();
+  await select('Choisir un lot','Autre lot · termine');
+  const second = await exportRows();
+  expect(second.at(-1).cost).toBe(0);
+  expect(second.at(-1).sales).toBe(0);
+ });
  it('keeps the staging example available and labelled',async()=>{
   vi.stubEnv('VITE_DEPLOYMENT_ENV','preview');mocks.cycles.mockResolvedValue([]);render(<GlobalOverviewPage/>);
   await screen.findByText(/Données de démonstration/);
