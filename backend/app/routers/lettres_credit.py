@@ -299,7 +299,8 @@ def _get_active_lc_or_400(id: int, db: Session) -> LettreDeCredit:
         raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
     if lc.statut != 'active':
         raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
-    if not lc.id_client_origine or not lc.date_reception:
+    if (not lc.id_client_origine or not lc.date_reception
+            or lc.date_reception > business_date()):
         raise HTTPException(409, "L'origine ou la date de réception de cette LC doit être vérifiée avant utilisation.")
     if not lc.est_disponible:
         raise HTTPException(
@@ -351,7 +352,8 @@ def verser_lc_banque(
 
     if lc.statut != "active" or lc.statut_cycle != "detenue":
         raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
-    if not lc.id_client_origine or not lc.date_reception:
+    if (not lc.id_client_origine or not lc.date_reception
+            or lc.date_reception > business_date()):
         raise HTTPException(409, "L'origine ou la date de réception de cette LC doit être vérifiée avant utilisation.")
     if not lc.est_disponible:
         raise HTTPException(
@@ -398,6 +400,8 @@ def payer_fournisseur_lc(
     lc = _get_active_lc_or_400(id, db)
     if payload.version_utilisation != lc.version_utilisation:
         raise HTTPException(status_code=409, detail="La LC a changé depuis l'ouverture du formulaire. Actualisez la page.")
+    if payload.date_cession < max(lc.date_reception, lc.date_disponibilite) or payload.date_cession > business_date():
+        raise HTTPException(422, "La date du transfert doit respecter la réception et la disponibilité de la LC.")
     fournisseur = db.query(Fournisseur).filter(Fournisseur.id_fournisseur == payload.id_fournisseur).first()
     if not fournisseur:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable")
