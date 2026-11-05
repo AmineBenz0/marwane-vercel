@@ -169,11 +169,16 @@ describe('Suivi global release checks',()=>{
   });
   render(<GlobalOverviewPage/>);
   await screen.findByText(/sans lot ni bâtiment ne sont pas réparties/);
+  await select('Choisir un lot','Lot réel · termine');
+  await waitFor(() => expect(mocks.performance).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(screen.queryByLabelText('Chargement du registre')).not.toBeInTheDocument());
   const first = await exportRows();
   expect(first.at(-1).cost).toBe(10);
   expect(first.at(-1).sales).toBe(20);
   mocks.export.mockClear();
   await select('Choisir un lot','Autre lot · termine');
+  await waitFor(() => expect(mocks.performance).toHaveBeenCalledWith(2));
+  await waitFor(() => expect(screen.queryByLabelText('Chargement du registre')).not.toBeInTheDocument());
   const second = await exportRows();
   expect(second.at(-1).cost).toBe(0);
   expect(second.at(-1).sales).toBe(0);
