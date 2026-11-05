@@ -2,11 +2,22 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+from app.models.client import Client
 from app.main import app
 from app.models.caisse import Caisse
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.utils.dependencies import get_current_active_user
+
+
+@pytest.fixture
+def test_client(db_session):
+    contact = Client(nom_client="Client réactivation test", est_actif=True)
+    db_session.add(contact)
+    db_session.commit()
+    db_session.refresh(contact)
+    return contact
 
 
 def _inactive_sale(db_session, test_user, test_client, test_produit):
