@@ -18,7 +18,9 @@ describe('transaction register pagination for counts and exports', () => {
       params.skip === 0 ? [{id_transaction:2},{id_transaction:1}]
       : [{id_transaction:1}]);
     await expect(loadTransactionPages(overlap, {}, 2, 10)).rejects.toThrow(/changé/);
-    const oversized = vi.fn(async () => [{id_transaction:1},{id_transaction:2}]);
+    const oversized = vi.fn(async (_path, { params }) => [
+      {id_transaction: params.skip + 1}, {id_transaction: params.skip + 2},
+    ]);
     await expect(loadTransactionPages(oversized, {}, 2, 4)).rejects.toThrow(/trop de transactions/);
   });
 });
