@@ -217,3 +217,48 @@ def test_invalid_target_type_is_rejected(db_session, conversion_case):
     with pytest.raises(HTTPException) as wrong_product:
         preview_conversion(db_session, tx.id_transaction, preview_command(tx, vendor, sold))
     assert wrong_product.value.status_code == 409
+
+
+def test_conversion_rejects_active_non_cash_credit_allocation(
+    db_session, conversion_case, test_user
+):
+    from app.models.credit import AffectationCredit
+    tx, buyer, vendor, sold, bought = conversion_case
+    supplier_tx = Transaction(
+        date_transaction=tx.date_transaction, id_produit=bought.id_produit,
+        quantite=1, prix_unitaire=Decimal("20.00"), montant_total=Decimal("20.00"),
+        id_fournisseur=vendor.id_fournisseur, est_actif=True,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(supplier_tx)
+    db_session.flush()
+    # A same-party allocation is more typical, but the validator must
+    # reject any active link irrespective of the direction of the link.
+    alloc = AffectationCredit(
+        id_affectation=uuid4(), id_transaction_source=tx.id_transaction,
+        id_transaction_cible=supplier_tx.id_transaction, montant=Decimal("5"),
+        date_effet=date.today(), reason="Test credit dependency", statut="active",
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(alloc)
+    db_session.flush()
+    with pytest.raises(HTTPException) as conflict:
+        preview_conversion(db_session, tx.id_transaction, preview_command(tx, vendor, bought))
+    assert conflict.value.status_code == 409
+    assert "affectations de crédit" in conflict.value.detail
+    db_session.rollback()
+
+
+def test_converted_original_cannot_be_updated_through_legacy_route(
+    client, db_session, conversion_case, test_user, auth_headers
+):
+    tx, buyer, vendor, sold, bought = conversion_case
+    op = confirmed(tx, vendor, bought, db_session)
+    apply_conversion(db_session, tx.id_transaction, op, test_user)
+    response = client.put(
+        f"/api/v1/transactions/{tx.id_transaction}",
+        json={"quantite": 7}, headers=auth_headers,
+    )
+    assert response.status_code == 409
+    db_session.expire_all()
+    assert db_session.get(Transaction, tx.id_transaction).quantite == 3

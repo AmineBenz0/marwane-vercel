@@ -966,6 +966,12 @@ def update_transaction(
     }
     original_building_id = transaction.id_batiment
 
+    if not transaction.est_actif and update_data:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Une transaction retirée est conservée en lecture seule. Réactivez-la depuis son détail si elle n’a pas été convertie.",
+        )
+
     promise_identity_fields = {
         "date_transaction", "id_production", "id_batiment", "id_cycle",
         "id_produit", "id_client", "id_fournisseur",

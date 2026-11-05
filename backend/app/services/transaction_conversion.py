@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.models.client import Client
+from app.models.credit import AffectationCredit
 from app.models.correction_operation import CorrectionOperation
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.fournisseur import Fournisseur
@@ -140,6 +141,19 @@ def _plan(db, original, command, *, lock=False):
             or target_product.usage != ("achete" if target_side == "achat" else "vendu")
             or parse_sellable_egg_product_name(target_product.nom_produit)):
         raise HTTPException(409, "Choisissez un produit actif compatible, hors œufs et livraisons différées.")
+
+    # Explicit non-cash allocations have no Paiement row. Reject any active
+    # allocation referencing the source, whether it provides or receives credit.
+    # The allocation writer locks transaction rows as well; on apply the source
+    # row is held FOR UPDATE before this check.
+    from sqlalchemy import or_
+    linked_credit = db.query(AffectationCredit.id_affectation).filter(
+        AffectationCredit.statut == "active",
+        or_(AffectationCredit.id_transaction_source == original.id_transaction,
+            AffectationCredit.id_transaction_cible == original.id_transaction),
+    ).first()
+    if linked_credit:
+        raise HTTPException(409, "Annulez les affectations de crédit liées avant de convertir cette transaction.")
 
     payments = db.query(Paiement).filter(
         Paiement.id_transaction == original.id_transaction,
