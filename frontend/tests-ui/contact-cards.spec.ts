@@ -87,7 +87,7 @@ for (const plural of ['clients', 'fournisseurs'] as const) {
           && title.getBoundingClientRect().height <= parseFloat(style.lineHeight) * 2 + 1;
       }))).toBe(true);
       await expect(grid.getByText('Indisponible')).toHaveCount(1);
-      await expect(grid.getByText(plural === 'clients' ? 'Avance reçue' : 'Avance versée')).toBeVisible();
+      await expect(grid.getByText(plural === 'clients' ? 'Crédit du client' : 'Crédit chez le fournisseur')).toBeVisible();
       await expect(grid.getByText(/Créé le/)).toHaveCount(0);
       expect(state.listRequests.every((url) => url.searchParams.get('include_balance') === 'true')).toBe(true);
       expect(state.profileRequests).toEqual([]);
