@@ -45,6 +45,7 @@ import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
 import RefundDialog from '../../components/Corrections/RefundDialog';
 import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
+import { eggCategory } from '../../components/Corrections/correctionValues';
 import TransactionEditForm from './TransactionEditForm';
 import ReactivationReviewDialog from './ReactivationReviewDialog';
 import TransactionConversionDialog from './TransactionConversionDialog';
@@ -590,7 +591,7 @@ function TransactionDetail() {
   const sourceProduct = produits.find(item => item.id_produit === transaction.id_produit);
   const canConvert = !inactiveTransaction && !transaction.est_promesse && !transaction.id_production
     && !transaction.repartition_stock?.length && sourceProduct &&
-    !/^oeufs\s*-/i.test(sourceProduct.nom_produit || '');
+    !eggCategory(sourceProduct.nom_produit);
 
   const isSale = Boolean(transaction.id_client);
   const balance = transactionBalance(transaction, statutPaiement?.montant_restant);

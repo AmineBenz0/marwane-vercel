@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { post } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
+import { eggCategory } from '../../components/Corrections/correctionValues';
 
 export default function TransactionConversionDialog({ transaction, products = [], clients = [], suppliers = [], onClose, onConverted }) {
   const toPurchase = Boolean(transaction.id_client);
@@ -10,7 +11,7 @@ export default function TransactionConversionDialog({ transaction, products = []
   const contactId = toPurchase ? 'id_fournisseur' : 'id_client';
   const contactName = toPurchase ? 'nom_fournisseur' : 'nom_client';
   const eligibleProducts = products.filter(x => x.est_actif !== false &&
-    x.usage === (toPurchase ? 'achete' : 'vendu') && !/^oeufs\s*-/i.test(x.nom_produit || ''));
+    x.usage === (toPurchase ? 'achete' : 'vendu') && !eggCategory(x.nom_produit));
   const [values, setValues] = useState({
     id_contact_cible: '', id_produit_cible: '', quantite: String(transaction.quantite),
     prix_unitaire: String(transaction.prix_unitaire),

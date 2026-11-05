@@ -8,7 +8,7 @@ const source = { id_transaction: 7, id_client: 3, id_fournisseur: null,
   row_version: 6, quantite: 2, prix_unitaire: '20.00' };
 const products = [
   { id_produit: 11, nom_produit: 'Aliment de poule', usage: 'achete', est_actif: true },
-  { id_produit: 12, nom_produit: 'Oeufs - Gros', usage: 'achete', est_actif: true },
+  { id_produit: 12, nom_produit: 'Œufs - Gros', usage: 'achete', est_actif: true },
   { id_produit: 13, nom_produit: 'Service vendu', usage: 'vendu', est_actif: true },
 ];
 const suppliers = [{ id_fournisseur: 4, nom_fournisseur: 'Ferme locale', est_actif: true }];
@@ -35,7 +35,7 @@ async function inspect() {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Fournisseur' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Ferme locale' }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Produit' }));
-  expect(screen.queryByRole('option', { name: 'Oeufs - Gros' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Œufs - Gros' })).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole('option', { name: 'Aliment de poule' }));
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier la conversion' }));
   await screen.findByRole('button', { name: 'Confirmer la conversion' });
