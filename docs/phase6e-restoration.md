@@ -29,8 +29,8 @@ blocked rather than assigned invented sources.
 - Existing Phase 6D LC lifecycle integration and migration replay regressions
   remain separate blockers; do not release this feature to production until
   those gates and owner walkthrough pass.
-- **6E-B — conversion remains unimplemented.** Sale↔purchase conversion must
-  be an explicit linked replacement, with separately selected financial and
-  inventory effects, valid contact and lot/source constraints, immutable old
-  payment/LC/cheque history, and single atomic commit. Do not simply change
-  `id_client` into `id_fournisseur` on a settled transaction.
+- **6E-B — ordinary service/general-inventory conversion implemented on staging.**
+  Opposite-side conversion creates a separate linked, unpaid transaction and
+  retires the original atomically. Egg-source, deferred-delivery and linked
+  instrument/credit cases stay blocked pending dedicated lifecycle handling.
+  See `docs/phase6e-conversion.md` and `docs/phase6e-acceptance.md`.
