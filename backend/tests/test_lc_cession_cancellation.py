@@ -7,6 +7,7 @@ from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.fournisseur import Fournisseur
 from app.models.lettre_credit import LettreDeCredit
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.paiement import Paiement
 from app.models.produit import Produit
 from app.models.transaction import Transaction
@@ -29,6 +30,8 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
         montant=1000,
         date_emission=date.today() - timedelta(days=10),
         date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=date.today() - timedelta(days=2),
+        id_client_origine=original_holder.id_client,
         type_detenteur="client",
         id_client=original_holder.id_client,
         statut="active",
@@ -64,26 +67,24 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     assert first_use.json()["statut"] == "utilisee"
     assert first_use.json()["version_utilisation"] == 1
     original_cession_1 = db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).one()
-    original_cash_movement = db_session.query(Caisse).filter_by(
-        id_cession=original_cession_1.id_cession,
+    original_usage = db_session.query(LettreCreditUtilisation).filter_by(
+        id_lc=lc.id_lc, id_cession=original_cession_1.id_cession,
         statut="active",
     ).one()
-    assert original_cash_movement.type_mouvement == "SORTIE"
-    assert original_cash_movement.montant == lc.montant
+    assert original_usage.type_utilisation == "fournisseur"
+    assert original_usage.id_fournisseur == supplier.id_fournisseur
+    # A transfer consumes the LC instrument, not physical cash.
+    assert db_session.query(Caisse).filter_by(id_cession=original_cession_1.id_cession).count() == 0
     cash_response = client.get("/api/v1/caisse/mouvements", headers=auth_headers)
     assert cash_response.status_code == 200, cash_response.text
     assert all(row["id_cession"] is None for row in cash_response.json())
-    # Preserve the LC audit trail while keeping non-cash transfers out of cash totals/exports.
-    assert original_cash_movement.numero_reference_lc == lc.numero_reference
 
     first_cancel = cancel(1)
     assert first_cancel.status_code == 200, first_cancel.text
     assert first_cancel.json()["statut"] == "active"
     assert first_cancel.json()["version_utilisation"] == 1
     db_session.expire_all()
-    assert db_session.query(Caisse).filter_by(
-        id_mouvement=original_cash_movement.id_mouvement
-    ).one().statut == "annule"
+    assert db_session.get(LettreCreditUtilisation, original_usage.id_utilisation).statut == "annulee"
 
     stored_lc = db_session.query(LettreDeCredit).filter_by(id_lc=lc.id_lc).one()
     assert stored_lc.est_disponible
@@ -96,8 +97,8 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     ).one()
     assert first_reversal.type_cedant == "fournisseur"
     assert first_reversal.id_cedant_fournisseur == supplier.id_fournisseur
-    assert first_reversal.type_cessionnaire == "client"
-    assert first_reversal.id_cessionnaire_client == original_holder.id_client
+    assert first_reversal.type_cessionnaire == "entreprise"
+    assert first_reversal.id_cessionnaire_client is None
     assert original_cession_1.motif is not None
     assert "Contrepassation" in first_reversal.motif
 
@@ -128,6 +129,8 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     cessions = db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).order_by(CessionLC.id_cession).all()
     assert len(cessions) == 4
     assert [row.id_cession_origine for row in cessions] == [None, cessions[0].id_cession, None, cessions[2].id_cession]
+    assert db_session.query(LettreCreditUtilisation).filter_by(id_lc=lc.id_lc, statut="active").count() == 0
+    assert db_session.query(LettreCreditUtilisation).filter_by(id_lc=lc.id_lc, statut="annulee").count() == 2
     assert db_session.query(CorrectionFinanciere).filter_by(
         type_entite="cession_lc", action="annulation"
     ).count() == 2
@@ -145,8 +148,9 @@ def test_payment_use_reversal_restores_amount_due_across_reuse_cycles(
     app.dependency_overrides[get_current_active_user] = lambda: test_user
 
     holder = Client(nom_client="LC payment holder")
-    product = Produit(nom_produit="LC payment product")
-    db_session.add_all([holder, product])
+    supplier = Fournisseur(nom_fournisseur="LC payment supplier")
+    product = Produit(nom_produit="LC payment product", type_produit="service")
+    db_session.add_all([holder, supplier, product])
     db_session.flush()
     transaction = Transaction(
         date_transaction=date.today(),
@@ -155,7 +159,7 @@ def test_payment_use_reversal_restores_amount_due_across_reuse_cycles(
         prix_unitaire=1000,
         montant_total=1000,
         est_actif=True,
-        id_client=holder.id_client,
+        id_fournisseur=supplier.id_fournisseur,
         id_utilisateur_creation=test_user.id_utilisateur,
     )
     lc = LettreDeCredit(
@@ -163,6 +167,8 @@ def test_payment_use_reversal_restores_amount_due_across_reuse_cycles(
         montant=1000,
         date_emission=date.today() - timedelta(days=10),
         date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=date.today() - timedelta(days=2),
+        id_client_origine=holder.id_client,
         type_detenteur="client",
         id_client=holder.id_client,
         statut="active",
@@ -254,6 +260,8 @@ def test_bank_deposit_uses_a_new_idempotency_key_after_each_cancellation(
         montant=1000,
         date_emission=date.today() - timedelta(days=10),
         date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=date.today() - timedelta(days=2),
+        id_client_origine=holder.id_client,
         type_detenteur="client",
         id_client=holder.id_client,
         statut="active",
@@ -293,6 +301,10 @@ def test_bank_deposit_uses_a_new_idempotency_key_after_each_cancellation(
             id_compte=account.id_compte
         ).one()
         assert stored_account.solde_actuel == 250
+        stored_lc = db_session.get(LettreDeCredit, lc.id_lc)
+        assert stored_lc.statut_cycle == "detenue"
+        assert stored_lc.id_client == holder.id_client
+        assert db_session.query(LettreCreditUtilisation).filter_by(id_lc=lc.id_lc, statut="active").count() == 0
         assert db_session.query(MouvementBancaire).filter_by(
             cle_idempotence=f"lc-bank-deposit-{lc.id_lc}-{expected_version + 1}",
             statut="annule",

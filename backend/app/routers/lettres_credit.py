@@ -299,6 +299,8 @@ def _get_active_lc_or_400(id: int, db: Session) -> LettreDeCredit:
         raise HTTPException(status_code=404, detail="Lettre de Crédit introuvable")
     if lc.statut != 'active':
         raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
+    if not lc.id_client_origine or not lc.date_reception:
+        raise HTTPException(409, "L'origine ou la date de réception de cette LC doit être vérifiée avant utilisation.")
     if not lc.est_disponible:
         raise HTTPException(
             status_code=400,
@@ -349,6 +351,8 @@ def verser_lc_banque(
 
     if lc.statut != "active" or lc.statut_cycle != "detenue":
         raise HTTPException(status_code=400, detail="Cette LC est déjà utilisée")
+    if not lc.id_client_origine or not lc.date_reception:
+        raise HTTPException(409, "L'origine ou la date de réception de cette LC doit être vérifiée avant utilisation.")
     if not lc.est_disponible:
         raise HTTPException(
             status_code=400,
