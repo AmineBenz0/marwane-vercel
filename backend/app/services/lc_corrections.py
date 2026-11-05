@@ -14,6 +14,7 @@ from app.models.fournisseur import Fournisseur
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.correction_operation import CorrectionOperation
 from app.models.lettre_credit import LettreDeCredit
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.services.correction_contract import replay_result
@@ -91,18 +92,29 @@ def _context(db, command, lock):
 
 def plan_lc_correction(db, command, *, lock=False):
     lc, payments, cessions, cash, bank, transactions, siblings, state = _context(db, command, lock)
-    active_payments = [p for p in payments if p.statut != 'annule']
+    # A client payment records RECEIPT of the LC, not its outgoing usage.
+    # A receipt can coexist with a subsequent supplier transfer/deposit, and
+    # must not be counted as an independent outgoing utilisation.
+    active_receipts = [p for p in payments if p.statut != 'annule' and p.role_lc == 'reception']
+    active_outgoing = [p for p in payments if p.statut != 'annule' and p.role_lc == 'utilisation']
+    unclassified = [p for p in payments if p.statut != 'annule' and p.role_lc not in ('reception', 'utilisation')]
     reversed_ids = {c.id_cession_origine for c in cessions if c.id_cession_origine is not None}
     active_cessions = [c for c in cessions if c.id_cession_origine is None and c.id_cession not in reversed_ids]
     deposits = [m for m in bank if m.id_paiement is None and m.statut == 'active']
-    uses = len(active_payments) + len(active_cessions) + len(deposits)
-    if uses > 1 or (lc.statut == 'utilisee') != (uses == 1):
+    uses = len(active_outgoing) + len(active_cessions) + len(deposits)
+    if (unclassified or len(active_receipts) > 1 or uses > 1
+            or (lc.statut == 'utilisee') != (uses == 1)):
         raise HTTPException(409, 'Réconciliez les utilisations de cette LC avant de la corriger.')
-    payment = active_payments[0] if active_payments else None
     cession = active_cessions[0] if active_cessions else None
     deposit = deposits[0] if deposits else None
-    usage = 'payment' if payment else 'cession' if cession else 'deposit' if deposit else 'unused'
+    payment = active_outgoing[0] if active_outgoing else (
+        active_receipts[0] if not (cession or deposit) and active_receipts else None)
+    usage = 'payment' if active_outgoing else 'cession' if cession else 'deposit' if deposit else 'receipt' if payment else 'unused'
     changes = command.changes.model_dump(exclude_unset=True)
+    # Do not leave an already received LC with mismatched incoming and outgoing
+    # payments. Cancel the outgoing use before changing the instrument amount.
+    if active_receipts and uses and 'montant' in changes and changes['montant'] != lc.montant:
+        raise HTTPException(409, 'Annulez l’utilisation sortante avant de modifier le montant de la LC reçue.')
     financial = bool(set(changes) - {'notes', 'numero_reference', 'numero_serie', 'banque_emettrice'}) or command.action == 'cancel_usage'
     if financial and any(p.statut != 'annule' and p.nature in {'remboursement', 'credit_recu', 'credit_transfere'} for p in siblings):
         raise HTTPException(409, 'Traitez les remboursements ou crédits liés avant cette correction.')
@@ -140,8 +152,9 @@ def plan_lc_correction(db, command, *, lock=False):
     if 'date_effet' in changes and not uses:
         raise HTTPException(422, 'Cette LC n’a pas d’utilisation à dater.')
     day = changes.get('date_effet', payment.date_paiement if payment else cession.date_cession if cession else deposit.date_mouvement.date() if deposit else None)
-    if day is not None and not available <= day <= business_date():
-        raise HTTPException(422, 'L’utilisation doit être comprise entre la disponibilité de la LC et aujourd’hui.')
+    earliest = lc.date_reception if usage == 'receipt' else available
+    if day is not None and (earliest is None or not earliest <= day <= business_date()):
+        raise HTTPException(422, 'La date doit respecter la réception/disponibilité de la LC et aujourd’hui.')
     tx_by_id = {t.id_transaction: t for t in transactions}
     active_cash = [m for m in cash if m.statut == 'active']
     active_bank = [m for m in bank if m.statut == 'active']
@@ -149,20 +162,27 @@ def plan_lc_correction(db, command, *, lock=False):
         tx = tx_by_id[payment.id_transaction]
         if (payment.nature != 'paiement' or payment.type_paiement != 'lc' or not payment.est_effectif
             or payment.montant != lc.montant or not tx.est_actif or day < tx.date_transaction
-            or tx.id_client != lc.id_client or tx.id_fournisseur != lc.id_fournisseur):
-            raise HTTPException(409, 'Le paiement, sa transaction et le détenteur doivent être réconciliés.')
-        expected_bank = payment.source_reglement == 'banque' and tx.id_fournisseur is not None
-        movements = active_cash + active_bank
-        if len(movements) != 1:
-            raise HTTPException(409, 'Le paiement LC doit avoir un seul mouvement associé.')
-        m = movements[0]
-        if (m.id_paiement != payment.id_paiement or m.montant != payment.montant
-            or m.type_mouvement != payment.ledger_direction(tx) or m.date_mouvement.date() != payment.date_paiement
-            or m.id_charge is not None or m.id_avance is not None
-            or isinstance(m, MouvementBancaire) != expected_bank
-            or expected_bank and (m.id_compte != payment.id_compte or m.source != 'lc')
-            or isinstance(m, Caisse) and (m.id_transaction != tx.id_transaction or m.id_cession is not None)):
-            raise HTTPException(409, 'Le mouvement du paiement LC doit être réconcilié.')
+            or payment.source_reglement is not None or payment.id_compte is not None):
+            raise HTTPException(409, 'Le paiement et sa transaction doivent être réconciliés.')
+        if payment.role_lc == 'reception':
+            if (tx.id_client != lc.id_client_origine or tx.id_fournisseur is not None
+                    or lc.statut_cycle != 'detenue' or lc.statut != 'active'
+                    or not lc.date_reception):
+                raise HTTPException(409, 'La réception de LC et son paiement doivent être réconciliés.')
+        else:
+            use = db.query(LettreCreditUtilisation).filter(
+                LettreCreditUtilisation.id_lc == lc.id_lc,
+                LettreCreditUtilisation.id_paiement == payment.id_paiement,
+                LettreCreditUtilisation.statut == 'active',
+            ).one_or_none()
+            if (tx.id_fournisseur != lc.id_fournisseur or tx.id_client is not None
+                    or lc.statut_cycle != 'transferee' or lc.statut != 'utilisee'
+                    or use is None or use.id_fournisseur != tx.id_fournisseur):
+                raise HTTPException(409, 'L’utilisation de LC et son paiement doivent être réconciliés.')
+        # LC receipt/transfer is a non-cash instrument settlement: neither a
+        # caisse entry nor a bank debit is valid for its payment row.
+        if active_cash or active_bank:
+            raise HTTPException(409, 'Un règlement LC ne doit pas produire de mouvement de caisse ou de banque.')
     elif deposit:
         if active_cash or len(active_bank) != 1 or deposit.montant != lc.montant or deposit.type_mouvement != 'ENTREE' or deposit.source != 'lc' or deposit.reference != lc.numero_reference or deposit.id_charge or deposit.id_avance:
             raise HTTPException(409, 'Le versement bancaire de cette LC doit être réconcilié.')
@@ -176,7 +196,10 @@ def plan_lc_correction(db, command, *, lock=False):
         raise HTTPException(409, 'Cette LC disponible conserve des mouvements actifs à réconcilier.')
     if command.action == 'cancel_usage':
         after['statut'] = 'active'
-        if cession:
+        after['statut_cycle'] = 'detenue' if lc.id_client_origine is not None else 'a_verifier'
+        if payment or deposit or (cession and cession.type_cedant == 'entreprise'):
+            after.update(type_detenteur='client', id_client=lc.id_client_origine, id_fournisseur=None)
+        elif cession:
             after.update(type_detenteur=cession.type_cedant, id_client=cession.id_cedant_client, id_fournisseur=cession.id_cedant_fournisseur)
     after['version_utilisation'] = lc.version_utilisation + 1
     new_account = changes.get('id_compte', deposit.id_compte if deposit else None)
@@ -264,7 +287,7 @@ def apply_lc_correction(db, command, fingerprint, actor):
         db.flush()
         if db.get_bind().dialect.name == 'postgresql':
             db.execute(text("SELECT set_config('app.correction_operation_id', :op, true)"), {'op': str(command.operation_id)})
-        for field in ('numero_reference', 'numero_serie', 'banque_emettrice', 'montant', 'date_emission', 'date_disponibilite', 'notes', 'type_detenteur', 'id_client', 'id_fournisseur', 'statut'):
+        for field in ('numero_reference', 'numero_serie', 'banque_emettrice', 'montant', 'date_emission', 'date_disponibilite', 'notes', 'type_detenteur', 'id_client', 'id_fournisseur', 'statut', 'statut_cycle'):
             value = after[field]
             if field == 'montant':
                 value = Decimal(value)
@@ -275,6 +298,17 @@ def apply_lc_correction(db, command, fingerprint, actor):
         lc.id_utilisateur_modification = actor.id_utilisateur
         lc.date_modification = now
         if change_payment:
+            if payment.role_lc == 'utilisation':
+                usage_row = db.query(LettreCreditUtilisation).filter(
+                    LettreCreditUtilisation.id_lc == lc.id_lc,
+                    LettreCreditUtilisation.id_paiement == payment.id_paiement,
+                    LettreCreditUtilisation.statut == 'active',
+                ).with_for_update().one()
+                if cancel:
+                    usage_row.statut = 'annulee'
+                    usage_row.motif_annulation = command.reason[:1000]
+                else:
+                    usage_row.date_utilisation = datetime.fromisoformat(plan['date_effet']).date()
             payment.montant = Decimal(plan['montant'])
             payment.date_paiement = datetime.fromisoformat(plan['date_effet']).date()
             payment.id_utilisateur_modification = actor.id_utilisateur
