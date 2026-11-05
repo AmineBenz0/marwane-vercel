@@ -8,6 +8,7 @@ from app.models.cession_lc import CessionLC
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.correction_operation import CorrectionOperation
 from app.models.lettre_credit import LettreDeCredit
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.paiement import Paiement
 from app.schemas.correction import CorrectionCommand
 from app.schemas.lc_correction import LCCorrectionCommand
@@ -76,7 +77,9 @@ def letter(db_session, correction_sale, test_user):
     tx.date_transaction = date.today() - timedelta(days=10)
     lc = LettreDeCredit(numero_reference='TEST-LC-INSTRUMENT', montant=Decimal('5.00'),
         date_emission=tx.date_transaction, date_disponibilite=tx.date_transaction,
-        id_client=tx.id_client, type_detenteur='client', statut='active', version_utilisation=0,
+        date_reception=tx.date_transaction, id_client_origine=tx.id_client,
+        statut_cycle='detenue', id_client=tx.id_client, type_detenteur='client',
+        statut='active', version_utilisation=0,
         id_utilisateur_creation=test_user.id_utilisateur)
     db_session.add(lc)
     db_session.commit()
@@ -174,21 +177,56 @@ def test_failure_rolls_back_lc_payment_and_ledger(db_session, letter, test_user,
     assert db_session.query(MouvementBancaire).count() == 1
 
 
-def test_lc_payment_amount_and_date_replace_effect(db_session, letter, test_user):
-    lc, tx = letter
-    p = Paiement(id_transaction=tx.id_transaction, type_paiement='lc', id_lc=lc.id_lc,
-        montant=lc.montant, date_paiement=date.today() - timedelta(days=1), statut='valide',
-        id_utilisateur_creation=test_user.id_utilisateur)
-    db_session.add(p); db_session.flush()
-    lc.statut, lc.version_utilisation = 'utilisee', 1
-    sync_payment_cash_movement(db_session, p, tx, current_user=test_user)
+def used_lc_supplier_payment(db, lc, tx, actor, *, payment_date):
+    """Build a reconciled outgoing, non-cash LC usage for correction tests."""
+    lc.statut = 'utilisee'
+    lc.statut_cycle = 'transferee'
+    lc.type_detenteur = 'fournisseur'
+    lc.id_client = None
+    lc.id_fournisseur = tx.id_fournisseur
+    lc.version_utilisation = 1
+    payment = Paiement(
+        id_transaction=tx.id_transaction, type_paiement='lc', role_lc='utilisation',
+        id_lc=lc.id_lc, montant=lc.montant, date_paiement=payment_date,
+        statut='valide', id_utilisateur_creation=actor.id_utilisateur,
+    )
+    db.add(payment)
+    db.flush()
+    db.add(LettreCreditUtilisation(
+        id_lc=lc.id_lc, type_utilisation='fournisseur',
+        date_utilisation=payment.date_paiement, id_fournisseur=tx.id_fournisseur,
+        id_paiement=payment.id_paiement,
+        id_utilisateur_creation=actor.id_utilisateur,
+    ))
+    sync_payment_cash_movement(db, payment, tx, current_user=actor)
+    db.commit()
+    return payment
+
+
+def test_lc_payment_amount_and_date_replace_effect(
+    db_session, letter, test_user, correction_transaction
+):
+    lc, receipt_tx = letter
+    supplier_tx = correction_transaction
+    supplier_tx.date_transaction = date.today() - timedelta(days=2)
     db_session.commit()
+    p = used_lc_supplier_payment(
+        db_session, lc, supplier_tx, test_user,
+        payment_date=date.today() - timedelta(days=1),
+    )
     revision_trigger(db_session, 'paiements', 'montant,date_paiement,statut')
     apply_lc(db_session, lc_cmd(lc, {'montant': '6.00', 'date_effet': date.today()}), test_user)
     assert p.montant == lc.montant == 6
-    assert db_session.query(Caisse).filter(Caisse.statut == 'active').one().montant == 6
+    assert p.date_paiement == date.today()
+    usage = db_session.query(LettreCreditUtilisation).filter_by(id_paiement=p.id_paiement).one()
+    assert usage.date_utilisation == date.today() and usage.statut == 'active'
+    # The transfer settles the supplier liability but never touches cash.
+    assert db_session.query(Caisse).filter(Caisse.statut == 'active').count() == 0
     apply_lc(db_session, lc_cmd(lc, action='cancel_usage'), test_user)
     assert p.statut == 'annule' and lc.statut == 'active'
+    assert lc.statut_cycle == 'detenue'
+    assert lc.id_client == receipt_tx.id_client and lc.id_fournisseur is None
+    assert usage.statut == 'annulee'
 
 
 def test_cession_replacement_preserves_original_and_restores_owner(db_session, letter, test_user, correction_transaction):
@@ -250,17 +288,16 @@ def test_supplier_bank_cheque_status_reversal_restores_account(db_session, corre
     assert account.solde_actuel == 0
 
 
-def test_lc_dependent_refund_blocks_amount_edit_and_cancellation(db_session, letter, test_user):
+def test_lc_dependent_refund_blocks_amount_edit_and_cancellation(
+    db_session, letter, test_user, correction_transaction
+):
     from app.schemas.refund import RefundCommand, RefundApplyCommand
     from app.services.refunds import preview_refund, apply_refund
-    lc, tx = letter
+    lc, _ = letter
+    tx = correction_transaction
     tx.montant_total = Decimal('1.00')
-    p = Paiement(id_transaction=tx.id_transaction, type_paiement='lc', id_lc=lc.id_lc,
-        montant=lc.montant, date_paiement=date.today(), statut='valide', id_utilisateur_creation=test_user.id_utilisateur)
-    db_session.add(p); db_session.flush()
-    lc.statut, lc.version_utilisation = 'utilisee', 1
-    sync_payment_cash_movement(db_session, p, tx, current_user=test_user)
     db_session.commit()
+    p = used_lc_supplier_payment(db_session, lc, tx, test_user, payment_date=date.today())
     cmd = RefundCommand(operation_id=uuid4(), id_transaction=tx.id_transaction, date_paiement=date.today(), montant='2.00', type_paiement='cash', reason='Remboursement LC')
     preview = preview_refund(db_session, cmd)
     apply_refund(db_session, RefundApplyCommand(**cmd.model_dump(), dependency_fingerprint=preview['dependency_fingerprint']), test_user)
