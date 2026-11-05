@@ -50,3 +50,18 @@ export function summarizeTransactions(transactions) {
     totalAchats: activeAchats.reduce((sum, transaction) => sum + parseFloat(transaction.montant_total || 0), 0),
   };
 }
+
+
+// Preserve historical/cancelled rows in registers while making their state
+// explicit in exports. Financial totals must match active-only dashboard cards.
+export const prepareTransactionExportRows = (transactions) => transactions.map(transaction => ({
+  ...transaction,
+  etat_transaction: transaction.est_actif === false ? 'Annulée' : 'Active',
+}));
+
+export const sumActiveTransactionAmounts = transactions => transactions.reduce(
+  (total, transaction) => total + (
+    transaction.est_actif === false ? 0 : Number(transaction.montant_total || 0)
+  ),
+  0
+);

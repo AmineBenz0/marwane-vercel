@@ -106,6 +106,51 @@ describe('Suivi global release checks',()=>{
   const exported=await exportRows();
   expect(exported[0].oeufs).toBe(777);
  });
+
+
+ it('keeps unallocated costs/sales in the lot total without multiplying them by building', async () => {
+  const sharedCycles = [
+   {...cycles[0], id_lot:8, id_cycle:1, id_batiment:1, nom_batiment:'Bâtiment 1'},
+   {...cycles[0], id_lot:8, id_cycle:2, id_batiment:2, nom_batiment:'Bâtiment 2'},
+  ];
+  mocks.cycles.mockResolvedValue(sharedCycles);
+  mocks.performance.mockResolvedValue({ rows: [{...rows[1], date:'01/10/2026', aliment_kg:0}] });
+  mocks.get.mockImplementation(async (path, options) => {
+   if (path === '/produits') return [{id_produit:1,nom_produit:'Œufs normaux'}];
+   if (path === '/charges') return [
+    {id_cycle:null, id_batiment:null, date_charge:'2026-10-01', montant:100, libelle:'Électricité'},
+    {id_cycle:null, id_batiment:1, date_charge:'2026-10-01', montant:10, libelle:'Entretien bâtiment 1'},
+   ];
+   if (path === '/transactions' && options?.params?.est_promesse) return [];
+   if (path === '/transactions') return [
+    {id_transaction:101, id_client:3, id_produit:1, date_transaction:'2026-10-01', quantite:2, montant_total:200, est_actif:true},
+    {id_transaction:102, id_client:3, id_produit:1, id_batiment:1, date_transaction:'2026-10-01', quantite:1, montant_total:20, est_actif:true},
+    // Allocated to building 2, even though this promise originated in building 1.
+    {id_transaction:103, id_client:3, id_produit:1, id_batiment:1, est_promesse:true, est_actif:true,
+     date_transaction:'2026-10-01', quantite:10, montant_total:100,
+     repartition_stock:[{id_cycle:2, quantite:10, quantite_livree:4}]},
+   ];
+   return [];
+  });
+  render(<GlobalOverviewPage/>);
+  await screen.findByText('01/10/2026');
+  await select('Choisir une période','Toute la période');
+  let exported = await exportRows();
+  expect(exported.at(-1).sales).toBe(260);
+  expect(exported.at(-1).cost).toBe(110);
+
+  mocks.export.mockClear();
+  await select('Choisir un bâtiment','Bâtiment 1');
+  exported = await exportRows();
+  expect(exported.at(-1).sales).toBe(20);
+  expect(exported.at(-1).cost).toBe(10);
+
+  mocks.export.mockClear();
+  await select('Choisir un bâtiment','Bâtiment 2');
+  exported = await exportRows();
+  expect(exported.at(-1).sales).toBe(40);
+  expect(exported.at(-1).cost).toBe(0);
+ });
  it('keeps the staging example available and labelled',async()=>{
   vi.stubEnv('VITE_DEPLOYMENT_ENV','preview');mocks.cycles.mockResolvedValue([]);render(<GlobalOverviewPage/>);
   await screen.findByText(/Données de démonstration/);

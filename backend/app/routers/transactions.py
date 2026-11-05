@@ -655,7 +655,9 @@ def get_transactions(
         query = query.filter(Transaction.est_promesse == est_promesse)
 
     # Pagination
-    transactions = query.order_by(Transaction.date_transaction.desc()).offset(skip).limit(limit).all()
+    transactions = query.order_by(
+        Transaction.date_transaction.desc(), Transaction.id_transaction.desc()
+    ).offset(skip).limit(limit).all()
     
     reservations = deferred_sale_reservations(db) if any(tx.est_promesse for tx in transactions) else {}
     return [TransactionRead.model_validate(tx).model_copy(update={

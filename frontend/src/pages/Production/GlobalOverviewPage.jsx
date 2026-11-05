@@ -229,7 +229,10 @@ function GlobalOverviewPage() {
     const chargesByWeek = new Map();
     const filteredCharges = data.charges.filter((charge) => {
       if (buildingId === 'all') return true;
-      return charge.id_cycle ? allowedCycleIds.includes(Number(charge.id_cycle)) : !charge.id_batiment || Number(charge.id_batiment) === Number(buildingId);
+      // Common, unallocated charges belong to the whole lot, never 100% to each building.
+      return charge.id_cycle
+        ? allowedCycleIds.includes(Number(charge.id_cycle))
+        : charge.id_batiment != null && Number(charge.id_batiment) === Number(buildingId);
     });
     filteredCharges.forEach((charge) => {
       const date = isoDate(charge.date_charge);
@@ -251,11 +254,13 @@ function GlobalOverviewPage() {
     const relevantTransactions = data.transactions.flatMap(transaction => {
       if (!transaction.repartition_stock?.length) return [transaction];
       const quantity = transaction.repartition_stock.filter(a => cycleIds.has(Number(a.id_cycle))).reduce((sum, a) => sum + Number(a.quantite_livree ?? a.quantite), 0);
-      return quantity ? [{ ...transaction, id_cycle: null, quantite: quantity, montant_total: Number(transaction.montant_total) * quantity / transaction.quantite }] : [];
+      return quantity ? [{ ...transaction, id_cycle: null, id_batiment: null, _attributedByAllocation: true, quantite: quantity, montant_total: Number(transaction.montant_total) * quantity / transaction.quantite }] : [];
     }).filter((transaction) => {
       if (transaction.est_actif === false) return false;
       const hasOwner = transaction.id_cycle || transaction.id_batiment;
-      if (!hasOwner) return true;
+      // Do not count an unassigned sale against every individual building.
+      // A stock allocation, however, is explicit evidence of building ownership.
+      if (!hasOwner) return buildingId === 'all' || transaction._attributedByAllocation === true;
       return transaction.id_cycle ? cycleIds.has(Number(transaction.id_cycle)) : buildingSet.has(Number(transaction.id_batiment));
     });
     const salesByDate = new Map();

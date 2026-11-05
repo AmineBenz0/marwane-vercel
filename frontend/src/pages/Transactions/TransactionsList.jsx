@@ -36,7 +36,8 @@ import TransactionForm from './TransactionForm';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { deferredSaleStatus } from './deferredSaleStatus';
 import { deferredStockQuantities } from './deferredStockQuantities';
-import { countTransactionQuickFilters, filterTransactions, summarizeTransactions } from './transactionListModel';
+import { countTransactionQuickFilters, filterTransactions, summarizeTransactions, prepareTransactionExportRows, sumActiveTransactionAmounts } from './transactionListModel';
+import { loadTransactionPages } from './transactionPages';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
@@ -314,12 +315,8 @@ function TransactionsList() {
       if (sourceBuilding) params.id_batiment = Number(sourceBuilding);
 
       // Récupérer les transactions
-      const data = await get('/transactions', {
-        params: {
-          ...params,
-          limit: 1000, // Limite élevée pour récupérer toutes les transactions
-        },
-      });
+      // All filters, counts and exports must use the complete paginated result.
+      const data = await loadTransactionPages(get, params);
 
       if (request === loadRequest.current) setTransactions(data || []);
     } catch (err) {
@@ -480,7 +477,7 @@ function TransactionsList() {
   const handleExportExcel = async () => {
     try {
       const hasPromises = rowsForExport.some(row => row.est_promesse);
-      const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), ...(hasPromises ? [
+      const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), { id: 'etat_transaction', label: 'État' }, ...(hasPromises ? [
         { id: 'quantite_completee', label: 'Quantité complétée' },
         { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
         { id: 'quantite_en_attente', label: 'Reste à fournir' },
@@ -491,10 +488,7 @@ function TransactionsList() {
         ...row,
         quantite_a_produire: deferredStockQuantities(row).toProduce,
       }));
-      const totalMontant = rowsForExport.reduce(
-        (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
-        0
-      );
+      const totalMontant = sumActiveTransactionAmounts(rowsForExport);
 
       const createEmptyRow = () =>
         columnsForExport.reduce((acc, col) => {
@@ -600,7 +594,7 @@ function TransactionsList() {
   const handleExportPDF = () => {
     try {
       const hasPromises = rowsForExport.some(row => row.est_promesse);
-      const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), ...(hasPromises ? [
+      const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), { id: 'etat_transaction', label: 'État' }, ...(hasPromises ? [
         { id: 'quantite_completee', label: 'Quantité complétée' },
         { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
         { id: 'quantite_en_attente', label: 'Reste à fournir' },
@@ -611,10 +605,7 @@ function TransactionsList() {
         ...row,
         quantite_a_produire: deferredStockQuantities(row).toProduce,
       }));
-      const totalMontant = rowsForExport.reduce(
-        (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
-        0
-      );
+      const totalMontant = sumActiveTransactionAmounts(rowsForExport);
       const totalMontantFormatted =
         new Intl.NumberFormat('fr-FR', {
           minimumFractionDigits: 2,
@@ -904,7 +895,10 @@ function TransactionsList() {
   /**
    * Lignes actuellement affichées dans le registre, utilisées pour les exports.
    */
-  const rowsForExport = displayedTransactions;
+  const rowsForExport = useMemo(
+    () => prepareTransactionExportRows(displayedTransactions),
+    [displayedTransactions]
+  );
 
   return (
     <Box sx={{ maxWidth: 1480, mx: 'auto', overflowX: 'hidden' }}>

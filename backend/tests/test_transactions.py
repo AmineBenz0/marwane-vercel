@@ -356,3 +356,30 @@ def test_phase6e_restoring_a_cancelled_sale_does_not_double_count_its_old_stock_
     assert review["stock_effect"] == "sortie"
     assert review["stock_quantity"] == 60
     assert review["restore_cancelled_payments"] is False
+
+
+
+def test_transaction_pages_have_stable_order_for_equal_dates(
+    client, db_session, test_user, test_client, test_produit, auth_headers
+):
+    """Pagination must have a unique tie-breaker so every record is fetched once."""
+    for i in range(7):
+        db_session.add(Transaction(
+            date_transaction=date(2026, 11, 5),
+            id_produit=test_produit.id_produit,
+            quantite=1, prix_unitaire=Decimal("10.00"),
+            montant_total=Decimal("10.00"), est_actif=(i % 2 == 0),
+            id_client=test_client.id_client,
+            id_utilisateur_creation=test_user.id_utilisateur,
+        ))
+    db_session.commit()
+    expected = [row.id_transaction for row in db_session.query(Transaction)
+                .order_by(Transaction.date_transaction.desc(), Transaction.id_transaction.desc())]
+    received = []
+    for skip in range(0, len(expected), 3):
+        response = client.get("/api/v1/transactions", params={"skip": skip, "limit": 3},
+                              headers=auth_headers)
+        assert response.status_code == 200, response.text
+        received.extend(row["id_transaction"] for row in response.json())
+    assert received == expected
+    assert len(set(received)) == len(expected)
