@@ -126,6 +126,13 @@ jobs:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
           ENVIRONMENT: testing
           SECRET_KEY: ci-only-secret
+      - name: Verify LC receipt, transfer, cancellation and atomic payment on PostgreSQL
+        run: python -m pytest --override-ini addopts='' tests/test_lc_cession_cancellation.py tests/test_transaction_payment_atomicity.py -q
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          SECRET_KEY: ci-only-secret
+
 
   frontend:
     # Pin a Playwright-supported OS; ubuntu-latest is now Ubuntu 26.04.
