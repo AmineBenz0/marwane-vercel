@@ -1,0 +1,58 @@
+name: One-shot frontend lockfile security repair
+on:
+  push:
+    branches: [staging]
+permissions:
+  contents: write
+jobs:
+  patch-lock:
+    if: "github.event.head_commit.message == 'chore: trigger one-time frontend lockfile repair'"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Update only the audited transitive package
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'frontend/package-lock.json';
+          let text = fs.readFileSync(path, 'utf8');
+          const oldEntry = [
+            '"version": "1.16.1"',
+            '"resolved": "https://registry.npmjs.org/follow-redirects/-/follow-redirects-1.16.1.tgz"',
+            '"integrity": "sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg=="',
+          ].join(',\n      ');
+          const newEntry = [
+            '"version": "1.16.2"',
+            '"resolved": "https://registry.npmjs.org/follow-redirects/-/follow-redirects-1.16.2.tgz"',
+            '"integrity": "sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow=="',
+          ].join(',\n      ');
+          const pos = text.indexOf('"node_modules/follow-redirects": {');
+          if (pos < 0 || text.indexOf(oldEntry, pos) < 0 ||
+              text.indexOf(oldEntry, pos) - pos > 80 ||
+              text.indexOf(oldEntry, pos + 1) !== text.lastIndexOf(oldEntry)) {
+            throw new Error('Expected vulnerable follow-redirects lock entry was not found uniquely');
+          }
+          text = text.replace(oldEntry, newEntry);
+          fs.writeFileSync(path, text);
+          if (JSON.parse(text).packages['node_modules/follow-redirects'].version !== '1.16.2') {
+            throw new Error('Patched version not saved');
+          }
+          NODE
+      - name: Verify the exact lockfile with npm
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-fund
+          npm audit --audit-level=high
+      - name: Commit verified lockfile to staging
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json
+          git diff --cached --exit-code && exit 1 || true
+          git commit -m "security: fix locked follow-redirects advisory (1.16.2)"
+          git push origin HEAD:staging
