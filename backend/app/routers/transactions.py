@@ -890,8 +890,7 @@ def get_transaction(
             detail=f"Transaction avec l'ID {id} introuvable"
         )
     
-    reserved = deferred_sale_reservations(db).get(id, 0) if transaction.est_promesse and transaction.est_actif and transaction.quantite_en_attente > 0 else 0
-    return TransactionRead.model_validate(transaction).model_copy(update=deferred_stock_quantities(transaction, reserved))
+    return _transaction_read(db, transaction)
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)

@@ -262,3 +262,32 @@ def test_converted_original_cannot_be_updated_through_legacy_route(
     assert response.status_code == 409
     db_session.expire_all()
     assert db_session.get(Transaction, tx.id_transaction).quantite == 3
+
+
+def test_conversion_http_preview_apply_and_both_detail_links(
+    client, db_session, conversion_case, test_user, auth_headers
+):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    tx, buyer, vendor, sold, bought = conversion_case
+    payload = preview_command(tx, vendor, bought).model_dump(mode="json")
+    target = f"/api/v1/transactions/{tx.id_transaction}/conversion"
+    preview = client.post(target + "/preview", json=payload, headers=auth_headers)
+    assert preview.status_code == 200, preview.text
+    review = preview.json()
+    apply = client.post(target + "/apply", json={
+        **payload, "dependency_fingerprint": review["dependency_fingerprint"],
+        "operation_id": str(uuid4()), "annuler_paiements_existants": False,
+    }, headers=auth_headers)
+    assert apply.status_code == 200, apply.text
+    replacement_id = apply.json()["id_transaction_remplacement"]
+    original_detail = client.get(f"/api/v1/transactions/{tx.id_transaction}", headers=auth_headers)
+    replacement_detail = client.get(f"/api/v1/transactions/{replacement_id}", headers=auth_headers)
+    assert original_detail.status_code == 200
+    assert replacement_detail.status_code == 200
+    assert original_detail.json()["id_transaction_remplacement"] == replacement_id
+    assert replacement_detail.json()["id_transaction_origine"] == tx.id_transaction
+    assert original_detail.json()["est_actif"] is False
+    assert replacement_detail.json()["est_actif"] is True
