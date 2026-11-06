@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import ExcelJS from 'exceljs';
-import { readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { mockAuthenticatedSession } from './auth';
 
 // Deterministic, read-only browser coverage of the actual downloaded artifacts.
@@ -68,12 +68,19 @@ async function exportSheet(page: Page, click: () => Promise<void>) {
   return workbook.worksheets[0];
 }
 
-async function assertPdf(page: Page, click: () => Promise<void>) {
+async function savePdfPreview(path: string, filename: string) {
+  if (!process.env.CI) return;
+  await mkdir('test-results/phase7-previews', { recursive: true });
+  await copyFile(path, 'test-results/phase7-previews/' + filename);
+}
+
+async function assertPdf(page: Page, click: () => Promise<void>, filename: string) {
   const [download] = await Promise.all([page.waitForEvent('download'), click()]);
   expect(download.suggestedFilename()).toMatch(/\.pdf$/);
   const file = await download.path();
   expect(file).toBeTruthy();
   expect((await readFile(file!)).subarray(0, 5).toString()).toBe('%PDF-');
+  await savePdfPreview(file!, filename);
 }
 
 const amount = (value: unknown) =>
@@ -111,7 +118,7 @@ test('phase7 transaction register XLSX includes canceled rows but total excludes
     [103, { state: 'Active', money: 25.5 }],
   ]));
   expect(total).toBe(125.5);
-  await assertPdf(page, () => page.getByRole('button', { name: 'Exporter en PDF' }).click());
+  await assertPdf(page, () => page.getByRole('button', { name: 'Exporter en PDF' }).click(), 'transactions-courtes.pdf');
   expect(writes).toEqual([]);
 });
 
@@ -131,7 +138,7 @@ test('phase7 monthly summary XLSX matches visible figures and PDF is valid', asy
   expect(items.get('Charges')).toBe(35);
   expect(items.get('À encaisser actuel au 06/11/26')).toBe(100);
   expect(items.get('À payer aux fournisseurs actuel au 06/11/26')).toBe(25.5);
-  await assertPdf(page, () => page.getByRole('button', { name: 'PDF', exact: true }).click());
+  await assertPdf(page, () => page.getByRole('button', { name: 'PDF', exact: true }).click(), 'rapport-mensuel.pdf');
   expect(writes).toEqual([]);
 });
 
@@ -169,6 +176,7 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
   const path = await download.path();
   expect(path).toBeTruthy();
   const buffer = await readFile(path!);
+  await savePdfPreview(path!, 'transactions-30-lignes.pdf');
   const source = buffer.toString('latin1');
   const pageCount = (source.match(/\/Type \/Page\b/g) || []).length;
   expect(pageCount).toBeGreaterThanOrEqual(3);
