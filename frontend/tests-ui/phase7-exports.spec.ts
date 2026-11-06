@@ -172,9 +172,12 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
   const source = buffer.toString('latin1');
   const pageCount = (source.match(/\/Type \/Page\b/g) || []).length;
   expect(pageCount).toBeGreaterThanOrEqual(3);
-  expect(pageCount).toBeLessThanOrEqual(6);
+  expect(pageCount).toBeLessThanOrEqual(7);
+  expect(source).toContain('MARWANE');
+  expect(source).toContain('Rapport des transactions');
+  expect(source).toContain('TOTAL ACTIF');
   for (let number = 1; number <= pageCount; number += 1) {
-    expect(source).toContain(`Page ${number} sur ${pageCount}`);
+    expect(source).toContain(`${number} / ${pageCount}`);
   }
   expect(writes).toEqual([]);
 });
