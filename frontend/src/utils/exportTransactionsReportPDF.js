@@ -56,18 +56,74 @@ function tableStyle(top = 42) {
 
 function addSection(doc, section, title, subtitle, columns, data, widths, emphasis = []) {
   if (!data.length) return;
-  doc.addPage();
-  const first = doc.getNumberOfPages();
-  autoTable(doc, {
-    ...tableStyle(42),
+  const options = {
+    ...tableStyle(43),
     startY: 43,
     head: [columns],
-    body: data,
     columnStyles: Object.fromEntries(widths.map((width, index) => [
       index, { cellWidth: width, halign: emphasis.includes(index) ? 'right' : 'left' },
     ])),
     rowPageBreak: 'avoid',
+  };
+  // Let AutoTable measure wrapping and padding with exactly the rendering styles.
+  // Its continuation rows retain raw data, even though their index becomes -1.
+  const measure = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const heights = new Map(data.map(row => [row, 0]));
+  let headHeight = 0;
+  autoTable(measure, {
+    ...options,
+    body: data,
+    didDrawCell: ({ column, row }) => {
+      if (column.index !== 0) return;
+      if (row.section === 'head') headHeight = row.height;
+      if (row.section === 'body') {
+        heights.set(row.raw, heights.get(row.raw) + row.height);
+      }
+    },
   });
+  const capacity = measure.internal.pageSize.getHeight() -
+    options.startY - options.margin.bottom - headHeight;
+  const pages = [];
+  let page = [];
+  let used = 0;
+  for (const row of data) {
+    const height = heights.get(row);
+    if (page.length && used + height > capacity + 0.01) {
+      pages.push(page);
+      page = [];
+      used = 0;
+    }
+    page.push(row);
+    used += height;
+  }
+  if (page.length) pages.push(page);
+
+  // Balance only the final pair, keeping order, page count and typography intact.
+  // Oversized rows remain alone and AutoTable handles their necessary splitting.
+  if (pages.length > 1) {
+    const last = pages.length - 1;
+    const combined = [...pages[last - 1], ...pages[last]];
+    const totalHeight = combined.reduce((sum, row) => sum + heights.get(row), 0);
+    let leftHeight = 0;
+    let bestDifference = Infinity;
+    let split = pages[last - 1].length;
+    for (let index = 1; index < combined.length; index += 1) {
+      leftHeight += heights.get(combined[index - 1]);
+      const rightHeight = totalHeight - leftHeight;
+      const difference = Math.abs(leftHeight - rightHeight);
+      if (leftHeight <= capacity && rightHeight <= capacity && difference < bestDifference) {
+        split = index;
+        bestDifference = difference;
+      }
+    }
+    pages.splice(last - 1, 2, combined.slice(0, split), combined.slice(split));
+  }
+
+  const first = doc.getNumberOfPages() + 1;
+  for (const body of pages) {
+    doc.addPage();
+    autoTable(doc, { ...options, body });
+  }
   const end = doc.getNumberOfPages();
   section.push({ start: first, end, title, subtitle });
 }
@@ -108,12 +164,12 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     ...tableStyle(43),
     styles: {
       ...tableStyle(43).styles,
-      // Nine rows fit on the first page and twelve on following pages,
-      // avoiding a nearly empty last register page for normal histories.
+      // Preserve the approved spacing while keeping ordinary rows together.
       cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
       minCellHeight: 9.2,
     },
     startY: 72,
+    rowPageBreak: 'avoid',
     head: [['ID', 'DATE', 'PARTENAIRE / PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
     body: transactionRows,
     foot: [[
@@ -146,7 +202,10 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     },
     didDrawCell: data => {
       if (data.section !== 'body' || data.column.index !== 7) return;
-      const cancelled = source[data.row.index]?.est_actif === false;
+      // Cell.raw survives page splitting. Row.index is -1 on continuations.
+      const status = data.cell.raw;
+      if (status !== 'Annulée' && status !== 'Active') return;
+      const cancelled = status === 'Annulée';
       const { x, y, width, height } = data.cell;
       const pillWidth = Math.min(width - 4, 22);
       const pillHeight = 7;
@@ -157,7 +216,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       doc.setTextColor(...(cancelled ? PDF_COLORS.muted : PDF_COLORS.teal));
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.8);
-      doc.text(cancelled ? 'Annulée' : 'Active',
+      doc.text(status,
         x + width / 2, pillY + 4.9, { align: 'center' });
     },
   });

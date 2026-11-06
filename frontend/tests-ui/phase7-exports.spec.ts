@@ -158,6 +158,8 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
     ...txData[0],
     id_transaction: 500 + index,
     date_transaction: '2026-10-22',
+    // Canceled rows must retain their status at every possible page boundary.
+    est_actif: index % 3 !== 1,
     est_promesse: index === 0,
     quantite: 20,
     montant_total: '100.00',
@@ -195,6 +197,12 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
   expect(source).toContain('MARWANE');
   expect(source).toContain('Rapport des transactions');
   expect(source).toContain('TOTAL ACTIF');
+  const register = [...source.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
+    .map(match => match[1])
+    .filter(stream => !stream.includes('ANNEXE'))
+    .join('\n');
+  expect((register.match(/\(Annulée\) Tj/g) || [])).toHaveLength(10);
+  expect((register.match(/\(Active\) Tj/g) || [])).toHaveLength(20);
   for (let number = 1; number <= pageCount; number += 1) {
     expect(source).toContain(`${number} / ${pageCount}`);
   }
