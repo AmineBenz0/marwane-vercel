@@ -147,9 +147,24 @@ test.describe('Phase 7: authenticated reporting reconciliation (read-only)', () 
       ventes: string;
       achats: string;
       charges: string;
+      creances_actuelles: string;
+      dettes_actuelles: string;
+      solde_caisse: string;
+      date_soldes_actuels: string;
     }>(page, '/reports/monthly?month=' + month);
     expect(cents(report.ventes)).toBe(billedSales);
     expect(cents(report.achats)).toBe(billedPurchases);
+
+    // Reconcile the monthly report with the same-date financial position
+    // used by the live cash and receivables/payables screens.
+    const position = await fetchJson<{
+      creances_clients: string;
+      dettes_fournisseurs: string;
+      solde_caisse: string;
+    }>(page, '/caisse/solde/complet?date_as_of=' + report.date_soldes_actuels);
+    expect(cents(report.creances_actuelles)).toBe(cents(position.creances_clients));
+    expect(cents(report.dettes_actuelles)).toBe(cents(position.dettes_fournisseurs));
+    expect(cents(report.solde_caisse)).toBe(cents(position.solde_caisse));
 
     await page.goto('/rapports/mensuel');
     await page.locator('input[type="month"]').fill(month);

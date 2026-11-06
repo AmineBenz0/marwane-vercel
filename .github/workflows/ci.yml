@@ -165,6 +165,8 @@ jobs:
       - run: npm run lint
       - run: npm run test:unit:coverage
       - run: npm run build
+      - name: Validate Phase 7 authenticated E2E specification without credentials
+        run: npx playwright test --list --project=chromium tests-e2e/phase7-read-only.spec.ts
       - name: Install Chromium for deterministic contact UI checks
         run: npx playwright install --with-deps chromium
       - name: Verify contacts and flock lifecycle on desktop and mobile
