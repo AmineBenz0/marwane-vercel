@@ -44,3 +44,60 @@ Staging Supabase: `aqosvbpcxfpntcejebma`. No production or staging database muta
 - No production promotion until Phase 8 release gates (security, backup/recovery, concurrency and full E2E) plus owner approval.
 
 **Release decision:** Not a production go-ahead. No production deployment or Supabase data write is part of Phase 7 fixes.
+
+
+## Follow-up verification — 6 November 2026
+
+**Staging-only, read-only live data checks:** Supabase `aqosvbpcxfpntcejebma`. No user credentials were retrieved, no staging data was mutated, and no production changes were made.
+
+### October financial benchmarks
+
+Independent SQL against active transactions and charges gives:
+
+| October 2026 | Staging figure |
+| --- | ---: |
+| Active sales | 18,070.90 MAD |
+| Active purchases | 8,750.00 MAD |
+| Active charges | 3,850.00 MAD |
+| Active transactions | 16 |
+| Inactive transactions retained | 12 |
+
+These must agree with `GET /reports/monthly?month=2026-10`, the client/supplier register, and Excel/PDF exports. A live authenticated comparison is still pending; the calculations above are independent SQL reference values, not claimed screenshots or downloaded artifacts.
+
+### Deferred sales and production-source integrity
+
+Read-only PostgreSQL checks returned:
+
+- 19 active production source rows; 15,425 recorded eggs across the available categories.
+- 1,450 eggs in allocations to active sales, of which 1,449 are marked completed, with **zero** production sources reserved beyond their recorded quantity and **zero** completed quantities above active allocations.
+- 69 eggs in historic allocations to inactive/canceled sales. These must remain auditable but must not be counted as currently reserved stock.
+- Deferred sales #15 and #22 account for 9 and 50 eggs respectively sourced from production dated later than the original invoice date. No live cross-building or explicitly cross-cycle deferred allocation was present in this data sample.
+- One ordinary (non-deferred) sale has an allocation of one egg with `quantite_livree=0`. This field is not meaningful for an ordinary sale. `Suivi global` previously omitted it; the code now uses `allocation.quantite` for ordinary sales and `quantite_livree` only for deferred completions.
+- Regression tests cover ordinary allocations with zero deferred-completion markers, partially reserved deferred sales, and cross-lot source attribution in a synthetic scenario. A real cross-lot case cannot be claimed tested on staging because none was found there.
+
+**Accounting date distinction:** The canonical monthly report recognizes the full invoice in the original transaction month, while per-lot `Suivi global` uses completed/allocated production quantities to attribute egg volume and a proportional value to the source lot. Those are different measures and should not be compared as if both were whole-farm invoiced revenue. Do not silently change the delivery accounting date based solely on a source's production date; that requires an explicit business rule.
+
+### Read-only live staging security inventory
+
+- Every public table has RLS enabled.
+- Zero direct `PUBLIC`/`anon` or `authenticated` table grants; zero runtime `DELETE` or `TRUNCATE` privileges on accounting/stock journals.
+- Zero non-invoker public views; zero public `SECURITY DEFINER` functions.
+- `app_runtime` and `app_migrator` are not superusers and cannot bypass RLS.
+- Supabase security advisors still report: two deliberately policyless internal tables (`alembic_version`, `independent_lot_migration_map`) with RLS enabled (deny-by-default); three functions with role-mutable `search_path`; two extensions (`pg_trgm`, `unaccent`) in the public schema. These advisory-level schema-hardening topics are not silently patched during a Phase 7 reporting audit.
+
+Advisory guidance:
+- https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
+- https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable
+- https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public
+
+### Automated coverage added
+
+- The full unit/CI gate runs the new ordinary-egg allocation and deferred-source regression tests.
+- A native PostgreSQL conversion test now asserts that the historical original remains available, the replacement is active, and the monthly report, payables, receivables, and cash totals reconcile after sale-to-purchase conversion.
+- `frontend/tests-e2e/phase7-read-only.spec.ts` provides an authenticated **read-only** acceptance: fetch and reconcile active transaction totals, verify all transaction IDs and canceled-state labels in the downloaded Excel file, verify the financial grand total, check the monthly report's Excel values and current cash/receivable/payable balances, and verify valid PDF downloads. The regular frontend CI validates Playwright test discovery without credentials.
+- **Execution limitation:** the repository's authenticated E2E workflow is gated by `RUN_E2E=true` and `E2E_BASE_URL`, `E2E_EMAIL`, `E2E_PASSWORD` secrets. Its workflow remains skipped unless those are configured. The available connected browser was not logged in to the staging app and cannot perform an authenticated walkthrough in Chat mode. An E2E specification and API-only checks do not substitute for a real signed-in Excel/PDF download test.
+- The database-security workflow is likewise workflow-dispatch gated; the live security results above come from direct read-only Supabase queries and advisors, not the skipped GitHub job.
+
+### Release decision
+
+**Staging reporting implementation: ready for code-level acceptance once final CI passes. Phase 7 full authenticated acceptance: open. Production promotion: not authorized.** Remaining actionable gate: run the new authenticated read-only E2E against staging or complete its equivalent owner walkthrough, then sign off downloaded files and historical cross-lot presentation. Broader concurrency/recovery/schema-hardening is retained for Phase 8.
