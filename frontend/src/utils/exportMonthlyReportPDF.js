@@ -41,7 +41,7 @@ function flowCard(doc, x, y, title, inflow, outflow) {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...PDF_COLORS.muted);
   doc.setFontSize(8);
-  doc.text('Entrees', x + 4, y + 18);
+  doc.text('Entrées', x + 4, y + 18);
   doc.text('Sorties', x + 4, y + 26.5);
   doc.setTextColor(...PDF_COLORS.navy);
   doc.setFont('helvetica', 'bold');
@@ -76,8 +76,8 @@ function balances(report) {
   });
 
   return [
-    ['A encaisser', pdfMoney(report.creances), pdfMoney(report.creances_actuelles)],
-    ['A payer aux fournisseurs', pdfMoney(report.dettes), pdfMoney(report.dettes_actuelles)],
+    ['À encaisser', pdfMoney(report.creances), pdfMoney(report.creances_actuelles)],
+    ['À payer aux fournisseurs', pdfMoney(report.dettes), pdfMoney(report.dettes_actuelles)],
     ['Solde caisse', pdfMoney(report.solde_caisse_historique), pdfMoney(report.solde_caisse)],
     ...banks,
   ];
@@ -111,7 +111,7 @@ export function exportMonthlyReportPDF(report, filename) {
   flowCard(doc, margin + (interior - 4) / 2 + 4, 98, 'Banques',
     report.banques_entrees, report.banques_sorties);
 
-  sectionTitle(doc, 'Situation financiere', 146);
+  sectionTitle(doc, 'Situation financière', 146);
   const monthEnd = pdfDate(report.date_soldes_historiques || report.date_fin);
   const currentDate = pdfDate(report.date_soldes_actuels);
   autoTable(doc, {
@@ -172,10 +172,10 @@ export function exportMonthlyReportPDF(report, filename) {
     doc.text(month, margin, 39);
     doc.setTextColor(...PDF_COLORS.muted);
     doc.setFontSize(8.3);
-    const label = 'Periode : ' + pdfDate(report.date_debut) + ' au ' + pdfDate(report.date_fin) +
+    const label = 'Période : ' + pdfDate(report.date_debut) + ' au ' + pdfDate(report.date_fin) +
       (projected ? '  |  Fin de mois provisoire' : '');
     doc.text(pdfClean(label), margin, 46);
-    doc.text('Edition ' + pdfDate(edition), pageWidth - margin, 31, { align: 'right' });
+    doc.text('Édition ' + pdfDate(edition), pageWidth - margin, 31, { align: 'right' });
   }
 
   pdfFooters(doc, edition);

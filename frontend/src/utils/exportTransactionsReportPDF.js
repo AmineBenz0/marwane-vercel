@@ -150,7 +150,8 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     [13, 85, 147, 29],
   );
 
-  const deferred = source.filter(row => row.est_promesse);
+  const deferred = source.filter(row => row.est_promesse ||
+    (row.etat_stock && !['-', '—'].includes(String(row.etat_stock).trim())));
   addSection(
     doc, sections, 'Livraisons différées',
     String(deferred.length) + ' transactions concernées par une livraison différée',
