@@ -44,28 +44,25 @@ def monthly_report(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="month doit être au format YYYY-MM") from exc
     current_date = business_date()
-    # A current-month report cannot claim to know future month-end balances.
-    # Treat future-dated financial entries as not yet realized activity.
-    effective_end = min(date_fin, current_date)
-    transactions = db.query(Transaction).filter(Transaction.est_actif.is_(True), Transaction.date_transaction.between(date_debut, effective_end)).all()
+    transactions = db.query(Transaction).filter(Transaction.est_actif.is_(True), Transaction.date_transaction.between(date_debut, date_fin)).all()
     sales = [row for row in transactions if row.id_client is not None]
     purchases = [row for row in transactions if row.id_fournisseur is not None]
-    charge_total = db.query(func.sum(Charge.montant)).filter(Charge.statut == "active", Charge.date_charge.between(date_debut, effective_end)).scalar()
-    previous_day = (date_debut - timedelta(days=1)) if current_date >= date_debut else current_date
-    cash_end = cash_ledger_as_of(db, effective_end)
+    charge_total = db.query(func.sum(Charge.montant)).filter(Charge.statut == "active", Charge.date_charge.between(date_debut, date_fin)).scalar()
+    previous_day = date_debut - timedelta(days=1)
+    cash_end = cash_ledger_as_of(db, date_fin)
     cash_start = cash_ledger_as_of(db, previous_day)
     cash_current = cash_ledger_as_of(db, current_date)
-    bank_end = bank_ledgers_as_of(db, effective_end)
+    bank_end = bank_ledgers_as_of(db, date_fin)
     bank_current = bank_ledgers_as_of(db, current_date)
-    bank_activity_end = bank_activity_as_of(db, effective_end)
+    bank_activity_end = bank_activity_as_of(db, date_fin)
     bank_activity_start = bank_activity_as_of(db, previous_day)
-    historical_position = financial_position_as_of(db, effective_end)
+    historical_position = financial_position_as_of(db, date_fin)
     current_position = financial_position_as_of(db, current_date)
     inventory_count, inventory_quantity_delta = db.query(
         func.count(MouvementStock.id_mouvement_stock),
         func.coalesce(func.sum(MouvementStock.quantite_delta), 0),
     ).filter(
-        func.date(MouvementStock.date_mouvement).between(date_debut, effective_end)
+        func.date(MouvementStock.date_mouvement).between(date_debut, date_fin)
     ).one()
     bank_balances = []
     historical_bank_balances = []
@@ -100,7 +97,7 @@ def monthly_report(
         date_debut=date_debut,
         date_fin=date_fin,
         date_soldes_actuels=current_date,
-        date_soldes_historiques=effective_end,
+        date_soldes_historiques=date_fin,
         creances_actuelles=current_position["receivables"],
         dettes_actuelles=current_position["payables"],
         ventes=sum((_money(row.montant_total) for row in sales), Decimal("0")),

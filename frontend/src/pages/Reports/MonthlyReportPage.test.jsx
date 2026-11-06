@@ -96,10 +96,10 @@ it('keeps current balances separate from month-end amounts and explains accounti
 });
 
 
-it('labels an in-progress reporting month with the actual snapshot date, not a future month-end', async () => {
+it('identifies future month-end balances as projections without changing the recorded month', async () => {
   get.mockResolvedValue({
     month: '2026-11', date_debut: '2026-11-01', date_fin: '2026-11-30',
-    date_soldes_historiques: '2026-11-06', date_soldes_actuels: '2026-11-06',
+    date_soldes_historiques: '2026-11-30', date_soldes_actuels: '2026-11-06',
     ventes: '0', achats: '0', charges: '0', caisse_entrees: '0', caisse_sorties: '0',
     banques_entrees: '0', banques_sorties: '0', creances: '10', dettes: '20',
     creances_actuelles: '10', dettes_actuelles: '20',
@@ -108,13 +108,13 @@ it('labels an in-progress reporting month with the actual snapshot date, not a f
     inventory_movements: 0, inventory_quantity_delta: '0',
   });
   render(<MonthlyReportPage />);
-  const snapshot = await screen.findByRole('button', { name: 'Situation au jour du rapport' });
+  const snapshot = await screen.findByRole('button', { name: 'Projection à la fin du mois' });
   expect(snapshot).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
   await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalled());
   const firstRow = exportToExcelAdvanced.mock.calls[0][0][0];
-  expect(firstRow).toEqual({ indicateur: 'Période', valeur: '01/11/26 – 06/11/26' });
+  expect(firstRow).toEqual({ indicateur: 'Période', valeur: '01/11/26 – 30/11/26' });
   expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining([
-    expect.objectContaining({ indicateur: 'À encaisser au 06/11/26' }),
+    expect.objectContaining({ indicateur: 'À encaisser (projection au 30/11/26)' }),
   ]));
 });
