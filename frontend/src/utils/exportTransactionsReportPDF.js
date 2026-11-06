@@ -94,7 +94,8 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
 
   const transactionRows = source.map(row => [
     pdfDate(row.date_transaction),
-    row.partner + '\n' + row.product,
+    row.partner,
+    row.product,
     pdfInteger(row.quantite),
     pdfMoney(row.montant_total, false),
     pdfMoney(row.montant_paye, false),
@@ -112,10 +113,10 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     },
     startY: 72,
     rowPageBreak: 'avoid',
-    head: [['DATE', 'PARTENAIRE / PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
+    head: [['DATE', 'PARTENAIRE', 'PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
     body: transactionRows,
     foot: [[
-      { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 3 },
+      { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 4 },
       pdfMoney(total, false), pdfMoney(paid, false), pdfMoney(remaining, false), '',
     ]],
     showFoot: 'lastPage',
@@ -125,24 +126,25 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     },
     columnStyles: {
       0: { cellWidth: 22 },
-      1: { cellWidth: 118 },
-      2: { cellWidth: 16, halign: 'right' },
-      3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
-      4: { cellWidth: 29, halign: 'right' },
-      5: { cellWidth: 30, halign: 'right', textColor: PDF_COLORS.teal },
-      6: { cellWidth: 29, halign: 'center' },
+      1: { cellWidth: 64 },
+      2: { cellWidth: 54 },
+      3: { cellWidth: 16, halign: 'right' },
+      4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+      5: { cellWidth: 29, halign: 'right' },
+      6: { cellWidth: 30, halign: 'right', textColor: PDF_COLORS.teal },
+      7: { cellWidth: 29, halign: 'center' },
     },
     didParseCell: data => {
-      if (data.section === 'body' && data.column.index === 3) {
+      if (data.section === 'body' && data.column.index === 4) {
         const row = source[data.row.index];
         data.cell.styles.textColor = row?.id_client != null ? PDF_COLORS.teal : PDF_COLORS.navy;
       }
-      if (data.section === 'body' && data.column.index === 6) {
+      if (data.section === 'body' && data.column.index === 7) {
         data.cell.text = [];
       }
     },
     didDrawCell: data => {
-      if (data.section !== 'body' || data.column.index !== 6) return;
+      if (data.section !== 'body' || data.column.index !== 7) return;
       // Cell.raw survives page splitting. Row.index is -1 on continuations.
       const status = data.cell.raw;
       if (status !== 'Annulée' && status !== 'Active') return;
