@@ -440,9 +440,14 @@ def revision_trigger(db, table, fields):
     db.commit()
 
 
-@pytest.mark.parametrize("changes", [{"montant": "8.00"}, {"date_paiement": date.today()+timedelta(days=1)}])
-def test_single_field_payment_corrections_preserve_omitted_fields(db_session, cash_payment, test_user, changes):
+@pytest.mark.parametrize("change_field", ["montant", "date_paiement"])
+def test_single_field_payment_corrections_preserve_omitted_fields(db_session, cash_payment, test_user, change_field):
     sale, payment, movement = cash_payment
+    # Resolve dates when this test executes, not at module import. CI may span
+    # midnight, making an import-time 'tomorrow' equal to the fixture's 'today'.
+    changes = {"montant": "8.00"} if change_field == "montant" else {
+        "date_paiement": payment.date_paiement + timedelta(days=1)
+    }
     revision_trigger(db_session, "paiements", "montant,date_paiement")
     command = prepared(db_session, CorrectionCommand(
         operation_id=uuid4(), reason="Correction d’un seul champ",
