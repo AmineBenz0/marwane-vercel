@@ -291,3 +291,48 @@ def test_conversion_http_preview_apply_and_both_detail_links(
     assert replacement_detail.json()["id_transaction_origine"] == tx.id_transaction
     assert original_detail.json()["est_actif"] is False
     assert replacement_detail.json()["est_actif"] is True
+
+
+def test_phase7_conversion_is_consistent_across_transaction_history_monthly_report_and_balances(
+    client, db_session, conversion_case, test_user, auth_headers,
+):
+    """A sale-to-purchase conversion changes active totals once but retains audit history."""
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    original, buyer, vendor, sold, bought = conversion_case
+    operation = confirmed(original, vendor, bought, db_session)
+    result = apply_conversion(db_session, original.id_transaction, operation, test_user)
+    replacement_id = result["id_transaction_remplacement"]
+
+    original_record = client.get(f"/api/v1/transactions/{original.id_transaction}", headers=auth_headers)
+    replacement = client.get(f"/api/v1/transactions/{replacement_id}", headers=auth_headers)
+    history = client.get("/api/v1/transactions", headers=auth_headers)
+    current = client.get("/api/v1/transactions", params={"est_actif": "true"}, headers=auth_headers)
+    inactive = client.get("/api/v1/transactions", params={"est_actif": "false"}, headers=auth_headers)
+    monthly = client.get("/api/v1/reports/monthly", params={"month": "2026-10"}, headers=auth_headers)
+    balances = client.get("/api/v1/caisse/solde/complet",
+                          params={"date_as_of": "2026-10-31"}, headers=auth_headers)
+
+    for response in [original_record, replacement, history, current, inactive, monthly, balances]:
+        assert response.status_code == 200, response.text
+
+    history_ids = {row["id_transaction"] for row in history.json()}
+    active_ids = {row["id_transaction"] for row in current.json()}
+    cancelled_ids = {row["id_transaction"] for row in inactive.json()}
+    assert original.id_transaction in history_ids and replacement_id in history_ids
+    assert original.id_transaction not in active_ids and replacement_id in active_ids
+    assert original.id_transaction in cancelled_ids and replacement_id not in cancelled_ids
+    assert original_record.json()["id_transaction_remplacement"] == replacement_id
+    assert replacement.json()["id_transaction_origine"] == original.id_transaction
+    assert original_record.json()["est_actif"] is False
+    assert replacement.json()["est_actif"] is True
+
+    assert Decimal(str(monthly.json()["ventes"])) == Decimal("0")
+    assert Decimal(str(monthly.json()["achats"])) == Decimal("60.00")
+    assert Decimal(str(monthly.json()["creances"])) == Decimal("0")
+    assert Decimal(str(monthly.json()["dettes"])) == Decimal("60.00")
+    assert Decimal(str(balances.json()["creances_clients"])) == Decimal("0")
+    assert Decimal(str(balances.json()["dettes_fournisseurs"])) == Decimal("60.00")
+    assert Decimal(str(balances.json()["solde_caisse"])) == Decimal("0")

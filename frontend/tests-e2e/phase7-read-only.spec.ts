@@ -113,7 +113,7 @@ test.describe('Phase 7: authenticated reporting reconciliation (read-only)', () 
           transaction.est_actif === false ? 'Annulée' : 'Active'
         );
         expect(moneyCellCents(row.getCell(amountCol!).value)).toBe(cents(transaction.montant_total));
-      } else if (row.values.some?.((value: unknown) => String(value || '').startsWith('Total :'))) {
+      } else if (Array.isArray(row.values) && row.values.some((value: unknown) => String(value || '').startsWith('Total :'))) {
         footerCents = moneyCellCents(row.getCell(amountCol!).value);
       }
     }
