@@ -28,7 +28,7 @@ const report = {
   inventory_movements: 0, inventory_quantity_delta: '0',
 };
 
-async function mockFinancialApi(page: Page) {
+async function mockFinancialApi(page: Page, transactions = txData) {
   await mockAuthenticatedSession(page);
   const attemptedWrites: string[] = [];
   await page.route('**/api/v1/**', async route => {
@@ -43,7 +43,7 @@ async function mockFinancialApi(page: Page) {
     let result: unknown = [];
     if (p === '/transactions') {
       const filterActive = u.searchParams.get('est_actif');
-      const filtered = filterActive === null ? txData : txData.filter(tx => tx.est_actif === (filterActive === 'true'));
+      const filtered = filterActive === null ? transactions : transactions.filter(tx => tx.est_actif === (filterActive === 'true'));
       result = filtered.slice(Number(u.searchParams.get('skip') || 0),
         Number(u.searchParams.get('skip') || 0) + Number(u.searchParams.get('limit') || 500));
     } else if (p === '/clients') result = [{ id_client: 1, nom_client: 'Client Test', est_actif: true }];
@@ -132,5 +132,49 @@ test('phase7 monthly summary XLSX matches visible figures and PDF is valid', asy
   expect(items.get('À encaisser actuel au 06/11/26')).toBe(100);
   expect(items.get('À payer aux fournisseurs actuel au 06/11/26')).toBe(25.5);
   await assertPdf(page, () => page.getByRole('button', { name: 'PDF', exact: true }).click());
+  expect(writes).toEqual([]);
+});
+
+
+test('phase7 wide transaction PDF remains paginated and keeps deferred and payment details', async ({ page }) => {
+  test.setTimeout(120_000);
+  // Reproduce the wide source register: many rows, a deferred sale, and a long
+  // payment history. The PDF must not compress 19 columns into its first page.
+  const transactions = Array.from({ length: 30 }, (_, index) => ({
+    ...txData[0],
+    id_transaction: 500 + index,
+    date_transaction: '2026-10-22',
+    est_promesse: index === 0,
+    quantite: 20,
+    montant_total: '100.00',
+    quantite_completee: index === 0 ? 10 : 0,
+    quantite_reservee: index === 0 ? 5 : 0,
+    quantite_en_attente: index === 0 ? 10 : 0,
+    quantite_annulee: 0,
+    date_livraison_prevue: index === 0 ? '2026-11-15' : null,
+    paiements: index === 0
+      ? Array.from({ length: 14 }, (_, n) => ({
+        type_paiement: 'cash', montant: 0,
+        reference: 'AUDIT-LONG-REGLEMENT-' + n,
+      }))
+      : [],
+  }));
+  const writes = await mockFinancialApi(page, transactions);
+  await page.goto('/transactions');
+  await expect(page.getByRole('button', { name: 'Exporter en PDF' })).toBeEnabled();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Exporter en PDF' }).click(),
+  ]);
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const buffer = await readFile(path!);
+  const source = buffer.toString('latin1');
+  const pageCount = (source.match(/\/Type \/Page\b/g) || []).length;
+  expect(pageCount).toBeGreaterThanOrEqual(3);
+  expect(pageCount).toBeLessThanOrEqual(6);
+  for (let number = 1; number <= pageCount; number += 1) {
+    expect(source).toContain(`Page ${number} sur ${pageCount}`);
+  }
   expect(writes).toEqual([]);
 });
