@@ -73,14 +73,10 @@ export function pdfBrand(doc, category) {
   doc.rect(0, 0, width, 16, 'F');
   doc.setFillColor(...PDF_COLORS.teal);
   doc.rect(0, 0, 2.2, 16, 'F');
-  doc.setTextColor(...PDF_COLORS.white);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('MARWANE', 11.5, 10.4);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(191, 220, 223);
-  doc.text(pdfClean(category).toUpperCase(), 39.5, 10.3);
+  doc.text(pdfClean(category).toUpperCase(), 11.5, 10.3);
 }
 
 export function pdfFooters(doc, editionDate = new Date()) {
@@ -95,7 +91,7 @@ export function pdfFooters(doc, editionDate = new Date()) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(...PDF_COLORS.muted);
-    doc.text('MARWANE  |  Exporte le ' + pdfDate(editionDate), 11.5, height - 9.2);
+    doc.text('Exporte le ' + pdfDate(editionDate), 11.5, height - 9.2);
     doc.text(String(page) + ' / ' + String(count), width - 11.5, height - 9.2, {
       align: 'right',
     });

@@ -194,7 +194,7 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
   const pageCount = (source.match(/\/Type \/Page\b/g) || []).length;
   expect(pageCount).toBeGreaterThanOrEqual(3);
   expect(pageCount).toBeLessThanOrEqual(7);
-  expect(source).toContain('MARWANE');
+  expect(source).not.toContain('MARWANE');
   expect(source).toContain('Rapport des transactions');
   expect(source).toContain('TOTAL ACTIF');
   const register = [...source.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
