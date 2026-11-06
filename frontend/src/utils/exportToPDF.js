@@ -13,6 +13,10 @@ import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { formatShortDate, formatShortDateTime } from './dateFormatting';
 
+// Built-in jsPDF fonts do not render French narrow/no-break spacing reliably.
+// Normalize only the PDF text; Excel retains locale-native numeric formatting.
+const printableText = value => String(value ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ');
+
 /**
  * Exporte les données vers PDF avec formatage de tableau professionnel.
  */
@@ -76,7 +80,7 @@ export const exportToPDF = (
         
         // Utiliser un formatter personnalisé si disponible
         if (options.customFormatters && options.customFormatters[column.id]) {
-          return String(options.customFormatters[column.id](cellValue, row));
+          return printableText(options.customFormatters[column.id](cellValue, row));
         }
         
         // Formatage par défaut
@@ -87,13 +91,14 @@ export const exportToPDF = (
         } else if (cellValue instanceof Date) {
           return formatShortDate(cellValue);
         } else {
-          return String(cellValue);
+          return printableText(cellValue);
         }
       });
     });
 
     // Calculer les largeurs de colonnes de manière intelligente
     const columnWidths = columns.map((col) => {
+      if (options.columnWidths?.[col.id] != null) return options.columnWidths[col.id];
       // Largeurs personnalisées selon le type de colonne
       if (col.id === 'id_transaction' || col.id === 'id') return 15;
       if (col.id === 'date_transaction') return 25;
@@ -112,8 +117,8 @@ export const exportToPDF = (
       body: tableData,
       theme: 'grid',
       styles: {
-        fontSize: 9,
-        cellPadding: 3,
+        fontSize: options.compact ? 7.5 : 9,
+        cellPadding: options.compact ? 2.3 : 3,
         overflow: 'linebreak',
         halign: 'left',
         valign: 'middle',
@@ -123,7 +128,7 @@ export const exportToPDF = (
         fillColor: [66, 133, 244],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 10,
+        fontSize: options.compact ? 8 : 10,
         halign: 'left',
       },
       alternateRowStyles: {
@@ -136,7 +141,7 @@ export const exportToPDF = (
         acc[index] = {
           halign: isMontantTotal || isPrixUnitaire ? 'right' : col.align || 'left',
           cellWidth: columnWidths[index] === 'auto' ? 'auto' : columnWidths[index],
-          overflow: isMontantTotal || isPrixUnitaire ? 'visible' : undefined,
+          overflow: options.compact ? 'linebreak' : (isMontantTotal || isPrixUnitaire ? 'visible' : undefined),
         };
         
         // Style spécial pour les montants (gras)
@@ -160,20 +165,8 @@ export const exportToPDF = (
           }
         }
       },
-      margin: { top: 35, right: margin, bottom: 20, left: margin },
-      didDrawPage: function() {
-        // Pied de page
-        const pageCount = doc.internal.pages.length - 1;
-        const pageNumber = doc.internal.getCurrentPageInfo().pageNumber;
-        
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text(
-          `Page ${pageNumber} sur ${pageCount}`,
-          pageWidth - margin - 20,
-          doc.internal.pageSize.getHeight() - 10
-        );
-      },
+      // Reserve space for the total on the final table page.
+      margin: { top: 35, right: margin, bottom: options.footerTotals ? 34 : 20, left: margin },
     });
 
     // Afficher les totaux sous le tableau si demandés
@@ -197,7 +190,47 @@ export const exportToPDF = (
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
       doc.setTextColor(33, 33, 33);
-      doc.text(`${label} ${value}`, columnRight, startY, { align: 'right' });
+      doc.text(printableText(`${label} ${value}`), columnRight, startY, { align: 'right' });
+    }
+
+    // A wide register is organized into readable tables instead of squeezing
+    // payment history and deferred stock quantities into narrow columns.
+    for (const section of options.extraSections || []) {
+      if (!section.data?.length || !section.columns?.length) continue;
+      doc.addPage();
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(33, 33, 33);
+      doc.text(printableText(section.title || 'Détails'), margin, 20);
+      autoTable(doc, {
+        startY: 27,
+        head: [section.columns.map(column => printableText(column.label || column.id))],
+        body: section.data.map(row => section.columns.map(column => {
+          const cell = row[column.id];
+          const formatter = options.customFormatters?.[column.id];
+          return printableText(formatter ? formatter(cell, row) : (cell ?? '-'));
+        })),
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2.6, overflow: 'linebreak', valign: 'middle' },
+        headStyles: { fillColor: [66, 133, 244], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: Object.fromEntries(section.columns.map((column, index) => [
+          index, { cellWidth: section.columnWidths?.[column.id] || 'auto' },
+        ])),
+        margin: { top: 25, right: margin, bottom: 22, left: margin },
+      });
+    }
+
+    // Page numbering must run only after every appendix and total has been
+    // generated; counting pages while drawing a table reports wrong totals.
+    const finalPageCount = doc.getNumberOfPages();
+    for (let number = 1; number <= finalPageCount; number += 1) {
+      doc.setPage(number);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Page ${number} sur ${finalPageCount}`, pageWidth - margin,
+        doc.internal.pageSize.getHeight() - 10, { align: 'right' });
     }
 
     // Sauvegarder le PDF

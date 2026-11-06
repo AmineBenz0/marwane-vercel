@@ -668,13 +668,56 @@ function TransactionsList() {
         },
       };
 
+      const mainColumnIds = new Set([
+        'id_transaction', 'date_transaction', 'client_ou_fournisseur',
+        'produit', 'batiment', 'quantite', 'montant_total', 'montant_paye',
+        'montant_restant', 'etat_transaction',
+      ]);
+      const primaryColumns = columnsForExport.filter(column => mainColumnIds.has(column.id));
+      const byId = ids => columnsForExport.filter(column => ids.includes(column.id));
+      const paymentRows = promiseRows.filter(row => {
+        const summary = getPaymentReglementSummary(row);
+        return summary && summary !== '-';
+      });
+      const deferredRows = promiseRows.filter(row => row.est_promesse);
+
       exportToPDF(
         promiseRows,
-        columnsForExport,
+        primaryColumns,
         'Rapport des Transactions',
         'rapport_transactions',
         { 
           customFormatters,
+          compact: true,
+          columnWidths: {
+            id_transaction: 12,
+            date_transaction: 18,
+            client_ou_fournisseur: 50,
+            produit: 38,
+            batiment: 23,
+            quantite: 14,
+            montant_total: 26,
+            montant_paye: 24,
+            montant_restant: 24,
+            etat_transaction: 20,
+          },
+          extraSections: [
+            {
+              title: 'Règlements et historique',
+              data: paymentRows,
+              columns: byId(['id_transaction', 'reglement', 'statut_paiement']),
+              columnWidths: { id_transaction: 16, reglement: 193, statut_paiement: 45 },
+            },
+            {
+              title: 'Livraisons différées',
+              data: deferredRows,
+              columns: byId([
+                'id_transaction', 'etat_stock', 'date_livraison_prevue', 'etat_transaction',
+                'quantite_completee', 'quantite_reservee', 'quantite_en_attente',
+                'quantite_a_produire', 'quantite_annulee',
+              ]),
+            },
+          ],
           colorByType: (rowIndex) => {
             // Retourne true si c'est une entrée (client), false si sortie (fournisseur)
             const transaction = rowsForExport[rowIndex];
