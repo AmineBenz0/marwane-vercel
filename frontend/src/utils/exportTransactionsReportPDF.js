@@ -106,6 +106,13 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   const sections = [];
   autoTable(doc, {
     ...tableStyle(43),
+    styles: {
+      ...tableStyle(43).styles,
+      // Nine rows fit on the first page and twelve on following pages,
+      // avoiding a nearly empty last register page for normal histories.
+      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+      minCellHeight: 9.2,
+    },
     startY: 72,
     head: [['ID', 'DATE', 'PARTENAIRE / PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
     body: transactionRows,
@@ -134,10 +141,24 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
         data.cell.styles.textColor = row?.id_client != null ? PDF_COLORS.teal : PDF_COLORS.navy;
       }
       if (data.section === 'body' && data.column.index === 7) {
-        data.cell.styles.textColor = source[data.row.index]?.est_actif === false
-          ? PDF_COLORS.muted : PDF_COLORS.teal;
-        data.cell.styles.fontStyle = 'bold';
+        data.cell.text = [];
       }
+    },
+    didDrawCell: data => {
+      if (data.section !== 'body' || data.column.index !== 7) return;
+      const cancelled = source[data.row.index]?.est_actif === false;
+      const { x, y, width, height } = data.cell;
+      const pillWidth = Math.min(width - 4, 22);
+      const pillHeight = 7;
+      const pillX = x + (width - pillWidth) / 2;
+      const pillY = y + (height - pillHeight) / 2;
+      doc.setFillColor(...(cancelled ? PDF_COLORS.paleBlue : PDF_COLORS.paleTeal));
+      doc.roundedRect(pillX, pillY, pillWidth, pillHeight, 3, 3, 'F');
+      doc.setTextColor(...(cancelled ? PDF_COLORS.muted : PDF_COLORS.teal));
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.8);
+      doc.text(cancelled ? 'Annulée' : 'Active',
+        x + width / 2, pillY + 4.9, { align: 'center' });
     },
   });
 
