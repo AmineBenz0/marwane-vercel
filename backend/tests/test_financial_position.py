@@ -252,3 +252,30 @@ def test_other_bank_history_can_be_read_and_replayed_without_new_money(client, d
     assert account.solde_actuel == Decimal(expected)
     assert db_session.query(MouvementBancaire).count() == 1
 
+
+
+
+def test_current_month_report_stops_at_today_and_does_not_claim_future_balances(
+    client, balances, monkeypatch
+):
+    """Future-dated stock/bank entries must not become realized current-month activity."""
+    monkeypatch.setattr("app.routers.reports.business_date", lambda: date(2026, 2, 3))
+    current = client.get("/api/v1/reports/monthly", params={"month": "2026-02"})
+    assert current.status_code == 200, current.text
+    data = current.json()
+    assert data["date_fin"] == "2026-02-28"  # requested calendar period
+    assert data["date_soldes_historiques"] == "2026-02-03"  # actual cutoff
+    assert data["date_soldes_actuels"] == "2026-02-03"
+    assert Decimal(data["solde_caisse_historique"]) == Decimal("200")
+    assert Decimal(data["solde_caisse"]) == Decimal("200")
+    assert Decimal(data["soldes_bancaires_historiques"][0]["solde"]) == Decimal("5400")
+
+    future = client.get("/api/v1/reports/monthly", params={"month": "2026-03"})
+    assert future.status_code == 200, future.text
+    later = future.json()
+    assert later["date_fin"] == "2026-03-31"
+    assert later["date_soldes_historiques"] == "2026-02-03"
+    for field in ("ventes", "achats", "charges", "caisse_entrees", "caisse_sorties",
+                  "banques_entrees", "banques_sorties"):
+        assert Decimal(later[field]) == 0, field
+    assert Decimal(later["soldes_bancaires_historiques"][0]["solde"]) == Decimal("5400")

@@ -68,7 +68,7 @@ function MonthlyReportPage() {
   const historicalDate = formatShortDate(report?.date_soldes_historiques || report?.date_fin);
   const currentDate = formatShortDate(report?.date_soldes_actuels);
   const exportRows = useMemo(() => groups ? [
-    { indicateur: 'Période', valeur: `${formatShortDate(report.date_debut)} – ${formatShortDate(report.date_fin)}` },
+    { indicateur: 'Période', valeur: `${formatShortDate(report.date_debut)} – ${formatShortDate(report.date_soldes_historiques)}` },
     ...[...groups.activity, ...groups.cash, ...groups.bank, ...groups.stock].map(row => ({ indicateur: row.indicateur, valeur: displayReportValue(row) })),
     ...groups.historical.map(row => ({ indicateur: `${row.indicateur} au ${historicalDate}`, valeur: displayReportValue(row) })),
     ...groups.current.map(row => ({ indicateur: `${row.indicateur} actuel au ${currentDate}`, valeur: displayReportValue(row) })),
