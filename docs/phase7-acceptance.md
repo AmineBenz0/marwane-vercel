@@ -116,3 +116,40 @@ CI run: https://github.com/AmineBenz0/marwane-vercel/actions/runs/42203626680
 **Acceptance boundary:** Phase 7 implementation, historical-stock reconciliation, real SQL benchmarks, and deterministic UI/Excel/PDF regression checks are complete and green. **Live authenticated cross-system report/download acceptance remains open** because the available browser connection is not signed into staging and GitHub's `e2e` job is still skipped pending test credentials/flag. Do not label these live E2E tests as passed.
 
 **Phase 8 handoff:** Database security advisors (search paths, public extensions, deliberately policyless internal tables), conditional CI jobs, rollback/concurrency/backup checks, and moderate npm advisories remain separately tracked. No production promotion has been authorized.
+
+
+## Authenticated file-based acceptance — 6 November 2026, 11:11 local export
+
+The owner downloaded and supplied six **live staging artifacts**: October and November monthly reports as PDF and Excel, and the full transaction register as PDF and Excel. These are actual user exports, **not** the controlled CI browser fixtures. The original uploaded artifacts were reviewed read-only and compared with live staging SQL; no user data was changed.
+
+### Financial reconciliation
+
+| Control | Outcome |
+| --- | --- |
+| October monthly PDF ↔ XLSX | All 21 exported indicators/labels and values agree |
+| November monthly PDF ↔ XLSX | All 21 exported indicators/labels and values agree |
+| October active sales | 18,070.90 MAD; matches independent staging SQL |
+| October active purchases | 8,750.00 MAD; matches independent staging SQL |
+| October active charges | 3,850.00 MAD; matches independent staging SQL |
+| November invoiced sales/purchases/charges | 0 each; the only November transaction (0.30 MAD) is canceled |
+| Full transaction Excel | 30 unique transactions (17 active, 13 canceled), matching staging database count |
+| Active transactions by month | September: 2,340.00 MAD; October: 26,820.90 MAD; November: 0 |
+| Active grand total (PDF ↔ Excel ↔ SQL) | 29,160.90 MAD = 20,410.90 MAD sales + 8,750.00 MAD purchases |
+| Canceled history excluded from total | 182.35 MAD retained as canceled records, excluded from grand total |
+| Paid / remaining, active rows only | 6,755.00 MAD paid + 22,405.90 MAD remaining = 29,160.90 MAD invoiced |
+| Each active row: amount = paid + remaining | 0 mismatches across all 17 active transactions |
+| Cash and bank figures | October: 2,105.00 MAD cash receipts, 1,750.00 MAD cash outflow; 10,500.00 MAD bank receipts, 5,250.00 MAD bank outflow; monthly PDF and Excel agree |
+| Client + supplier outstanding | 16,805.90 + 5,600.00 = 22,405.90 MAD, reconciling to transaction-level remaining amounts |
+
+### User-visible defects found and staging corrections
+
+1. **Unreadable transaction PDF**: the supplied PDF tried to fit 19 columns onto A4 landscape. Headers became vertically stacked and overlapped data, with a grand total orphaned on a seventh page and incorrect `Page X sur Y` numbering. The same numbers were valid in Excel. Staging code now presents a concise main financial table and separate payment and deferred-stock detail sections, retains the active-only total, reserves space for the total and numbers pages after all sections render.
+2. **Currency text**: PDF text could render French U+202F/U+00A0 grouping spaces as stray glyphs (`18 /070,90 MAD`). The jsPDF export now normalizes non-breaking spacing for PDF glyph rendering only; the Excel strings remain unchanged.
+3. **November month-end labels**: the uploaded report generated November 6 used `au 30/11/26` without noting that November had not ended. The canonical backend intentionally recognizes all recorded transactions in the selected month and separately calculates today's current position. This business rule remains unchanged. For current/future periods, the frontend now labels month-end positions as **projections based on currently recorded operations** rather than confirmed final balances; November's calendar period and monetary values are retained.
+
+### Final Phase 7 scope and handoff
+
+- Financial and historical reconciliation of the actual signed-in user's downloaded reports is **complete**, without needing to expose login credentials.
+- **Staging PDF layout fix needs final visual re-export inspection** once CI/deployment passes; a deterministic browser test exercises a 30-transaction PDF with long payment histories and deferred-stock appendices, and checks complete pagination labels.
+- The GitHub authenticated E2E job remains conditionally skipped, which is a broader release gate and not evidence that a logged-in full-system end-to-end suite ran.
+- Phase 8 remains responsible for backup/recovery, security-advisor hardening, concurrency/rollback checks and final production release approval. No production changes.
