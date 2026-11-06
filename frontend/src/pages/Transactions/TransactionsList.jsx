@@ -601,7 +601,6 @@ function TransactionsList() {
         batiment_label: row.id_batiment
           ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
           : '-',
-        reglement_label: getPaymentReglementSummary(row),
         etat_stock: deferredSaleStatus(row)?.label || row.etat_stock || '-',
         quantite_a_produire: deferredStockQuantities(row).toProduce,
       })));

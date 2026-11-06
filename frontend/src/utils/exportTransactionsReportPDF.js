@@ -1,14 +1,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { addTransactionPaymentsSection } from './transactionPaymentsPdf';
 import {
   PDF_COLORS, pdfBrand, pdfBox, pdfClean, pdfDate, pdfExportName,
   pdfFit, pdfFooters, pdfHeading, pdfInteger, pdfMoney,
 } from './financialPdfStyles';
-
-const includesPayment = row => {
-  const details = pdfClean(row.reglement_label).trim();
-  return details.length > 0 && details !== '-';
-};
 
 const asNumber = value => {
   const number = Number(value ?? 0);
@@ -164,14 +160,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     },
   });
 
-  const payments = source.filter(includesPayment);
-  addSection(
-    doc, sections, 'Règlements et références',
-    String(payments.length) + ' transactions avec un règlement',
-    ['PARTENAIRE', 'DÉTAIL DES RÈGLEMENTS', 'ÉTAT'],
-    payments.map(row => [row.partner, pdfClean(row.reglement_label), row.status]),
-    [85, 160, 29],
-  );
+  addTransactionPaymentsSection(doc, sections, source);
 
   const deferred = source.filter(row => row.est_promesse ||
     (row.etat_stock && !['-', '—'].includes(String(row.etat_stock).trim())));

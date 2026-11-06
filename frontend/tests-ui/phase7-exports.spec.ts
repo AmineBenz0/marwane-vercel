@@ -170,8 +170,11 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
     date_livraison_prevue: index === 0 ? '2026-11-15' : null,
     paiements: index === 0
       ? Array.from({ length: 14 }, (_, n) => ({
-        type_paiement: 'cash', montant: 0,
-        reference: 'AUDIT-LONG-REGLEMENT-' + n,
+        date_paiement: '2026-10-23', nature: n === 4 ? 'remboursement' : 'paiement',
+        type_paiement: n === 2 ? 'cheque' : 'virement', montant: (n + 0.01).toFixed(2),
+        statut: n === 1 ? 'annule' : 'valide', statut_cheque: n === 2 ? 'a_encaisser' : null,
+        reference_virement: n === 2 ? null : 'PAYMENT-REF-' + String(n).padStart(2, '0'),
+        numero_cheque: n === 2 ? 'PAYMENT-REF-02' : null,
       }))
       : [],
   }));
@@ -203,6 +206,20 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
     .join('\n');
   expect((register.match(/\(Annulée\) Tj/g) || [])).toHaveLength(10);
   expect((register.match(/\(Active\) Tj/g) || [])).toHaveLength(20);
+  const payments = [...source.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
+    .map(match => match[1])
+    .filter(stream => stream.includes('DATE RÈGL.'));
+  expect(payments).toHaveLength(2);
+  expect(payments.every(stream => stream.includes('PRODUIT') && stream.includes('RÉFÉRENCE'))).toBe(true);
+  const paymentText = payments.join('\n');
+  for (let n = 0; n < 14; n += 1) {
+    expect(paymentText.split('PAYMENT-REF-' + String(n).padStart(2, '0'))).toHaveLength(2);
+  }
+  expect(paymentText).toContain('Remboursement');
+  expect(paymentText).toContain('(Annulé) Tj');
+  expect(paymentText).toContain('(À encaisser) Tj');
+  expect(paymentText).toContain('(0,01) Tj');
+  expect(paymentText).toContain('(13,01) Tj');
   for (let number = 1; number <= pageCount; number += 1) {
     expect(source).toContain(`${number} / ${pageCount}`);
   }
