@@ -3,7 +3,7 @@ import { Alert, Box, Button, Card, CardContent, CircularProgress, Collapse, Grid
 import { FileDownload as DownloadIcon, InfoOutlined, PictureAsPdf as PdfIcon, CalendarTodayOutlined, LayersOutlined } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
-import { exportToPDF } from '../../utils/exportToPDF';
+import { exportMonthlyReportPDF } from '../../utils/exportMonthlyReportPDF';
 import { getBusinessMonthInput } from '../../utils/businessDate';
 import { formatMonthYear, formatShortDate } from '../../utils/dateFormatting';
 import ExpandableDetails from '../../components/ExpandableDetails';
@@ -84,7 +84,7 @@ function MonthlyReportPage() {
   const exportReport = async outputFormat => {
     if (!report || loading) return;
     const columns = [{ id: 'indicateur', label: 'Indicateur' }, { id: 'valeur', label: 'Valeur' }];
-    if (outputFormat === 'pdf') exportToPDF(exportRows, columns, `Rapport mensuel ${displayMonth}`, `rapport_mensuel_${report.month}`);
+    if (outputFormat === 'pdf') exportMonthlyReportPDF(report, `rapport_mensuel_${report.month}`);
     else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse');
   };
   const hasBankActivity = !!report && ((report.soldes_bancaires || []).length > 0 || Number(report.banques_entrees) !== 0 || Number(report.banques_sorties) !== 0);

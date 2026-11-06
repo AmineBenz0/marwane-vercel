@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MonthlyReportPage from './MonthlyReportPage';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
-import { exportToPDF } from '../../utils/exportToPDF';
+import { exportMonthlyReportPDF } from '../../utils/exportMonthlyReportPDF';
 
 vi.mock('../../services/api', () => ({ get: vi.fn() }));
 vi.mock('../../utils/exportToExcel', () => ({ exportToExcelAdvanced: vi.fn() }));
-vi.mock('../../utils/exportToPDF', () => ({ exportToPDF: vi.fn() }));
+vi.mock('../../utils/exportMonthlyReportPDF', () => ({ exportMonthlyReportPDF: vi.fn() }));
 
 describe('MonthlyReportPage', () => {
   beforeEach(() => {
@@ -77,7 +77,10 @@ describe('MonthlyReportPage', () => {
       { indicateur: 'Solde Banque Test actuel au 25/10/26', valeur: money(500) },
     ];
     expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining(expected));
-    expect(exportToPDF.mock.calls[0][0]).toEqual(exportToExcelAdvanced.mock.calls[0][0]);
+    expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
+      expect.objectContaining({ month: '2026-09', ventes: '100.00', achats: '40.00' }),
+      'rapport_mensuel_2026-09',
+    );
   });
 });
 

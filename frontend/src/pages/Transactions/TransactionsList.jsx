@@ -45,7 +45,7 @@ import { get, post } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
-import { exportToPDF } from '../../utils/exportToPDF';
+import { exportTransactionsReportPDF } from '../../utils/exportTransactionsReportPDF';
 import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
@@ -593,144 +593,18 @@ function TransactionsList() {
    */
   const handleExportPDF = () => {
     try {
-      const hasPromises = rowsForExport.some(row => row.est_promesse);
-      const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), { id: 'etat_transaction', label: 'État' }, ...(hasPromises ? [
-        { id: 'quantite_completee', label: 'Quantité complétée' },
-        { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
-        { id: 'quantite_en_attente', label: 'Reste à fournir' },
-        { id: 'quantite_a_produire', label: 'À produire' },
-        { id: 'quantite_annulee', label: 'Reste clôturé' },
-      ] : [])];
-      const promiseRows = rowsForExport.map(row => ({
+      // The printable report uses the same filtered records and accounting
+      // amounts as Excel, but moves secondary details into readable appendices.
+      exportTransactionsReportPDF(rowsForExport.map(row => ({
         ...row,
+        produit_label: produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`,
+        batiment_label: row.id_batiment
+          ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
+          : '-',
+        reglement_label: getPaymentReglementSummary(row),
+        etat_stock: deferredSaleStatus(row)?.label || row.etat_stock || '-',
         quantite_a_produire: deferredStockQuantities(row).toProduce,
-      }));
-      const totalMontant = sumActiveTransactionAmounts(rowsForExport);
-      const totalMontantFormatted =
-        new Intl.NumberFormat('fr-FR', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })
-          .format(totalMontant)
-          .replace(/\s/g, '\u00A0') + '\u00A0MAD';
-
-      const customFormatters = {
-        date_transaction: (value) => {
-          if (!value) return '-';
-          try {
-            return formatShortDate(value, String(value));
-          } catch {
-            return value;
-          }
-        },
-        produit: (value, row) => {
-          return produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`;
-        },
-        batiment: (value, row) => {
-          return row.id_batiment
-            ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
-            : '-';
-        },
-        reglement: (value, row) => getPaymentReglementSummary(row),
-        montant_total: (value) => {
-          if (value === null || value === undefined) return '-';
-          // Conserver les séparateurs de milliers et empêcher les retours à la ligne
-          return (
-            new Intl.NumberFormat('fr-FR', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-              .format(value)
-              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
-          );
-        },
-        montant_paye: (value) => {
-          if (value === null || value === undefined) return '-';
-          return (
-            new Intl.NumberFormat('fr-FR', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-              .format(value)
-              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
-          );
-        },
-        montant_restant: (value) => {
-          if (value === null || value === undefined) return '-';
-          return (
-            new Intl.NumberFormat('fr-FR', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-              .format(value)
-              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
-          );
-        },
-      };
-
-      const mainColumnIds = new Set([
-        'id_transaction', 'date_transaction', 'client_ou_fournisseur',
-        'produit', 'batiment', 'quantite', 'montant_total', 'montant_paye',
-        'montant_restant', 'etat_transaction',
-      ]);
-      const primaryColumns = columnsForExport.filter(column => mainColumnIds.has(column.id));
-      const byId = ids => columnsForExport.filter(column => ids.includes(column.id));
-      const paymentRows = promiseRows.filter(row => {
-        const summary = getPaymentReglementSummary(row);
-        return summary && summary !== '-';
-      });
-      const deferredRows = promiseRows.filter(row => row.est_promesse);
-
-      exportToPDF(
-        promiseRows,
-        primaryColumns,
-        'Rapport des Transactions',
-        'rapport_transactions',
-        { 
-          customFormatters,
-          compact: true,
-          columnWidths: {
-            id_transaction: 12,
-            date_transaction: 18,
-            client_ou_fournisseur: 50,
-            produit: 38,
-            batiment: 23,
-            quantite: 14,
-            montant_total: 26,
-            montant_paye: 24,
-            montant_restant: 24,
-            etat_transaction: 20,
-          },
-          extraSections: [
-            {
-              title: 'Règlements et historique',
-              data: paymentRows,
-              columns: byId(['id_transaction', 'reglement', 'statut_paiement']),
-              columnWidths: { id_transaction: 16, reglement: 193, statut_paiement: 45 },
-            },
-            {
-              title: 'Livraisons différées',
-              data: deferredRows,
-              columns: byId([
-                'id_transaction', 'etat_stock', 'date_livraison_prevue', 'etat_transaction',
-                'quantite_completee', 'quantite_reservee', 'quantite_en_attente',
-                'quantite_a_produire', 'quantite_annulee',
-              ]),
-            },
-          ],
-          colorByType: (rowIndex) => {
-            // Retourne true si c'est une entrée (client), false si sortie (fournisseur)
-            const transaction = rowsForExport[rowIndex];
-            if (!transaction) return null;
-            return transaction.id_client !== null;
-          },
-          footerTotals: {
-            label: 'Total :',
-            value: totalMontantFormatted,
-            columnId: 'montant_total',
-          },
-        }
-      );
+      })));
     } catch (error) {
       console.error('Erreur lors de l\'export PDF:', error);
       setError('Une erreur est survenue lors de l\'export PDF');
