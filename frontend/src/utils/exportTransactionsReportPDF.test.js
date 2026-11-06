@@ -47,6 +47,7 @@ describe('transaction PDF pagination', () => {
     exportTransactionsReportPDF(rows);
     const outputPages = pages();
     const all = outputPages.join('\n');
+    expect(all).not.toContain('(ID) Tj');
     expect(outputPages.length).toBeGreaterThan(1);
     expect((all.match(/\(Annulée\) Tj/g) || [])).toHaveLength(10);
     expect((all.match(/\(Active\) Tj/g) || [])).toHaveLength(20);

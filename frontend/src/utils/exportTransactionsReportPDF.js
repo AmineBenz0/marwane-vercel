@@ -15,8 +15,6 @@ const asNumber = value => {
   return Number.isFinite(number) ? number : 0;
 };
 
-const sameId = row => String(row.id_transaction ?? '-');
-
 function drawKpi(doc, label, value, column, highlight = false) {
   const x = 11.5 + column * 69.25;
   const y = 46;
@@ -142,7 +140,6 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     : 'Periode selectionnee';
   const source = rows.map(row => ({
     ...row,
-    id: sameId(row),
     partner: pdfClean(row.client_ou_fournisseur || '-'),
     product: pdfClean(row.produit_label || ('Produit #' + String(row.id_produit || '-'))),
     building: pdfClean(row.batiment_label || '-'),
@@ -150,7 +147,6 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   }));
 
   const transactionRows = source.map(row => [
-    row.id,
     pdfDate(row.date_transaction),
     row.partner + '\n' + row.product,
     pdfInteger(row.quantite),
@@ -170,10 +166,10 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     },
     startY: 72,
     rowPageBreak: 'avoid',
-    head: [['ID', 'DATE', 'PARTENAIRE / PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
+    head: [['DATE', 'PARTENAIRE / PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
     body: transactionRows,
     foot: [[
-      { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 4 },
+      { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 3 },
       pdfMoney(total, false), pdfMoney(paid, false), pdfMoney(remaining, false), '',
     ]],
     showFoot: 'lastPage',
@@ -182,26 +178,25 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       fontStyle: 'bold', fontSize: 9, cellPadding: { top: 4, bottom: 4, left: 2, right: 2 },
     },
     columnStyles: {
-      0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
-      1: { cellWidth: 22 },
-      2: { cellWidth: 106 },
-      3: { cellWidth: 16, halign: 'right' },
-      4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
-      5: { cellWidth: 29, halign: 'right' },
-      6: { cellWidth: 30, halign: 'right', textColor: PDF_COLORS.teal },
-      7: { cellWidth: 29, halign: 'center' },
+      0: { cellWidth: 22 },
+      1: { cellWidth: 118 },
+      2: { cellWidth: 16, halign: 'right' },
+      3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+      4: { cellWidth: 29, halign: 'right' },
+      5: { cellWidth: 30, halign: 'right', textColor: PDF_COLORS.teal },
+      6: { cellWidth: 29, halign: 'center' },
     },
     didParseCell: data => {
-      if (data.section === 'body' && data.column.index === 4) {
+      if (data.section === 'body' && data.column.index === 3) {
         const row = source[data.row.index];
         data.cell.styles.textColor = row?.id_client != null ? PDF_COLORS.teal : PDF_COLORS.navy;
       }
-      if (data.section === 'body' && data.column.index === 7) {
+      if (data.section === 'body' && data.column.index === 6) {
         data.cell.text = [];
       }
     },
     didDrawCell: data => {
-      if (data.section !== 'body' || data.column.index !== 7) return;
+      if (data.section !== 'body' || data.column.index !== 6) return;
       // Cell.raw survives page splitting. Row.index is -1 on continuations.
       const status = data.cell.raw;
       if (status !== 'Annulée' && status !== 'Active') return;
@@ -225,9 +220,9 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   addSection(
     doc, sections, 'Règlements et références',
     String(payments.length) + ' transactions avec un règlement',
-    ['ID', 'PARTENAIRE', 'DÉTAIL DES RÈGLEMENTS', 'ÉTAT'],
-    payments.map(row => [row.id, row.partner, pdfClean(row.reglement_label), row.status]),
-    [13, 85, 147, 29],
+    ['PARTENAIRE', 'DÉTAIL DES RÈGLEMENTS', 'ÉTAT'],
+    payments.map(row => [row.partner, pdfClean(row.reglement_label), row.status]),
+    [85, 160, 29],
   );
 
   const deferred = source.filter(row => row.est_promesse ||
@@ -235,9 +230,8 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   addSection(
     doc, sections, 'Livraisons différées',
     String(deferred.length) + ' transactions concernées par une livraison différée',
-    ['ID', 'PRODUIT / BATIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COMPLÉTÉ', 'RÉSERVÉ', 'RESTE'],
+    ['PRODUIT / BATIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COMPLÉTÉ', 'RÉSERVÉ', 'RESTE'],
     deferred.map(row => [
-      row.id,
       row.product + '\n' + row.building,
       pdfClean(row.etat_stock || row.status) +
         '\nÀ produire : ' + pdfInteger(row.quantite_a_produire) +
@@ -247,8 +241,8 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       pdfInteger(row.quantite_reservee),
       pdfInteger(row.quantite_en_attente),
     ]),
-    [13, 78, 76, 28, 24, 26, 29],
-    [4, 5, 6],
+    [91, 76, 28, 24, 26, 29],
+    [3, 4, 5],
   );
 
   const totalPages = doc.getNumberOfPages();
