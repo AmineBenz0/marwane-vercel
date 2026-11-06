@@ -96,6 +96,17 @@ export const belongsToUniqueLotOnDate = (allCycles, selectedLotKey, targetDate) 
   return activeLots.size === 1 && activeLots.has(String(selectedLotKey));
 };
 
+// Ordinary sales consume their allocated eggs immediately. The delivered
+// quantity field is meaningful only for deferred-sale completions; older
+// ordinary allocations may legitimately have quantite_livree = 0.
+export const quantityAttributedToCycle = (transaction, cycleIds) => (
+  (transaction.repartition_stock || [])
+    .filter(source => cycleIds.has(Number(source.id_cycle)))
+    .reduce((quantity, source) => quantity + Number(
+      transaction.est_promesse ? (source.quantite_livree ?? 0) : (source.quantite ?? 0)
+    ), 0)
+);
+
 export function aggregateDays(dayRows, label, rowType = 'summary') {
   if (!dayRows.length) return null;
   const sum = (key) => dayRows.reduce((total, row) => total + Number(row[key] || 0), 0);

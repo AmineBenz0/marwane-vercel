@@ -12,6 +12,7 @@ import {
   aggregateDays,
   aggregateDemoDays,
   belongsToUniqueLotOnDate,
+  quantityAttributedToCycle,
   chargeBucket,
   dateLabel,
   fmt,
@@ -271,7 +272,7 @@ function GlobalOverviewPage() {
     const buildingSet = new Set(buildingIds);
     const relevantTransactions = data.transactions.flatMap(transaction => {
       if (!transaction.repartition_stock?.length) return [transaction];
-      const quantity = transaction.repartition_stock.filter(a => cycleIds.has(Number(a.id_cycle))).reduce((sum, a) => sum + Number(a.quantite_livree ?? a.quantite), 0);
+      const quantity = quantityAttributedToCycle(transaction, cycleIds);
       return quantity ? [{ ...transaction, id_cycle: null, id_batiment: null, _attributedByAllocation: true, quantite: quantity, montant_total: Number(transaction.montant_total) * quantity / transaction.quantite }] : [];
     }).filter((transaction) => {
       if (transaction.est_actif === false) return false;

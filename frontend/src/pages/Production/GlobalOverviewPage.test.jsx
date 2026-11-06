@@ -84,6 +84,27 @@ describe('Suivi global release checks',()=>{
   expect(october.sold).toBe(600);
   expect(october.sales).toBe(1200);
  });
+ it('counts ordinary allocated egg sales even when legacy completed quantity is zero', async () => {
+  const previous = mocks.get.getMockImplementation();
+  const ordinary = {
+    id_transaction:27, id_cycle:1, id_batiment:1,
+    id_client:3, id_produit:1, est_promesse:false, est_actif:true,
+    date_transaction:'2026-10-02', quantite:1, montant_total:1.50,
+    repartition_stock:[{id_production:12,id_cycle:1,quantite:1,quantite_livree:0,date_production:'2026-10-01'}],
+  };
+  mocks.get.mockImplementation(async(path,options) => {
+    if (path === '/transactions' && options?.params?.est_promesse) return [];
+    if (path === '/transactions') return [ordinary];
+    return previous(path,options);
+  });
+  render(<GlobalOverviewPage/>);
+  await screen.findByText('01/10/2026');
+  await select('Choisir une période','Toute la période');
+  const exported = await exportRows();
+  expect(exported.at(-1).sold).toBe(1);
+  expect(exported.at(-1).sales).toBe(1.5);
+ });
+
  it('does not report missing feed prices as zero costs or a positive margin',async()=>{
   const previous=mocks.get.getMockImplementation();
   mocks.get.mockImplementation(async(path)=>path==='/transactions' ? [] : previous(path));
