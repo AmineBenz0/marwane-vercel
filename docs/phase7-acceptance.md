@@ -101,3 +101,18 @@ Advisory guidance:
 ### Release decision
 
 **Staging reporting implementation: ready for code-level acceptance once final CI passes. Phase 7 full authenticated acceptance: open. Production promotion: not authorized.** Remaining actionable gate: run the new authenticated read-only E2E against staging or complete its equivalent owner walkthrough, then sign off downloaded files and historical cross-lot presentation. Broader concurrency/recovery/schema-hardening is retained for Phase 8.
+
+
+## Final deterministic browser export acceptance — 6 November 2026, 10:40 UTC
+
+CI run: https://github.com/AmineBenz0/marwane-vercel/actions/runs/42203626680
+
+- Full backend: **731 passed**, 33 skipped, 83.20% service coverage, Python dependencies show no known vulnerabilities.
+- Frontend: **337 unit tests passed**; successful build and high-severity npm audit gate (five moderate advisories remain).
+- Browser: **18 passed**, including two new tests (`frontend/tests-ui/phase7-exports.spec.ts`) that download and inspect the actual XLSX content and PDF file signatures. Transaction export: all three synthetic transactions are present, the canceled transaction is labeled `Annulée`, and the grand total counts only the 125.50 MAD in active transactions rather than all 325.50 MAD. Monthly report export: 100.00 MAD in sales, 25.50 MAD in purchases, 35.00 MAD in charges, and dated current balances match the rendered contract.
+- Database migration/integrity and secret-scanning jobs passed; the staging preview corresponding to the code commit is READY.
+- These are **deterministic mocks**, not live staging credentials or business data. They prove the browser-based export pipeline and its calculation contract, but not equivalence between actual staging API responses and downloaded reports.
+
+**Acceptance boundary:** Phase 7 implementation, historical-stock reconciliation, real SQL benchmarks, and deterministic UI/Excel/PDF regression checks are complete and green. **Live authenticated cross-system report/download acceptance remains open** because the available browser connection is not signed into staging and GitHub's `e2e` job is still skipped pending test credentials/flag. Do not label these live E2E tests as passed.
+
+**Phase 8 handoff:** Database security advisors (search paths, public extensions, deliberately policyless internal tables), conditional CI jobs, rollback/concurrency/backup checks, and moderate npm advisories remain separately tracked. No production promotion has been authorized.
