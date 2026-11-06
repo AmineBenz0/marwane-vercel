@@ -24,11 +24,18 @@ const report = {
   caisse_entrees: '0.00', caisse_sorties: '0.00', banques_entrees: '0.00', banques_sorties: '0.00',
   creances: '100.00', dettes: '25.50', solde_caisse_historique: '0.00',
   creances_actuelles: '100.00', dettes_actuelles: '25.50', solde_caisse: '0.00',
-  soldes_bancaires_historiques: [], soldes_bancaires: [],
+  soldes_bancaires_historiques: [
+    { id_compte: 1, nom_banque: '[STAGE DEMO] Banque CIH', solde: '5250.00' },
+    { id_compte: 2, nom_banque: '[TEST PH5 01-11] Corrections', solde: '0.00' },
+  ],
+  soldes_bancaires: [
+    { id_compte: 1, nom_banque: '[STAGE DEMO] Banque CIH', solde: '5250.00' },
+    { id_compte: 2, nom_banque: '[TEST PH5 01-11] Corrections', solde: '0.00' },
+  ],
   inventory_movements: 0, inventory_quantity_delta: '0',
 };
 
-async function mockFinancialApi(page: Page, transactions = txData) {
+async function mockFinancialApi(page: Page, transactions = txData, partnerName = 'Client Test') {
   await mockAuthenticatedSession(page);
   const attemptedWrites: string[] = [];
   await page.route('**/api/v1/**', async route => {
@@ -46,7 +53,7 @@ async function mockFinancialApi(page: Page, transactions = txData) {
       const filtered = filterActive === null ? transactions : transactions.filter(tx => tx.est_actif === (filterActive === 'true'));
       result = filtered.slice(Number(u.searchParams.get('skip') || 0),
         Number(u.searchParams.get('skip') || 0) + Number(u.searchParams.get('limit') || 500));
-    } else if (p === '/clients') result = [{ id_client: 1, nom_client: 'Client Test', est_actif: true }];
+    } else if (p === '/clients') result = [{ id_client: 1, nom_client: partnerName, est_actif: true }];
     else if (p === '/fournisseurs') result = [{ id_fournisseur: 2, nom_fournisseur: 'Fournisseur Test', est_actif: true }];
     else if (p === '/produits') result = [{ id_produit: 1, nom_produit: 'Service Test', est_actif: true }];
     else if (p === '/batiments') result = [];
@@ -166,7 +173,11 @@ test('phase7 wide transaction PDF remains paginated and keeps deferred and payme
       }))
       : [],
   }));
-  const writes = await mockFinancialApi(page, transactions);
+  const writes = await mockFinancialApi(
+    page,
+    transactions,
+    '[STAGE DEMO 2026-10-12] Marché Central Rabat avec une raison sociale assez longue',
+  );
   await page.goto('/transactions');
   await expect(page.getByRole('button', { name: 'Exporter en PDF' })).toBeEnabled();
   const [download] = await Promise.all([
