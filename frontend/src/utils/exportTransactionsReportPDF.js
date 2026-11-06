@@ -90,7 +90,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     partner: pdfClean(row.client_ou_fournisseur || '-'),
     product: pdfClean(row.produit_label || ('Produit #' + String(row.id_produit || '-'))),
     building: pdfClean(row.batiment_label || '-'),
-    status: row.est_actif === false ? 'Annulee' : 'Active',
+    status: row.est_actif === false ? 'Annulée' : 'Active',
   }));
 
   const transactionRows = source.map(row => [
@@ -107,10 +107,10 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   autoTable(doc, {
     ...tableStyle(43),
     startY: 72,
-    head: [['ID', 'DATE', 'PARTENAIRE / PRODUIT', 'QTE', 'MONTANT', 'PAYE', 'RESTE', 'ETAT']],
+    head: [['ID', 'DATE', 'PARTENAIRE / PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
     body: transactionRows,
     foot: [[
-      { content: 'TOTAL ACTIF (hors operations annulees)', colSpan: 4 },
+      { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 4 },
       pdfMoney(total, false), pdfMoney(paid, false), pdfMoney(remaining, false), '',
     ]],
     showFoot: 'lastPage',
@@ -140,28 +140,27 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       }
     },
   });
-  const registerEnd = doc.getNumberOfPages();
 
   const payments = source.filter(includesPayment);
   addSection(
-    doc, sections, 'Reglements et references',
-    String(payments.length) + ' transactions avec un reglement',
-    ['ID', 'PARTENAIRE', 'DETAIL DES REGLEMENTS', 'ETAT'],
+    doc, sections, 'Règlements et références',
+    String(payments.length) + ' transactions avec un règlement',
+    ['ID', 'PARTENAIRE', 'DÉTAIL DES RÈGLEMENTS', 'ÉTAT'],
     payments.map(row => [row.id, row.partner, pdfClean(row.reglement_label), row.status]),
     [13, 85, 147, 29],
   );
 
   const deferred = source.filter(row => row.est_promesse);
   addSection(
-    doc, sections, 'Livraisons differees',
-    String(deferred.length) + ' transactions concernees par la livraison differee',
-    ['ID', 'PRODUIT / BATIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COMPLETE', 'RESERVE', 'RESTE'],
+    doc, sections, 'Livraisons différées',
+    String(deferred.length) + ' transactions concernées par une livraison différée',
+    ['ID', 'PRODUIT / BÂTIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COMPLÉTÉ', 'RÉSERVÉ', 'RESTE'],
     deferred.map(row => [
       row.id,
       row.product + '\n' + row.building,
       pdfClean(row.etat_stock || row.status) +
-        '\nA produire: ' + pdfInteger(row.quantite_a_produire) +
-        '  |  Cloture: ' + pdfInteger(row.quantite_annulee),
+        '\nÀ produire : ' + pdfInteger(row.quantite_a_produire) +
+        '  |  Clôturé : ' + pdfInteger(row.quantite_annulee),
       pdfDate(row.date_livraison_prevue),
       pdfInteger(row.quantite_completee),
       pdfInteger(row.quantite_reservee),
@@ -175,14 +174,14 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   for (let number = 1; number <= totalPages; number += 1) {
     doc.setPage(number);
     const section = sections.find(item => number >= item.start && number <= item.end);
-    pdfBrand(doc, section ? 'ANNEXE - DETAILS' : 'EXPORTS - COMPTABILITE');
+    pdfBrand(doc, section ? 'ANNEXE - DÉTAILS' : 'EXPORTS - COMPTABILITÉ');
     if (number === 1) {
-      pdfHeading(doc, 'Rapport des transactions', 'Operations du ' + period,
-        'Edite le ' + pdfDate(reportDate));
+      pdfHeading(doc, 'Rapport des transactions', 'Opérations du ' + period,
+        'Édité le ' + pdfDate(reportDate));
       drawKpi(doc, 'TRANSACTIONS', String(rows.length) + ' - ' + String(active.length) + ' actives', 0);
       drawKpi(doc, 'MONTANT ACTIF', pdfMoney(total), 1, true);
-      drawKpi(doc, 'DEJA PAYE', pdfMoney(paid), 2);
-      drawKpi(doc, 'RESTE A REGLER', pdfMoney(remaining), 3);
+      drawKpi(doc, 'DÉJÀ PAYÉ', pdfMoney(paid), 2);
+      drawKpi(doc, 'RESTE À RÉGLER', pdfMoney(remaining), 3);
     } else if (section) {
       pdfHeading(doc, section.title + (number > section.start ? ' - suite' : ''),
         section.subtitle);
