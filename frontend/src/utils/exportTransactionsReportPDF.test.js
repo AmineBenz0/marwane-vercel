@@ -78,7 +78,7 @@ describe('transaction PDF pagination', () => {
     expect(all).toContain('END-OF-CANCELED-ROW');
   });
 
-  it('balances payment and deferred annexes without losing or repeating entries', () => {
+  it('fills annex pages before continuing without losing or repeating entries', () => {
     const rows = Array.from({ length: 15 }, (_, index) => transaction(index, {
       reglement_label: `PAYMENT-${String(index).padStart(3, '0')} ` +
         (index === 0 ? 'Long reference with multiple words '.repeat(20) : '25,00 MAD'),
@@ -98,8 +98,8 @@ describe('transaction PDF pagination', () => {
     expect(deferredPages).toHaveLength(2);
     const paymentCounts = paymentPages.map(page => (page.match(/PAYMENT-\d{3}/g) || []).length);
     const deferredCounts = deferredPages.map(page => (page.match(/En attente/g) || []).length);
-    expect(Math.min(...paymentCounts)).toBeGreaterThanOrEqual(5);
-    expect(Math.min(...deferredCounts)).toBeGreaterThanOrEqual(5);
+    expect(paymentCounts[0]).toBeGreaterThanOrEqual(11);
+    expect(deferredCounts[0]).toBeGreaterThanOrEqual(9);
     expect(paymentCounts.reduce((a, b) => a + b, 0)).toBe(15);
     expect(deferredCounts.reduce((a, b) => a + b, 0)).toBe(11);
     rows.forEach((row, index) => {
