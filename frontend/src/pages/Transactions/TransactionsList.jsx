@@ -543,6 +543,10 @@ function TransactionsList() {
           if (row?.__summaryType) return '';
           return getPaymentReglementSummary(row);
         },
+        date_livraison_prevue: (value, row) => {
+          if (row?.__summaryType || !value) return '';
+          return formatShortDate(value, String(value));
+        },
         montant_total: (value, row) => {
           if (row?.__summaryType === 'spacer') return '';
           if (row?.__summaryType === 'total') {

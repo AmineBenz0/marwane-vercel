@@ -99,8 +99,8 @@ const formatPaymentAmountForSummary = (value) => {
   if (value === null || value === undefined) return null;
   return (
     new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })
       .format(Number(value || 0))
       .replace(/\s/g, '\u00A0') + '\u00A0MAD'

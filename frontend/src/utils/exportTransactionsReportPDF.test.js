@@ -97,12 +97,12 @@ describe('transaction PDF pagination', () => {
     const paymentPages = outputPages.filter(page => page.includes('PAYMENT-'));
     const deferredPages = outputPages.filter(page => page.includes('En attente'));
     expect(paymentPages).toHaveLength(2);
-    expect(deferredPages).toHaveLength(2);
+    expect(deferredPages).toHaveLength(1);
     const paymentCounts = paymentPages.map(page => (page.match(/PAYMENT-\d{3}/g) || []).length);
     const deferredCounts = deferredPages.map(page => (page.match(/En attente/g) || []).length);
     // Single-payment groups include their transaction context and amount.
     expect(paymentCounts[0]).toBeGreaterThanOrEqual(9);
-    expect(deferredCounts[0]).toBeGreaterThanOrEqual(9);
+    expect(deferredCounts[0]).toBe(11);
     expect(paymentCounts.reduce((a, b) => a + b, 0)).toBe(15);
     expect(deferredCounts.reduce((a, b) => a + b, 0)).toBe(11);
     rows.forEach((row, index) => {

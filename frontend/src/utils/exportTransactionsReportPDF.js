@@ -56,6 +56,13 @@ function addSection(doc, section, title, subtitle, columns, data, widths, emphas
   // to a new page only when it no longer fits above the footer margin.
   autoTable(doc, {
     ...tableStyle(43),
+    // Compact annex rows just enough to avoid orphaning the final delivery
+    // on a nearly empty page, without reducing font size or column width.
+    styles: {
+      ...tableStyle(43).styles,
+      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+      minCellHeight: 9.2,
+    },
     startY: 43,
     head: [columns],
     body: data,

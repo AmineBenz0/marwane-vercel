@@ -1,7 +1,7 @@
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import TransactionsExcelRegister from './TransactionsExcelRegister';
+import TransactionsExcelRegister, { getPaymentReglementSummary } from './TransactionsExcelRegister';
 
 const { useMediaQueryMock } = vi.hoisted(() => ({ useMediaQueryMock: vi.fn() }));
 
@@ -111,4 +111,17 @@ it('opens a mobile card by tapping its amount', () => {
   renderRegister({ onView });
   fireEvent.click(screen.getByText('+100 MAD'));
   expect(onView).toHaveBeenCalledExactlyOnceWith(transaction);
+});
+
+it('preserves centimes in Excel settlement summaries instead of rounding to whole dirhams', () => {
+  const summary = getPaymentReglementSummary({ paiements: [
+    { type_paiement: 'cash', montant: '0.10' },
+    { type_paiement: 'lc', montant: '1.60', numero_reference_lc: 'LC-EXEMPLE' },
+    { type_paiement: 'cash', montant: '0.01', nature: 'remboursement' },
+  ] });
+  expect(summary).toContain('0,10');
+  expect(summary).toContain('1,60');
+  expect(summary).toContain('0,01');
+  expect(summary).toContain('LC-EXEMPLE');
+  expect(summary).not.toContain('2 MAD');
 });
