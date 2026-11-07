@@ -95,8 +95,9 @@ for (const width of [390, 1200]) {
     const state = await mockFlock(page, false);
     await page.goto('/production/batiment/7?date=2026-10-05');
     await expect(page.getByText(/Aucun lot ne couvre cette date/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Saisir la journée', exact: true })).toBeDisabled();
-    await page.getByRole('button', { name: 'Gestion des lots', exact: true }).click();
+    const production = page.getByRole('region', { name: 'Production du bâtiment' });
+    await expect(production.getByRole('button', { name: 'Saisir la journée', exact: true })).toBeDisabled();
+    await production.getByRole('button', { name: 'Gestion des lots', exact: true }).click();
     for (const [name, count] of [['Lot A', '100'], ['Lot B', '200']]) {
       await page.getByRole('button', { name: 'Démarrer un lot', exact: true }).click();
       const dialog = page.getByRole('dialog');
