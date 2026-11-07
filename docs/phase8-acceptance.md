@@ -115,3 +115,68 @@ The disposable PostgreSQL migration test and independent-lot lifecycle tests
 must pass before applying this change to staging. The two internal policyless
 tables and two public-schema extensions are explicitly **not** modified in
 this change. No production SQL is authorized.
+
+
+## Phase 8 execution results — 7 November 2026, 22:06 UTC
+
+### Verified G1/G4/G5 increments
+
+- **Disposable PostgreSQL concurrency checks passed** in CI run
+  https://github.com/AmineBenz0/marwane-vercel/actions/runs/42416157643 :
+  concurrent distinct edits to one version, identical operation-ID replay,
+  and an injected late failure with no persisted transaction/operation/revision
+  side effects. These are only the first G4 tests; stock-order/LC/cheque races
+  remain to cover.
+- **Scoped function-search-path hardening passed all standard CI gates**
+  https://github.com/AmineBenz0/marwane-vercel/actions/runs/42416638852
+  and migration `phase8_lot_function_search_path` was applied to staging
+  Supabase (recorded version `20261107214147`). Advisors no longer list the
+  three `function_search_path_mutable` warnings. The remaining staging
+  security advisors are two internal policyless RLS tables (INFO) and two
+  public-schema extensions (WARN). No extension relocation or RLS-policy
+  mutation was performed.
+- **Post-migration read-only staging baseline**: 30 transactions, 17 active,
+  29,160.90 MAD active total, six lots and six cycles, three pinned trigger
+  functions; no financial/lot count changes detected.
+- **Stable staging alias verification**: the Vercel READY deployment
+  `dpl_H1kZC1zCrpz2VtNghiKRaWnhSXKj` at commit
+  `b5c9f8c7feab7aa825beb4ff56cefebe11ea6451` is the current target of
+  `marwane-vercel-git-staging-airzets-projects.vercel.app`. The matching
+  standard CI run passed. Production was not deployed.
+
+### Production parity — read-only inventory
+
+- Stage: 37 public tables / 40 active custom triggers / 219 indexes /
+  22 Supabase migrations **before** this hardening migration, 23 afterward.
+- Production: 31 public tables / 16 active custom triggers / 127 indexes /
+  9 recorded Supabase migrations.
+- Six stage-only tables: `affectations_credit`, `alembic_version`,
+  `avances`, `correction_operations`, `entity_revisions`,
+  `utilisations_lettre_credit`. A direct inventory comparison also found
+  24 staging-only trigger identities, 105 staging-only index identities,
+  and 13 staging-only columns on tables common to both environments.
+- No migrations, schema changes, or financial records were written to
+  production. This is a **migration-planning blocker**, not authorization
+  to replay every staging migration blindly. Version naming differs;
+  review historical migration effects, preconditions, role grants,
+  existing data, and backfill semantics before preparing a production
+  migration sequence.
+
+### Still open for final release acceptance
+
+1. G2: authenticated GitHub E2E remains skipped (requires repository
+   variable `RUN_E2E=true` and GitHub secrets for staging URL/login).
+   Read-only connected browser context is not executable end-to-end UI testing.
+2. G3: mutating browser workflows must run against a disposable clone, not
+   live staging or production; the currently connected Supabase organization
+   shows no existing staging development branch.
+3. G4: stock-reservation/LC/cheque races and crash recovery still need
+   target-specific concurrency acceptance.
+4. G5: both extension-in-public warnings require separate dependency impact
+   analysis; do not move extensions merely to clear advisors. Database
+   security workflow remains opt-in/skipped in normal CI.
+5. G6: backup/PITR availability, restore point, actual isolated restore
+   drill and RPO/RTO evidence remain unverified.
+6. G7/G8: production parity and migration rehearsal, exact release
+   candidate approval, maintenance/rollback plan, and post-deploy
+   reconciliation all remain open. **Production NO-GO**.
