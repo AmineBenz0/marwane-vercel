@@ -38,4 +38,4 @@ def test_independent_lot_trigger_resolution_is_pinned_without_security_definer()
     assert {f["proname"] for f in functions} == FUNCTIONS
     for function in functions:
         assert function["prosecdef"] is False
-        assert "search_path=" in (function["proconfig"] or [])
+        assert any(setting in {"search_path=", 'search_path=""'} for setting in (function["proconfig"] or []))
