@@ -201,3 +201,46 @@ the same live staging database. They require a **separately verified**
 disposable database and explicit matching origin configuration; URL allowlisting
 alone does not establish database isolation. The read-only authenticated E2E
 suite remains a separate optional gate until GitHub secrets are configured.
+
+## Phase 8 execution results — 7 November 2026, final concurrency and stock acceptance
+
+- **CI passed** on staging commit `2f5f3f93661d4367d2f79fa8c364b23eb3b4da9e`:
+  https://github.com/AmineBenz0/marwane-vercel/actions/runs/42420714000
+  (backend coverage, frontend/unit and desktop/mobile checks, native PostgreSQL
+  migration-validation, and secret scan). The conditional authenticated
+  `e2e` and `database-security` jobs remain **skipped**, not passed.
+- **Phase 8 native PostgreSQL concurrency suite passed** on a disposable local
+  database, including conflicting and repeated transaction corrections,
+  atomic rollback, competing LC metadata corrections, concurrent identical LC
+  replay, simultaneous cheque encashment, and FIFO deferred-stock allocation.
+- **Real concurrency regression found and fixed**: two concurrent deferred-egg
+  allocation requests previously attempted to insert the same
+  `(id_transaction,id_production)` source row after reading stale
+  reservations. The fix acquires the building lock before reading promises.
+  An intermediate `populate_existing()` strategy was reverted because it
+  overwrote pending in-session cancellation edits; the final implementation
+  retains identity-map changes after taking the lock. Both the race test and
+  all existing deferred-sale cancellation/regression tests pass in the final CI.
+- **E2E mutation safety tightened:** the mutating browser suite requires an
+  explicit disposable target and exact allowlisted origin and rejects the
+  stable staging, production, and this project's staging preview deployment
+  hostnames. These are guardrails, not proof that a selected arbitrary domain
+  actually has a separate database: target isolation must still be verified.
+- **Stable staging alias** now targets READY Vercel deployment
+  `dpl_6TNrZbBLKUYqyfPgKGf6YKqqNREh` for the exact verified SHA above.
+  Alias ownership and target were rechecked after assignment.
+- **Production migration rehearsal plan:** see
+  [phase8-production-migration-preflight.md](phase8-production-migration-preflight.md).
+  Candidate production Supabase contains 14 active historic production rows,
+  all building-linked but without cycle links, and no transaction records.
+  Preserve these legacy rows and establish actual runtime DB identity before
+  any migration. The candidate database does not itself prove Vercel's bound
+  production DATABASE_URL points there.
+- **Security:** staging's three unsafe function search-path warnings were
+  resolved earlier. Extension relocation and internal RLS disposition remain
+  separately open. No new staging SQL or production SQL was executed in this
+  increment.
+
+**Phase 8 remains OPEN / production NO-GO** until authenticated read-only E2E,
+isolated mutating E2E, actual backup/PITR restore drill, safe production
+migration rehearsal and explicit owner approval are complete.
