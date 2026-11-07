@@ -20,7 +20,7 @@ const stock = {
   ] }],
 };
 const daily = {
-  batiments: [{ id_batiment: 7, produced_eggs: 0, sold_eggs: 0, lost_eggs: 0, mortalite: 0, consommation_aliment_kg: 2, entries_count: 0, categories: [] }],
+  batiments: [{ id_batiment: 7, produced_eggs: 0, sold_eggs: 0, lost_eggs: 0, mortalite: 0, consommation_aliment_kg: 2, entries_count: 0, categories: [], cycle: { id_cycle: 4 } }],
   movements: [],
 };
 const mockData = ({ dayData = daily, rows = [], stockData = stock } = {}) => get.mockImplementation((path) => {
@@ -40,6 +40,13 @@ describe('Building production views', () => {
     const before = get.mock.calls.filter(([path]) => path === '/productions/stock/daily').length;
     fireEvent(window, new Event('marwane:correction'));
     await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/productions/stock/daily').length).toBeGreaterThan(before));
+  });
+  it('blocks a new entry on a date with no lot and points to lot management', async () => {
+    mockData({ dayData: { ...daily, batiments: [{ ...daily.batiments[0], cycle: null }] } });
+    renderPage();
+    expect(await screen.findByText(/Aucun lot ne couvre cette date/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Saisir la journée' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Gestion des lots' })).toBeEnabled();
   });
 
   it('shows carried stock and daily details together, with no tabs', async () => {
@@ -74,7 +81,7 @@ describe('Building production views', () => {
       { id_production: 3, id_batiment: 7, date_production: '2026-10-05', type_oeuf: 'casse', nombre_oeufs: 5, grammage: 99, nombre_cartons: 0 },
       { id_production: 4, id_batiment: 7, date_production: '2026-10-06', type_oeuf: 'blanc', nombre_oeufs: 999, grammage: 60 },
     ];
-    mockData({ rows, dayData: { ...daily, batiments: [{ ...daily.batiments[0], produced_eggs: 120, lost_eggs: 5, mortalite: 2, consommation_aliment_kg: 3, entries_count: 3 }] } });
+    mockData({ rows, dayData: { ...daily, batiments: [{ ...daily.batiments[0], cycle: null, produced_eggs: 120, lost_eggs: 5, mortalite: 2, consommation_aliment_kg: 3, entries_count: 3 }] } });
     renderPage();
     expect((await screen.findAllByText('120 œufs'))[0]).toBeVisible();
     expect(within(screen.getByRole('region', { name: 'Journée sélectionnée' })).getByText('62,0 g')).toBeVisible();

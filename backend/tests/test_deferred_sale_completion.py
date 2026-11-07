@@ -21,6 +21,7 @@ from app.schemas.transaction import DeferredSaleCompletion
 from app.utils.egg_product_sync import ensure_sellable_egg_product
 from app.routers.productions import create_daily_production, update_daily_production
 from app.schemas.production import ProductionDailyInput
+from tests.lot_test_helpers import add_lot_cycle
 
 
 def create_transaction(payload, db, user):
@@ -408,6 +409,7 @@ def test_production_saves_reserve_fifo_and_repeat_updates_do_not_duplicate(clien
     assert (oldest.quantite_couverte, oldest.quantite_en_attente) == (600, 400)
     assert (later.quantite_couverte, later.quantite_en_attente) == (0, 300)
 
+    add_lot_cycle(db_session, building, name="Reservation lot", date_debut=today)
     daily = create_daily_production(ProductionDailyInput(
         id_batiment=building.id_batiment,
         date_production=today,

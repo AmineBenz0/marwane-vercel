@@ -213,6 +213,26 @@ def _daily_response(records, batiment, db, day):
     }
 
 
+def _require_production_cycle(
+    db: Session, id_batiment: int, production_date: date, id_cycle: Optional[int] = None,
+) -> CycleProduction:
+    if production_date > date.today():
+        raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
+    if id_cycle is None:
+        cycle = find_cycle_for_date(db, id_batiment, production_date)
+        if cycle is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Aucun lot ne couvre cette date pour ce bâtiment. Vérifiez la date ou démarrez un lot dans Gestion des lots.",
+            )
+    else:
+        cycle = db.get(CycleProduction, id_cycle)
+        if cycle is None or cycle.id_batiment != id_batiment:
+            raise HTTPException(status_code=400, detail="Lot introuvable pour ce bâtiment.")
+    validate_cycle_date(cycle, production_date)
+    return cycle
+
+
 @router.get("/daily", response_model=ProductionDailyRead)
 def get_daily_production(
     id_batiment: int,
@@ -254,18 +274,13 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         if len(cycle_ids) > 1:
             raise HTTPException(status_code=409, detail="Cette journee contient plusieurs lots et doit etre corrigee separement.")
         cycle_id = next(iter(cycle_ids), None)
-        cycle = db.get(CycleProduction, cycle_id) if cycle_id else None
-        if not updating:
-            cycle = find_cycle_for_date(db, prod_in.id_batiment, prod_in.date_production)
-            if not cycle and db.query(CycleProduction.id_cycle).filter(
-                CycleProduction.id_batiment == prod_in.id_batiment,
-            ).first():
-                raise HTTPException(status_code=400, detail="Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez la date et la répartition dans Gestion des lots.")
-            cycle_id = cycle.id_cycle if cycle else None
+        # Keep existing unassigned days editable. Every new day must resolve a lot.
+        cycle = (
+            _require_production_cycle(db, prod_in.id_batiment, prod_in.date_production, cycle_id)
+            if not updating or cycle_id is not None else None
+        )
         if cycle:
-            validate_cycle_date(cycle, prod_in.date_production)
-            if prod_in.date_production > date.today():
-                raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
+            cycle_id = cycle.id_cycle
             validate_cycle_mortality(db, cycle, prod_in.mortalite or 0,
                                     [record.id_production for record in existing])
         operational_only = not any(quantities.values())
@@ -418,23 +433,8 @@ def create_production(
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
 
-    cycle = None
-    if prod_in.id_cycle is not None:
-        cycle = db.query(CycleProduction).filter(CycleProduction.id_cycle == prod_in.id_cycle).first()
-        if not cycle or cycle.id_batiment != prod_in.id_batiment:
-            raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
-        refresh_cycle_status(db, cycle)
-    else:
-        cycle = find_cycle_for_date(db, prod_in.id_batiment, prod_in.date_production)
-        if not cycle and db.query(CycleProduction.id_cycle).filter(
-            CycleProduction.id_batiment == prod_in.id_batiment,
-        ).first():
-            raise HTTPException(status_code=400, detail="Aucun lot n'est affecté à ce bâtiment pour cette date. Vérifiez Gestion des lots.")
-    if cycle:
-        validate_cycle_date(cycle, prod_in.date_production)
-        if prod_in.date_production > date.today():
-            raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
-        validate_cycle_mortality(db, cycle, prod_in.mortalite or 0)
+    cycle = _require_production_cycle(db, prod_in.id_batiment, prod_in.date_production, prod_in.id_cycle)
+    validate_cycle_mortality(db, cycle, prod_in.mortalite or 0)
     # Calculer le nombre de cartons selon les règles métier
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
     calibre = _deduce_calibre(prod_in.type_oeuf, prod_in.grammage)
@@ -443,7 +443,7 @@ def create_production(
     db_prod = Production(
         **{
             **prod_in.model_dump(exclude={"oeufs_perdus"}),
-            "id_cycle": cycle.id_cycle if cycle else None,
+            "id_cycle": cycle.id_cycle,
             "calibre": calibre,
         },
         nombre_cartons=nb_cartons,
@@ -456,7 +456,7 @@ def create_production(
             Production(
                 date_production=prod_in.date_production,
                 id_batiment=prod_in.id_batiment,
-                id_cycle=cycle.id_cycle if cycle else None,
+                id_cycle=cycle.id_cycle,
                 type_oeuf="perdu",
                 calibre=None,
                 nombre_oeufs=prod_in.oeufs_perdus,
@@ -480,7 +480,7 @@ def create_production(
 
         res = {c.name: getattr(db_prod, c.name) for c in db_prod.__table__.columns}
         res["nom_batiment"] = batiment.nom
-        res["nom_cycle"] = cycle.nom_cycle if cycle else None
+        res["nom_cycle"] = cycle.nom_cycle
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -1173,27 +1173,13 @@ def update_production(
     final_batiment_id = update_dict.get("id_batiment", prod.id_batiment)
     final_date = update_dict.get("date_production", prod.date_production)
     cycle = None
-
-    # A lot is optional for normal daily production. Existing historical links
-    # are preserved unless the caller explicitly changes id_cycle.
-    if "id_cycle" in update_dict:
-        if update_dict["id_cycle"] is not None:
-            cycle = db.query(CycleProduction).filter(
-                CycleProduction.id_cycle == update_dict["id_cycle"]
-            ).first()
-            if not cycle or cycle.id_batiment != final_batiment_id:
-                raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
-            validate_cycle_date(cycle, final_date)
-        # Explicit null detaches the production from its lot.
-    elif prod.id_cycle is not None:
-        cycle = db.query(CycleProduction).filter(
-            CycleProduction.id_cycle == prod.id_cycle
-        ).first()
-        if not cycle or cycle.id_batiment != final_batiment_id:
-            raise HTTPException(status_code=400, detail="Lot introuvable pour ce batiment")
-        validate_cycle_date(cycle, final_date)
-
-    if cycle:
+    cycle_id = update_dict.get("id_cycle", prod.id_cycle)
+    if cycle_id is None and prod.id_cycle is not None:
+        raise HTTPException(status_code=400, detail="Une production rattachée doit conserver un lot.")
+    # An existing unassigned record can still be corrected at its original building and date.
+    if cycle_id is not None or (final_batiment_id, final_date) != (prod.id_batiment, prod.date_production):
+        cycle = _require_production_cycle(db, final_batiment_id, final_date, cycle_id)
+        update_dict["id_cycle"] = cycle.id_cycle
         validate_cycle_mortality(db, cycle, update_dict.get("mortalite", prod.mortalite) or 0, [prod.id_production])
     protect_production_source(db, prod,
         quantity=update_dict.get("nombre_oeufs", prod.nombre_oeufs),

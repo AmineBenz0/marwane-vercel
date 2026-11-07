@@ -11,7 +11,7 @@ from app.models.produit import Produit
 from app.models.production import Production
 from app.models.transaction import Transaction
 from app.utils.dependencies import get_current_active_user
-from app.utils.egg_product_sync import build_sellable_egg_product_name
+from app.utils.egg_product_sync import build_sellable_egg_product_name, ensure_sellable_egg_product
 from app.main import app
 from tests.lot_test_helpers import add_lot_cycle
 
@@ -151,7 +151,7 @@ def test_invalid_daily_loss_payload_is_rejected_without_writes(
     assert db_session.query(Production).count() == 0
 
 
-def test_daily_stock_and_egg_sales_work_without_a_lot(
+def test_daily_stock_and_egg_sales_include_legacy_unassigned_production(
     client,
     db_session,
     auth_headers,
@@ -168,37 +168,14 @@ def test_daily_stock_and_egg_sales_work_without_a_lot(
     db_session.refresh(batiment)
     db_session.refresh(client_row)
 
-    production_payload = {
-        "date_production": str(date.today()),
-        "id_batiment": batiment.id_batiment,
-        "type_oeuf": "normal",
-        "nombre_oeufs": 100,
-        "grammage": "62.0",
-    }
-    production_response = client.post(
-        "/api/v1/productions",
-        json=production_payload,
-        headers=auth_headers,
-    )
-    assert production_response.status_code == status.HTTP_201_CREATED, production_response.text
-    assert production_response.json()["id_cycle"] is None
-
-    loss_response = client.post(
-        "/api/v1/productions",
-        json={
-            **production_payload,
-            "type_oeuf": "perdu",
-            "nombre_oeufs": 5,
-            "grammage": "0",
-        },
-        headers=auth_headers,
-    )
-    assert loss_response.status_code == status.HTTP_201_CREATED, loss_response.text
-    assert loss_response.json()["id_cycle"] is None
-
-    product_name = build_sellable_egg_product_name("normal", "gros")
-    produit = db_session.query(Produit).filter(Produit.nom_produit == product_name).first()
-    assert produit is not None
+    db_session.add_all([
+        Production(date_production=date.today(), id_batiment=batiment.id_batiment,
+                   type_oeuf="normal", calibre="gros", nombre_oeufs=100, grammage=62, nombre_cartons=5),
+        Production(date_production=date.today(), id_batiment=batiment.id_batiment,
+                   type_oeuf="perdu", nombre_oeufs=5, grammage=0, nombre_cartons=0),
+    ])
+    produit = ensure_sellable_egg_product(db_session, "normal", "gros")
+    db_session.commit()
 
     sale_response = client.post(
         "/api/v1/transactions",
@@ -237,19 +214,20 @@ def test_lotless_production_can_be_updated_without_being_attached(
     db_session.commit()
     db_session.refresh(batiment)
 
-    create_response = client.post(
-        "/api/v1/productions",
-        json={
-            "date_production": str(date.today()),
-            "id_batiment": batiment.id_batiment,
-            "type_oeuf": "normal",
-            "nombre_oeufs": 60,
-            "grammage": "55",
-        },
+    production = Production(
+        date_production=date.today(), id_batiment=batiment.id_batiment,
+        type_oeuf="normal", calibre="moyen", nombre_oeufs=60, grammage=55, nombre_cartons=3,
+    )
+    db_session.add(production)
+    db_session.commit()
+    production_id = production.id_production
+
+    move_response = client.put(
+        f"/api/v1/productions/{production_id}",
+        json={"date_production": (date.today() - timedelta(days=1)).isoformat()},
         headers=auth_headers,
     )
-    assert create_response.status_code == status.HTTP_201_CREATED, create_response.text
-    production_id = create_response.json()["id_production"]
+    assert move_response.status_code == status.HTTP_400_BAD_REQUEST, move_response.text
 
     update_response = client.put(
         f"/api/v1/productions/{production_id}",
@@ -259,6 +237,7 @@ def test_lotless_production_can_be_updated_without_being_attached(
     assert update_response.status_code == status.HTTP_200_OK, update_response.text
     assert update_response.json()["nombre_oeufs"] == 90
     assert update_response.json()["id_cycle"] is None
+    assert update_response.json()["date_production"] == date.today().isoformat()
 
 
 def test_production_delete_is_audited_and_removed_from_active_stock(

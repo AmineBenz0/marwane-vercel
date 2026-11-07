@@ -59,9 +59,7 @@ function ProductionForm({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const notification = useNotification();
-  const [cycleContext, setCycleContext] = useState(null);
-  const [contextLoading, setContextLoading] = useState(false);
-  const [contextError, setContextError] = useState('');
+  const [contextResult, setContextResult] = useState(null);
   const manualFormula = useRef(null);
   const [formules, setFormules] = useState([]);
   const [calibreThresholds, setCalibreThresholds] = useState([]);
@@ -100,6 +98,13 @@ function ProductionForm({
   const averageEggWeight = trayWeight !== '' && Number.isFinite(Number(trayWeight)) && Number(trayWeight) > 60
     ? eggWeightFromTray(trayWeight) : null;
   const watchedDate = watch('date_production');
+  const contextKey = open && watchedBatiment && watchedDate ? `${watchedBatiment}:${watchedDate}` : null;
+  const currentContext = contextKey && contextResult?.key === contextKey ? contextResult : null;
+  const cycleContext = currentContext?.data;
+  const contextLoading = !!contextKey && !currentContext;
+  const contextError = currentContext?.error;
+  const missingCycle = !initialData && !!currentContext && !contextError && !cycleContext?.cycle;
+  const entryBlocked = loadingDaily || !!loadError || (!initialData && !cycleContext?.cycle);
   const totalEggs = EGG_TYPES.reduce(
     (sum, type) => sum + (['casse', 'perdu'].includes(type.value) ? 0 : previewCount(quantities[type.value])), 0,
   );
@@ -193,18 +198,16 @@ function ProductionForm({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !watchedBatiment || !watchedDate) return undefined;
+    setContextResult(null);
+    if (!contextKey) return undefined;
     let cancelled = false;
-    setContextLoading(true);
-    setCycleContext(null);
-    setContextError('');
     cycleProductionService.getContext(watchedBatiment, watchedDate).then((data) => {
-      if (!cancelled) setCycleContext(data);
+      if (!cancelled) setContextResult({ key: contextKey, data });
     }).catch(() => {
-      if (!cancelled) setContextError('Impossible de charger le cycle. Réessayez en rouvrant le formulaire.');
-    }).finally(() => { if (!cancelled) setContextLoading(false); });
+      if (!cancelled) setContextResult({ key: contextKey, error: 'Impossible de charger le lot. Réessayez en rouvrant le formulaire.' });
+    });
     return () => { cancelled = true; };
-  }, [open, watchedBatiment, watchedDate]);
+  }, [contextKey, watchedBatiment, watchedDate]);
 
   useEffect(() => {
     if (!open || initialData || contextLoading) return;
@@ -214,7 +217,6 @@ function ProductionForm({
       : '');
   }, [open, cycleContext, contextLoading, initialData, formules, watchedDate, watchedBatiment, setValue]);
 
-  const missingCycle = !!cycleContext?.has_cycles && !cycleContext?.cycle;
   const deducedCalibre = (() => {
     const gramValue = averageEggWeight;
     if (!Number.isFinite(gramValue) || gramValue <= 0) return null;
@@ -227,7 +229,7 @@ function ProductionForm({
   })();
 
   const onSubmit = async (data) => {
-    if (loadingDaily || loadError || contextLoading || contextError || missingCycle) return;
+    if (entryBlocked) return;
     const counts = Object.fromEntries(Object.entries(data.quantites).map(
       ([type, count]) => [type, Number(count || 0)],
     ));
@@ -327,7 +329,7 @@ function ProductionForm({
           {contextLoading && <Typography sx={{ mb: 2 }}>Chargement du cycle...</Typography>}
           {contextError && <Alert severity="error" sx={{ mb: 2 }}>{contextError}</Alert>}
           {missingCycle && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" href="/production/lots">Gestion des lots</Button>}>
-            Aucun lot affecté à cette date.
+            Aucun lot ne couvre cette date pour ce bâtiment. Vérifiez la date ou démarrez un lot pour saisir la production.
           </Alert>}
           {cycleContext?.cycle && <Box sx={{ mb: 2 }}>
             <Typography variant="body2" color="text.secondary">
@@ -430,7 +432,7 @@ function ProductionForm({
                     type="number"
                     inputProps={{ min: 0, step: 1 }}
                         fullWidth
-                    disabled={loadingDaily || !!loadError}
+                    disabled={entryBlocked}
                     error={!!quantityError(quantities[type.value])}
                     helperText={quantityError(quantities[type.value])}
                   />
@@ -453,7 +455,7 @@ function ProductionForm({
                     inputProps={{ min: 60.01, step: '0.01' }}
                     value={trayWeight ?? ''}
                     fullWidth
-                    disabled={loadingDaily || !!loadError}
+                    disabled={entryBlocked}
                     error={!!errors.poids_plateau}
                     helperText={errors.poids_plateau?.message}
                   />
@@ -527,6 +529,7 @@ function ProductionForm({
                 type="number"
                 inputProps={{ min: 0, step: 1 }}
                 fullWidth
+                disabled={entryBlocked}
                 error={!!errors.mortalite}
                 helperText={errors.mortalite?.message}
               />
@@ -540,6 +543,7 @@ function ProductionForm({
                 type="number"
                 inputProps={{ step: '0.01' }}
                 fullWidth
+                disabled={entryBlocked}
                 error={!!errors.consommation_aliment_kg}
                 helperText={errors.consommation_aliment_kg?.message}
               />
@@ -549,6 +553,7 @@ function ProductionForm({
                 {...register('formule')}
                 select
                 label="Formule"
+                disabled={entryBlocked}
                 value={watch('formule') || ''}
                 onChange={(event) => {
                   manualFormula.current = {
@@ -573,7 +578,7 @@ function ProductionForm({
             <Grid item xs={12}>
               <VaccineExpenseFields control={control} register={register} setValue={setValue} errors={errors}
                 vaccins={vaccins} onVaccinsChange={setVaccins} comptes={comptes} loading={vaccinesLoading} loadError={vaccinesError}
-                disabled={isSubmitting || loadingDaily || !!loadError} />
+                disabled={isSubmitting || entryBlocked} />
             </Grid>
           </Grid>
           </Grid>
@@ -639,7 +644,7 @@ function ProductionForm({
           <Button
             type="submit"
             variant="contained"
-            disabled={isSubmitting || loadingDaily || !!loadError || contextLoading || !!contextError || missingCycle}
+            disabled={isSubmitting || entryBlocked}
             sx={{ px: 4, borderRadius: 2 }}
           >
             {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre a jour' : 'Enregistrer')}
