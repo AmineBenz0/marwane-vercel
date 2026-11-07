@@ -20,6 +20,8 @@ describe('mutating E2E safety gate', () => {
     for (const url of [
       'https://marwane-vercel.vercel.app',
       'https://marwane-vercel-git-staging-airzets-projects.vercel.app',
+      'https://marwane-vercel-e2redhcpf-airzets-projects.vercel.app',
+      'https://marwane-vercel-7e0mv794g-airzets-projects.vercel.app',
     ]) {
       expect(canRunMutatingE2E({
         ...enabled, E2E_BASE_URL: url, E2E_MUTATION_ALLOWED_ORIGIN: url,

@@ -191,3 +191,13 @@ cycle and zero lots. Protect them during any migration; do not invent historical
 source attribution. **The actual Vercel production DATABASE_URL target still
 needs confirmation** using credential-safe runtime checks, since environment
 values were redacted by the integration. The production release remains NO-GO.
+
+
+## E2E safety hardening — additional preview URL protection
+
+Mutation tests reject not only stable production/staging URLs but also
+the project-specific Vercel deployment preview hostnames, which can share
+the same live staging database. They require a **separately verified**
+disposable database and explicit matching origin configuration; URL allowlisting
+alone does not establish database isolation. The read-only authenticated E2E
+suite remains a separate optional gate until GitHub secrets are configured.

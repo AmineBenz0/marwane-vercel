@@ -20,7 +20,12 @@ export function canRunMutatingE2E(env) {
     if (url.username || url.password || url.search || url.hash) return false;
     if (url.pathname !== '/' && url.pathname !== '') return false;
     if (url.origin !== explicitlyAllowed.origin) return false;
+    // Preview deployment URLs on this project's staging branch share the
+    // live staging database. Never allow the same Vercel project under a
+    // different immutable deployment hostname either.
     if (LIVE_ORIGINS.has(url.origin)) return false;
+    if (url.hostname.endsWith('.vercel.app')
+        && url.hostname.startsWith('marwane-vercel-')) return false;
     return true;
   } catch {
     return false;
