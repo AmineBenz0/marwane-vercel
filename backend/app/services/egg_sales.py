@@ -110,16 +110,29 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
     are distributed, so repeated production saves are safe and canceled sales
     naturally release their allocations to the next promise.
     """
+    # Lock before loading promises and their allocations. Loading first
+    # leaves an ORM snapshot that can go stale while another writer holds
+    # these building locks, causing a duplicate (sale, source) allocation.
+    # Keep the established lock order: buildings, then products, then stock.
+    scoped_buildings = {building for building in (building_ids or ()) if building is not None}
+    if building_id is not None:
+        scoped_buildings.add(building_id)
+    building_scope = db.query(Batiment)
+    if scoped_buildings:
+        building_scope = building_scope.filter(Batiment.id_batiment.in_(sorted(scoped_buildings)))
+    # When unscoped, serialize against all building stock writers: the
+    # owner app has few buildings and legacy unassigned sales are global.
+    building_scope.order_by(Batiment.id_batiment).with_for_update().all()
+
     query = db.query(Transaction).join(Produit).filter(
         Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
         Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
     ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit))
-    scoped_buildings = {building for building in (building_ids or ()) if building is not None}
-    if building_id is not None:
-        scoped_buildings.add(building_id)
     if scoped_buildings:
         query = query.filter(Transaction.id_batiment.in_(sorted(scoped_buildings)))
-    promises = query.order_by(Transaction.date_creation, Transaction.id_transaction).all()
+    promises = query.populate_existing().order_by(
+        Transaction.date_creation, Transaction.id_transaction
+    ).all()
     grouped = defaultdict(list)
     for tx in promises:
         category = parse_sellable_egg_product_name(tx.produit.nom_produit)
@@ -128,11 +141,8 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
     if not grouped:
         return []
 
-    # Match the established stock-write lock order: buildings, then products.
-    building_ids = sorted({building for building, _ in grouped})
-    db.query(Batiment).filter(Batiment.id_batiment.in_(building_ids)).order_by(
-        Batiment.id_batiment
-    ).with_for_update().all()
+    # Building locks are already held, so the loaded allocation collections
+    # are fresh. Product locks still precede the stock-balance calculation.
     product_ids = sorted({tx.id_produit for items in grouped.values() for tx in items})
     db.query(Produit).filter(Produit.id_produit.in_(product_ids)).order_by(
         Produit.id_produit
