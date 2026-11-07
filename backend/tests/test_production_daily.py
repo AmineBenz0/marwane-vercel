@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -8,13 +8,16 @@ from sqlalchemy.exc import IntegrityError
 from app.main import app
 from app.models.batiment import Batiment
 from app.models.production import Production
+from tests.lot_test_helpers import add_lot_cycle
 
 
-def daily_payload(db_session):
+def daily_payload(db_session, *, start_lot=True):
     building = Batiment(nom="Daily types", est_actif=True)
     db_session.add(building)
     db_session.commit()
     db_session.refresh(building)
+    if start_lot:
+        add_lot_cycle(db_session, building, name="Daily lot", date_debut=date.today())
     return {
         "date_production": str(date.today()),
         "id_batiment": building.id_batiment,
@@ -23,6 +26,52 @@ def daily_payload(db_session):
         "mortalite": 2,
         "consommation_aliment_kg": "12",
     }
+
+
+@pytest.mark.parametrize("counts", [{"normal": 120}, {}])
+def test_daily_requires_a_lot_even_for_operational_only_entries(client, db_session, auth_headers, counts):
+    payload = {**daily_payload(db_session, start_lot=False), "quantites": counts}
+    response = client.post("/api/v1/productions/daily", json=payload, headers=auth_headers)
+    assert response.status_code == 400, response.text
+    assert "Gestion des lots" in response.json()["detail"]
+    assert db_session.query(Production).count() == 0
+
+
+def test_daily_entry_requires_a_date_covered_by_the_buildings_lot(client, db_session, auth_headers):
+    payload = daily_payload(db_session, start_lot=False)
+    building = db_session.get(Batiment, payload["id_batiment"])
+    start = date.today() - timedelta(days=3)
+    end = date.today() - timedelta(days=1)
+    _, cycle = add_lot_cycle(
+        db_session, building, name="Closed lot", date_debut=start, date_fin_reelle=end, statut="termine",
+    )
+    for day in (start - timedelta(days=1), end + timedelta(days=1)):
+        response = client.post("/api/v1/productions/daily", json={
+            **payload, "date_production": day.isoformat(),
+        }, headers=auth_headers)
+        assert response.status_code == 400, response.text
+    assert db_session.query(Production).count() == 0
+    for day in (start, end):
+        response = client.post("/api/v1/productions/daily", json={
+            **payload, "date_production": day.isoformat(),
+        }, headers=auth_headers)
+        assert response.status_code == 201, response.text
+        assert {row["id_cycle"] for row in response.json()["records"]} == {cycle.id_cycle}
+
+
+def test_existing_unassigned_day_can_still_be_corrected(client, db_session, auth_headers):
+    payload = daily_payload(db_session, start_lot=False)
+    production = Production(
+        id_batiment=payload["id_batiment"], date_production=date.today(),
+        type_oeuf="normal", nombre_oeufs=120, grammage=63, nombre_cartons=5,
+    )
+    db_session.add(production)
+    db_session.commit()
+    response = client.put("/api/v1/productions/daily", json={
+        **payload, "versions": {production.id_production: production.date_modification.isoformat()},
+    }, headers=auth_headers)
+    assert response.status_code == 200, response.text
+    assert {row["id_cycle"] for row in response.json()["records"]} == {None}
 
 
 def test_daily_types_feed_stock_and_stats_once(client, db_session, auth_headers):

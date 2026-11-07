@@ -14,7 +14,7 @@ vi.mock('react-router-dom', async () => {
 const renderPage = (url = '/production') => render(<MemoryRouter initialEntries={[url]}><ProductionDashboard /></MemoryRouter>);
 const daily = {
   totals: { buildings_count: 1, missing_buildings_count: 1, produced_eggs: 0, sold_eggs: 0, lost_eggs: 0 },
-  batiments: [{ id_batiment: 7, nom_batiment: 'Batiment 7', status: 'missing', entries_count: 0, categories: [] }],
+  batiments: [{ id_batiment: 7, nom_batiment: 'Batiment 7', status: 'missing', entries_count: 0, categories: [], cycle: { id_cycle: 4 } }],
   movements: [],
 };
 const stock = {
@@ -105,6 +105,13 @@ describe('ProductionDashboard single page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Saisir' }));
     expect(await screen.findByRole('dialog')).toBeVisible();
     expect(screen.getByText('Saisir la production du jour')).toBeVisible();
+  });
+  it('keeps the building accessible without offering a new entry on a day with no lot', async () => {
+    mockData({ ...daily, batiments: [{ ...daily.batiments[0], cycle: null }] });
+    renderPage();
+    expect(await screen.findByText('Aucun lot pour cette date')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Saisir' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Voir le bâtiment Batiment 7' })).toBeEnabled();
   });
   it('isolates stock failures from daily figures and retries stock without changing the day', async () => {
     get.mockImplementation((path) => path === '/productions/stock' ? Promise.reject(new Error('Stock indisponible')) :

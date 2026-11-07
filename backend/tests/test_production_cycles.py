@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import status
 
 from app.models.batiment import Batiment
+from app.models.production import Production
 
 
 def create_batiment(db_session):
@@ -67,6 +68,11 @@ def test_explicit_cycle_assignment_and_performance_updates(client, db_session, a
     )
     assert production_response.status_code == status.HTTP_201_CREATED
     assert production_response.json()["id_cycle"] == cycle_id
+    detach_response = client.put(
+        f"/api/v1/productions/{production_response.json()['id_production']}",
+        json={"id_cycle": None}, headers=auth_headers,
+    )
+    assert detach_response.status_code == status.HTTP_400_BAD_REQUEST, detach_response.text
 
     performance_response = client.get(
         f"/api/v1/productions/performance?id_cycle={cycle_id}",
@@ -86,7 +92,7 @@ def test_explicit_cycle_assignment_and_performance_updates(client, db_session, a
     assert summary["oeufs"] == 900
 
 
-def test_production_can_be_created_without_a_lot(client, db_session, auth_headers):
+def test_production_cannot_be_created_without_a_lot(client, db_session, auth_headers):
     batiment = create_batiment(db_session)
 
     response = client.post(
@@ -101,6 +107,6 @@ def test_production_can_be_created_without_a_lot(client, db_session, auth_header
         headers=auth_headers,
     )
 
-    assert response.status_code == status.HTTP_201_CREATED, response.text
-    assert response.json()["id_cycle"] is None
-    assert response.json()["nom_cycle"] is None
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.text
+    assert "Gestion des lots" in response.json()["detail"]
+    assert db_session.query(Production).count() == 0

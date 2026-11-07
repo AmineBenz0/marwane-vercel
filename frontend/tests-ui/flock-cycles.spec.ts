@@ -93,7 +93,11 @@ for (const width of [390, 1200]) {
   test(`independent creation, editing and termination at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     const state = await mockFlock(page, false);
-    await page.goto('/production/lots');
+    await page.goto('/production/batiment/7?date=2026-10-05');
+    await expect(page.getByText(/Aucun lot ne couvre cette date/)).toBeVisible();
+    const production = page.getByRole('region', { name: 'Production du bâtiment' });
+    await expect(production.getByRole('button', { name: 'Saisir la journée', exact: true })).toBeDisabled();
+    await production.getByRole('button', { name: 'Gestion des lots', exact: true }).click();
     for (const [name, count] of [['Lot A', '100'], ['Lot B', '200']]) {
       await page.getByRole('button', { name: 'Démarrer un lot', exact: true }).click();
       const dialog = page.getByRole('dialog');

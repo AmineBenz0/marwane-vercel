@@ -130,6 +130,7 @@ function BatimentProductionPage() {
   const lowStockCategory = stockCategories.find((category) => Number(category.available_eggs || 0) <= 0)
     || stockCategories.find((category) => Number(category.available_eggs || 0) < 200);
   const hasProduction = !!selectedDay;
+  const canAddProduction = batiment?.est_actif !== false && !!dailyBuildingStock?.cycle;
 
   const handleAddProduction = () => {
     setEditingProduction(null);
@@ -196,17 +197,19 @@ function BatimentProductionPage() {
       </Box>
       <CyclePanel buildingId={selectedBatimentId} refreshKey={productions} onSelectCycle={setInsightsCycleId}
         stockContent={stockContent}
-        actions={<Button variant="contained" disabled={!dailyReady || !batiment} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
+        actions={<Button variant="contained" disabled={!dailyReady || !batiment || (!hasProduction && !canAddProduction)} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
           onClick={() => hasProduction ? handleEdit(latestTodayEntry) : handleAddProduction()}>
           {hasProduction ? 'Modifier la saisie' : 'Saisir la journée'}
         </Button>} />
       <Card variant="outlined" component="section" aria-label="Journée sélectionnée" aria-busy={!dailyReady} sx={{ borderRadius: 3, minWidth: 0 }}>
         <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
           <DailySectionHeader title="Journée sélectionnée" selectedDate={selectedDate} onDateChange={setSelectedDate}
-            actions={dailyReady && batiment ? <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'À saisir'} /> : null} />
+            actions={dailyReady && batiment && (hasProduction || canAddProduction) ? <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'À saisir'} /> : null} />
           {loadError ? <Alert severity="error" action={<Button color="inherit" onClick={loadData}>Réessayer la journée</Button>}>{loadError}</Alert> : !dailyReady ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Chargement de la journée" /></Box>
           ) : !batiment ? <Alert severity="warning">Bâtiment introuvable.</Alert> : <>
+            {!hasProduction && batiment.est_actif !== false && !dailyBuildingStock?.cycle &&
+              <Alert severity="info" sx={{ mb: 2 }}>Aucun lot ne couvre cette date. Vérifiez la date ou démarrez un lot dans Gestion des lots.</Alert>}
             {Number(dailyBuildingStock?.mortalite || 0) >= 10 && <Alert severity="error" sx={{ mb: 2 }}>Mortalité élevée pour cette journée : {formatNumber(dailyBuildingStock.mortalite)} volailles.</Alert>}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 2, md: 4 } }}>
               <Box sx={{ minWidth: 0 }}>
