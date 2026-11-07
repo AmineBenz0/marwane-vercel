@@ -13,6 +13,7 @@
 
 import React from 'react';
 import ErrorPage from '../../pages/ErrorPage/ErrorPage';
+import { recoverFailedChunk } from '../../utils/chunkRecovery';
 
 /**
  * Classe ErrorBoundary qui étend React.Component.
@@ -51,6 +52,10 @@ class ErrorBoundary extends React.Component {
    * @param {Object} errorInfo - Informations sur le composant qui a causé l'erreur
    */
   componentDidCatch(error, errorInfo) {
+    // React.lazy can reject without Vite's preload event. Recover only once
+    // for missing JS chunks; other errors keep the normal error page.
+    if (recoverFailedChunk(error)) return;
+
     // Logger l'erreur dans la console
     console.error('ErrorBoundary a capturé une erreur:', error, errorInfo);
 
