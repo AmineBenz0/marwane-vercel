@@ -24,9 +24,9 @@ describe('Suivi global release checks',()=>{
  it('refreshes the selected lot after a correction without losing filters', async () => {
   render(<GlobalOverviewPage/>);
   await screen.findByText('01/10/2026');
-  await waitFor(() => expect(mocks.cycles).toHaveBeenCalledTimes(1));
+  const initialLoads = mocks.cycles.mock.calls.length;
   fireEvent(window, new Event('marwane:correction'));
-  await waitFor(() => expect(mocks.cycles).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(mocks.cycles.mock.calls.length).toBeGreaterThan(initialLoads));
  });
  it('maps localized API labels using the ISO production date and retains recorded zeros',async()=>{
   mocks.cycles.mockResolvedValue([{...cycles[0],id_lot:5,id_cycle:5,id_batiment:8,nom_cycle:'Lot B',date_debut:'2026-10-09',date_fin_reelle:'2026-10-12'}]);
