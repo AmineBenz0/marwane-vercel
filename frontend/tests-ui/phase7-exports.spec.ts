@@ -93,7 +93,7 @@ async function assertPdf(page: Page, click: () => Promise<void>, filename: strin
 const amount = (value: unknown) =>
   Number(String(value ?? '0').replace(/[^\d,.-]/g, '').replace(',', '.'));
 
-test('phase7 transaction register XLSX includes canceled rows but total excludes them, PDF is valid', async ({ page }) => {
+test('phase7 transaction register XLSX omits IDs and excludes canceled rows from the total, PDF is valid', async ({ page }) => {
   const writes = await mockFinancialApi(page);
   await page.goto('/transactions');
   const excel = page.getByRole('button', { name: 'Exporter en Excel' });
@@ -101,28 +101,29 @@ test('phase7 transaction register XLSX includes canceled rows but total excludes
   const sheet = await exportSheet(page, () => excel.click());
   const headings = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, col) => headings.set(String(cell.value), col));
-  const idCol = headings.get('ID');
   const statusCol = headings.get('État');
   const totalCol = headings.get('Montant total');
-  expect(idCol).toBeTruthy();
+  expect(headings.has('ID')).toBe(false);
+  expect(headings.get('Date')).toBe(1);
   expect(statusCol).toBeTruthy();
   expect(totalCol).toBeTruthy();
-  const byId = new Map<number, { state: string; money: number }>();
+  const transactions: { date: string; state: string; money: number }[] = [];
   let total: number | undefined;
   for (let i = 2; i <= sheet.rowCount; i += 1) {
     const row = sheet.getRow(i);
-    const id = Number(row.getCell(idCol!).value);
-    if ([101, 102, 103].includes(id)) {
-      byId.set(id, { state: String(row.getCell(statusCol!).value), money: amount(row.getCell(totalCol!).value) });
+    const date = row.getCell(1).value;
+    if (date) {
+      transactions.push({ date: String(date), state: String(row.getCell(statusCol!).value), money: amount(row.getCell(totalCol!).value) });
     }
-    if (Array.isArray(row.values) && row.values.some(v => String(v ?? '').startsWith('Total :'))) {
+    if (row.getCell(totalCol! - 1).value === 'Total :') {
       total = amount(row.getCell(totalCol!).value);
     }
   }
-  expect(byId).toEqual(new Map([
-    [101, { state: 'Active', money: 100 }],
-    [102, { state: 'Annulée', money: 200 }],
-    [103, { state: 'Active', money: 25.5 }],
+  expect(transactions).toHaveLength(3);
+  expect(transactions).toEqual(expect.arrayContaining([
+    { date: '22/10/26', state: 'Active', money: 100 },
+    { date: '22/10/26', state: 'Annulée', money: 200 },
+    { date: '22/10/26', state: 'Active', money: 25.5 },
   ]));
   expect(total).toBe(125.5);
   await assertPdf(page, () => page.getByRole('button', { name: 'Exporter en PDF' }).click(), 'transactions-courtes.pdf');

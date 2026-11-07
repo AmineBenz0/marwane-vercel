@@ -624,18 +624,10 @@ function TransactionsList() {
 
   /**
    * Configuration des colonnes utilisées pour les exports.
-   * Ordre : ID, Date, Client/Fournisseur, Produit, Bâtiment, Quantité, montants, règlement, statut.
+   * Ordre : Date, Client/Fournisseur, Produit, Bâtiment, Quantité, montants, règlement, statut.
    * mobilePriority: true pour les colonnes à afficher en priorité sur mobile
    */
   const columns = [
-    {
-      id: 'id_transaction',
-      label: 'ID',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      mobilePriority: false,
-    },
     {
       id: 'date_transaction',
       label: 'Date',
