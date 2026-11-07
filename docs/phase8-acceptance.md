@@ -80,3 +80,26 @@ use corrective-forward migrations and audited reversal records instead of
 destructive rollback. Use a disposable target for mutating E2E and restore drills.
 The client-facing forms should remain simple: do not add mandatory notes,
 IDs, motives or verification tags in pursuit of test coverage.
+
+
+## Phase 8 execution log — 7 November 2026, first release-hardening increment
+
+- Inspected a signed-in staging tab in **read-only** browser mode: transactions
+  render and the 30-row list is present. This is not an authenticated click/
+  download E2E run; GitHub secrets and the configured `RUN_E2E` gate remain
+  required for G2.
+- Compared staging with production Supabase inventories using SELECT and
+  migration listing only. Stage: 37 public tables, 40 enabled custom triggers,
+  219 public indexes, 22 Supabase migrations. Production: 31 / 16 / 127 / 9.
+  The **six stage-only tables** are `affectations_credit`, `alembic_version`,
+  `avances`, `correction_operations`, `entity_revisions` and
+  `utilisations_lettre_credit`. There are also 24 stage trigger identities
+  not installed in production and 105 stage index identities missing in prod
+  (not a count of automatically required new indexes).
+  **No production migration was applied.**
+- Added disposable-only native PostgreSQL test coverage for two simultaneous
+  edits to one version, simultaneous identical operation retries, and forced
+  late-transaction rollback. The test refuses remote database hosts and is
+  explicitly activated only in the ephemeral PostgreSQL GitHub job.
+  This is *partial* G4 coverage: LC, cheque, stock-order races and restore
+  recovery still need separate validation. Results must be recorded after CI.
