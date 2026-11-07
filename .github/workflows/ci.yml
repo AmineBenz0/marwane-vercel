@@ -95,6 +95,14 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
           ENVIRONMENT: development
           SECRET_KEY: ci-only-secret
+      - name: Verify Phase 8 FIFO deferred stock reservations under concurrency
+        run: python -m pytest --override-ini addopts='' tests/test_phase8_stock_reservation_race_pg.py -q
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          PHASE8_DISPOSABLE_DB: "true"
+          ENVIRONMENT: testing
+          SECRET_KEY: ci-only-secret
+
       - name: Verify Phase 8 LC and cheque settlement races on disposable PostgreSQL
         run: python -m pytest --override-ini addopts='' tests/test_phase8_instrument_concurrency_pg.py -q
         env:
