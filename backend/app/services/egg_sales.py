@@ -130,9 +130,10 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
     ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit))
     if scoped_buildings:
         query = query.filter(Transaction.id_batiment.in_(sorted(scoped_buildings)))
-    promises = query.populate_existing().order_by(
-        Transaction.date_creation, Transaction.id_transaction
-    ).all()
+    # Preserve pending in-session cancellation/quantity edits. Locking the
+    # building *before* the SELECT ensures other transactions cannot race;
+    # the normal identity map must not be forcibly overwritten here.
+    promises = query.order_by(Transaction.date_creation, Transaction.id_transaction).all()
     grouped = defaultdict(list)
     for tx in promises:
         category = parse_sellable_egg_product_name(tx.produit.nom_produit)
