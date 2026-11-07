@@ -18,6 +18,15 @@ describe('UnifiedSearch', () => {
     get.mockResolvedValue({ results: [{ kind: 'produit', id: 7, label: 'Matière première', subtitle: 'matiere_premiere', href: '/produits/7' }] });
   });
 
+  it('refreshes an active search after a correction without changing its query', async () => {
+    render(<MemoryRouter><UnifiedSearch /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'matiere' } });
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1), { timeout: 1500 });
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2), { timeout: 1500 });
+    expect(get.mock.calls[1][1].params).toEqual({ q: 'matiere' });
+  });
+
   it('debounces a search, renders grouped results, and navigates on selection', async () => {
     render(<MemoryRouter><UnifiedSearch /></MemoryRouter>);
     fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'matiere' } });

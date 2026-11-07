@@ -14,6 +14,14 @@ describe('AlertCenter', () => {
     patch.mockResolvedValue({});
   });
 
+  it('refreshes alerts immediately after a correction rather than waiting for polling', async () => {
+    render(<AlertCenter />);
+    await screen.findByText('3');
+    const before = get.mock.calls.length;
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(before));
+  });
+
   it('shows unread alerts and marks them read', async () => {
     render(<AlertCenter />);
     expect(await screen.findByText('3')).toBeVisible();

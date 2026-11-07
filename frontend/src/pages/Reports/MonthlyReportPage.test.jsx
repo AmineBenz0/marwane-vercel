@@ -39,6 +39,15 @@ describe('MonthlyReportPage', () => {
     exportToExcelAdvanced.mockResolvedValue(undefined);
   });
 
+  it('refetches the same selected month when another tab corrects a transaction', async () => {
+    render(<MonthlyReportPage />);
+    await screen.findByRole('region', { name: 'Situation actuelle' });
+    expect(get).toHaveBeenCalledTimes(1);
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    expect(get.mock.calls[1][1]).toEqual(get.mock.calls[0][1]);
+  });
+
   it('renders stock movement counts correctly and exports the full summary', async () => {
     render(<MonthlyReportPage />);
 

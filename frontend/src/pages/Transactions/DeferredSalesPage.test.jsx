@@ -17,6 +17,13 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('refreshes deferred deliveries when a correction changes reservations', async () => {
+  show();
+  expect(await screen.findByText('2 ventes · 55 œufs à produire')).toBeVisible();
+  const initial = get.mock.calls.filter(([path]) => path === '/transactions/deferred-sales').length;
+  fireEvent(window, new Event('marwane:correction'));
+  await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/transactions/deferred-sales').length).toBeGreaterThan(initial));
+});
 it('orders pending sales by expected date, searches clients without accents and returns home', async () => {
   show();
   expect(await screen.findByText('2 ventes · 55 œufs à produire')).toBeVisible();

@@ -18,13 +18,21 @@ describe('ProduitsList usage', () => {
       if (path === '/clients') return Promise.resolve([{ id_client: 7, nom_client: 'Client test' }]);
       if (path === '/fournisseurs') return Promise.resolve([{ id_fournisseur: 8, nom_fournisseur: 'Fournisseur test' }]);
       if (path === '/transactions') return Promise.resolve([
-        { id_produit: 1, id_client: 7, id_fournisseur: null, quantite: 12,
+        { id_transaction: 1, id_produit: 1, id_client: 7, id_fournisseur: null, quantite: 12,
           prix_unitaire: '2', montant_total: '24', date_transaction: '2026-10-09' },
-        { id_produit: 2, id_client: null, id_fournisseur: 8, quantite: 10,
+        { id_transaction: 2, id_produit: 2, id_client: null, id_fournisseur: 8, quantite: 10,
           prix_unitaire: '3', montant_total: '30', date_transaction: '2026-10-08' },
       ]);
       return Promise.resolve([]);
     });
+  });
+
+  it('reloads product statistics after an accounting correction', async () => {
+    render(<ProduitsList />);
+    expect(await screen.findByText('Produit vendu')).toBeVisible();
+    await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/transactions')).toHaveLength(1));
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/transactions')).toHaveLength(2));
   });
 
   it('shows the right history and filters sold/bought products', async () => {

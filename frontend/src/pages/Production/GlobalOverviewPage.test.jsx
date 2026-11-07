@@ -18,9 +18,16 @@ async function exportRows() {
 beforeEach(()=>{
  vi.clearAllMocks();vi.stubEnv('VITE_DEPLOYMENT_ENV','production');
  mocks.cycles.mockResolvedValue(cycles);mocks.performance.mockResolvedValue({rows});mocks.export.mockResolvedValue();
- mocks.get.mockImplementation(async(path)=>path==='/produits' ? [{id_produit:1,nom_produit:'Œufs normaux'}, {id_produit:2,nom_produit:'Aliment ponte'}] : path==='/charges' ? [{id_cycle:1,id_batiment:1,date_charge:'2026-10-01',montant:100,libelle:'Salaires'},{id_cycle:99,id_batiment:1,date_charge:'2026-10-01',montant:900,libelle:'Autre lot'}] : [{id_cycle:1,id_batiment:1,id_fournisseur:1,id_produit:2,date_transaction:'2026-09-30',quantite:100,montant_total:400}, {id_cycle:1,id_batiment:1,id_client:1,id_produit:1,date_transaction:'2026-10-02',quantite:100,montant_total:200}]);
+ mocks.get.mockImplementation(async(path)=>path==='/produits' ? [{id_produit:1,nom_produit:'Œufs normaux'}, {id_produit:2,nom_produit:'Aliment ponte'}] : path==='/charges' ? [{id_cycle:1,id_batiment:1,date_charge:'2026-10-01',montant:100,libelle:'Salaires'},{id_cycle:99,id_batiment:1,date_charge:'2026-10-01',montant:900,libelle:'Autre lot'}] : [{id_transaction:1,id_cycle:1,id_batiment:1,id_fournisseur:1,id_produit:2,date_transaction:'2026-09-30',quantite:100,montant_total:400}, {id_transaction:2,id_cycle:1,id_batiment:1,id_client:1,id_produit:1,date_transaction:'2026-10-02',quantite:100,montant_total:200}]);
 });
 describe('Suivi global release checks',()=>{
+ it('refreshes the selected lot after a correction without losing filters', async () => {
+  render(<GlobalOverviewPage/>);
+  await screen.findByText('01/10/2026');
+  await waitFor(() => expect(mocks.cycles).toHaveBeenCalledTimes(1));
+  fireEvent(window, new Event('marwane:correction'));
+  await waitFor(() => expect(mocks.cycles).toHaveBeenCalledTimes(2));
+ });
  it('maps localized API labels using the ISO production date and retains recorded zeros',async()=>{
   mocks.cycles.mockResolvedValue([{...cycles[0],id_lot:5,id_cycle:5,id_batiment:8,nom_cycle:'Lot B',date_debut:'2026-10-09',date_fin_reelle:'2026-10-12'}]);
   mocks.performance.mockResolvedValue({rows:[
