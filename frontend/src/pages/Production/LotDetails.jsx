@@ -9,6 +9,7 @@ import { productionService } from '../../services/productionService';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { localToday } from './useProductionView';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { downloadLotCsv, lotChartDays, lotDailyRows, shiftLotDate } from './lotDetailsData';
 
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
@@ -29,6 +30,7 @@ export default function LotDetails({ lot, refreshKey, onBack, onEdit, onEnd }) {
   const [to, setTo] = useState(end);
   const [limit, setLimit] = useState(7);
   const [retry, setRetry] = useState(0);
+  useCorrectionRefresh(() => setRetry(value => value + 1));
   const [data, setData] = useState({ rows: [], vaccines: [], loading: true, productionError: '', vaccineError: '' });
 
   useEffect(() => {

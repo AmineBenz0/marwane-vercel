@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -31,6 +31,8 @@ import {
   ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import { del, get, put } from '../../services/api';
+import { loadTransactionPages } from '../Transactions/transactionPages';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useNotification from '../../hooks/useNotification';
 import ProduitForm from './ProduitForm';
@@ -69,6 +71,7 @@ function ProduitDetail() {
   const [formError, setFormError] = useState(null);
   const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const loadVersion = useRef(0);
 
   const clientsMap = useMemo(() => new Map(
     clients.map((client) => [client.id_client, client.nom_client])
@@ -83,18 +86,13 @@ function ProduitDetail() {
   }, [fournisseurs]);
 
   const loadProduit = useCallback(async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
     try {
       const [produitData, transactionsData, fournisseursData, clientsData] = await Promise.all([
         get(`/produits/${id}`),
-        get('/transactions', {
-          params: {
-            id_produit: Number(id),
-            est_actif: true,
-            limit: 1000,
-          },
-        }),
+        loadTransactionPages(get, { id_produit: Number(id), est_actif: true }),
         get('/fournisseurs', {
           params: {
             est_actif: true,
@@ -104,20 +102,23 @@ function ProduitDetail() {
         get('/clients', { params: { est_actif: true, limit: 1000 } }),
       ]);
 
+      if (version !== loadVersion.current) return;
       setProduit(produitData);
       setTransactions(transactionsData || []);
       setFournisseurs(fournisseursData || []);
       setClients(clientsData || []);
     } catch (err) {
-      setError(err?.message || 'Impossible de charger ce produit');
+      if (version === loadVersion.current) setError(err?.message || 'Impossible de charger ce produit');
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
     loadProduit();
+    return () => { loadVersion.current += 1; };
   }, [loadProduit]);
+  useCorrectionRefresh(loadProduit);
 
   const insights = useMemo(() => {
     const achats = transactions.filter((transaction) => {

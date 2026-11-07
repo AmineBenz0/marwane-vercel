@@ -27,6 +27,14 @@ describe('LotDetails', () => {
     ]);
   });
 
+  it('reloads historical lot production after a correction', async () => {
+    render(<LotDetails lot={lot} onBack={vi.fn()} onEdit={vi.fn()} onEnd={vi.fn()} />);
+    await screen.findByText(/Dernière saisie/);
+    const before = getProductions.mock.calls.length;
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(getProductions.mock.calls.length).toBeGreaterThan(before));
+  });
+
   it('filters production totals, table and export together, while grouping types into one daily row', async () => {
     render(<LotDetails lot={lot} onBack={vi.fn()} onEdit={vi.fn()} onEnd={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible();

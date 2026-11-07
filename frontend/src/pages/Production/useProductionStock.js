@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { productionService } from '../../services/productionService';
 import { localToday } from './useProductionView';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 
 // Current inventory is independent of the date selected for daily activity.
 export default function useProductionStock() {
@@ -24,6 +25,7 @@ export default function useProductionStock() {
       if (request === requestId.current) setLoading(false);
     }
   }, []);
+  useCorrectionRefresh(reload);
   useEffect(() => {
     reload();
     return () => { requestId.current += 1; };

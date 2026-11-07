@@ -28,6 +28,7 @@ import CyclePanel, { CycleWeeklyInsights } from './CyclePanel';
 import useProductionView, { productionLink } from './useProductionView';
 import { DailyActivity, DailySectionHeader, StockSummary } from './ProductionViews';
 import useProductionStock from './useProductionStock';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { EGG_TYPE_LABELS, groupDailyProductions } from '../../utils/dailyProduction';
 import { formatVaccineMoney } from '../../utils/vaccineExpenses';
 
@@ -94,6 +95,7 @@ function BatimentProductionPage() {
     loadData();
     return () => { loadRequest.current += 1; };
   }, [loadData]);
+  useCorrectionRefresh(loadData);
 
   const dailyBuildingStock = useMemo(
     () => (stockData?.batiments || []).find((item) => Number(item.id_batiment) === selectedBatimentId),

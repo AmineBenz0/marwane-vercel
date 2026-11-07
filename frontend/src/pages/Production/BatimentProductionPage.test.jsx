@@ -34,6 +34,14 @@ const mockData = ({ dayData = daily, rows = [], stockData = stock } = {}) => get
 describe('Building production views', () => {
   beforeEach(() => { vi.clearAllMocks(); mockData(); });
 
+  it('refreshes building stock and daily activity after a correction', async () => {
+    renderPage();
+    await screen.findByText('Production non saisie');
+    const before = get.mock.calls.filter(([path]) => path === '/productions/stock/daily').length;
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/productions/stock/daily').length).toBeGreaterThan(before));
+  });
+
   it('shows carried stock and daily details together, with no tabs', async () => {
     renderPage();
     expect(await screen.findByText('Disponible à la vente')).toBeVisible();

@@ -30,6 +30,16 @@ const mockData = (dailyData = daily) => get.mockImplementation((path) => {
 });
 describe('ProductionDashboard single page', () => {
   beforeEach(() => { vi.clearAllMocks(); mockData(); });
+  it('reloads both daily and current stock after a correction', async () => {
+    renderPage();
+    await screen.findByText('Non saisie');
+    const previous = get.mock.calls.filter(([path]) => path === '/productions/stock').length;
+    const previousDaily = get.mock.calls.filter(([path]) => path === '/productions/stock/daily').length;
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/productions/stock').length).toBeGreaterThan(previous));
+    await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/productions/stock/daily').length).toBeGreaterThan(previousDaily));
+  });
+
   it('shows current stock, type breakdown and daily activity together without tabs', async () => {
     renderPage();
     expect(await screen.findByText('Disponible à la vente')).toBeVisible();

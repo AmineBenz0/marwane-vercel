@@ -39,6 +39,14 @@ describe('ProduitDetail', () => {
     });
   });
 
+  it('reloads product history immediately when a correction is saved in another tab', async () => {
+    render(<ProduitDetail />);
+    expect(await screen.findByRole('button', { name: 'Modifier' })).toBeVisible();
+    const before = get.mock.calls.filter(([path]) => path === '/transactions').length;
+    fireEvent(window, new Event('marwane:correction'));
+    await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/transactions').length).toBeGreaterThan(before));
+  });
+
   it('keeps ordinary client-enabled products in the normal catalogue workflow', async () => {
     render(<ProduitDetail />);
 
@@ -77,7 +85,7 @@ it('shows sales and clients for a sold product', async () => {
     });
     if (path === '/clients') return Promise.resolve([{ id_client: 7, nom_client: 'Client test' }]);
     if (path === '/transactions') return Promise.resolve([{
-      id_produit: 1, id_client: 7, id_fournisseur: null, quantite: 12,
+      id_transaction: 1, id_produit: 1, id_client: 7, id_fournisseur: null, quantite: 12,
       prix_unitaire: '2', montant_total: '24', date_transaction: '2026-10-09',
     }]);
     return Promise.resolve([]);

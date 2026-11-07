@@ -11,6 +11,7 @@ import ProductionLotChart from './ProductionLotChart';
 import ProductionForm from './ProductionForm';
 import useProductionView, { productionLink } from './useProductionView';
 import useProductionStock from './useProductionStock';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { DailyActivity, DailySectionHeader, StockSummary } from './ProductionViews';
 import useNotificationStore from '../../store/notificationStore';
 
@@ -59,6 +60,7 @@ function ProductionDashboard() {
     loadData();
     return () => { loadRequest.current += 1; };
   }, [loadData]);
+  useCorrectionRefresh(loadData);
 
   const dailyReady = !loading && !loadError && loadedDate === selectedDate;
   const totals = stockData?.totals || {};
