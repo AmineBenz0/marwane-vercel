@@ -118,7 +118,7 @@ test.describe('Phase 7: authenticated reporting reconciliation (read-only)', () 
     for (let i = 2; i <= sheet.rowCount; i += 1) {
       const row = sheet.getRow(i);
       const date = String(row.getCell(dateCol!).value ?? '');
-      if (/^\\d{2}\\/\\d{2}\\/\\d{2}$/.test(date)) {
+      if (/^[0-9]{2}[/][0-9]{2}[/][0-9]{2}$/.test(date)) {
         const key = rowKey(
           date,
           String(row.getCell(stateCol!).value),
