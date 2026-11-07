@@ -1,0 +1,82 @@
+# Phase 8 — Final staging acceptance and production release gate
+
+Date opened: 7 November 2026
+Scope: release readiness for owner correction, stock, LC and reporting flows.
+**Current release decision: NO-GO.** Production is unchanged.
+
+## Entry evidence
+
+- Phase 7 closed on staging at `ce86ebdc0dae46ee414b83760c13718cd4ffd435`.
+- Standard CI green:
+  https://github.com/AmineBenz0/marwane-vercel/actions/runs/42414492269
+  (backend, frontend, deterministic desktop/mobile checks, migration checks,
+  secret scan).
+- Owner inspected live staging exports: 30 transactions (17 active),
+  active gross 29,160.90 MAD, paid 6,755.00 MAD, remaining 22,405.90 MAD;
+  monthly PDF/XLSX reconciled. Deferred delivery and payment details verified.
+- Stage database migrations are recorded through
+  `20261103162336_lc_lifecycle_runtime_access` (Supabase).
+  This alone does not establish production parity.
+
+## Acceptance gates
+
+| Gate | Status on 7 November | Exit evidence required |
+| --- | --- | --- |
+| G1. Staging source, deployment and CI | **Passed for entry** | Branch HEAD, READY preview, staging alias and successful checks match exactly |
+| G2. Authenticated browser E2E | **Open** | Set `RUN_E2E=true` and secure `E2E_BASE_URL`, `E2E_EMAIL`, `E2E_PASSWORD`; execute read-only transaction/monthly exports and desktop/mobile journeys; keep credentials in GitHub secrets |
+| G3. Safe mutation E2E | **Open** | Use disposable staging database/clone with `E2E_MUTATION_TESTS=true`; finance, LC, deferred-stock, lot, payment, credit and correction flow evidence; reconcile and clean test effects without rewriting audit history |
+| G4. Native PostgreSQL concurrency/rollback | **Open** | Parallel correction/replay/stale-preview, stock reservation priority, LC/cheque reuse, bank/cash and crash/partial-commit rollback checks; immutable journal matches canonical ledgers |
+| G5. Security and dependency review | **Open** | Run conditional database-security workflow and current dependency scans; fix or formally risk-accept advisor notices, recheck grants/RLS/runtime roles, and test schema migrations |
+| G6. Backup/PITR and recovery drill | **Open** | Confirm backups and retention, restore to disposable target, run health/integrity/security/reconciliation and reversible payment smoke; record actual RPO/RTO and recovery steps |
+| G7. Production schema/config parity | **Open** | Non-destructive prod↔stage migrations, triggers, indexes, privileges, env/CORS/auth/health and baseline reconciliation; production preflight and documented rollback/forward-recovery procedure |
+| G8. Owner acceptance and release | **Open** | Reconfirm blocked advanced functionality scope, perform final client walkthrough, approve the exact build and maintenance window; migrate safely, deploy and verify production post-release |
+
+## Current evidence and caveats
+
+- The authenticated `e2e` job is skipped by `.github/workflows/ci.yml`
+  unless the repository variable `RUN_E2E` is true. Test discovery in normal
+  CI is not execution. The database-security job is separately
+  `workflow_dispatch`-gated by `RUN_DATABASE_SECURITY=true`.
+- Read-only staging Supabase security advisors on 7 November list:
+  **2 information** notices for policyless, intentionally internal
+  RLS-protected tables (`alembic_version`,
+  `independent_lot_migration_map`),
+  **3 warnings** for functions with role-mutable `search_path`, and
+  **2 warnings** for `pg_trgm`/`unaccent` installed in `public`.
+  Confirm actual exploitability and safe remediation; do not disable RLS
+  or move extensions blindly.
+  References:
+  https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
+  https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable
+  https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public
+- Performance advisors also show unindexed foreign keys (45 on the
+  inspection date). Treat as profiling/prioritization items, not automatic
+  evidence of a bug or authorization for 45 new indexes.
+- `docs/backup-restore-runbook.md` documents the procedure but a completed
+  **actual restore drill with comparison evidence was not found**.
+- Earlier Phase 6E acceptance conditionally accepted limited
+  restoration/service/general-stock conversion; egg-source/deferred-sale
+  conversion remains blocked. Confirm allowed production scope, rather than
+  treating this work as completed merely because Phase 7 closed.
+- The database and security findings are read-only audit evidence, not
+  approval to mutate production or staging schema.
+
+## Recommended execution order
+
+1. **G2** authenticated read-only staging E2E, then **G3** disposable mutation
+   suites. Repair any regressions before release freeze.
+2. **G4–G5** native concurrency and security fixes with verified migrations and
+   role-sensitive tests. Keep optional advanced converters blocked.
+3. **G6–G7** backup/PITR restoration on an isolated target, production parity
+   inventory, rollback and deployment preflight.
+4. **G8** owner's explicit go/no-go, migration-first release, smoke/reconcile
+   and post-deployment monitoring. No production changes before approval.
+
+## Safety boundaries
+
+Do not invent historical stock allocations or distribute common costs without
+a defined policy. Preserve financial history and cancelled/converted originals;
+use corrective-forward migrations and audited reversal records instead of
+destructive rollback. Use a disposable target for mutating E2E and restore drills.
+The client-facing forms should remain simple: do not add mandatory notes,
+IDs, motives or verification tags in pursuit of test coverage.

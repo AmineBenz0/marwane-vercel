@@ -675,3 +675,17 @@ confirmed zero remaining active test money effects and the original sale and
 bank balances. The synthetic LC remains retained and explicitly marked as test
 data with availability in 2099, contributing zero to current balances.
 Phase 6D is ready for owner review; it is not marked closed automatically.
+
+
+## Phase 7 closed — 7 November 2026
+
+The owner accepted the final staging transaction and monthly reporting exports,
+including payment precision, human-readable references, canceled history,
+financial totals and grouped PDF payment details. The last standard CI run on
+`ce86ebdc0dae46ee414b83760c13718cd4ffd435` passed. This closes Phase 7
+on staging, **not** the production release. See
+[Phase 7 closure evidence](phase7-acceptance.md).
+
+Next milestone: [Phase 8 — final acceptance and release gates](phase8-acceptance.md).
+Authenticated E2E, security-advisor disposition, concurrency, backup/PITR
+restore, environment parity and production owner approval remain open.

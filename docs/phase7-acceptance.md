@@ -1,7 +1,7 @@
 # Phase 7 — Indirect consumers and history consistency
 
 Date: 5 November 2026
-Scope: staging implementation and regression verification. **Phase 7 is not yet production-approved.**
+Scope: staging implementation and regression verification. **Phase 7 CLOSED for staging as of 7 November 2026; production release remains gated by Phase 8.**
 
 ## Purpose
 
@@ -153,3 +153,55 @@ The owner downloaded and supplied six **live staging artifacts**: October and No
 - **Staging PDF layout fix needs final visual re-export inspection** once CI/deployment passes; a deterministic browser test exercises a 30-transaction PDF with long payment histories and deferred-stock appendices, and checks complete pagination labels.
 - The GitHub authenticated E2E job remains conditionally skipped, which is a broader release gate and not evidence that a logged-in full-system end-to-end suite ran.
 - Phase 8 remains responsible for backup/recovery, security-advisor hardening, concurrency/rollback checks and final production release approval. No production changes.
+
+
+## Phase 7 closure — 7 November 2026 (staging acceptance)
+
+**Decision: CLOSED for the implemented Phase 7 staging scope.** This closes
+historical/indirect reporting consistency and the owner-accepted export defects.
+It is not production approval and does not claim the skipped automated
+authenticated E2E or backup/recovery tests passed.
+
+Evidence:
+- Staging code/deployment commit `ce86ebdc0dae46ee414b83760c13718cd4ffd435`;
+  full standard GitHub quality gates passed:
+  https://github.com/AmineBenz0/marwane-vercel/actions/runs/42414492269
+  (backend, frontend, deterministic desktop/mobile browser checks, migrations,
+  and secret scan). The conditional authenticated `e2e` and
+  `database-security` workflow jobs were skipped.
+- Owner supplied refreshed staging transaction PDF and XLSX dated
+  7 November 2026 at 21:17 (local). Both were reviewed and accepted:
+  **30 rows (17 active, 13 canceled)**,
+  **29,160.90 MAD active gross**, **6,755.00 MAD paid**,
+  **22,405.90 MAD remaining**. Grand totals exclude canceled history.
+- The ID-free spreadsheet shows human-readable client/supplier, product and
+  building labels, rather than `Client #7`, `Produit #12` or
+  `Bâtiment #8`. Settlement descriptions retain centimes (e.g.
+  0.01 / 0.10 / 1.60 MAD). PDF detail sections retain transaction grouping;
+  all 11 deferred-delivery records fit on its final eighth page.
+- Earlier owner-supplied October/November monthly PDF/XLSX comparisons agreed
+  on canonical financial totals, reporting dates, and cash/bank balances.
+- Cross-lot source attribution is regression-tested; **no real historic
+  explicitly cross-lot allocation was present in the inspected staging
+  dataset**. We have not fabricated one or introduced a shared-cost
+  allocation formula.
+- Page-refresh consistency, transaction pagination and exports were updated,
+  and the staging reference-lookup fallback now resolves actual names or
+  fails clearly without exporting internal IDs.
+
+Carried forward to **Phase 8** (not Phase 7 defects):
+1. Execute real authenticated end-to-end acceptance, including
+   `phase7-read-only.spec.ts` and core owner workflows. Use secure
+   CI variables/secrets; mutation tests run only against a disposable target.
+2. PostgreSQL concurrency, stale-preview/operation replay, rollback and
+   financial/stock integrity acceptance under real parallel workloads.
+3. Security advisor review and conditional database-security gate; record
+   disposition of existing search-path, extension-schema and internal-RLS
+   findings, plus dependency advisories.
+4. Backup/PITR restore drill and recovery evidence, production migration
+   parity, release/rollback plan, final owner signoff.
+5. Independently scope any unapproved optional Phase 6E functionality; Phase 7
+   closure does not authorize previously blocked advanced corrections.
+
+**Environment disposition:** no production deployment or data mutation.
+See [Phase 8 acceptance register](phase8-acceptance.md).
