@@ -5,6 +5,8 @@ import {
   Tab, Tabs, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { get } from '../../services/api';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
+import { loadTransactionPages } from '../Transactions/transactionPages';
 import { cycleProductionService, productionService } from '../../services/productionService';
 import { exportOverview } from './globalOverviewExport';
 import { DEMO_LOTS, buildDemoDays } from './globalOverviewDemo';
@@ -74,13 +76,19 @@ const renderRowLabel = (row) => {
 };
 
 const loadPages = async (path, params = {}) => {
+  if (path === '/transactions') return loadTransactionPages(get, params);
   const items = [];
-  for (let skip = 0; skip < 50000; skip += 500) {
-    const page = await get(path, { params: { ...params, skip, limit: 500 } });
-    items.push(...(page || []));
-    if (!page || page.length < 500) break;
+  const pageSize = 500;
+  const maxRows = 50000;
+  for (let skip = 0; skip < maxRows; skip += pageSize) {
+    const page = await get(path, { params: { ...params, skip, limit: pageSize } });
+    if (!Array.isArray(page) || page.length > pageSize) {
+      throw new Error('Résultat du registre invalide. Actualisez la page.');
+    }
+    items.push(...page);
+    if (page.length < pageSize) return items;
   }
-  return items;
+  throw new Error('Le registre dépasse la limite de chargement. Affinez la période ou les filtres.');
 };
 
 function GlobalOverviewPage() {
@@ -190,6 +198,7 @@ function GlobalOverviewPage() {
   }, [lotId]);
 
   useEffect(() => { load(); return () => { loadVersion.current += 1; }; }, [load]);
+  useCorrectionRefresh(load);
 
   const columns = useMemo(() => [
     { key: 'birds', label: 'Effectif restant', unit: 'poules', group: 'effectif', value: (r) => fmt(r.birds) },

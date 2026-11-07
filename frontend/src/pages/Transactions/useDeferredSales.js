@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { get } from '../../services/api';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 
 export default function useDeferredSales(enabled = true, refreshKey = 0) {
   const [sales, setSales] = useState([]);
@@ -7,6 +8,7 @@ export default function useDeferredSales(enabled = true, refreshKey = 0) {
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const reload = useCallback(() => setRevision(value => value + 1), []);
+  useCorrectionRefresh(reload);
   useEffect(() => {
     if (!enabled) return undefined;
     let cancelled = false;

@@ -1,5 +1,5 @@
 import DateField from '../../utils/DateField';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   Alert,
@@ -32,6 +32,7 @@ import {
 import { Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { get, post } from '../../services/api';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { getBusinessDateInput } from '../../utils/businessDate';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 
@@ -277,7 +278,12 @@ function FinancialLedgerPage({ direction }) {
     return () => { cancelled = true; };
   }, [partyEndpoint]);
 
+  const loadVersion = useRef(0);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
+  useCorrectionRefresh(() => setCorrectionRevision(value => value + 1));
+
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
     try {
@@ -289,15 +295,15 @@ function FinancialLedgerPage({ direction }) {
       params.sort_by = filters.sort_by || 'date_echeance';
       params.sort_order = filters.sort_order || 'asc';
       const result = await get(endpoint, { params: { ...params, [tierParam]: selectedParty || undefined, skip: page * pageSize, limit: pageSize } });
-      setData(result || { items: [], summary: {} });
+      if (version === loadVersion.current) setData(result || { items: [], summary: {} });
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Impossible de charger les données.');
+      if (version === loadVersion.current) setError(err?.response?.data?.detail || err?.message || 'Impossible de charger les données.');
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, [endpoint, filters, isReceivable, page]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { loadVersion.current += 1; }; }, [load, correctionRevision]);
 
   const rows = useMemo(() => data.items || [], [data.items]);
   const updateFilter = (field, value) => {

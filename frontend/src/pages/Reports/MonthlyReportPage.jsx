@@ -7,6 +7,7 @@ import { exportMonthlyReportPDF } from '../../utils/exportMonthlyReportPDF';
 import { getBusinessMonthInput } from '../../utils/businessDate';
 import { formatMonthYear, formatShortDate } from '../../utils/dateFormatting';
 import ExpandableDetails from '../../components/ExpandableDetails';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 
 const number = (value, maximumFractionDigits = 2) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits }).format(Number(value || 0));
 const money = value => value == null ? '—' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(Number(value));
@@ -24,7 +25,9 @@ function MonthlyReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
   const infoId = useId();
+  useCorrectionRefresh(() => setCorrectionRevision(value => value + 1));
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError(null);
@@ -32,7 +35,7 @@ function MonthlyReportPage() {
       .catch(err => { if (!cancelled) { setReport(null); setError(err?.response?.data?.detail || err?.message || 'Le rapport n’a pas pu être chargé.'); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [month]);
+  }, [month, correctionRevision]);
 
   const groups = useMemo(() => report ? {
     activity: [

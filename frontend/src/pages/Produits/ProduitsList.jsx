@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -27,6 +27,8 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import ProduitForm from './ProduitForm';
 import { get, post } from '../../services/api';
+import { loadTransactionPages } from '../Transactions/transactionPages';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { getProductUsage, productUsageLabels } from '../../utils/productUsage';
 import { deferredStockQuantities } from '../Transactions/deferredStockQuantities';
@@ -58,6 +60,9 @@ function ProduitsList() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const loadVersion = useRef(0);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
+  useCorrectionRefresh(() => setCorrectionRevision(value => value + 1));
 
   const [modalOpen, setModalOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
@@ -133,6 +138,7 @@ function ProduitsList() {
   }, [produits, search, typeFilter]);
 
   const fetchData = async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
 
@@ -144,12 +150,7 @@ function ProduitsList() {
             limit: 1000,
           },
         }),
-        get('/transactions', {
-          params: {
-            est_actif: true,
-            limit: 5000,
-          },
-        }),
+        loadTransactionPages(get, { est_actif: true }),
         get('/fournisseurs', {
           params: {
             est_actif: true,
@@ -159,21 +160,24 @@ function ProduitsList() {
         get('/clients', { params: { est_actif: true, limit: 1000 } }),
       ]);
 
+      if (version !== loadVersion.current) return;
       setProduits(produitsData || []);
       setTransactions(transactionsData || []);
       setFournisseurs(fournisseursData || []);
       setClients(clientsData || []);
     } catch (err) {
+      if (version !== loadVersion.current) return;
       console.error('Erreur lors du chargement des produits:', err);
       setError(err?.message || 'Une erreur est survenue lors du chargement des produits');
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, []);
+    return () => { loadVersion.current += 1; };
+  }, [correctionRevision]);
 
   const handleCreate = () => {
     setFormError(null);

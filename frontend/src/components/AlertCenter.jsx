@@ -3,6 +3,7 @@ import { Badge, Box, Button, Divider, IconButton, List, ListItem, ListItemText, 
 import { NotificationsNone as NotificationsIcon } from '@mui/icons-material';
 import { get, patch } from '../services/api';
 import { deferredStockQuantities } from '../pages/Transactions/deferredStockQuantities';
+import useCorrectionRefresh from './Corrections/useCorrectionRefresh';
 
 function AlertCenter() {
   const [anchor, setAnchor] = useState(null);
@@ -24,6 +25,7 @@ function AlertCenter() {
       setPromiseAlerts((Array.isArray(promisesResult.value) ? promisesResult.value : []).filter(sale => Number(sale.quantite_en_attente || 0) > 0 && (Number(sale.quantite_reservee || 0) > 0 || (sale.date_livraison_prevue && sale.date_livraison_prevue <= today))));
     }
   }, []);
+  useCorrectionRefresh(load);
   useEffect(() => {
     load();
     const interval = window.setInterval(load, 60000);

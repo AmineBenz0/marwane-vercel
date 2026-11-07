@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import useCorrectionRefresh from '../components/Corrections/useCorrectionRefresh';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -125,8 +126,11 @@ function Dashboard() {
   const [totalCartonsAujourdhui, setTotalCartonsAujourdhui] = useState(0);
   const [transactionsRecentes, setTransactionsRecentes] = useState([]);
   const [chartData, setChartData] = useState([]);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
+  useCorrectionRefresh(() => setCorrectionRevision(value => value + 1));
 
   useEffect(() => {
+    let current = true;
     const loadDashboardData = async () => {
       try {
         setLoading(true);
@@ -162,6 +166,7 @@ function Dashboard() {
           }),
         ]);
 
+        if (!current) return;
         const transactionsMois = transactionsMoisResponse || [];
         const transactions30Jours = transactions30JoursResponse || [];
         const productionsToday = productionResponse || [];
@@ -185,15 +190,17 @@ function Dashboard() {
           productionsToday.reduce((sum, p) => sum + (p.nombre_cartons || 0), 0)
         );
       } catch (err) {
+        if (!current) return;
         console.error('Erreur lors du chargement du dashboard:', err);
         setError(err.message || 'Une erreur est survenue lors du chargement des donn\u00e9es.');
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
 
     loadDashboardData();
-  }, []);
+    return () => { current = false; };
+  }, [correctionRevision]);
 
   const alerts = useMemo(() => {
     const items = [];

@@ -11,6 +11,7 @@ import {
 import { Search as SearchIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { get } from '../services/api';
+import useCorrectionRefresh from './Corrections/useCorrectionRefresh';
 
 const SEARCH_IDLE = 'idle';
 const SEARCH_LOADING = 'loading';
@@ -24,7 +25,11 @@ function UnifiedSearch() {
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState(SEARCH_IDLE);
   const [open, setOpen] = useState(false);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
   const requestRef = useRef(null);
+  useCorrectionRefresh(() => {
+    if (open && query.trim().length >= 2) setCorrectionRevision(value => value + 1);
+  });
 
   useEffect(() => {
     const normalized = query.trim();
@@ -73,7 +78,7 @@ function UnifiedSearch() {
       requestRef.current?.abort();
       requestRef.current = null;
     };
-  }, [query]);
+  }, [query, correctionRevision]);
 
   const choose = (result) => {
     setQuery('');

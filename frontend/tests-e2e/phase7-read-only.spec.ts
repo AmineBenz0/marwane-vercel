@@ -40,6 +40,7 @@ type Tx = {
   id_client: number | null;
   id_fournisseur: number | null;
   montant_total: number | string;
+  quantite: number | string | null;
 };
 
 async function allTransactions(page: Page, active?: boolean): Promise<Tx[]> {
@@ -81,10 +82,19 @@ test.describe('Phase 7: authenticated reporting reconciliation (read-only)', () 
     await login(page);
     const transactions = await allTransactions(page);
     test.skip(!transactions.length, 'No staging transactions to reconcile');
-    const byId = new Map(transactions.map(item => [item.id_transaction, item]));
-    const expectedCents = transactions.reduce((sum, tx) => (
-      sum + (tx.est_actif === false ? 0 : cents(tx.montant_total))
-    ), 0);
+    // Match business rows as a multiset; IDs are internal and intentionally
+    // absent from the client-facing export. Duplicate-looking rows are counted.
+    const expectedRows = new Map<string, number>();
+    const rowKey = (date: string, status: string, quantity: number, amountCents: number) =>
+      JSON.stringify([date, status, quantity, amountCents]);
+    const expectedCents = transactions.reduce((sum, tx) => {
+      const iso = tx.date_transaction.slice(0, 10);
+      const date = `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
+      const status = tx.est_actif === false ? 'Annulée' : 'Active';
+      const key = rowKey(date, status, Number(tx.quantite || 0), cents(tx.montant_total));
+      expectedRows.set(key, (expectedRows.get(key) || 0) + 1);
+      return sum + (tx.est_actif === false ? 0 : cents(tx.montant_total));
+    }, 0);
 
     await page.goto('/transactions');
     const button = page.getByRole('button', { name: 'Exporter en Excel' });
@@ -93,31 +103,35 @@ test.describe('Phase 7: authenticated reporting reconciliation (read-only)', () 
 
     const columns = new Map<string, number>();
     sheet.getRow(1).eachCell((cell, column) => columns.set(String(cell.value), column));
-    const idCol = columns.get('ID');
+    expect(columns.has('ID')).toBe(false);
+    const dateCol = columns.get('Date');
     const stateCol = columns.get('État');
+    const quantityCol = columns.get('Quantité');
     const amountCol = columns.get('Montant total');
-    expect(idCol).toBeTruthy();
+    expect(dateCol).toBeTruthy();
     expect(stateCol).toBeTruthy();
+    expect(quantityCol).toBeTruthy();
     expect(amountCol).toBeTruthy();
 
-    const observed = new Set<number>();
+    const observedRows = new Map<string, number>();
     let footerCents: number | undefined;
     for (let i = 2; i <= sheet.rowCount; i += 1) {
       const row = sheet.getRow(i);
-      const id = Number(row.getCell(idCol!).value);
-      if (id && byId.has(id)) {
-        const transaction = byId.get(id)!;
-        expect(observed.has(id)).toBe(false);
-        observed.add(id);
-        expect(String(row.getCell(stateCol!).value)).toBe(
-          transaction.est_actif === false ? 'Annulée' : 'Active'
+      const date = String(row.getCell(dateCol!).value ?? '');
+      if (/^\\d{2}\\/\\d{2}\\/\\d{2}$/.test(date)) {
+        const key = rowKey(
+          date,
+          String(row.getCell(stateCol!).value),
+          Number(row.getCell(quantityCol!).value || 0),
+          moneyCellCents(row.getCell(amountCol!).value),
         );
-        expect(moneyCellCents(row.getCell(amountCol!).value)).toBe(cents(transaction.montant_total));
+        expect(expectedRows.has(key)).toBe(true);
+        observedRows.set(key, (observedRows.get(key) || 0) + 1);
       } else if (Array.isArray(row.values) && row.values.some((value: unknown) => String(value || '').startsWith('Total :'))) {
         footerCents = moneyCellCents(row.getCell(amountCol!).value);
       }
     }
-    expect(observed.size).toBe(byId.size);
+    expect([...observedRows.entries()].sort()).toEqual([...expectedRows.entries()].sort());
     expect(footerCents).toBe(expectedCents);
 
     const [pdf] = await Promise.all([
