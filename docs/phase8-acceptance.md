@@ -180,3 +180,14 @@ this change. No production SQL is authorized.
 6. G7/G8: production parity and migration rehearsal, exact release
    candidate approval, maintenance/rollback plan, and post-deploy
    reconciliation all remain open. **Production NO-GO**.
+
+## Phase 8 production-migration preflight prepared — 7 November 2026
+
+The ordered, no-go release rehearsal requirements are in
+[phase8-production-migration-preflight.md](phase8-production-migration-preflight.md).
+Read-only inspection of the candidate production Supabase project found
+14 active historical production rows with valid buildings but no associated
+cycle and zero lots. Protect them during any migration; do not invent historical
+source attribution. **The actual Vercel production DATABASE_URL target still
+needs confirmation** using credential-safe runtime checks, since environment
+values were redacted by the integration. The production release remains NO-GO.
