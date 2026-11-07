@@ -38,6 +38,7 @@ import { deferredSaleStatus } from './deferredSaleStatus';
 import { deferredStockQuantities } from './deferredStockQuantities';
 import { countTransactionQuickFilters, filterTransactions, summarizeTransactions, prepareTransactionExportRows, sumActiveTransactionAmounts } from './transactionListModel';
 import { loadTransactionPages } from './transactionPages';
+import { resolveTransactionExportRows } from './resolveTransactionExportReferences';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
@@ -64,6 +65,7 @@ function TransactionsList() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   // ðtat pour les clients, fournisseurs et produits (pour les filtres et l'affichage)
   const [clients, setClients] = useState([]);
@@ -259,16 +261,18 @@ function TransactionsList() {
    */
   const fetchReferenceData = async () => {
     try {
-      const [clientsData, fournisseursData, produitsData, batimentsData] = await Promise.all([
+      // A failed reference endpoint should not erase every other catalogue.
+      const results = await Promise.allSettled([
         get('/clients', { referenceData: true, params: { limit: 1000, est_actif: true } }),
         get('/fournisseurs', { referenceData: true, params: { limit: 1000, est_actif: true } }),
         get('/produits', { referenceData: true, params: { limit: 1000, est_actif: true } }),
         get('/batiments', { referenceData: true }),
       ]);
-      setClients(clientsData || []);
-      setFournisseurs(fournisseursData || []);
-      setProduits(produitsData || []);
-      setBatiments(batimentsData || []);
+      const setters = [setClients, setFournisseurs, setProduits, setBatiments];
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') setters[index](result.value || []);
+        else console.error('Impossible de charger une liste de référence:', result.reason);
+      });
     } catch (err) {
       console.error('Erreur lors du chargement des données de référence:', err);
     }
@@ -474,9 +478,19 @@ function TransactionsList() {
   /**
    * Gère l'export Excel des transactions filtrées.
    */
+  const resolveExportRows = () => resolveTransactionExportRows(
+    rowsForExport,
+    { clients: clientsMap, fournisseurs: fournisseursMap, produits: produitsMap, batiments: batimentsMap },
+    get
+  );
+
   const handleExportExcel = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setError(null);
     try {
-      const hasPromises = rowsForExport.some(row => row.est_promesse);
+      const namedRows = await resolveExportRows();
+      const hasPromises = namedRows.some(row => row.est_promesse);
       const excelWidths = {
         client_ou_fournisseur: 38,
         produit: 40,
@@ -490,7 +504,7 @@ function TransactionsList() {
         { id: 'quantite_a_produire', label: 'À produire' },
         { id: 'quantite_annulee', label: 'Reste clôturé' },
       ] : [])].map(column => ({ ...column, excelWidth: excelWidths[column.id] }));
-      const promiseRows = rowsForExport.map(row => ({
+      const promiseRows = namedRows.map(row => ({
         ...row,
         quantite_a_produire: deferredStockQuantities(row).toProduce,
       }));
@@ -535,16 +549,8 @@ function TransactionsList() {
             return value;
           }
         },
-        produit: (value, row) => {
-          if (row?.__summaryType) return '';
-          return produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`;
-        },
-        batiment: (value, row) => {
-          if (row?.__summaryType) return '';
-          return row.id_batiment
-            ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
-            : '-';
-        },
+        produit: (value, row) => row?.__summaryType ? '' : row.produit_label,
+        batiment: (value, row) => row?.__summaryType ? '' : row.batiment_label,
         reglement: (value, row) => {
           if (row?.__summaryType) return '';
           return getPaymentReglementSummary(row);
@@ -602,29 +608,32 @@ function TransactionsList() {
       );
     } catch (error) {
       console.error('Erreur lors de l\'export Excel:', error);
-      setError('Une erreur est survenue lors de l\'export Excel');
+      setError(error?.message || 'Une erreur est survenue lors de l\'export Excel');
+    } finally {
+      setExporting(false);
     }
   };
 
   /**
    * Gère l'export PDF des transactions filtrées.
    */
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setError(null);
     try {
-      // The printable report uses the same filtered records and accounting
-      // amounts as Excel, but moves secondary details into readable appendices.
-      exportTransactionsReportPDF(rowsForExport.map(row => ({
+      // Both formats use the same names, including historical inactive records.
+      const namedRows = await resolveExportRows();
+      exportTransactionsReportPDF(namedRows.map(row => ({
         ...row,
-        produit_label: produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`,
-        batiment_label: row.id_batiment
-          ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
-          : '-',
         etat_stock: deferredSaleStatus(row)?.label || row.etat_stock || '-',
         quantite_a_produire: deferredStockQuantities(row).toProduce,
       })));
     } catch (error) {
       console.error('Erreur lors de l\'export PDF:', error);
-      setError('Une erreur est survenue lors de l\'export PDF');
+      setError(error?.message || 'Une erreur est survenue lors de l\'export PDF');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -863,7 +872,7 @@ function TransactionsList() {
               variant="outlined"
               startIcon={<FileDownloadIcon />}
               onClick={handleExportExcel}
-              disabled={loading || rowsForExport.length === 0}
+              disabled={loading || exporting || rowsForExport.length === 0}
             >
               Exporter en Excel
             </Button>
@@ -872,7 +881,7 @@ function TransactionsList() {
               color="error"
               startIcon={<PictureAsPdfIcon />}
               onClick={handleExportPDF}
-              disabled={loading || rowsForExport.length === 0}
+              disabled={loading || exporting || rowsForExport.length === 0}
             >
               Exporter en PDF
             </Button>
