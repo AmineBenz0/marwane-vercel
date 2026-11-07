@@ -103,3 +103,15 @@ IDs, motives or verification tags in pursuit of test coverage.
   explicitly activated only in the ephemeral PostgreSQL GitHub job.
   This is *partial* G4 coverage: LC, cheque, stock-order races and restore
   recovery still need separate validation. Results must be recorded after CI.
+
+
+## Phase 8 scoped security hardening — candidate
+
+Three `SECURITY INVOKER` functions used by the independent-lot triggers
+reference their application relations as `public.*` but inherited an
+uncontrolled search path. Prepared a metadata-only migration that pins each
+function to an empty `search_path`, as recommended by Supabase advisors.
+The disposable PostgreSQL migration test and independent-lot lifecycle tests
+must pass before applying this change to staging. The two internal policyless
+tables and two public-schema extensions are explicitly **not** modified in
+this change. No production SQL is authorized.
