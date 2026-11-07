@@ -86,7 +86,7 @@ function MonthlyReportPage() {
   const displayMonth = report ? formatMonthYear(report.month, report.month) : '';
   const exportReport = async outputFormat => {
     if (!report || loading) return;
-    const columns = [{ id: 'indicateur', label: 'Indicateur' }, { id: 'valeur', label: 'Valeur' }];
+    const columns = [{ id: 'indicateur', label: 'Indicateur', excelWidth: 66 }, { id: 'valeur', label: 'Valeur', excelWidth: 24 }];
     if (outputFormat === 'pdf') exportMonthlyReportPDF(report, `rapport_mensuel_${report.month}`);
     else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse');
   };

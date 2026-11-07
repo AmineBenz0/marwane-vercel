@@ -65,7 +65,10 @@ describe('MonthlyReportPage', () => {
         expect.objectContaining({ indicateur: 'Mouvements stock', valeur: '3' }),
         expect.objectContaining({ indicateur: 'Variation nette stock' }),
       ]),
-      expect.any(Array),
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'indicateur', excelWidth: 66 }),
+        expect.objectContaining({ id: 'valeur', excelWidth: 24 }),
+      ]),
       'rapport_mensuel_2026-09',
       'Synthèse',
     ));

@@ -35,7 +35,7 @@ const downloadWorkbook = async (rows, columns, filename, sheetName) => {
   worksheet.addRow(headers);
   rows.forEach((row) => worksheet.addRow(row));
   worksheet.columns = columns.map((column) => ({
-    width: Math.max(String(column.label || column.id).length + 2, 15),
+    width: column.excelWidth ?? Math.max(String(column.label || column.id).length + 2, 15),
   }));
 
   const headerRow = worksheet.getRow(1);

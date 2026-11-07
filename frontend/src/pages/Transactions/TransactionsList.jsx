@@ -477,13 +477,19 @@ function TransactionsList() {
   const handleExportExcel = async () => {
     try {
       const hasPromises = rowsForExport.some(row => row.est_promesse);
+      const excelWidths = {
+        client_ou_fournisseur: 38,
+        produit: 40,
+        batiment: 26,
+        reglement: 62,
+      };
       const columnsForExport = [...columns.filter((col) => col.id !== 'est_actif'), { id: 'etat_transaction', label: 'État' }, ...(hasPromises ? [
         { id: 'quantite_completee', label: 'Quantité complétée' },
         { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
         { id: 'quantite_en_attente', label: 'Reste à fournir' },
         { id: 'quantite_a_produire', label: 'À produire' },
         { id: 'quantite_annulee', label: 'Reste clôturé' },
-      ] : [])];
+      ] : [])].map(column => ({ ...column, excelWidth: excelWidths[column.id] }));
       const promiseRows = rowsForExport.map(row => ({
         ...row,
         quantite_a_produire: deferredStockQuantities(row).toProduce,
@@ -546,6 +552,14 @@ function TransactionsList() {
         date_livraison_prevue: (value, row) => {
           if (row?.__summaryType || !value) return '';
           return formatShortDate(value, String(value));
+        },
+        statut_paiement: (value, row) => {
+          if (row?.__summaryType) return '';
+          const status = row?.est_en_retard ? 'en_retard' : value;
+          return {
+            impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé',
+            surpaye: 'Surpayé', en_retard: 'En retard',
+          }[status] || String(status || '-');
         },
         montant_total: (value, row) => {
           if (row?.__summaryType === 'spacer') return '';
