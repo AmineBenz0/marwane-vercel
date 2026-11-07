@@ -1,8 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
+import { canRunMutatingE2E } from '../src/utils/e2eMutationSafety';
 
 const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
-const MUTATION_TESTS_ENABLED = process.env.E2E_MUTATION_TESTS === 'true';
+const MUTATION_TESTS_ENABLED = canRunMutatingE2E(process.env);
 
 async function login(page: Page) {
   await page.goto('/login');
@@ -44,7 +45,7 @@ test.describe('Authenticated release business workflows', () => {
   test.beforeEach(async ({}, testInfo) => {
     testInfo.skip(
       !EMAIL || !PASSWORD || !MUTATION_TESTS_ENABLED,
-      'Set E2E_EMAIL, E2E_PASSWORD, and E2E_MUTATION_TESTS=true against a disposable staging target',
+      'Mutating E2E requires a disposable target, exact allowed origin and explicit E2E flags (never stable staging)',
     );
   });
 

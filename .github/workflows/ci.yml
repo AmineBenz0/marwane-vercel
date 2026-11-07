@@ -243,6 +243,8 @@ jobs:
           E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           E2E_MUTATION_TESTS: ${{ secrets.E2E_MUTATION_TESTS }}
+          E2E_DISPOSABLE_TARGET: ${{ secrets.E2E_DISPOSABLE_TARGET }}
+          E2E_MUTATION_ALLOWED_ORIGIN: ${{ secrets.E2E_MUTATION_ALLOWED_ORIGIN }}
 
   secrets:
     runs-on: ubuntu-latest
