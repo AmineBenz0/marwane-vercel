@@ -215,8 +215,10 @@ def _daily_response(records, batiment, db, day):
 
 def _require_production_cycle(
     db: Session, id_batiment: int, production_date: date, id_cycle: Optional[int] = None,
+    *, for_new_entry: bool,
 ) -> CycleProduction:
-    if production_date > date.today():
+    today = date.today()
+    if production_date > today:
         raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
     if id_cycle is None:
         cycle = find_cycle_for_date(db, id_batiment, production_date)
@@ -230,6 +232,11 @@ def _require_production_cycle(
         if cycle is None or cycle.id_batiment != id_batiment:
             raise HTTPException(status_code=400, detail="Lot introuvable pour ce bâtiment.")
     validate_cycle_date(cycle, production_date)
+    if for_new_entry and production_date == today and cycle_schedule(cycle).statut == "termine":
+        raise HTTPException(
+            status_code=400,
+            detail="Le lot de ce bâtiment est terminé. Démarrez un nouveau lot pour saisir la production d’aujourd’hui.",
+        )
     return cycle
 
 
@@ -276,7 +283,9 @@ def _save_daily_production(prod_in, db, current_user, *, updating):
         cycle_id = next(iter(cycle_ids), None)
         # Keep existing unassigned days editable. Every new day must resolve a lot.
         cycle = (
-            _require_production_cycle(db, prod_in.id_batiment, prod_in.date_production, cycle_id)
+            _require_production_cycle(
+                db, prod_in.id_batiment, prod_in.date_production, cycle_id, for_new_entry=not updating,
+            )
             if not updating or cycle_id is not None else None
         )
         if cycle:
@@ -433,7 +442,9 @@ def create_production(
     if not batiment:
         raise HTTPException(status_code=404, detail="Batiment introuvable")
 
-    cycle = _require_production_cycle(db, prod_in.id_batiment, prod_in.date_production, prod_in.id_cycle)
+    cycle = _require_production_cycle(
+        db, prod_in.id_batiment, prod_in.date_production, prod_in.id_cycle, for_new_entry=True,
+    )
     validate_cycle_mortality(db, cycle, prod_in.mortalite or 0)
     # Calculer le nombre de cartons selon les règles métier
     nb_cartons = Production.calculer_cartons(prod_in.nombre_oeufs, prod_in.type_oeuf)
@@ -1177,8 +1188,9 @@ def update_production(
     if cycle_id is None and prod.id_cycle is not None:
         raise HTTPException(status_code=400, detail="Une production rattachée doit conserver un lot.")
     # An existing unassigned record can still be corrected at its original building and date.
-    if cycle_id is not None or (final_batiment_id, final_date) != (prod.id_batiment, prod.date_production):
-        cycle = _require_production_cycle(db, final_batiment_id, final_date, cycle_id)
+    moving_entry = (final_batiment_id, final_date, cycle_id) != (prod.id_batiment, prod.date_production, prod.id_cycle)
+    if cycle_id is not None or moving_entry:
+        cycle = _require_production_cycle(db, final_batiment_id, final_date, cycle_id, for_new_entry=moving_entry)
         update_dict["id_cycle"] = cycle.id_cycle
         validate_cycle_mortality(db, cycle, update_dict.get("mortalite", prod.mortalite) or 0, [prod.id_production])
     protect_production_source(db, prod,

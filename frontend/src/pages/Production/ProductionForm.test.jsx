@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductionForm from './ProductionForm';
+import { localToday } from './useProductionView';
 import { get, post, put } from '../../services/api';
 
 vi.mock('../../services/api', () => ({
@@ -87,6 +88,22 @@ describe('ProductionForm', () => {
     expect(save).toBeDisabled();
     expect(screen.getByLabelText('Oeufs normaux')).toBeDisabled();
     expect(await screen.findByText(/Aucun lot ne couvre cette date/)).toBeVisible();
+  });
+
+  it('blocks new production when today’s lot is finished', async () => {
+    const fallback = get.getMockImplementation();
+    get.mockImplementation((path) => path.startsWith('/cycles-production/context/')
+      ? Promise.resolve({ has_cycles: true, cycle: { id_cycle: 4, nom_cycle: 'Lot A', statut: 'termine' } })
+      : fallback(path));
+    render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
+      batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} preselectedDate={localToday()} />);
+    expect(await screen.findByText(/Démarrez un nouveau lot pour saisir/)).toBeVisible();
+    expect(screen.getByLabelText('Oeufs normaux')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeDisabled();
+    const save = screen.getByRole('button', { name: 'Enregistrer' });
+    expect(save).toBeDisabled();
+    fireEvent.submit(save.closest('form'));
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('preselects the dated formula and accepts feed before laying', async () => {

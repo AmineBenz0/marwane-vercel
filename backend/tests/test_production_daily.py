@@ -59,6 +59,34 @@ def test_daily_entry_requires_a_date_covered_by_the_buildings_lot(client, db_ses
         assert {row["id_cycle"] for row in response.json()["records"]} == {cycle.id_cycle}
 
 
+def test_closing_day_blocks_new_entries_until_a_successor_starts(client, db_session, auth_headers):
+    payload = daily_payload(db_session, start_lot=False)
+    building = db_session.get(Batiment, payload["id_batiment"])
+    lot, cycle = add_lot_cycle(db_session, building, name="Outgoing lot", date_debut=date.today())
+    closed = client.post(f"/api/v1/lots-production/{lot.id_lot}/terminer", json={}, headers=auth_headers)
+    assert closed.status_code == 200, closed.text
+
+    single = {
+        "id_batiment": payload["id_batiment"], "date_production": payload["date_production"],
+        "id_cycle": cycle.id_cycle, "type_oeuf": "normal", "nombre_oeufs": 120, "grammage": "63.25",
+    }
+    for path, body in (("/daily", payload), ("", single)):
+        response = client.post(f"/api/v1/productions{path}", json=body, headers=auth_headers)
+        assert response.status_code == 400, response.text
+        assert "Démarrez un nouveau lot" in response.json()["detail"]
+    assert db_session.query(Production).count() == 0
+
+    successor = client.post("/api/v1/lots-production", json={
+        "nom_lot": "Successor", "date_debut": payload["date_production"], "effectif_initial": 100,
+        "repartitions": [{"id_batiment": building.id_batiment, "effectif_initial": 100}],
+    }, headers=auth_headers)
+    assert successor.status_code == 201, successor.text
+    response = client.post("/api/v1/productions/daily", json=payload, headers=auth_headers)
+    assert response.status_code == 201, response.text
+    new_cycle_id = successor.json()["repartitions"][0]["id_cycle"]
+    assert {row["id_cycle"] for row in response.json()["records"]} == {new_cycle_id}
+
+
 def test_existing_unassigned_day_can_still_be_corrected(client, db_session, auth_headers):
     payload = daily_payload(db_session, start_lot=False)
     production = Production(
