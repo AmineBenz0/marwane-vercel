@@ -3,8 +3,8 @@ import { mockAuthenticatedSession } from './auth';
 
 test.use({ timezoneId: 'UTC' });
 
-for (const width of [390, 1200]) {
-  test(`task grid and card actions at ${width}px`, async ({ page }) => {
+for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
+  test(`task grid with ${columns} columns and card actions at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const now = new Date();
     await page.clock.setFixedTime(now);
@@ -13,6 +13,9 @@ for (const width of [390, 1200]) {
       { id_tache: 1, titre: 'Vérifier la collecte', statut: 'en_cours' },
       { id_tache: 2, titre: 'Relever la température', statut: 'en_attente' },
       { id_tache: 3, titre: 'Confirmer la livraison', statut: 'annule' },
+      { id_tache: 4, titre: 'Vérifier les relevés des bâtiments après la collecte du matin', statut: 'en_attente' },
+      { id_tache: 5, titre: 'Contrôler le stock de cartons', statut: 'en_cours' },
+      { id_tache: 6, titre: 'Compter les plateaux', statut: 'en_attente' },
     ].map(task => ({
       ...task, description: 'Vérifier le bâtiment A.', priorite: 'haute', categorie: 'travail',
       date_debut: `${today}T09:00:00`, date_fin: `${today}T10:00:00`, est_toute_la_journee: false,
@@ -48,35 +51,33 @@ for (const width of [390, 1200]) {
     await page.goto('/tasks');
     const card = (name: string) => page.getByRole('article', { name, exact: true });
     const count = (name: string, value: number) => page.getByRole('button', { name: new RegExp(`^${name}\\s*${value}$`) });
-    await count("Aujourd'hui", 2).click();
+    await count("Aujourd'hui", 5).click();
     const first = card('Vérifier la collecte');
     const second = card('Relever la température');
     await expect(first).toBeVisible();
     await expect(second).toBeVisible();
-    const firstBox = (await first.boundingBox())!;
-    const secondBox = (await second.boundingBox())!;
-    if (width === 390) {
-      expect(firstBox.x).toBeCloseTo(secondBox.x, 0);
-      expect(secondBox.y).toBeGreaterThan(firstBox.y);
-    } else {
-      expect(firstBox.y).toBeCloseTo(secondBox.y, 0);
-      expect(secondBox.x).toBeGreaterThan(firstBox.x + firstBox.width);
+    const firstRowSize = await page.getByRole('main').getByRole('article').evaluateAll(cards => {
+      const firstTop = cards[0].getBoundingClientRect().top;
+      return cards.filter(item => Math.abs(item.getBoundingClientRect().top - firstTop) < 1).length;
+    });
+    expect(firstRowSize).toBe(columns);
+    if (width === 1200) {
       await first.getByRole('button', { name: /Marquer comme terminée/ }).click();
       await expect(page.getByText('Impossible de terminer la tâche', { exact: true })).toBeVisible();
-      await expect(count("Aujourd'hui", 2)).toBeVisible();
+      await expect(count("Aujourd'hui", 5)).toBeVisible();
       expect(writes).toEqual([]);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await expect(first.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
     await first.getByRole('button', { name: /Marquer comme terminée/ }).click();
     await expect(first).toHaveCount(0);
-    await expect(count("Aujourd'hui", 1)).toBeVisible();
+    await expect(count("Aujourd'hui", 4)).toBeVisible();
     await count('Clôturées', 2).click();
     await expect(first.getByText('Terminée', { exact: true })).toBeVisible();
     await expect(card('Confirmer la livraison').getByText('Annulée', { exact: true })).toBeVisible();
     await expect(first.getByRole('button', { name: /Marquer comme terminée/ })).toHaveCount(0);
     await page.getByRole('button', { name: 'Annuler', exact: true }).click();
-    await count("Aujourd'hui", 2).click();
+    await count("Aujourd'hui", 5).click();
     await expect(first.getByText('En cours', { exact: true })).toBeVisible();
     expect(writes).toEqual([
       { method: 'PUT', id: 1, status: 'complete' },
@@ -100,7 +101,7 @@ for (const width of [390, 1200]) {
     await page.getByRole('menuitem', { name: 'Supprimer' }).click();
     await dialog.getByRole('button', { name: 'Supprimer' }).click();
     await expect(second).toHaveCount(0);
-    await expect(count("Aujourd'hui", 1)).toBeVisible();
+    await expect(count("Aujourd'hui", 4)).toBeVisible();
     expect(writes.filter(write => write.method === 'DELETE')).toEqual([{ method: 'DELETE', id: 2 }]);
   });
 }
