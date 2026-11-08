@@ -18,6 +18,7 @@ describe('Daily vaccine expenses', () => {
     vi.clearAllMocks();
     get.mockImplementation((path) => {
       if (path === '/vaccins') return Promise.resolve([{ id_vaccin: 3, nom: 'MA5', prix_defaut: '45.00', unite: 'unité' }]);
+      if (path.startsWith('/cycles-production/context/')) return Promise.resolve({ cycle: { id_cycle: 4, nom_cycle: 'Lot A' } });
       return Promise.resolve([]);
     });
     post.mockResolvedValue({});
@@ -110,9 +111,10 @@ describe('Daily vaccine expenses', () => {
   });
 
   it('requires a first price and explains that it will become the future tariff', async () => {
+    const fallback = get.getMockImplementation();
     get.mockImplementation((path) => path === '/vaccins'
       ? Promise.resolve([{ id_vaccin: 3, nom: 'MA5', prix_defaut: null, unite: 'unité' }])
-      : Promise.resolve([]));
+      : fallback(path));
     renderForm();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter un vaccin' }));

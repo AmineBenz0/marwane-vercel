@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -11,6 +11,7 @@ from app.models.charge import Charge
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.production import Production
 from app.models.vaccin import Vaccin
+from tests.lot_test_helpers import add_lot_cycle
 
 
 @pytest.fixture
@@ -20,6 +21,7 @@ def vaccine_day(db_session):
     bank = CompteBancaire(nom_banque="Vaccines bank", numero_compte="vaccines-test", solde_actuel=1000)
     db_session.add_all([building, vaccine, bank])
     db_session.commit()
+    add_lot_cycle(db_session, building, name="Vaccine lot", date_debut=date.today())
     return {
         "id_batiment": building.id_batiment, "date_production": str(date.today()),
         "quantites": {"normal": 10}, "grammage": "60",
@@ -36,6 +38,17 @@ def create(client, headers, payload):
 def correction(payload, day, **kwargs):
     return {**payload, "versions": day['versions'], "charge_versions": day['charge_versions'], **kwargs}
 
+
+def test_vaccine_only_entry_before_lot_start_creates_no_debit(client, db_session, auth_headers, vaccine_day):
+    response = client.post('/api/v1/productions/daily', json={
+        **vaccine_day, "quantites": {},
+        "date_production": (date.today() - timedelta(days=1)).isoformat(),
+    }, headers=auth_headers)
+    assert response.status_code == 400, response.text
+    assert "Gestion des lots" in response.json()["detail"]
+    assert db_session.query(Production).count() == 0
+    assert db_session.query(Charge).count() == 0
+    assert db_session.query(CompteBancaire).one().solde_actuel == 1000
 
 
 @pytest.mark.parametrize('quantity', ['0', '1.5'])

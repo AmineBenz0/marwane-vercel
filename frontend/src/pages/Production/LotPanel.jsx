@@ -3,28 +3,15 @@ import {
   Alert, Box, Button, ButtonBase, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
-import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
+import { ArrowForward, EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { cycleProductionService, lotProductionService } from '../../services/productionService';
 import LotDetails from './LotDetails';
+import LotCreateDialog from './LotCreateDialog';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
-const makeLotName = (buildingName, date, strain) => {
-  const building = String(buildingName || '').trim().replace(/^(?:bâtiment|batiment|bat)\s*/i, '').trim();
-  const parts = [`Bat ${building}`];
-  if (date) parts.push(formatShortDate(date));
-  if (strain?.trim()) parts.push(strain.trim());
-  return parts.join(' - ');
-};
-const estimateLotEndDate = (startDate, durationWeeks = 100) => {
-  if (!startDate) return '';
-  const endDate = new Date(`${startDate}T12:00:00`);
-  if (Number.isNaN(endDate.getTime())) return '';
-  endDate.setDate(endDate.getDate() + (durationWeeks * 7) - 1);
-  return formatShortDate(endDate);
-};
 const displayLotName = (lot) => lot.statut === 'termine' ? lot.nom_lot
   : lot.nom_lot?.replace(/\s+en cours$/i, '').trim() || lot.nom_lot;
 const message = (error) => {
@@ -32,7 +19,7 @@ const message = (error) => {
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
 };
 
-export default function LotPanel({ buildings, refreshKey, onChange, managementMode = false, onViewChange }) {
+export default function LotPanel({ buildings, refreshKey, onChange, managementMode = false, onViewChange, initialFinishedBuildingId }) {
   const [lots, setLots] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -41,12 +28,11 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [revision, setRevision] = useState(0);
   const [dialog, setDialog] = useState('');
   const [values, setValues] = useState({});
-  const [automaticName, setAutomaticName] = useState(true);
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
-  const [buildingFilter, setBuildingFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [buildingFilter, setBuildingFilter] = useState(initialFinishedBuildingId ?? 'all');
+  const [statusFilter, setStatusFilter] = useState(initialFinishedBuildingId ? 'finished' : 'active');
   const [managementView, setManagementView] = useState('overview');
 
 
@@ -82,36 +68,24 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const open = (kind) => {
     if (kind === 'create' && (!loaded || !available.length)) return;
     setError('');
-    const defaultBuilding = available[0];
-    setAutomaticName(kind === 'create');
-    setValues(kind === 'create' ? {
-      nom_lot: makeLotName(defaultBuilding?.nom, localToday(), ''), date_debut: localToday(),
-      id_batiment: defaultBuilding?.id_batiment || '', effectif_initial: '',
-      age_depart_semaines: 0, souche: '', notes: '', duree_semaines: 100, date_fin_prevue: '',
-    } : kind === 'edit' ? {
+    setValues(kind === 'edit' ? {
       ...selected, id_batiment: selectedCycle?.id_batiment,
       effectif_initial: selected?.effectif_initial ?? '',
     } : { date_fin_reelle: localToday() });
     setDialog(kind);
   };
-  const generatedName = (source) => {
-    const building = buildings.find((row) => Number(row.id_batiment) === Number(source.id_batiment));
-    return makeLotName(building?.nom, source.date_debut, source.souche);
-  };
-  const field = (name, value) => setValues((old) => {
-    const next = {
-      ...old,
-      [name]: value,
-      ...(dialog === 'edit' && ['date_debut', 'duree_semaines'].includes(name) ? { date_fin_prevue: '' } : {}),
-    };
-    if (dialog === 'create' && automaticName && ['date_debut', 'id_batiment', 'souche'].includes(name)) {
-      next.nom_lot = generatedName(next);
-    }
-    return next;
-  });
-  const restoreAutomaticName = () => {
-    setAutomaticName(true);
-    setValues((old) => ({ ...old, nom_lot: generatedName(old) }));
+  const field = (name, value) => setValues((old) => ({
+    ...old,
+    [name]: value,
+    ...(dialog === 'edit' && ['date_debut', 'duree_semaines'].includes(name) ? { date_fin_prevue: '' } : {}),
+  }));
+  const finish = (result) => {
+    setSelectedId(String(result.id_lot));
+    if (managementMode) setManagementView('details');
+    setDialog('');
+    setValues({});
+    setRevision((old) => old + 1);
+    onChange?.();
   };
 
   const submitHistory = async (event) => {
@@ -147,15 +121,9 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           date_fin_prevue: values.date_fin_prevue || null,
           repartitions: [{ id_batiment: Number(values.id_batiment), effectif_initial: count }],
         };
-        result = dialog === 'create' ? await lotProductionService.createLot(data)
-          : await lotProductionService.updateLot(selected.id_lot, data);
+        result = await lotProductionService.updateLot(selected.id_lot, data);
       }
-      setSelectedId(String(result.id_lot));
-      if (managementMode) setManagementView('details');
-      setDialog('');
-      setValues({});
-      setRevision((old) => old + 1);
-      onChange?.();
+      finish(result);
     } catch (err) { setError(message(err)); }
     finally { setSaving(false); }
   };
@@ -208,7 +176,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             const cycle = lot.repartitions?.[0];
             const finished = lot.statut === 'termine';
             const lotName = displayLotName(lot);
-            return <ButtonBase component="article" key={lot.id_lot} aria-label={`Ouvrir le lot ${lotName}`}
+            return <ButtonBase component="article" key={lot.id_lot} aria-label={`${finished ? 'Consulter' : 'Ouvrir'} le lot ${lotName}`}
               onClick={() => { setSelectedId(String(lot.id_lot)); setManagementView('details'); }}
               sx={{ display: 'block', width: '100%', textAlign: 'left', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, color: 'text.primary', transition: 'border-color 120ms ease, background-color 120ms ease', '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' }, '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}>
               <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
@@ -229,6 +197,11 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                   {finished && lot.date_fin_reelle && <Typography variant="body2" color="text.secondary">Fin le {formatShortDate(lot.date_fin_reelle)}</Typography>}
                 </Box>
               </Stack>
+              {finished && <Stack direction="row" alignItems="center" justifyContent="space-between"
+                sx={{ mt: 1.5, pt: 1.25, borderTop: '1px solid', borderColor: 'divider', color: 'primary.main' }}>
+                <Typography variant="body2" fontWeight={700}>Consulter le lot</Typography>
+                <ArrowForward fontSize="small" />
+              </Stack>}
             </ButtonBase>;
           })}
         </Box> : <Box sx={{ mt: 3, p: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
@@ -314,38 +287,16 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
         </DialogContent>
         <DialogActions><Button onClick={() => setHistoryOpen(false)}>Fermer</Button></DialogActions>
       </Dialog>
-      <Dialog open={!!dialog} onClose={() => { if (!saving) { setDialog(''); setError(''); } }} maxWidth="sm" fullWidth>
+      {dialog === 'create' && <LotCreateDialog available={available} onClose={() => setDialog('')} onCreated={finish} />}
+      <Dialog open={dialog === 'edit' || dialog === 'end'} onClose={() => { if (!saving) { setDialog(''); setError(''); } }} maxWidth="sm" fullWidth>
         <Box component="form" onSubmit={submit}>
-          <DialogTitle>{dialog === 'create' ? 'Démarrer un lot' : dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
+          <DialogTitle>{dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
           <DialogContent>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Stack spacing={2} sx={{ pt: 1 }}>
               {dialog === 'end' ? <>
                 <Typography>Ce lot passera dans les lots terminés. Ses saisies et son historique resteront consultables.</Typography>
                 <DateField label="Date de fin" required inputProps={{ min: selected?.date_debut, max: localToday() }} value={values.date_fin_reelle || ''} onChange={(event) => field('date_fin_reelle', event.target.value)} />
-              </> : dialog === 'create' ? <>
-                <TextField select label="Bâtiment" required fullWidth value={values.id_batiment ?? ''} onChange={(event) => field('id_batiment', event.target.value)}>
-                  {available.map((building) => <MenuItem key={building.id_batiment} value={building.id_batiment}>{building.nom}</MenuItem>)}
-                </TextField>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                  <DateField label="Date de mise en place" required fullWidth value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
-                  <Box sx={{ minWidth: 0 }}>
-                    <TextField label="Nom du lot" required fullWidth inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => { setAutomaticName(false); setValues((old) => ({ ...old, nom_lot: event.target.value })); }} />
-                    {!automaticName && <Button size="small" onClick={restoreAutomaticName} sx={{ minWidth: 0, p: 0, mt: 0.5, alignSelf: 'flex-end', textTransform: 'none' }}>Rétablir le nom automatique</Button>}
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                  <TextField label="Effectif de départ" required fullWidth type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
-                  <TextField label="Souche (facultatif)" fullWidth inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
-                </Box>
-                <TextField label="Notes (facultatif)" multiline minRows={2} fullWidth value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
-                <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                    <Typography variant="body2" color="text.secondary">Fin estimée</Typography>
-                    <Typography variant="body2" fontWeight={700}>{estimateLotEndDate(values.date_debut) || 'À calculer'}</Typography>
-                  </Stack>
-                  <Typography variant="caption" color="text.secondary">Calculée sur une durée standard de 100 semaines. La clôture reste manuelle.</Typography>
-                </Box>
               </> : <>
                 <TextField label="Nom du lot" required inputProps={{ maxLength: 100 }} value={values.nom_lot || ''} onChange={(event) => field('nom_lot', event.target.value)} />
                 <TextField select label="Bâtiment" required value={values.id_batiment ?? ''} disabled onChange={(event) => field('id_batiment', event.target.value)}>
@@ -364,7 +315,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           </DialogContent>
           <DialogActions>
             <Button color="inherit" disabled={saving} onClick={() => { setDialog(''); setError(''); }}>Annuler</Button>
-            <Button type="submit" variant="contained" color={dialog === 'end' ? 'error' : 'primary'} disabled={saving || (dialog === 'create' && !available.length) || (dialog !== 'end' && (!values.id_batiment || Number(values.effectif_initial) <= 0))}>
+            <Button type="submit" variant="contained" color={dialog === 'end' ? 'error' : 'primary'} disabled={saving || (dialog !== 'end' && (!values.id_batiment || Number(values.effectif_initial) <= 0))}>
               {saving ? 'Enregistrement...' : dialog === 'end' ? 'Terminer le lot' : 'Enregistrer'}
             </Button>
           </DialogActions>

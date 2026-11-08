@@ -2,10 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LotPanel from './LotPanel';
-import { cycleProductionService, lotProductionService, productionService } from '../../services/productionService';
+import LotsManagementPage from './LotsManagementPage';
+import { batimentService, cycleProductionService, lotProductionService, productionService } from '../../services/productionService';
 
 vi.mock('../../services/productionService', () => ({
   cycleProductionService: { assignHistory: vi.fn() },
+  batimentService: { getBatiments: vi.fn() },
   productionService: { getProductions: vi.fn(), getBuildingVaccineExpenses: vi.fn() },
   lotProductionService: { getLots: vi.fn(), updateLot: vi.fn() },
 }));
@@ -20,11 +22,29 @@ const buildings = [{ id_batiment: 1, nom: 'A' }, { id_batiment: 2, nom: 'B' }];
 describe('Independent lot management', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    batimentService.getBatiments.mockResolvedValue(buildings);
     productionService.getProductions.mockResolvedValue([]);
     productionService.getBuildingVaccineExpenses.mockResolvedValue([]);
     lotProductionService.getLots.mockResolvedValue([lot]);
     cycleProductionService.assignHistory.mockResolvedValue({});
     lotProductionService.updateLot.mockResolvedValue(lot);
+  });
+
+  it('opens the finished lots for the originating building and preserves that filter when returning from details', async () => {
+    const closedA = { ...lot, statut: 'termine', date_fin_reelle: '2026-10-06' };
+    const closedB = { ...closedA, id_lot: 2, nom_lot: 'Lot B',
+      repartitions: [{ ...lot.repartitions[0], id_cycle: 2, id_batiment: 2, nom_batiment: 'B' }] };
+    lotProductionService.getLots.mockResolvedValue([closedA, closedB]);
+    render(<MemoryRouter initialEntries={['/production/lots?statut=termine&id_batiment=1&date=2026-10-08']}><LotsManagementPage /></MemoryRouter>);
+    const card = await screen.findByRole('button', { name: 'Consulter le lot Lot A' });
+    expect(screen.getByRole('tab', { name: /Terminés/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('combobox', { name: 'Filtrer par bâtiment' })).toHaveValue('1');
+    expect(screen.queryByRole('button', { name: 'Consulter le lot Lot B' })).not.toBeInTheDocument();
+    fireEvent.click(card);
+    expect(await screen.findByRole('heading', { name: 'Lot A' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retour aux lots' }));
+    expect(screen.getByRole('combobox', { name: 'Filtrer par bâtiment' })).toHaveValue('1');
+    expect(screen.getByRole('link', { name: 'Retour au bâtiment' })).toHaveAttribute('href', '/production/batiment/1?date=2026-10-08');
   });
 
   it('edits the selected flock while keeping its building fixed', async () => {

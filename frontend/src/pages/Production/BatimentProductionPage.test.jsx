@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BatimentProductionPage from './BatimentProductionPage';
 import { localToday } from './useProductionView';
-import { get } from '../../services/api';
+import { get, post } from '../../services/api';
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() }));
@@ -20,20 +20,99 @@ const stock = {
   ] }],
 };
 const daily = {
-  batiments: [{ id_batiment: 7, produced_eggs: 0, sold_eggs: 0, lost_eggs: 0, mortalite: 0, consommation_aliment_kg: 2, entries_count: 0, categories: [] }],
+  batiments: [{ id_batiment: 7, produced_eggs: 0, sold_eggs: 0, lost_eggs: 0, mortalite: 0, consommation_aliment_kg: 2, entries_count: 0, categories: [], cycle: { id_cycle: 4 } }],
   movements: [],
 };
-const mockData = ({ dayData = daily, rows = [], stockData = stock } = {}) => get.mockImplementation((path) => {
-  if (path === '/batiments') return Promise.resolve([{ id_batiment: 7, nom: 'Batiment 7' }]);
-  if (path === '/productions/stock/daily') return Promise.resolve(dayData);
+const withoutLot = { ...daily, batiments: [{ ...daily.batiments[0], cycle: null }] };
+const mockData = ({ dayData = daily, rows = [], stockData = stock, cycles = [] } = {}) => get.mockImplementation((path, options) => {
+  if (path === '/batiments') return Promise.resolve([{ id_batiment: 8, nom: 'Batiment 8' }, { id_batiment: 7, nom: 'Batiment 7' }]);
+  if (path === '/productions/stock/daily') return Promise.resolve(typeof dayData === 'function' ? dayData(options.params.date_stock) : dayData);
   if (path === '/productions/stock') return Promise.resolve(stockData);
   if (path === '/productions') return Promise.resolve(rows);
+  if (path === '/cycles-production') return Promise.resolve(cycles);
   return Promise.resolve([]);
 });
 
 describe('Building production views', () => {
   beforeEach(() => { vi.clearAllMocks(); mockData(); });
 
+  it('starts a lot for the displayed building and opens today without opening a production form', async () => {
+    mockData({ dayData: withoutLot });
+    post.mockImplementation(async () => {
+      mockData({ cycles: [{ id_cycle: 4, statut: 'actif', nom_cycle: 'Lot 7', date_debut: localToday() }] });
+      return { id_lot: 4 };
+    });
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Aucun lot actif dans ce bâtiment' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Saisir la journée' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Disponible à la vente')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Démarrer un lot' }));
+    const dialog = screen.getByRole('dialog', { name: 'Démarrer un lot' });
+    const building = within(dialog).getByRole('textbox', { name: 'Bâtiment' });
+    expect(building).toHaveValue('Batiment 7');
+    expect(building).toHaveAttribute('readonly');
+    fireEvent.change(within(dialog).getByRole('spinbutton', { name: /Effectif de départ/ }), { target: { value: '1000' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith('/lots-production', expect.objectContaining({
+      date_debut: localToday(),
+      repartitions: [{ id_batiment: 7, effectif_initial: 1000 }],
+    }));
+    expect(get).toHaveBeenCalledWith('/productions/stock/daily', { params: { date_stock: localToday() } });
+  });
+
+  it('returns from a finished lot’s history to the new lot action', async () => {
+    const closed = { id_cycle: 4, statut: 'termine', nom_cycle: 'Lot terminé' };
+    const row = { id_production: 1, id_batiment: 7, id_cycle: 4, date_production: '2026-10-04', type_oeuf: 'normal', nombre_oeufs: 840, grammage: 62 };
+    mockData({ cycles: [closed], rows: [row], dayData: (date) => date === row.date_production
+      ? { ...daily, batiments: [{ ...daily.batiments[0], cycle: closed, produced_eggs: 840 }] } : withoutLot });
+    renderPage('/production/batiment/7');
+    expect(await screen.findByRole('button', { name: 'Démarrer un nouveau lot' })).toBeEnabled();
+    expect(screen.getByRole('link', { name: 'Voir les lots terminés' })).toHaveAttribute(
+      'href', `/production/lots?statut=termine&id_batiment=7&date=${localToday()}`,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Historique des saisies' }));
+    const history = screen.getByRole('dialog', { name: 'Historique des saisies' });
+    fireEvent.click(within(history).getByRole('button', { name: 'Consulter la saisie du 04/10/26' }));
+    expect(await screen.findByText('Vous consultez une journée d’un lot terminé.')).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retour à aujourd’hui' }));
+    expect(await screen.findByRole('button', { name: 'Démarrer un nouveau lot' })).toBeEnabled();
+  });
+
+  it.each([false, true])('shows the finished state on the closing day with a saved entry: %s', async (hasEntry) => {
+    const today = localToday();
+    const closed = { id_cycle: 4, statut: 'termine', nom_cycle: 'Lot terminé', date_fin_reelle: today };
+    const row = { id_production: 1, id_batiment: 7, id_cycle: 4, date_production: today, type_oeuf: 'normal', nombre_oeufs: 840, grammage: 62 };
+    mockData({ cycles: [closed], rows: hasEntry ? [row] : [], dayData: {
+      ...daily, batiments: [{ ...daily.batiments[0], cycle: closed, produced_eggs: hasEntry ? 840 : 0 }],
+    } });
+    renderPage('/production/batiment/7');
+    expect(await screen.findByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Démarrer un nouveau lot' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Saisir la journée' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Journée sélectionnée' })).not.toBeInTheDocument();
+    if (!hasEntry) return;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Historique des saisies' }));
+    const history = screen.getByRole('dialog', { name: 'Historique des saisies' });
+    fireEvent.click(within(history).getByRole('button', { name: /Consulter la saisie du/ }));
+    expect(await screen.findByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retour à aujourd’hui' }));
+    expect(await screen.findByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
+  });
+
+  it('offers the start date when a lot exists but the selected day is too early', async () => {
+    const start = '2026-10-06';
+    mockData({ cycles: [{ id_cycle: 4, statut: 'actif', date_debut: start }], dayData: (date) => date < start ? withoutLot : daily });
+    renderPage();
+    expect(await screen.findByText('Cette date précède le début du lot')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Démarrer un lot' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Aller au début du lot' }));
+    expect(await screen.findByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
+    expect(get).toHaveBeenCalledWith('/productions/stock/daily', { params: { date_stock: start } });
+  });
   it('shows carried stock and daily details together, with no tabs', async () => {
     renderPage();
     expect(await screen.findByText('Disponible à la vente')).toBeVisible();
@@ -66,7 +145,7 @@ describe('Building production views', () => {
       { id_production: 3, id_batiment: 7, date_production: '2026-10-05', type_oeuf: 'casse', nombre_oeufs: 5, grammage: 99, nombre_cartons: 0 },
       { id_production: 4, id_batiment: 7, date_production: '2026-10-06', type_oeuf: 'blanc', nombre_oeufs: 999, grammage: 60 },
     ];
-    mockData({ rows, dayData: { ...daily, batiments: [{ ...daily.batiments[0], produced_eggs: 120, lost_eggs: 5, mortalite: 2, consommation_aliment_kg: 3, entries_count: 3 }] } });
+    mockData({ rows, dayData: { ...daily, batiments: [{ ...daily.batiments[0], cycle: null, produced_eggs: 120, lost_eggs: 5, mortalite: 2, consommation_aliment_kg: 3, entries_count: 3 }] } });
     renderPage();
     expect((await screen.findAllByText('120 œufs'))[0]).toBeVisible();
     expect(within(screen.getByRole('region', { name: 'Journée sélectionnée' })).getByText('62,0 g')).toBeVisible();

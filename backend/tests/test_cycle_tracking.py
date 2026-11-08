@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from app.models.batiment import Batiment
+from app.models.production import Production
 from app.utils.production_cycles import suggested_formula
 
 
@@ -123,16 +124,19 @@ def test_weekly_rates_use_recorded_bird_days_and_show_gaps(client, db_session, a
 def test_history_assignment_is_explicit_and_keeps_recorded_formula(client, db_session, auth_headers):
     building = Batiment(nom="Existing daily", est_actif=True)
     db_session.add(building)
+    db_session.flush()
+    production = Production(
+        date_production=date.today(), id_batiment=building.id_batiment,
+        type_oeuf="normal", nombre_oeufs=80, grammage=60, nombre_cartons=4,
+        formule="manuelle", mortalite=3,
+    )
+    db_session.add(production)
     db_session.commit()
-    created = client.post("/api/v1/productions/daily", json={
-        "date_production": str(date.today()), "id_batiment": building.id_batiment,
-        "quantites": {"normal": 80}, "grammage": "60", "formule": "manuelle", "mortalite": 3,
-    }, headers=auth_headers).json()
     cycle = client.post("/api/v1/cycles-production", json={
         "id_batiment": building.id_batiment, "nom_cycle": "Existant",
         "date_debut": str(date.today()), "effectif_initial": 100,
     }, headers=auth_headers).json()
-    assert created["records"][0]["id_cycle"] is None
+    assert production.id_cycle is None
     result = client.post(f"/api/v1/cycles-production/{cycle['id_cycle']}/rattacher", json={
         "date_debut": str(date.today()), "date_fin": str(date.today()),
     }, headers=auth_headers)

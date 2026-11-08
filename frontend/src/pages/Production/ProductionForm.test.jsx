@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductionForm from './ProductionForm';
+import { localToday } from './useProductionView';
 import { get, post, put } from '../../services/api';
 
 vi.mock('../../services/api', () => ({
@@ -16,12 +17,13 @@ describe('ProductionForm', () => {
     get.mockImplementation((path) => {
       if (path === '/productions/formules') return Promise.resolve([]);
       if (path === '/productions/calibre-thresholds') return Promise.resolve([]);
+      if (path.startsWith('/cycles-production/context/')) return Promise.resolve({ cycle: { id_cycle: 4, nom_cycle: 'Lot A' } });
       return Promise.resolve([]);
     });
     post.mockResolvedValue({});
   });
 
-  it('submits a daily production without lot metadata', async () => {
+  it('submits a daily production and leaves lot assignment to the API', async () => {
     render(
       <ProductionForm
         open
@@ -34,6 +36,7 @@ describe('ProductionForm', () => {
     );
 
     expect(await screen.findByDisplayValue('01/09/26')).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.change(screen.getByLabelText("Oeufs normaux"), { target: { value: '120' } });
     fireEvent.change(screen.getByLabelText("Double jaune"), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText("Oeufs blancs"), { target: { value: '10' } });
@@ -41,7 +44,6 @@ describe('ProductionForm', () => {
     fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1950' } });
     expect(screen.getByText('Oeufs collectes').parentElement).toHaveTextContent('160 oeufs');
     expect(screen.getByText('10', { exact: true })).toBeVisible();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
@@ -53,6 +55,55 @@ describe('ProductionForm', () => {
 
     expect(post.mock.calls[0][1]).not.toHaveProperty('id_cycle');
     expect(post.mock.calls[0][1]).not.toHaveProperty('nom_cycle');
+  });
+
+  it('locks production details when the selected date has no lot and unlocks them on a covered date', async () => {
+    const fallback = get.getMockImplementation();
+    get.mockImplementation((path, options) => {
+      if (path.startsWith('/cycles-production/context/') && options.params.date_saisie === '2026-09-01') {
+        return Promise.resolve({ has_cycles: false, cycle: null });
+      }
+      return fallback(path);
+    });
+    render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
+      batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} preselectedDate="2026-09-01" />);
+    expect(screen.getByLabelText('Oeufs normaux')).toBeDisabled();
+    expect(await screen.findByText(/Aucun lot ne couvre cette date/)).toBeVisible();
+    for (const label of ['Oeufs normaux', 'Poids du plateau (g)', 'Mortalité', 'Aliment consommé (kg)']) {
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    }
+    expect(screen.getByRole('combobox', { name: 'Formule' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'Gestion des lots' })).toHaveAttribute('href', '/production/lots');
+    const save = screen.getByRole('button', { name: 'Enregistrer' });
+    expect(save).toBeDisabled();
+    fireEvent.submit(save.closest('form'));
+    expect(post).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/Date de production/), { target: { value: '02/09/26' } });
+    await waitFor(() => expect(save).toBeEnabled());
+    expect(screen.getByLabelText('Oeufs normaux')).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText(/Date de production/), { target: { value: '01/09/26' } });
+    expect(save).toBeDisabled();
+    expect(screen.getByLabelText('Oeufs normaux')).toBeDisabled();
+    expect(await screen.findByText(/Aucun lot ne couvre cette date/)).toBeVisible();
+  });
+
+  it('blocks new production when today’s lot is finished', async () => {
+    const fallback = get.getMockImplementation();
+    get.mockImplementation((path) => path.startsWith('/cycles-production/context/')
+      ? Promise.resolve({ has_cycles: true, cycle: { id_cycle: 4, nom_cycle: 'Lot A', statut: 'termine' } })
+      : fallback(path));
+    render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
+      batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} preselectedDate={localToday()} />);
+    expect(await screen.findByText(/Démarrez un nouveau lot pour saisir/)).toBeVisible();
+    expect(screen.getByLabelText('Oeufs normaux')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ajouter un vaccin' })).toBeDisabled();
+    const save = screen.getByRole('button', { name: 'Enregistrer' });
+    expect(save).toBeDisabled();
+    fireEvent.submit(save.closest('form'));
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('preselects the dated formula and accepts feed before laying', async () => {
@@ -126,6 +177,7 @@ describe('ProductionForm', () => {
     );
 
     const mortalityInput = screen.getByLabelText('Mortalité');
+    await waitFor(() => expect(mortalityInput).toBeEnabled());
     expect(mortalityInput).toHaveAttribute('min', '0');
     expect(mortalityInput).toHaveAttribute('step', '1');
 
@@ -136,8 +188,8 @@ describe('ProductionForm', () => {
   it('rejects an empty collection and fractional counts', async () => {
     render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
       batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
-    fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1710' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1710' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText("Indiquez au moins un nombre d'œufs.")).toBeVisible();
     expect(post).not.toHaveBeenCalled();
@@ -152,6 +204,7 @@ describe('ProductionForm', () => {
     async (label) => {
       render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
         batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
       fireEvent.change(screen.getByLabelText('Oeufs normaux'), { target: { value: '120' } });
       fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '10' } });
       fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: '1710' } });

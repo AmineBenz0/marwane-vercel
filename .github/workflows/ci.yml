@@ -114,7 +114,8 @@ jobs:
           SECRET_KEY: ci-only-secret
 
   frontend:
-    runs-on: ubuntu-latest
+    # Pin a Playwright-supported OS; ubuntu-latest is now Ubuntu 26.04.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -160,7 +161,7 @@ jobs:
     # does not make the secrets context reliably available there. Enable this
     # release gate with the repository variable RUN_E2E=true instead.
     if: ${{ vars.RUN_E2E == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend

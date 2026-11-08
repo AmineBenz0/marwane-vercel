@@ -141,12 +141,12 @@ describe('LotPanel independent building lots', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Terminés/ }));
     const buildingFilter = screen.getByLabelText('Filtrer par bâtiment');
     expect(buildingFilter).toHaveValue('all');
-    expect(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Consulter le lot Ancien lot' })).toBeVisible();
 
     fireEvent.change(buildingFilter, { target: { value: '2' } });
     expect(screen.getByText('Aucun lot terminé dans ce bâtiment')).toBeVisible();
     fireEvent.change(buildingFilter, { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Consulter le lot Ancien lot' }));
 
     expect(await screen.findByRole('heading', { name: 'Ancien lot' })).toBeVisible();
     expect(screen.getByText('Pertes depuis l’arrivée')).toBeVisible();
@@ -166,7 +166,7 @@ describe('LotPanel independent building lots', () => {
     render(<MemoryRouter><LotPanel buildings={buildings} refreshKey={0} managementMode /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole('tab', { name: /Terminés/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le lot Ancien lot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Consulter le lot Ancien lot' }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Production' }));
 
     expect(await screen.findByRole('table', { name: 'Saisies quotidiennes du lot' })).toBeVisible();
