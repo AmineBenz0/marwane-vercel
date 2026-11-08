@@ -24,11 +24,13 @@ export default function useProductionView() {
   const selectedDate = validDate(params.get('date')) ? params.get('date') : defaultDate;
   return {
     selectedDate,
-    setSelectedDate: (date) => {
+    viewingHistory: params.get('view') === 'history',
+    setSelectedDate: (date, { history = false } = {}) => {
       if (!validDate(date)) return;
       setParams((previous) => {
         const next = new URLSearchParams(previous);
-        next.delete('view');
+        if (history) next.set('view', 'history');
+        else next.delete('view');
         next.set('date', date);
         return next;
       });

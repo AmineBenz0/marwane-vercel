@@ -55,7 +55,7 @@ function BatimentProductionPage() {
   const [insightsCycleId, setInsightsCycleId] = useState(null);
   const [batiments, setBatiments] = useState([]);
   const [stockData, setStockData] = useState(null);
-  const { selectedDate, setSelectedDate } = useProductionView();
+  const { selectedDate, setSelectedDate, viewingHistory } = useProductionView();
   const { stock: currentStock, loading: stockLoading, error: stockError, reload: reloadStock } = useProductionStock();
   const [loadError, setLoadError] = useState('');
   const [loadedDay, setLoadedDay] = useState(null);
@@ -151,15 +151,21 @@ function BatimentProductionPage() {
   const hasProduction = !!selectedDay;
   const dailyCycle = dailyBuildingStock?.cycle;
   const canAddProduction = batiment?.est_actif !== false && !!dailyCycle;
-  const showLotGate = !loadError && batiment && batiment.est_actif !== false && !hasProduction && !canAddProduction;
-  const hasFinishedLot = cycleState.cycles.some((cycle) => cycle.statut === 'termine');
+  // The closing date still belongs to the finished lot for historical lookup.
+  const closedToday = selectedDate === today && !activeCycle && dailyCycle?.statut === 'termine';
+  const viewingClosingDayEntry = closedToday && viewingHistory && hasProduction;
+  const showLotGate = !loadError && batiment && batiment.est_actif !== false
+    && ((closedToday && !viewingClosingDayEntry) || (!hasProduction && !canAddProduction));
+  const hasFinishedLot = dailyCycle?.statut === 'termine' || cycleState.cycles.some((cycle) => cycle.statut === 'termine');
   const entryCycleId = latestTodayEntry?.id_cycle;
   const dayCycle = entryCycleId != null && entryCycleId !== dailyCycle?.id_cycle
     ? cycleState.cycles.find((cycle) => cycle.id_cycle === entryCycleId)
     : dailyCycle;
   const archivedDay = dayCycle?.statut === 'termine' || (!dailyCycle && hasProduction && hasFinishedLot && !activeCycle);
+  const showHistoryReturn = viewingClosingDayEntry
+    || (selectedDate !== today && (archivedDay || (hasProduction && !dailyCycle && !activeCycle)));
   const canStartToday = batiment?.est_actif !== false && cycleState.loaded && !activeCycle
-    && (!dailyCycle || dailyCycle.statut === 'termine') && selectedDate === today;
+    && !dailyCycle && selectedDate === today;
   const openLotDialog = () => setLotDialogBuildingId(selectedBatimentId);
   const openHistory = () => setHistoryBuildingId(selectedBatimentId);
   const closeHistory = () => setHistoryBuildingId(null);
@@ -250,7 +256,7 @@ function BatimentProductionPage() {
               onHistory={hasFinishedLot || buildingHistory.length > 0 ? openHistory : undefined}
             />
       ) : <>
-      {dailyReady && (archivedDay || (hasProduction && !dailyCycle && !activeCycle)) && selectedDate !== today && (
+      {dailyReady && showHistoryReturn && (
         <Alert severity="info" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => setSelectedDate(today)}>Retour à aujourd’hui</Button>}>
           {archivedDay ? 'Vous consultez une journée d’un lot terminé.' : 'Vous consultez une saisie précédente.'}
         </Alert>
@@ -321,7 +327,7 @@ function BatimentProductionPage() {
             {buildingHistory.map((day) => (
               <ListItem key={day.key} disableGutters divider sx={{ gap: 1, flexWrap: 'wrap' }}>
                 <ListItemText primary={formatShortDate(day.date)} secondary={formatNumber(day.collected) + ' œufs collectés'} />
-                <Button size="small" aria-label={'Voir la journée du ' + formatShortDate(day.date)} onClick={() => { closeHistory(); setSelectedDate(day.date); }}>
+                <Button size="small" aria-label={'Voir la journée du ' + formatShortDate(day.date)} onClick={() => { closeHistory(); setSelectedDate(day.date, { history: true }); }}>
                   Voir la journée
                 </Button>
               </ListItem>

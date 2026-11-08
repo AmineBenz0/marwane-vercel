@@ -137,6 +137,10 @@ for (const width of [390, 1200]) {
     await page.getByRole('tab', { name: /En cours/ }).click();
     await expect(page.getByRole('button', { name: 'Ouvrir le lot Lot B', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ouvrir le lot Lot A', exact: true })).toHaveCount(0);
+    await page.goto('/production/batiment/7');
+    await expect(page.getByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Démarrer un nouveau lot', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Saisir la journée', exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(state.errors).toEqual([]);
   });
