@@ -78,7 +78,7 @@ describe('Building production views', () => {
     expect(await screen.findByRole('button', { name: 'Démarrer un nouveau lot' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Voir l’historique' }));
     const history = screen.getByRole('dialog', { name: 'Historique des saisies' });
-    fireEvent.click(within(history).getByRole('button', { name: 'Voir la journée du 04/10/26' }));
+    fireEvent.click(within(history).getByRole('button', { name: 'Consulter la saisie du 04/10/26' }));
     expect(await screen.findByText('Vous consultez une journée d’un lot terminé.')).toBeVisible();
     expect(await screen.findByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Retour à aujourd’hui' }));
@@ -101,7 +101,7 @@ describe('Building production views', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Voir l’historique' }));
     const history = screen.getByRole('dialog', { name: 'Historique des saisies' });
-    fireEvent.click(within(history).getByRole('button', { name: /Voir la journée du/ }));
+    fireEvent.click(within(history).getByRole('button', { name: /Consulter la saisie du/ }));
     expect(await screen.findByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Retour à aujourd’hui' }));
     expect(await screen.findByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();

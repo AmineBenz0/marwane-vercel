@@ -327,8 +327,8 @@ function BatimentProductionPage() {
             {buildingHistory.map((day) => (
               <ListItem key={day.key} disableGutters divider sx={{ gap: 1, flexWrap: 'wrap' }}>
                 <ListItemText primary={formatShortDate(day.date)} secondary={formatNumber(day.collected) + ' œufs collectés'} />
-                <Button size="small" aria-label={'Voir la journée du ' + formatShortDate(day.date)} onClick={() => { closeHistory(); setSelectedDate(day.date, { history: true }); }}>
-                  Voir la journée
+                <Button size="small" aria-label={'Consulter la saisie du ' + formatShortDate(day.date)} onClick={() => { closeHistory(); setSelectedDate(day.date, { history: true }); }}>
+                  Consulter la saisie
                 </Button>
               </ListItem>
             ))}
