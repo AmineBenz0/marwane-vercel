@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { productionService, batimentService } from '../../services/productionService';
 import ProductionLotChart from './ProductionLotChart';
 import ProductionForm from './ProductionForm';
-import useProductionView, { productionLink } from './useProductionView';
+import useProductionView, { isClosingDayToday, productionLink } from './useProductionView';
 import useProductionStock from './useProductionStock';
 import { DailyActivity, DailySectionHeader, StockSummary } from './ProductionViews';
 import useNotificationStore from '../../store/notificationStore';
@@ -102,7 +102,7 @@ function ProductionDashboard() {
         <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
           <DailySectionHeader title="Suivi des bâtiments" selectedDate={selectedDate} onDateChange={setSelectedDate} />
           {loadError && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={loadData}>Réessayer la journée</Button>}>{loadError}</Alert>}
-          <BuildingsOverview buildings={buildingRows} dailyReady={dailyReady} dailyError={!!loadError} stockReady={!stockLoading && !stockError}
+          <BuildingsOverview buildings={buildingRows} selectedDate={selectedDate} dailyReady={dailyReady} dailyError={!!loadError} stockReady={!stockLoading && !stockError}
             onAdd={(id) => { setSelectedBatimentId(id); setOpenForm(true); }}
             onOpen={(id) => navigate(productionLink(id, selectedDate))} />
           {!dailyReady && !loadError && <Box sx={{ py: 2 }}><CircularProgress size={24} aria-label="Chargement de la journée" /></Box>}
@@ -135,15 +135,21 @@ function ProductionDashboard() {
   );
 }
 
-function BuildingsOverview({ buildings, dailyReady, dailyError, stockReady, onAdd, onOpen }) {
+function BuildingsOverview({ buildings, selectedDate, dailyReady, dailyError, stockReady, onAdd, onOpen }) {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('md'));
   const stock = (building) => stockReady && building.available_eggs != null ? formatEggs(building.available_eggs) : '—';
-  const collect = (building) => !dailyReady
-    ? <Typography variant="body2" color="text.secondary">{dailyError ? 'Indisponible' : 'Chargement…'}</Typography>
-    : building.daily?.entries_count ? <Typography variant="body2">{formatEggs(building.daily.produced_eggs || 0)}</Typography> : <Typography variant="body2" color={building.est_actif === false ? 'text.secondary' : 'warning.dark'}>{building.est_actif === false ? '—' : 'Non saisie'}</Typography>;
+  const canAdd = (building) => building.est_actif !== false && building.daily?.cycle
+    && !isClosingDayToday(building.daily.cycle, selectedDate);
+  const collect = (building) => {
+    if (!dailyReady) return <Typography variant="body2" color="text.secondary">{dailyError ? 'Indisponible' : 'Chargement…'}</Typography>;
+    if (building.daily?.entries_count) return <Typography variant="body2">{formatEggs(building.daily.produced_eggs || 0)}</Typography>;
+    if (canAdd(building)) return <Typography variant="body2" color="warning.dark">Non saisie</Typography>;
+    const status = building.daily?.cycle ? 'Lot terminé' : 'Aucun lot pour cette date';
+    return <Typography variant="body2" color="text.secondary">{building.est_actif === false ? '—' : status}</Typography>;
+  };
   const actions = (building) => <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap' }}>
-    {dailyReady && !building.daily?.entries_count && building.est_actif !== false && <Button size="small" variant="contained" startIcon={<Add />} onClick={() => onAdd(building.id_batiment)}>Saisir</Button>}
+    {dailyReady && canAdd(building) && !building.daily.entries_count && <Button size="small" variant="contained" startIcon={<Add />} onClick={() => onAdd(building.id_batiment)}>Saisir</Button>}
     <Button size="small" endIcon={<ChevronRight />} aria-label={'Voir le bâtiment ' + building.nom_batiment} onClick={() => onOpen(building.id_batiment)}>Voir</Button>
   </Stack>;
   const name = (building) => <Box>

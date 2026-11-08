@@ -158,6 +158,10 @@ def test_closing_one_lot_leaves_other_building_active_and_turnover_keeps_cycle_i
     lot_b = create_lot(client, auth_headers, building_b.id_batiment, name="B active", count=200)
     cycle_a = lot_a["repartitions"][0]
     cycle_b = lot_b["repartitions"][0]
+    payload = {"id_batiment": building_a.id_batiment, "date_production": str(date.today()),
+               "quantites": {"normal": 10}, "grammage": "61"}
+    entry = client.post("/api/v1/productions/daily", json=payload, headers=auth_headers)
+    assert entry.status_code == 201, entry.text
 
     closed = client.post(f"/api/v1/lots-production/{lot_a['id_lot']}/terminer", json={
         "date_fin_reelle": str(date.today()),
@@ -174,6 +178,14 @@ def test_closing_one_lot_leaves_other_building_active_and_turnover_keeps_cycle_i
     assert context["cycle"]["id_cycle"] == successor_cycle["id_cycle"]
     assert successor_cycle["id_cycle"] != cycle_a["id_cycle"]
     assert db_session.query(CycleProduction).filter_by(id_cycle=cycle_a["id_cycle"]).one().id_lot == lot_a["id_lot"]
+
+    corrected = client.put("/api/v1/productions/daily", json={
+        **payload, "quantites": {"normal": 12}, "versions": entry.json()["versions"],
+    }, headers=auth_headers)
+    assert corrected.status_code == 200, corrected.text
+    assert {row["id_cycle"] for row in corrected.json()["records"]} == {cycle_a["id_cycle"]}
+    duplicate = client.post("/api/v1/productions/daily", json=payload, headers=auth_headers)
+    assert duplicate.status_code == 409, duplicate.text
 
 
 def test_simultaneous_lot_requests_for_one_building_create_only_one_active_lot(

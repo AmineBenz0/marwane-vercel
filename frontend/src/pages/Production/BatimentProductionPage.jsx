@@ -1,6 +1,6 @@
 import ProductionDeferredNotice from './ProductionDeferredNotice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -9,6 +9,8 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog, DialogActions, DialogContent, DialogTitle,
+  List, ListItem, ListItemText,
   IconButton,
   Stack,
   Typography,
@@ -17,15 +19,21 @@ import {
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
+  FactoryOutlined,
+  EventBusyOutlined,
 } from '@mui/icons-material';
+import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { productionService, batimentService } from '../../services/productionService';
 import useNotificationStore from '../../store/notificationStore';
 import ProductionForm from './ProductionForm';
 import CyclePanel, { CycleWeeklyInsights } from './CyclePanel';
-import useProductionView, { productionLink } from './useProductionView';
+import useBuildingCycles from './useBuildingCycles';
+import LotCreateDialog from './LotCreateDialog';
+import useProductionView, { isClosingDayToday, localToday, productionLink } from './useProductionView';
 import { DailyActivity, DailySectionHeader, StockSummary } from './ProductionViews';
 import useProductionStock from './useProductionStock';
 import { EGG_TYPE_LABELS, groupDailyProductions } from '../../utils/dailyProduction';
@@ -47,10 +55,10 @@ function BatimentProductionPage() {
   const [insightsCycleId, setInsightsCycleId] = useState(null);
   const [batiments, setBatiments] = useState([]);
   const [stockData, setStockData] = useState(null);
-  const { selectedDate, setSelectedDate } = useProductionView();
+  const { selectedDate, setSelectedDate, viewingHistory } = useProductionView();
   const { stock: currentStock, loading: stockLoading, error: stockError, reload: reloadStock } = useProductionStock();
   const [loadError, setLoadError] = useState('');
-  const [loadedDate, setLoadedDate] = useState(null);
+  const [loadedDay, setLoadedDay] = useState(null);
   const loadRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
@@ -59,9 +67,16 @@ function BatimentProductionPage() {
   const [preselectedEggType, setPreselectedEggType] = useState('normal');
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
+  const [lotDialogBuildingId, setLotDialogBuildingId] = useState(null);
+  const [historyBuildingId, setHistoryBuildingId] = useState(null);
 
   const selectedBatimentId = Number(id);
   const batiment = batiments.find((item) => Number(item.id_batiment) === selectedBatimentId);
+  const dayKey = selectedBatimentId + ':' + selectedDate;
+  const cycleState = useBuildingCycles(selectedBatimentId);
+  const { reload: reloadCycles } = cycleState;
+  const activeCycle = cycleState.cycles.find((cycle) => cycle.statut !== 'termine');
+  const today = localToday();
 
   const loadData = useCallback(async () => {
     const request = ++loadRequest.current;
@@ -78,7 +93,7 @@ function BatimentProductionPage() {
       if (request !== loadRequest.current) return;
       setBatiments(batData || []);
       setStockData(stock);
-      setLoadedDate(selectedDate);
+      setLoadedDay(dayKey);
       setProductions(productionData || []);
       setVaccineExpenses(expenses || []);
     } catch (err) {
@@ -89,12 +104,16 @@ function BatimentProductionPage() {
     } finally {
       if (request === loadRequest.current) setLoading(false);
     }
-  }, [notifyError, selectedBatimentId, selectedDate]);
+  }, [dayKey, notifyError, selectedBatimentId, selectedDate]);
 
   useEffect(() => {
     loadData();
     return () => { loadRequest.current += 1; };
   }, [loadData]);
+  const refreshAfterChange = useCallback(() => {
+    reloadCycles();
+    return loadData();
+  }, [loadData, reloadCycles]);
 
   const dailyBuildingStock = useMemo(
     () => (stockData?.batiments || []).find((item) => Number(item.id_batiment) === selectedBatimentId),
@@ -116,9 +135,10 @@ function BatimentProductionPage() {
     lost: Number(dailyBuildingStock?.lost_eggs || 0),
   }), [dailyBuildingStock]);
 
-  const dailyHistory = useMemo(() => groupDailyProductions(productions).filter((day) => day.date <= selectedDate).map((day) => ({
+  const buildingHistory = useMemo(() => groupDailyProductions(productions).map((day) => ({
     ...day, vaccineExpenses: vaccineExpenses.filter((expense) => expense.date_charge === day.date),
-  })), [productions, selectedDate, vaccineExpenses]);
+  })), [productions, vaccineExpenses]);
+  const dailyHistory = buildingHistory.filter((day) => day.date <= selectedDate);
   const selectedDay = dailyHistory.find((day) => day.date === selectedDate) || null;
   const latestTodayEntry = selectedDay?.representative || null;
   const stockCategories = (buildingStock?.categories || []).filter((category) => !['casse', 'perdu'].includes(category.type_oeuf));
@@ -129,6 +149,35 @@ function BatimentProductionPage() {
   const lowStockCategory = stockCategories.find((category) => Number(category.available_eggs || 0) <= 0)
     || stockCategories.find((category) => Number(category.available_eggs || 0) < 200);
   const hasProduction = !!selectedDay;
+  const dailyCycle = dailyBuildingStock?.cycle;
+  // The closing date still belongs to the finished lot for historical lookup.
+  const closedToday = isClosingDayToday(dailyCycle, selectedDate);
+  const canAddProduction = batiment?.est_actif !== false && !!dailyCycle && !closedToday;
+  const viewingClosingDayEntry = closedToday && viewingHistory && hasProduction;
+  const showLotGate = !loadError && batiment && batiment.est_actif !== false
+    && ((closedToday && !viewingClosingDayEntry) || (!hasProduction && !canAddProduction));
+  const hasFinishedLot = dailyCycle?.statut === 'termine' || cycleState.cycles.some((cycle) => cycle.statut === 'termine');
+  const entryCycleId = latestTodayEntry?.id_cycle;
+  const dayCycle = entryCycleId != null && entryCycleId !== dailyCycle?.id_cycle
+    ? cycleState.cycles.find((cycle) => cycle.id_cycle === entryCycleId)
+    : dailyCycle;
+  const archivedDay = dayCycle?.statut === 'termine' || (!dailyCycle && hasProduction && hasFinishedLot && !activeCycle);
+  const showHistoryReturn = viewingClosingDayEntry
+    || (selectedDate !== today && (archivedDay || (hasProduction && !dailyCycle && !activeCycle)));
+  const canStartToday = batiment?.est_actif !== false && cycleState.loaded && !activeCycle
+    && !dailyCycle && selectedDate === today;
+  const openLotDialog = () => setLotDialogBuildingId(selectedBatimentId);
+  const openHistory = () => setHistoryBuildingId(selectedBatimentId);
+  const closeHistory = () => setHistoryBuildingId(null);
+  const onLotCreated = () => {
+    setLotDialogBuildingId(null);
+    notifySuccess('Lot démarré. Vous pouvez saisir la production de la journée.');
+    reloadCycles();
+    const currentDate = localToday();
+    if (selectedDate === currentDate) loadData();
+    else setSelectedDate(currentDate);
+    reloadStock();
+  };
 
   const handleAddProduction = () => {
     setEditingProduction(null);
@@ -165,13 +214,13 @@ function BatimentProductionPage() {
         charge_versions: daily.charge_versions || {},
       });
       notifySuccess('Saisie quotidienne désactivée');
-      await Promise.all([loadData(), reloadStock()]);
+      await Promise.all([refreshAfterChange(), reloadStock()]);
     } catch (err) {
       notifyError(err?.message || 'Erreur lors de la désactivation');
     }
   };
 
-  const dailyReady = !loading && !loadError && loadedDate === selectedDate;
+  const dailyReady = !loading && !loadError && loadedDay === dayKey;
   const stockContent = (
     <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
       {stockLoading ? <CircularProgress size={24} aria-label="Chargement du stock actuel" /> : stockError ? (
@@ -195,16 +244,40 @@ function BatimentProductionPage() {
           {batiment?.nom || buildingStock?.nom_batiment || 'Bâtiment'}
         </Typography>
       </Box>
-      <CyclePanel buildingId={selectedBatimentId} refreshKey={productions} onSelectCycle={setInsightsCycleId}
+      {(showLotGate || (!batiment && !dailyReady && !loadError)) ? (
+        !dailyReady || (!cycleState.loaded && !cycleState.error)
+          ? <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Chargement de la journée" /></Box>
+          : cycleState.error ? <Alert severity="error" action={<Button color="inherit" onClick={cycleState.reload}>Réessayer le chargement des lots</Button>}>{cycleState.error}</Alert>
+          : <BuildingLotGate
+              buildingName={batiment.nom}
+              activeCycle={activeCycle}
+              hasFinishedLot={hasFinishedLot}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              onStart={openLotDialog}
+              finishedLotsUrl={hasFinishedLot
+                ? '/production/lots?' + new URLSearchParams({ statut: 'termine', id_batiment: selectedBatimentId, date: selectedDate })
+                : undefined}
+              onDailyHistory={buildingHistory.length > 0 ? openHistory : undefined}
+            />
+      ) : <>
+      {dailyReady && showHistoryReturn && (
+        <Alert severity="info" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => setSelectedDate(today)}>Retour à aujourd’hui</Button>}>
+          {archivedDay ? 'Vous consultez une journée d’un lot terminé.' : 'Vous consultez une saisie précédente.'}
+        </Alert>
+      )}
+      <CyclePanel cycleState={cycleState} active={activeCycle} onSelectCycle={setInsightsCycleId}
         stockContent={stockContent}
-        actions={<Button variant="contained" disabled={!dailyReady || !batiment} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
+        actions={<>
+        {dailyReady && batiment && canStartToday && <Button variant="contained" startIcon={<AddIcon />} onClick={openLotDialog}>{hasFinishedLot ? 'Démarrer un nouveau lot' : 'Démarrer un lot'}</Button>}
+        <Button variant={canStartToday ? 'outlined' : 'contained'} disabled={!dailyReady || !batiment || (!hasProduction && !canAddProduction)} startIcon={hasProduction ? <EditIcon /> : <AddIcon />}
           onClick={() => hasProduction ? handleEdit(latestTodayEntry) : handleAddProduction()}>
           {hasProduction ? 'Modifier la saisie' : 'Saisir la journée'}
-        </Button>} />
+        </Button></>} />
       <Card variant="outlined" component="section" aria-label="Journée sélectionnée" aria-busy={!dailyReady} sx={{ borderRadius: 3, minWidth: 0 }}>
         <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
           <DailySectionHeader title="Journée sélectionnée" selectedDate={selectedDate} onDateChange={setSelectedDate}
-            actions={dailyReady && batiment ? <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'À saisir'} /> : null} />
+            actions={dailyReady && batiment && (hasProduction || canAddProduction) ? <Chip size="small" variant="outlined" color={hasProduction ? 'success' : 'warning'} label={hasProduction ? 'Saisie' : 'À saisir'} /> : null} />
           {loadError ? <Alert severity="error" action={<Button color="inherit" onClick={loadData}>Réessayer la journée</Button>}>{loadError}</Alert> : !dailyReady ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Chargement de la journée" /></Box>
           ) : !batiment ? <Alert severity="warning">Bâtiment introuvable.</Alert> : <>
@@ -249,6 +322,25 @@ function BatimentProductionPage() {
       {dailyReady && batiment && <HistoryCard key={selectedBatimentId + '-' + selectedDate} days={dailyHistory} onEdit={handleEdit} onDelete={handleDelete} />}
       <CycleWeeklyInsights cycleId={insightsCycleId} refreshKey={productions} />
       {dailyReady && batiment && <Box sx={{ mt: 3 }}><DailyActivity key={selectedDate} movements={buildingMovements} /></Box>}
+      </>}
+      {lotDialogBuildingId === selectedBatimentId && batiment && <LotCreateDialog building={batiment} onClose={() => setLotDialogBuildingId(null)} onCreated={onLotCreated} />}
+      <Dialog open={historyBuildingId === selectedBatimentId} onClose={closeHistory} maxWidth="sm" fullWidth aria-labelledby="building-history-title">
+        <DialogTitle id="building-history-title">Historique des saisies</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary">{batiment?.nom}</Typography>
+          {buildingHistory.length ? <List disablePadding>
+            {buildingHistory.map((day) => (
+              <ListItem key={day.key} disableGutters divider sx={{ gap: 1, flexWrap: 'wrap' }}>
+                <ListItemText primary={formatShortDate(day.date)} secondary={formatNumber(day.collected) + ' œufs collectés'} />
+                <Button size="small" aria-label={'Consulter la saisie du ' + formatShortDate(day.date)} onClick={() => { closeHistory(); setSelectedDate(day.date, { history: true }); }}>
+                  Consulter la saisie
+                </Button>
+              </ListItem>
+            ))}
+          </List> : <Typography sx={{ mt: 1 }}>Aucune saisie pour ce bâtiment.</Typography>}
+        </DialogContent>
+        <DialogActions><Button onClick={closeHistory}>Retour au bâtiment</Button></DialogActions>
+      </Dialog>
       {openForm && (
         <ProductionForm
           key={`${selectedBatimentId}-${preselectedEggType}-${formTitle}-${editingProduction?.id_production || 'new'}`}
@@ -256,7 +348,7 @@ function BatimentProductionPage() {
           onClose={() => setOpenForm(false)}
           onSuccess={(result) => { setSavedProduction(result);
             setOpenForm(false);
-            loadData();
+            refreshAfterChange();
             reloadStock();
           }}
           initialData={editingProduction}
@@ -270,6 +362,42 @@ function BatimentProductionPage() {
       )}
 
     </Box>
+  );
+}
+
+function BuildingLotGate({ buildingName, activeCycle, hasFinishedLot, selectedDate, setSelectedDate, onStart, finishedLotsUrl, onDailyHistory }) {
+  const start = activeCycle?.date_debut;
+  const beforeStart = start && selectedDate < start;
+  const title = activeCycle
+    ? (beforeStart ? 'Cette date précède le début du lot' : 'Aucun lot ne couvre cette date')
+    : (hasFinishedLot ? 'Le dernier lot est terminé' : 'Aucun lot actif dans ce bâtiment');
+  const detail = activeCycle
+    ? (beforeStart ? `Le lot a démarré le ${formatShortDate(start)}. Sélectionnez une date à partir du ${formatShortDate(start)}.`
+      : 'Sélectionnez une journée couverte par un lot de ce bâtiment.')
+    : `Démarrez ${hasFinishedLot ? 'un nouveau lot pour reprendre' : 'un lot pour commencer'} la saisie de production pour ${buildingName}.`;
+  return (
+    <Card component="section" aria-labelledby="building-lot-gate-title" variant="outlined"
+      sx={{ maxWidth: 540, mx: 'auto', mt: { xs: 4, md: 8 }, borderRadius: 3, textAlign: 'center' }}>
+      <CardContent sx={{ p: { xs: 2.5, sm: 4 }, '&:last-child': { pb: { xs: 2.5, sm: 4 } } }}>
+        <Stack alignItems="center" spacing={1.5}>
+          <Box sx={{ display: 'grid', placeItems: 'center', width: 52, height: 52, borderRadius: 3, bgcolor: 'action.selected', color: 'primary.main' }}>
+            {activeCycle ? <EventBusyOutlined /> : <FactoryOutlined />}
+          </Box>
+          <Typography id="building-lot-gate-title" component="h2" variant="h6" fontWeight={800}>{title}</Typography>
+          <Typography color="text.secondary" sx={{ maxWidth: 360 }}>{detail}</Typography>
+          {activeCycle ? <>
+            {start && <Button variant="contained" onClick={() => setSelectedDate(start)}>Aller au début du lot</Button>}
+            <DateField label="Autre date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+          </> : <Button variant="contained" startIcon={<AddIcon />} onClick={onStart}>
+            {hasFinishedLot ? 'Démarrer un nouveau lot' : 'Démarrer un lot'}
+          </Button>}
+          {finishedLotsUrl && (
+            <Button component={Link} to={finishedLotsUrl} size="small" endIcon={<ArrowForwardIcon />}>Voir les lots terminés</Button>
+          )}
+          {onDailyHistory && <Button size="small" color="inherit" onClick={onDailyHistory}>Historique des saisies</Button>}
+        </Stack>
+      </CardContent>
+    </Card>
   );
 }
 

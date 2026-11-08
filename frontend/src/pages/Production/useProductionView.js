@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { getBusinessDateInput } from '../../utils/businessDate';
 
-export const localToday = () => {
-  const now = new Date();
-  return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-};
+export const localToday = getBusinessDateInput;
+
+export const isClosingDayToday = (cycle, date) => cycle?.statut === 'termine' && date === localToday();
 
 const validDate = (value) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
@@ -24,11 +24,13 @@ export default function useProductionView() {
   const selectedDate = validDate(params.get('date')) ? params.get('date') : defaultDate;
   return {
     selectedDate,
-    setSelectedDate: (date) => {
+    viewingHistory: params.get('view') === 'history',
+    setSelectedDate: (date, { history = false } = {}) => {
       if (!validDate(date)) return;
       setParams((previous) => {
         const next = new URLSearchParams(previous);
-        next.delete('view');
+        if (history) next.set('view', 'history');
+        else next.delete('view');
         next.set('date', date);
         return next;
       });
