@@ -33,7 +33,7 @@ import ProductionForm from './ProductionForm';
 import CyclePanel, { CycleWeeklyInsights } from './CyclePanel';
 import useBuildingCycles from './useBuildingCycles';
 import LotCreateDialog from './LotCreateDialog';
-import useProductionView, { localToday, productionLink } from './useProductionView';
+import useProductionView, { isClosingDayToday, localToday, productionLink } from './useProductionView';
 import { DailyActivity, DailySectionHeader, StockSummary } from './ProductionViews';
 import useProductionStock from './useProductionStock';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
@@ -151,9 +151,9 @@ function BatimentProductionPage() {
     || stockCategories.find((category) => Number(category.available_eggs || 0) < 200);
   const hasProduction = !!selectedDay;
   const dailyCycle = dailyBuildingStock?.cycle;
-  const canAddProduction = batiment?.est_actif !== false && !!dailyCycle;
   // The closing date still belongs to the finished lot for historical lookup.
-  const closedToday = selectedDate === today && !activeCycle && dailyCycle?.statut === 'termine';
+  const closedToday = isClosingDayToday(dailyCycle, selectedDate);
+  const canAddProduction = batiment?.est_actif !== false && !!dailyCycle && !closedToday;
   const viewingClosingDayEntry = closedToday && viewingHistory && hasProduction;
   const showLotGate = !loadError && batiment && batiment.est_actif !== false
     && ((closedToday && !viewingClosingDayEntry) || (!hasProduction && !canAddProduction));

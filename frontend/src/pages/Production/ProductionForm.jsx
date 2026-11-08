@@ -22,6 +22,7 @@ import useNotification from '../../hooks/useNotification';
 import compteBancaireService from '../../services/compteBancaireService';
 import VaccineExpenseFields from './VaccineExpenseFields';
 import { carriedFeedFormula } from '../../utils/feedFormula';
+import { isClosingDayToday, localToday } from './useProductionView';
 
 const EGG_TYPES = [
   { value: 'normal', label: 'Oeufs normaux' },
@@ -53,7 +54,7 @@ function ProductionForm({
   initialData,
   batiments,
   preselectedBatimentId = '',
-  preselectedDate = new Date().toISOString().split('T')[0],
+  preselectedDate = localToday(),
   title,
 }) {
   const theme = useTheme();
@@ -104,7 +105,8 @@ function ProductionForm({
   const contextLoading = !!contextKey && !currentContext;
   const contextError = currentContext?.error;
   const missingCycle = !initialData && !!currentContext && !contextError && !cycleContext?.cycle;
-  const entryBlocked = loadingDaily || !!loadError || (!initialData && !cycleContext?.cycle);
+  const closedToday = !initialData && isClosingDayToday(cycleContext?.cycle, watchedDate);
+  const entryBlocked = loadingDaily || !!loadError || closedToday || (!initialData && !cycleContext?.cycle);
   const totalEggs = EGG_TYPES.reduce(
     (sum, type) => sum + (['casse', 'perdu'].includes(type.value) ? 0 : previewCount(quantities[type.value])), 0,
   );
@@ -328,8 +330,10 @@ function ProductionForm({
           {loadingDaily && <Typography sx={{ mb: 2 }}>Chargement de la saisie...</Typography>}
           {contextLoading && <Typography sx={{ mb: 2 }}>Chargement du cycle...</Typography>}
           {contextError && <Alert severity="error" sx={{ mb: 2 }}>{contextError}</Alert>}
-          {missingCycle && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" href="/production/lots">Gestion des lots</Button>}>
-            Aucun lot ne couvre cette date pour ce bâtiment. Vérifiez la date ou démarrez un lot pour saisir la production.
+          {(missingCycle || closedToday) && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" href="/production/lots">Gestion des lots</Button>}>
+            {closedToday
+              ? 'Le lot de ce bâtiment est terminé. Démarrez un nouveau lot pour saisir la production d’aujourd’hui.'
+              : 'Aucun lot ne couvre cette date pour ce bâtiment. Vérifiez la date ou démarrez un lot pour saisir la production.'}
           </Alert>}
           {cycleContext?.cycle && <Box sx={{ mb: 2 }}>
             <Typography variant="body2" color="text.secondary">

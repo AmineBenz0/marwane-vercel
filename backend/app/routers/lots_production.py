@@ -12,6 +12,7 @@ from app.models.production import Production
 from app.models.user import Utilisateur
 from app.schemas.lot_production import LotProductionCreate
 from app.schemas.cycle_production import CycleProductionTerminate
+from app.utils.business_date import business_date
 from app.utils.dependencies import get_current_active_user
 from app.utils.lot_egg_evolution import lot_egg_evolution
 from app.utils.production_cycles import (
@@ -71,7 +72,7 @@ def _lock_lot(db, id_lot):
 
 
 def _validate_start(db, payload, excluded=()):
-    if payload.date_debut > date.today():
+    if payload.date_debut > business_date():
         raise HTTPException(status_code=400, detail="Le lot ne peut pas commencer dans le futur.")
     ids = [row.id_batiment for row in payload.repartitions]
     conflicts = db.query(CycleProduction).filter(CycleProduction.id_batiment.in_(ids))
@@ -193,8 +194,9 @@ def terminate_lot(id_lot: int, payload: CycleProductionTerminate, db: Session = 
     lot = _lock_lot(db, id_lot)
     if lot.statut == "termine":
         return lot_to_dict(db, lot)
-    end = payload.date_fin_reelle or date.today()
-    if end < lot.date_debut or end > date.today():
+    today = business_date()
+    end = payload.date_fin_reelle or today
+    if end < lot.date_debut or end > today:
         raise HTTPException(status_code=400, detail="La date de fin doit être entre l'arrivée et aujourd'hui.")
     if db.query(Production).filter(
         Production.id_cycle.in_([row.id_cycle for row in lot.allocations]),

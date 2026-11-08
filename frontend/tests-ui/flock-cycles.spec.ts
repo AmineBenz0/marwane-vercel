@@ -151,6 +151,13 @@ for (const width of [390, 1200]) {
     await expect(page.getByLabel('Filtrer par bâtiment')).toHaveValue('7');
     await page.getByRole('link', { name: 'Retour au bâtiment' }).click();
     await expect(page.getByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
+    await page.getByRole('button', { name: 'Vue globale' }).click();
+    const buildingRole = width < 900 ? 'article' : 'row';
+    const finished = page.getByRole(buildingRole, { name: /Bâtiment A/ });
+    const active = page.getByRole(buildingRole, { name: /Bâtiment B/ });
+    await expect(finished.getByText('Lot terminé')).toBeVisible();
+    await expect(finished.getByRole('button', { name: 'Saisir', exact: true })).toHaveCount(0);
+    await expect(active.getByRole('button', { name: 'Saisir', exact: true })).toBeEnabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(state.errors).toEqual([]);
   });
