@@ -85,6 +85,28 @@ describe('Building production views', () => {
     expect(await screen.findByRole('button', { name: 'Démarrer un nouveau lot' })).toBeEnabled();
   });
 
+  it.each([false, true])('shows the finished state on the closing day with a saved entry: %s', async (hasEntry) => {
+    const today = localToday();
+    const closed = { id_cycle: 4, statut: 'termine', nom_cycle: 'Lot terminé', date_fin_reelle: today };
+    const row = { id_production: 1, id_batiment: 7, id_cycle: 4, date_production: today, type_oeuf: 'normal', nombre_oeufs: 840, grammage: 62 };
+    mockData({ cycles: [closed], rows: hasEntry ? [row] : [], dayData: {
+      ...daily, batiments: [{ ...daily.batiments[0], cycle: closed, produced_eggs: hasEntry ? 840 : 0 }],
+    } });
+    renderPage('/production/batiment/7');
+    expect(await screen.findByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Démarrer un nouveau lot' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Saisir la journée' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Journée sélectionnée' })).not.toBeInTheDocument();
+    if (!hasEntry) return;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voir l’historique' }));
+    const history = screen.getByRole('dialog', { name: 'Historique des saisies' });
+    fireEvent.click(within(history).getByRole('button', { name: /Voir la journée du/ }));
+    expect(await screen.findByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retour à aujourd’hui' }));
+    expect(await screen.findByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
+  });
+
   it('offers the start date when a lot exists but the selected day is too early', async () => {
     const start = '2026-10-06';
     mockData({ cycles: [{ id_cycle: 4, statut: 'actif', date_debut: start }], dayData: (date) => date < start ? withoutLot : daily });
