@@ -1,9 +1,9 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Collapse, Grid, IconButton, Paper, Stack, Typography } from '@mui/material';
-import { FileDownload as DownloadIcon, InfoOutlined, PictureAsPdf as PdfIcon } from '@mui/icons-material';
+import { FileDownload as DownloadIcon, InfoOutlined, PictureAsPdf as PdfIcon, CalendarTodayOutlined, LayersOutlined } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
-import { exportToPDF } from '../../utils/exportToPDF';
+import { exportMonthlyReportPDF } from '../../utils/exportMonthlyReportPDF';
 import { getBusinessMonthInput } from '../../utils/businessDate';
 import { formatMonthYear, formatShortDate } from '../../utils/dateFormatting';
 import ExpandableDetails from '../../components/ExpandableDetails';
@@ -13,8 +13,8 @@ const money = value => value == null ? '—' : new Intl.NumberFormat('fr-FR', { 
 const displayReportValue = row => row.type === 'text' ? row.valeur : row.type === 'money' ? money(row.valeur) : number(row.valeur, 3);
 
 function ReportRows({ rows }) {
-  return <Stack spacing={1.5}>{rows.map(row => <Stack direction="row" justifyContent="space-between" spacing={2} key={row.indicateur}>
-    <Typography>{row.indicateur}</Typography><Typography fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{displayReportValue(row)}</Typography>
+  return <Stack spacing={1.5}>{rows.map(row => <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="baseline" key={row.indicateur}>
+    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{row.indicateur}</Typography><Typography variant="body2" fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{displayReportValue(row)}</Typography>
   </Stack>)}</Stack>;
 }
 
@@ -51,6 +51,8 @@ function MonthlyReportPage() {
     historical: [
       { indicateur: 'À encaisser', valeur: report.creances, type: 'money' },
       { indicateur: 'À payer aux fournisseurs', valeur: report.dettes, type: 'money' },
+      { indicateur: 'Solde caisse', valeur: report.solde_caisse_historique, type: 'money' },
+      ...(report.soldes_bancaires_historiques || []).map(account => ({ indicateur: `Solde ${account.nom_banque}`, valeur: account.solde, type: 'money' })),
     ],
     current: [
       { indicateur: 'À encaisser', valeur: report.creances_actuelles, type: 'money' },
@@ -63,19 +65,26 @@ function MonthlyReportPage() {
       { indicateur: 'Variation nette stock', valeur: report.inventory_quantity_delta, type: 'quantity' },
     ],
   } : null, [report]);
-  const historicalDate = formatShortDate(report?.date_fin);
+  const historicalDate = formatShortDate(report?.date_soldes_historiques || report?.date_fin);
   const currentDate = formatShortDate(report?.date_soldes_actuels);
+  const futurePeriod = Boolean(report && report.date_debut > report.date_soldes_actuels);
+  const projectedPeriod = Boolean(report && report.date_fin > report.date_soldes_actuels);
+  const periodLabel = report
+    ? `${formatShortDate(report.date_debut)} – ${formatShortDate(report.date_fin)}`
+    : '';
   const exportRows = useMemo(() => groups ? [
-    { indicateur: 'Période', valeur: `${formatShortDate(report.date_debut)} – ${formatShortDate(report.date_fin)}` },
+    { indicateur: 'Période', valeur: periodLabel },
     ...[...groups.activity, ...groups.cash, ...groups.bank, ...groups.stock].map(row => ({ indicateur: row.indicateur, valeur: displayReportValue(row) })),
-    ...groups.historical.map(row => ({ indicateur: `${row.indicateur} au ${historicalDate}`, valeur: displayReportValue(row) })),
+    ...groups.historical.map(row => ({ indicateur: projectedPeriod
+      ? `${row.indicateur} (projection au ${historicalDate})`
+      : `${row.indicateur} au ${historicalDate}`, valeur: displayReportValue(row) })),
     ...groups.current.map(row => ({ indicateur: `${row.indicateur} actuel au ${currentDate}`, valeur: displayReportValue(row) })),
-  ] : [], [groups, report, historicalDate, currentDate]);
+  ] : [], [groups, historicalDate, currentDate, periodLabel, projectedPeriod]);
   const displayMonth = report ? formatMonthYear(report.month, report.month) : '';
   const exportReport = async outputFormat => {
     if (!report || loading) return;
-    const columns = [{ id: 'indicateur', label: 'Indicateur' }, { id: 'valeur', label: 'Valeur' }];
-    if (outputFormat === 'pdf') exportToPDF(exportRows, columns, `Rapport mensuel ${displayMonth}`, `rapport_mensuel_${report.month}`);
+    const columns = [{ id: 'indicateur', label: 'Indicateur', excelWidth: 66 }, { id: 'valeur', label: 'Valeur', excelWidth: 24 }];
+    if (outputFormat === 'pdf') exportMonthlyReportPDF(report, `rapport_mensuel_${report.month}`);
     else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse');
   };
   const hasBankActivity = !!report && ((report.soldes_bancaires || []).length > 0 || Number(report.banques_entrees) !== 0 || Number(report.banques_sorties) !== 0);
@@ -91,7 +100,7 @@ function MonthlyReportPage() {
     </Stack>
     {error && <Alert severity="error">{error}</Alert>}
     {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress aria-label="Chargement du rapport" /></Box> : report && <>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>{displayMonth} · Du {formatShortDate(report.date_debut)} au {historicalDate}</Typography>
+      <Typography color="text.secondary" sx={{ mb: 2 }}>{displayMonth} · Du {formatShortDate(report.date_debut)} au {formatShortDate(report.date_fin)}{projectedPeriod ? (futurePeriod ? ' · Période à venir' : ' · Période en cours') : ''}</Typography>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography component="h2" variant="h6" fontWeight={700}>Activité du mois</Typography>
         <IconButton aria-label="Calcul des livraisons différées" aria-expanded={showInfo} aria-controls={infoId} onClick={() => setShowInfo(value => !value)}><InfoOutlined /></IconButton>
@@ -105,8 +114,8 @@ function MonthlyReportPage() {
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements de caisse du mois</Typography><ReportRows rows={groups.cash} /></Paper>
       {hasBankActivity && <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements bancaires du mois</Typography><ReportRows rows={groups.bank} /></Paper>}
       <Paper component="section" aria-label="Situation actuelle" variant="outlined" sx={{ p: 2, mb: 2 }}><Stack direction="row" justifyContent="space-between" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700}>Situation actuelle</Typography><Typography variant="body2" color="text.secondary">Au {currentDate}</Typography></Stack><ReportRows rows={groups.current} /></Paper>
-      <ExpandableDetails label={`Situation à la fin du mois · Au ${historicalDate}`}><ReportRows rows={groups.historical} /></ExpandableDetails>
-      <ExpandableDetails label="Stock du mois"><ReportRows rows={groups.stock} /></ExpandableDetails>
+      <ExpandableDetails label={projectedPeriod ? 'Projection à la fin du mois' : 'Situation à la fin du mois'} description={projectedPeriod ? `Au ${historicalDate}, selon les opérations enregistrées` : `Au ${historicalDate}`} icon={<CalendarTodayOutlined />} ><ReportRows rows={groups.historical} /></ExpandableDetails>
+      <ExpandableDetails label="Stock du mois" description={periodLabel} icon={<LayersOutlined />} ><ReportRows rows={groups.stock} /></ExpandableDetails>
     </>}
   </Box>;
 }
