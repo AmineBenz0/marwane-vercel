@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from inspect import signature
 
@@ -753,6 +753,71 @@ def test_search_and_monthly_report_are_available(client, db_session, auth_header
     assert report.json()["soldes_bancaires"][0]["solde"] == "80.00"
     assert isinstance(report.json()["inventory_movements"], int)
     assert "inventory_quantity_delta" in report.json()
+
+
+def test_monthly_report_distinguishes_ledger_cutoffs_and_cheque_settlement(client, db_session, auth_headers, monkeypatch):
+    monkeypatch.setattr("app.routers.reports.business_date", lambda: date(2026, 11, 8))
+    customer = client.post("/api/v1/clients", json={"nom_client": "Client clôture"}, headers=auth_headers).json()
+    product = create_product(client, "Service clôture", "service", True, False)
+    transaction = Transaction(
+        id_client=customer["id_client"], id_produit=product["id_produit"],
+        date_transaction=date(2026, 10, 10), quantite=1, prix_unitaire=250, montant_total=250, est_actif=True,
+    )
+    account = CompteBancaire(nom_banque="Banque clôture", numero_compte="CUT-OFF")
+    db_session.add_all([transaction, account])
+    db_session.flush()
+
+    def timestamp(day):
+        return datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
+
+    for posted, amount, kind, cheque_fields in (
+        ("2026-10-10", 100, "cash", {}),
+        ("2026-10-28", 75, "cheque", {
+            "numero_cheque": "CUT-001", "statut_cheque": "encaisse", "date_encaissement_effective": date(2026, 11, 2),
+        }),
+        ("2026-11-15", 20, "cash", {}),
+    ):
+        payment = Paiement(
+            id_transaction=transaction.id_transaction, date_paiement=date.fromisoformat(posted),
+            montant=amount, type_paiement=kind, statut="valide", **cheque_fields,
+        )
+        db_session.add(payment)
+        db_session.flush()
+        db_session.add(Caisse(
+            id_transaction=transaction.id_transaction, id_paiement=payment.id_paiement,
+            date_mouvement=timestamp(posted), montant=amount, type_mouvement="ENTREE", statut="active",
+        ))
+    for posted, amount, direction, source, state in (
+        ("2026-10-01", 500, "ENTREE", "initial", "active"),
+        ("2026-11-04", 40, "SORTIE", "frais", "active"),
+        ("2026-11-07", 99, "SORTIE", "frais", "annule"),
+        ("2026-11-20", 50, "ENTREE", "virement", "active"),
+    ):
+        db_session.add(MouvementBancaire(
+            id_compte=account.id_compte, date_mouvement=timestamp(posted), montant=amount,
+            type_mouvement=direction, source=source, statut=state,
+        ))
+    db_session.commit()
+
+    october = client.get("/api/v1/reports/monthly", params={"month": "2026-10"}, headers=auth_headers)
+    november = client.get("/api/v1/reports/monthly", params={"month": "2026-11"}, headers=auth_headers)
+    assert october.status_code == 200, october.text
+    assert november.status_code == 200, november.text
+    oct_report, nov_report = october.json(), november.json()
+    assert oct_report["date_soldes_historiques"] == "2026-10-31"
+    assert nov_report["date_soldes_historiques"] == "2026-11-30"
+    assert nov_report["date_soldes_actuels"] == "2026-11-08"
+    assert Decimal(oct_report["creances"]) == 150
+    assert Decimal(nov_report["creances_actuelles"]) == 75
+    assert Decimal(nov_report["creances"]) == 55
+    assert Decimal(oct_report["solde_caisse_historique"]) == 100
+    assert Decimal(nov_report["solde_caisse"]) == 175
+    assert Decimal(nov_report["solde_caisse_historique"]) == 195
+    assert Decimal(nov_report["caisse_entrees"]) == 95
+    assert Decimal(oct_report["soldes_bancaires_historiques"][0]["solde"]) == 500
+    assert Decimal(nov_report["soldes_bancaires"][0]["solde"]) == 460
+    assert Decimal(nov_report["soldes_bancaires_historiques"][0]["solde"]) == 510
+    assert Decimal(nov_report["banques_sorties"]) == 40
 
 
 def test_inactive_transactions_do_not_create_inventory_movements(client, db_session, auth_headers):

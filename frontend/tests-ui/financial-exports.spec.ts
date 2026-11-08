@@ -22,6 +22,18 @@ const txData = [
     est_actif: true, est_promesse: false, montant_paye: '0', montant_restant: '25.50', paiements: [] },
 ];
 
+const monthlyReport = {
+  month: '2026-11', date_debut: '2026-11-01', date_fin: '2026-11-30',
+  date_soldes_historiques: '2026-11-30', date_soldes_actuels: '2026-11-08',
+  ventes: '100.00', achats: '25.50', charges: '35.00',
+  caisse_entrees: '95.00', caisse_sorties: '0.00', banques_entrees: '50.00', banques_sorties: '40.00',
+  creances: '55.00', dettes: '25.50', solde_caisse_historique: '195.00',
+  creances_actuelles: '75.00', dettes_actuelles: '25.50', solde_caisse: '175.00',
+  soldes_bancaires_historiques: [{ id_compte: 1, nom_banque: 'Banque Test', solde: '510.00' }],
+  soldes_bancaires: [{ id_compte: 1, nom_banque: 'Banque Test', solde: '460.00' }],
+  inventory_movements: 3, inventory_quantity_delta: '7.125',
+};
+
 async function mockFinancialApi(page: Page, transactions = txData, partnerName = 'Client Test') {
   await mockAuthenticatedSession(page);
   const attemptedWrites: string[] = [];
@@ -45,6 +57,7 @@ async function mockFinancialApi(page: Page, transactions = txData, partnerName =
     else if (p === '/fournisseurs') result = [{ id_fournisseur: 2, nom_fournisseur: 'Fournisseur Test', est_actif: true }];
     else if (p === '/produits') result = [{ id_produit: 1, nom_produit: 'Service Test', est_actif: true }];
     else if (p === '/batiments') result = [];
+    else if (p === '/reports/monthly') result = monthlyReport;
     else if (p === '/alerts/summary') result = { unread_count: 0 };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(result) });
   });
@@ -62,10 +75,10 @@ async function exportSheet(page: Page, click: () => Promise<void>) {
   return workbook.worksheets[0];
 }
 
-async function readPdf(page: Page) {
+async function readPdf(page: Page, buttonName = 'Export PDF') {
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export PDF', exact: true }).click(),
+    page.getByRole('button', { name: buttonName, exact: true }).click(),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.pdf$/);
   const file = await download.path();
@@ -77,6 +90,28 @@ async function readPdf(page: Page) {
 
 const amount = (value: unknown) =>
   Number(String(value ?? '0').replace(/[^\d,.-]/g, '').replace(',', '.'));
+
+test('monthly downloads agree on dated balances, projection labels and fractional stock', async ({ page }) => {
+  const writes = await mockFinancialApi(page);
+  await page.goto('/rapports/mensuel');
+  await page.getByLabel('Mois du rapport').fill('2026-11');
+  const excel = page.getByRole('button', { name: 'Excel', exact: true });
+  await expect(excel).toBeEnabled();
+  const sheet = await exportSheet(page, () => excel.click());
+  const items = new Map<string, unknown>();
+  sheet.eachRow(row => items.set(String(row.getCell(1).value), row.getCell(2).value));
+  expect(sheet.getColumn(1).width).toBe(66);
+  expect(sheet.getColumn(2).width).toBe(24);
+  expect(amount(items.get('Solde caisse (projection au 30/11/26)'))).toBe(195);
+  expect(amount(items.get('Solde caisse actuel au 08/11/26'))).toBe(175);
+  expect(amount(items.get('Solde Banque Test (projection au 30/11/26)'))).toBe(510);
+  expect(amount(items.get('Solde Banque Test actuel au 08/11/26'))).toBe(460);
+  expect(amount(items.get('Variation nette stock'))).toBe(7.125);
+  const source = await readPdf(page, 'PDF');
+  for (const label of ['Rapport mensuel', 'PROJECTION AU 30/11/26', 'ACTUEL AU 08/11/26', '195,00 MAD',
+    '175,00 MAD', '510,00 MAD', '460,00 MAD', '7,125']) expect(source).toContain(label);
+  expect(writes).toEqual([]);
+});
 
 test('transaction register preserves exact settlements, legacy deferred quantities and active-only totals', async ({ page }) => {
   const writes = await mockFinancialApi(page);

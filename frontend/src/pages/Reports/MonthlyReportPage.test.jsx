@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MonthlyReportPage from './MonthlyReportPage';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
+import { exportMonthlyReportPDF } from '../../utils/exportMonthlyReportPDF';
 
 vi.mock('../../services/api', () => ({ get: vi.fn() }));
 vi.mock('../../utils/exportToExcel', () => ({ exportToExcelAdvanced: vi.fn() }));
-vi.mock('../../utils/exportToPDF', () => ({ exportToPDF: vi.fn() }));
+vi.mock('../../utils/exportMonthlyReportPDF', () => ({ exportMonthlyReportPDF: vi.fn() }));
 
 describe('MonthlyReportPage', () => {
   beforeEach(() => {
@@ -23,9 +24,12 @@ describe('MonthlyReportPage', () => {
       caisse_entrees: '80.00',
       caisse_sorties: '30.00',
       solde_caisse: '250.00',
+      solde_caisse_historique: '100.00',
+      date_soldes_historiques: '2026-09-30',
       banques_entrees: '20.00',
       banques_sorties: '5.00',
       soldes_bancaires: [{ id_compte: 1, nom_banque: 'Banque Test', numero_compte: '123', solde: '500.00' }],
+      soldes_bancaires_historiques: [{ id_compte: 1, nom_banque: 'Banque Test', numero_compte: '123', solde: '300.00' }],
       inventory_movements: 3,
       inventory_quantity_delta: '7.500',
       top_clients: [],
@@ -52,10 +56,34 @@ describe('MonthlyReportPage', () => {
         expect.objectContaining({ indicateur: 'Mouvements stock', valeur: '3' }),
         expect.objectContaining({ indicateur: 'Variation nette stock' }),
       ]),
-      expect.any(Array),
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'indicateur', excelWidth: 66 }),
+        expect.objectContaining({ id: 'valeur', excelWidth: 24 }),
+      ]),
       'rapport_mensuel_2026-09',
       'Synthèse',
     ));
+  });
+
+  it('exports the displayed historical and current balances with dates in Excel and PDF', async () => {
+    render(<MonthlyReportPage />);
+    await screen.findByRole('region', { name: 'Situation actuelle' });
+    fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois' }));
+    expect(await screen.findByText(/300,00/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(value);
+    const expected = [
+      { indicateur: 'Solde caisse au 30/09/26', valeur: money(100) },
+      { indicateur: 'Solde Banque Test au 30/09/26', valeur: money(300) },
+      { indicateur: 'Solde caisse actuel au 25/10/26', valeur: money(250) },
+      { indicateur: 'Solde Banque Test actuel au 25/10/26', valeur: money(500) },
+    ];
+    expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining(expected));
+    expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
+      expect.objectContaining({ month: '2026-09', ventes: '100.00', achats: '40.00' }),
+      'rapport_mensuel_2026-09',
+    );
   });
 });
 
@@ -68,7 +96,31 @@ it('keeps current balances separate from month-end amounts and explains accounti
   expect(screen.getByText(deferredSaleExplanation)).not.toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Calcul des livraisons différées' }));
   expect(await screen.findByText(deferredSaleExplanation)).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois · Au 30/09/26' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois' }));
   expect(await screen.findByText(/25,00/)).toBeVisible();
   expect(screen.getAllByText('Ventes', { exact: true })).toHaveLength(1);
+});
+
+
+it('identifies future month-end balances as projections without changing the recorded month', async () => {
+  get.mockResolvedValue({
+    month: '2026-11', date_debut: '2026-11-01', date_fin: '2026-11-30',
+    date_soldes_historiques: '2026-11-30', date_soldes_actuels: '2026-11-06',
+    ventes: '0', achats: '0', charges: '0', caisse_entrees: '0', caisse_sorties: '0',
+    banques_entrees: '0', banques_sorties: '0', creances: '10', dettes: '20',
+    creances_actuelles: '10', dettes_actuelles: '20',
+    solde_caisse_historique: '5', solde_caisse: '5',
+    soldes_bancaires: [], soldes_bancaires_historiques: [],
+    inventory_movements: 0, inventory_quantity_delta: '0',
+  });
+  render(<MonthlyReportPage />);
+  const snapshot = await screen.findByRole('button', { name: 'Projection à la fin du mois' });
+  expect(snapshot).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+  await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalled());
+  const firstRow = exportToExcelAdvanced.mock.calls[0][0][0];
+  expect(firstRow).toEqual({ indicateur: 'Période', valeur: '01/11/26 – 30/11/26' });
+  expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining([
+    expect.objectContaining({ indicateur: 'À encaisser (projection au 30/11/26)' }),
+  ]));
 });

@@ -63,6 +63,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportTransactionsReportPDF } from '../../utils/exportTransactionsReportPDF';
 import { resolveTransactionExportRows } from './resolveTransactionExportReferences';
+import { loadTransactionPages } from './transactionPages';
 import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
@@ -337,17 +338,12 @@ function TransactionsList() {
       if (deferredOnly) params.est_promesse = true;
       if (sourceBuilding) params.id_batiment = Number(sourceBuilding);
 
-      // Récupérer les transactions
-      const data = await get('/transactions', {
-        params: {
-          ...params,
-          limit: 1000, // Limite élevée pour récupérer toutes les transactions
-        },
-      });
+      const data = await loadTransactionPages(get, params);
 
       if (request === loadRequest.current) setTransactions(data || []);
     } catch (err) {
       if (request !== loadRequest.current) return;
+      setTransactions([]);
       console.error('Erreur lors du chargement des transactions:', err);
       setError(
         err?.message || 'Une erreur est survenue lors du chargement des transactions'
