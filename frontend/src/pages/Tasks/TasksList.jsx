@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { format, isToday, isTomorrow, startOfToday } from 'date-fns';
 import {
   Alert,
   Box,
   Button,
+  ButtonBase,
   Card,
   CardContent,
   Chip,
@@ -23,11 +25,9 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Block as BlockIcon,
-  CheckCircle as CheckCircleIcon,
-  CheckCircleOutline as CheckCircleOutlineIcon,
   MoreHoriz as MoreHorizIcon,
 } from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 import { getTaskDate, groupTasks, isTaskDone } from './taskListModel';
 import { formatShortDate, formatShortDateTime } from '../../utils/dateFormatting';
 import TaskModal from '../../components/Tasks/TaskModal';
@@ -55,9 +55,11 @@ const FILTERS = [
   { key: 'terminees', label: 'Clôturées' },
 ];
 
-const formatTaskDate = (task) => {
+const formatTaskDate = (task, relative = false) => {
   const date = getTaskDate(task);
-  if (!date) return 'Date non définie';
+  if (!date) return 'Sans date prévue';
+  const day = relative && (isToday(date) ? 'Aujourd’hui' : isTomorrow(date) ? 'Demain' : null);
+  if (day) return task.est_toute_la_journee ? day : `${day} à ${format(date, 'HH:mm')}`;
   if (task.est_toute_la_journee) return formatShortDate(date);
   return formatShortDateTime(date);
 };
@@ -70,10 +72,12 @@ function TasksList() {
   const [activeFilter, setActiveFilter] = useState('toutes');
   const [pendingStatusIds, setPendingStatusIds] = useState(() => new Set());
   const [completionToUndo, setCompletionToUndo] = useState(null);
+  const [taskToViewId, setTaskToViewId] = useState(null);
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const notifyError = useNotificationStore(state => state.error);
   const notifySuccess = useNotificationStore(state => state.success);
+  const taskToView = tasks.find(task => task.id_tache === taskToViewId);
 
   useEffect(() => {
     let active = true;
@@ -353,6 +357,7 @@ function TasksList() {
               {...panel}
               pendingStatusIds={pendingStatusIds}
               onComplete={handleComplete}
+              onView={setTaskToViewId}
               onEdit={handleEdit}
               onDelete={setTaskToDelete}
             />
@@ -367,6 +372,43 @@ function TasksList() {
         task={selectedTask}
         onSave={handleSave}
       />
+
+      <Dialog
+        open={Boolean(taskToView)}
+        onClose={() => setTaskToViewId(null)}
+        aria-labelledby="task-details-title"
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle id="task-details-title" sx={{ overflowWrap: 'anywhere' }}>
+          {taskToView?.titre}
+        </DialogTitle>
+        {taskToView && (
+          <DialogContent sx={{ overflowWrap: 'anywhere' }}>
+            {taskToView.description && (
+              <Typography variant="body2" sx={{ mb: 1.5, whiteSpace: 'pre-wrap' }}>
+                {taskToView.description}
+              </Typography>
+            )}
+            <Stack component="dl" spacing={0.5} sx={{ m: 0 }}>
+              {[
+                ['Date prévue', formatTaskDate(taskToView)],
+                ['Statut', STATUS_LABELS[taskToView.statut] || taskToView.statut],
+                ['Priorité', PRIORITY_LABELS[taskToView.priorite] || taskToView.priorite],
+                ['Catégorie', taskToView.categorie],
+              ].filter(([, value]) => value).map(([label, value]) => (
+                <Box key={label} sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 1 }}>
+                  <Typography component="dt" variant="body2" color="text.secondary">{label}</Typography>
+                  <Typography component="dd" variant="body2" sx={{ m: 0 }}>{value}</Typography>
+                </Box>
+              ))}
+            </Stack>
+          </DialogContent>
+        )}
+        <DialogActions>
+          <Button onClick={() => setTaskToViewId(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={Boolean(taskToDelete)}
@@ -398,7 +440,7 @@ function TasksList() {
   );
 }
 
-function TaskPanel({ title, tasks, emptyText, pendingStatusIds, onComplete, onEdit, onDelete }) {
+function TaskPanel({ title, tasks, emptyText, pendingStatusIds, onComplete, onView, onEdit, onDelete }) {
   return (
     <Card component="section" sx={{ borderRadius: 3 }}>
       <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
@@ -427,6 +469,7 @@ function TaskPanel({ title, tasks, emptyText, pendingStatusIds, onComplete, onEd
                 task={task}
                 busy={pendingStatusIds.has(task.id_tache)}
                 onComplete={onComplete}
+                onView={onView}
                 onEdit={onEdit}
                 onDelete={onDelete}
               />
@@ -440,9 +483,11 @@ function TaskPanel({ title, tasks, emptyText, pendingStatusIds, onComplete, onEd
 
 const taskActionSize = { width: { xs: 44, md: 36 }, height: { xs: 44, md: 36 } };
 
-function TaskCard({ task, busy, onComplete, onEdit, onDelete }) {
+function TaskCard({ task, busy, onComplete, onView, onEdit, onDelete }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const done = isTaskDone(task);
+  const date = getTaskDate(task);
+  const overdue = !done && date && date < startOfToday();
   const closeMenu = () => setMenuAnchor(null);
 
   return (
@@ -450,77 +495,94 @@ function TaskCard({ task, busy, onComplete, onEdit, onDelete }) {
       component="article"
       aria-label={task.titre}
       sx={{
-        display: 'grid',
-        gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-        alignItems: 'start',
-        gap: { xs: 0.25, md: 0.5 },
-        p: { xs: 0.5, md: 1 },
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        p: 1,
         borderRadius: 2,
         border: '1px solid',
         borderColor: 'divider',
         bgcolor: 'background.default',
       }}
     >
-      {done ? (
-        <Box aria-hidden="true" sx={{ ...taskActionSize, display: 'grid', placeItems: 'center' }}>
-          {task.statut === 'complete'
-            ? <CheckCircleIcon color="success" />
-            : <BlockIcon color="disabled" />}
-        </Box>
-      ) : (
-        <Tooltip title="Marquer comme terminée">
+      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={0.5}>
+        <Typography component="h3" variant="body2" sx={{ minWidth: 0 }}>
+          <ButtonBase
+            onClick={() => onView(task.id_tache)}
+            sx={{
+              display: 'block',
+              minHeight: taskActionSize.height,
+              maxWidth: '100%',
+              py: 0.5,
+              textAlign: 'left',
+              font: 'inherit',
+              fontWeight: 800,
+              lineHeight: 1.35,
+              overflowWrap: 'anywhere',
+              '&:hover, &.Mui-focusVisible': { textDecoration: 'underline' },
+            }}
+          >
+            {task.titre}
+          </ButtonBase>
+        </Typography>
+        <Tooltip title="Actions">
           <span>
             <IconButton
-              aria-label={`Marquer comme terminée — ${task.titre}`}
-              color="primary"
+              id={`task-actions-${task.id_tache}`}
+              aria-label={`Actions — ${task.titre}`}
+              aria-haspopup="menu"
+              aria-expanded={Boolean(menuAnchor)}
+              aria-controls={menuAnchor ? `task-menu-${task.id_tache}` : undefined}
               disabled={busy}
-              onClick={() => onComplete(task)}
+              onClick={event => setMenuAnchor(event.currentTarget)}
               sx={taskActionSize}
             >
-              {busy ? <CircularProgress size={18} /> : <CheckCircleOutlineIcon />}
+              <MoreHorizIcon />
             </IconButton>
           </span>
         </Tooltip>
-      )}
-
-      <Stack spacing={0.5} sx={{ py: 0.75, minWidth: 0, overflowWrap: 'anywhere' }}>
-        <Typography component="h3" variant="body2" sx={{ fontWeight: 800, lineHeight: 1.35 }}>
-          {task.titre}
-        </Typography>
-        {task.description && (
-          <Typography variant="caption" color="text.secondary" sx={{
-            display: '-webkit-box',
-            WebkitBoxOrient: 'vertical',
-            WebkitLineClamp: 2,
-            overflow: 'hidden',
-          }}>
-            {task.description}
-          </Typography>
-        )}
-        <Stack direction="row" alignItems="center" flexWrap="wrap" spacing={0.5} useFlexGap>
-          <Typography variant="caption" color="text.secondary">{formatTaskDate(task)}</Typography>
-          <PriorityChip value={task.priorite} />
-          <StatusChip value={task.statut} />
-          {task.categorie && <Chip label={task.categorie} size="small" variant="outlined" />}
-        </Stack>
       </Stack>
 
-      <Tooltip title="Actions">
-        <span>
-          <IconButton
-            id={`task-actions-${task.id_tache}`}
-            aria-label={`Actions — ${task.titre}`}
-            aria-haspopup="menu"
-            aria-expanded={Boolean(menuAnchor)}
-            aria-controls={menuAnchor ? `task-menu-${task.id_tache}` : undefined}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        gap={0.75}
+        sx={{ mt: 'auto', pt: 0.5, borderTop: '1px solid', borderColor: 'divider' }}
+      >
+        <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.5} sx={{ minWidth: 0 }}>
+          <Typography variant="caption" color={overdue ? 'error.dark' : 'text.secondary'}>
+            {overdue && 'En retard · '}{formatTaskDate(task, !done)}
+          </Typography>
+          {!done && task.priorite === 'haute' && (
+            <Chip label="Prioritaire" color="warning" size="small" variant="outlined" />
+          )}
+          {done && <StatusChip value={task.statut} />}
+        </Stack>
+        {!done && (
+          <Button
+            aria-label={`Terminer — ${task.titre}`}
+            aria-busy={busy}
             disabled={busy}
-            onClick={event => setMenuAnchor(event.currentTarget)}
-            sx={taskActionSize}
+            onClick={() => onComplete(task)}
+            startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
+            size="small"
+            sx={theme => ({
+              flexShrink: 0,
+              minHeight: taskActionSize.height,
+              px: 1.25,
+              borderRadius: 1.5,
+              textTransform: 'none',
+              fontWeight: 800,
+              color: 'primary.dark',
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.18) },
+            })}
           >
-            <MoreHorizIcon />
-          </IconButton>
-        </span>
-      </Tooltip>
+            Terminer
+          </Button>
+        )}
+      </Stack>
       <Menu
         anchorEl={menuAnchor}
         open={Boolean(menuAnchor)}
@@ -548,24 +610,6 @@ function StatusChip({ value }) {
       color={colors[value] || 'default'}
       size="small"
       sx={{ fontWeight: 800 }}
-    />
-  );
-}
-
-function PriorityChip({ value }) {
-  const colors = {
-    basse: 'info',
-    moyenne: 'warning',
-    haute: 'error',
-  };
-
-  return (
-    <Chip
-      label={PRIORITY_LABELS[value] || value || 'Priorite'}
-      color={colors[value] || 'default'}
-      variant="outlined"
-      size="small"
-      sx={{ width: 'fit-content', fontWeight: 800 }}
     />
   );
 }
