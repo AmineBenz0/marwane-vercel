@@ -14,24 +14,10 @@ const errorMessage = (error) => {
   return typeof detail === 'string' ? detail : error.message || 'Impossible de charger le lot.';
 };
 
-export default function CyclePanel({ buildingId, refreshKey, onSelectCycle, stockContent, actions }) {
+export default function CyclePanel({ cycleState, active, onSelectCycle, stockContent, actions }) {
   const navigate = useNavigate();
-  const [cycles, setCycles] = useState([]);
   const [selectedId, setSelectedId] = useState('');
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState('');
-  const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoaded(false);
-    setError('');
-    cycleProductionService.getCycles({ id_batiment: buildingId }).then((rows) => {
-      if (!cancelled) { setCycles(rows || []); setLoaded(true); }
-    }).catch((err) => { if (!cancelled) setError(errorMessage(err)); });
-    return () => { cancelled = true; };
-  }, [buildingId, refreshKey, revision]);
-  const active = cycles.find((cycle) => cycle.statut !== 'termine');
+  const { cycles, loaded, error, reload } = cycleState;
   const selected = cycles.find((cycle) => String(cycle.id_cycle) === selectedId) || active || cycles[0];
   useEffect(() => { onSelectCycle(selected?.id_cycle || null); }, [selected?.id_cycle, onSelectCycle]);
 
@@ -49,7 +35,7 @@ export default function CyclePanel({ buildingId, refreshKey, onSelectCycle, stoc
           {actions}
         </Stack>
       </Stack>
-      {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={() => setRevision((old) => old + 1)}>Réessayer</Button>}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button onClick={reload}>Réessayer</Button>}>{error}</Alert>}
       <Box sx={{ p: { xs: 2, md: 2.5 }, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
         {stockContent}
       </Box>
