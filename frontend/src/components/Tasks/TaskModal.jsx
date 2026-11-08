@@ -233,7 +233,7 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
         </DialogContent>
         <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
           <Box>
-            {isEdit && (
+            {isEdit && onDelete && (
               <Button color="error" onClick={() => onDelete(task.id_tache)}>
                 Supprimer
               </Button>
