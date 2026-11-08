@@ -76,9 +76,12 @@ describe('Building production views', () => {
       ? { ...daily, batiments: [{ ...daily.batiments[0], cycle: closed, produced_eggs: 840 }] } : withoutLot });
     renderPage('/production/batiment/7');
     expect(await screen.findByRole('button', { name: 'Démarrer un nouveau lot' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Voir l’historique' }));
+    expect(screen.getByRole('link', { name: 'Voir les lots terminés' })).toHaveAttribute(
+      'href', `/production/lots?statut=termine&id_batiment=7&date=${localToday()}`,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Historique des saisies' }));
     const history = screen.getByRole('dialog', { name: 'Historique des saisies' });
-    fireEvent.click(within(history).getByRole('button', { name: 'Voir la journée du 04/10/26' }));
+    fireEvent.click(within(history).getByRole('button', { name: 'Consulter la saisie du 04/10/26' }));
     expect(await screen.findByText('Vous consultez une journée d’un lot terminé.')).toBeVisible();
     expect(await screen.findByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Retour à aujourd’hui' }));
@@ -99,9 +102,9 @@ describe('Building production views', () => {
     expect(screen.queryByRole('region', { name: 'Journée sélectionnée' })).not.toBeInTheDocument();
     if (!hasEntry) return;
 
-    fireEvent.click(screen.getByRole('button', { name: 'Voir l’historique' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Historique des saisies' }));
     const history = screen.getByRole('dialog', { name: 'Historique des saisies' });
-    fireEvent.click(within(history).getByRole('button', { name: /Voir la journée du/ }));
+    fireEvent.click(within(history).getByRole('button', { name: /Consulter la saisie du/ }));
     expect(await screen.findByRole('button', { name: 'Modifier la saisie' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Retour à aujourd’hui' }));
     expect(await screen.findByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();

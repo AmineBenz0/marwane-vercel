@@ -141,6 +141,16 @@ for (const width of [390, 1200]) {
     await expect(page.getByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Démarrer un nouveau lot', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Saisir la journée', exact: true })).toHaveCount(0);
+    await page.getByRole('link', { name: 'Voir les lots terminés' }).click();
+    await expect(page.getByRole('tab', { name: /Terminés/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByLabel('Filtrer par bâtiment')).toHaveValue('7');
+    await page.getByRole('button', { name: 'Consulter le lot Lot A', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Lot A', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Vaccins et dépenses' })).toBeVisible();
+    await page.getByRole('button', { name: 'Retour aux lots' }).click();
+    await expect(page.getByLabel('Filtrer par bâtiment')).toHaveValue('7');
+    await page.getByRole('link', { name: 'Retour au bâtiment' }).click();
+    await expect(page.getByRole('heading', { name: 'Le dernier lot est terminé' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(state.errors).toEqual([]);
   });

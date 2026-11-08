@@ -1,6 +1,6 @@
 import ProductionDeferredNotice from './ProductionDeferredNotice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -19,6 +19,7 @@ import {
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   FactoryOutlined,
@@ -253,7 +254,10 @@ function BatimentProductionPage() {
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
               onStart={openLotDialog}
-              onHistory={hasFinishedLot || buildingHistory.length > 0 ? openHistory : undefined}
+              finishedLotsUrl={hasFinishedLot
+                ? '/production/lots?' + new URLSearchParams({ statut: 'termine', id_batiment: selectedBatimentId, date: selectedDate })
+                : undefined}
+              onDailyHistory={buildingHistory.length > 0 ? openHistory : undefined}
             />
       ) : <>
       {dailyReady && showHistoryReturn && (
@@ -327,8 +331,8 @@ function BatimentProductionPage() {
             {buildingHistory.map((day) => (
               <ListItem key={day.key} disableGutters divider sx={{ gap: 1, flexWrap: 'wrap' }}>
                 <ListItemText primary={formatShortDate(day.date)} secondary={formatNumber(day.collected) + ' œufs collectés'} />
-                <Button size="small" aria-label={'Voir la journée du ' + formatShortDate(day.date)} onClick={() => { closeHistory(); setSelectedDate(day.date, { history: true }); }}>
-                  Voir la journée
+                <Button size="small" aria-label={'Consulter la saisie du ' + formatShortDate(day.date)} onClick={() => { closeHistory(); setSelectedDate(day.date, { history: true }); }}>
+                  Consulter la saisie
                 </Button>
               </ListItem>
             ))}
@@ -359,7 +363,7 @@ function BatimentProductionPage() {
   );
 }
 
-function BuildingLotGate({ buildingName, activeCycle, hasFinishedLot, selectedDate, setSelectedDate, onStart, onHistory }) {
+function BuildingLotGate({ buildingName, activeCycle, hasFinishedLot, selectedDate, setSelectedDate, onStart, finishedLotsUrl, onDailyHistory }) {
   const start = activeCycle?.date_debut;
   const beforeStart = start && selectedDate < start;
   const title = activeCycle
@@ -385,7 +389,10 @@ function BuildingLotGate({ buildingName, activeCycle, hasFinishedLot, selectedDa
           </> : <Button variant="contained" startIcon={<AddIcon />} onClick={onStart}>
             {hasFinishedLot ? 'Démarrer un nouveau lot' : 'Démarrer un lot'}
           </Button>}
-          {onHistory && <Button size="small" onClick={onHistory}>Voir l’historique</Button>}
+          {finishedLotsUrl && (
+            <Button component={Link} to={finishedLotsUrl} size="small" endIcon={<ArrowForwardIcon />}>Voir les lots terminés</Button>
+          )}
+          {onDailyHistory && <Button size="small" color="inherit" onClick={onDailyHistory}>Historique des saisies</Button>}
         </Stack>
       </CardContent>
     </Card>

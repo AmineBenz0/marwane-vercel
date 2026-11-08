@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, ButtonBase, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
-import { EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
+import { ArrowForward, EditOutlined, History, StopCircleOutlined } from '@mui/icons-material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { cycleProductionService, lotProductionService } from '../../services/productionService';
@@ -19,7 +19,7 @@ const message = (error) => {
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
 };
 
-export default function LotPanel({ buildings, refreshKey, onChange, managementMode = false, onViewChange }) {
+export default function LotPanel({ buildings, refreshKey, onChange, managementMode = false, onViewChange, initialFinishedBuildingId }) {
   const [lots, setLots] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -31,8 +31,8 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
   const [saving, setSaving] = useState(false);
   const [historyCycle, setHistoryCycle] = useState(null);
   const [historyPeriod, setHistoryPeriod] = useState({});
-  const [buildingFilter, setBuildingFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [buildingFilter, setBuildingFilter] = useState(initialFinishedBuildingId ?? 'all');
+  const [statusFilter, setStatusFilter] = useState(initialFinishedBuildingId ? 'finished' : 'active');
   const [managementView, setManagementView] = useState('overview');
 
 
@@ -176,7 +176,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
             const cycle = lot.repartitions?.[0];
             const finished = lot.statut === 'termine';
             const lotName = displayLotName(lot);
-            return <ButtonBase component="article" key={lot.id_lot} aria-label={`Ouvrir le lot ${lotName}`}
+            return <ButtonBase component="article" key={lot.id_lot} aria-label={`${finished ? 'Consulter' : 'Ouvrir'} le lot ${lotName}`}
               onClick={() => { setSelectedId(String(lot.id_lot)); setManagementView('details'); }}
               sx={{ display: 'block', width: '100%', textAlign: 'left', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, color: 'text.primary', transition: 'border-color 120ms ease, background-color 120ms ease', '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' }, '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}>
               <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
@@ -197,6 +197,11 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                   {finished && lot.date_fin_reelle && <Typography variant="body2" color="text.secondary">Fin le {formatShortDate(lot.date_fin_reelle)}</Typography>}
                 </Box>
               </Stack>
+              {finished && <Stack direction="row" alignItems="center" justifyContent="space-between"
+                sx={{ mt: 1.5, pt: 1.25, borderTop: '1px solid', borderColor: 'divider', color: 'primary.main' }}>
+                <Typography variant="body2" fontWeight={700}>Consulter le lot</Typography>
+                <ArrowForward fontSize="small" />
+              </Stack>}
             </ButtonBase>;
           })}
         </Box> : <Box sx={{ mt: 3, p: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
