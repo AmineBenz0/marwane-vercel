@@ -61,10 +61,11 @@ import { get, post, put, patch, del } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
-import { exportToPDF } from '../../utils/exportToPDF';
+import { exportTransactionsReportPDF } from '../../utils/exportTransactionsReportPDF';
+import { resolveTransactionExportRows } from './resolveTransactionExportReferences';
 import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
-import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
+import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
 
 /**
  * Composant TransactionsList.
@@ -80,6 +81,7 @@ function TransactionsList() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   // ðtat pour les clients, fournisseurs et produits (pour les filtres et l'affichage)
   const [clients, setClients] = useState([]);
@@ -573,210 +575,28 @@ function TransactionsList() {
     return formatMontantUtil(montant, { useCompactNotation: false, ...options });
   };
 
-  /**
-   * Gère l'export Excel des transactions filtrées.
-   */
-  const handleExportExcel = async () => {
+  const handleExport = async (format) => {
+    if (exporting) return;
+    setExporting(true);
+    setError(null);
     try {
-      const columnsForExport = columns.filter((col) => col.id !== 'est_actif');
-      const totalMontant = rowsForExport.reduce(
-        (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
-        0
-      );
-
-      const createEmptyRow = () =>
-        columnsForExport.reduce((acc, col) => {
-          acc[col.id] = '';
-          return acc;
-        }, {});
-
-      const spacerRow = { ...createEmptyRow(), __summaryType: 'spacer' };
-
-      const montantColumnIndex = columnsForExport.findIndex(
-        (col) => col.id === 'montant_total'
-      );
-      const totalLabelColumnId =
-        montantColumnIndex > 0
-          ? columnsForExport[montantColumnIndex - 1]?.id
-          : null;
-
-      const totalRow = {
-        ...createEmptyRow(),
-        __summaryType: 'total',
-        montant_total: totalMontant,
-      };
-
-      if (totalLabelColumnId) {
-        totalRow[totalLabelColumnId] = 'Total :';
-      }
-
-      const dataForExcel = [...rowsForExport, spacerRow, totalRow];
-
-      // Utiliser des formatters personnalisés pour l'export
-      const customFormatters = {
-        date_transaction: (value, row) => {
-          if (row?.__summaryType) return '';
-          if (!value) return '-';
-          try {
-            return formatShortDate(value, String(value));
-          } catch {
-            return value;
-          }
-        },
-        produit: (value, row) => {
-          if (row?.__summaryType) return '';
-          return produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`;
-        },
-        batiment: (value, row) => {
-          if (row?.__summaryType) return '';
-          return row.id_batiment
-            ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
-            : '-';
-        },
-        reglement: (value, row) => {
-          if (row?.__summaryType) return '';
-          return getPaymentReglementSummary(row);
-        },
-        montant_total: (value, row) => {
-          if (row?.__summaryType === 'spacer') return '';
-          if (row?.__summaryType === 'total') {
-            return new Intl.NumberFormat('fr-FR', {
-              style: 'currency',
-              currency: 'MAD',
-            }).format(value || 0);
-          }
-          if (value === null || value === undefined) return '-';
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'MAD',
-          }).format(value);
-        },
-        montant_paye: (value, row) => {
-          if (row?.__summaryType) return '';
-          if (value === null || value === undefined) return '-';
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'MAD',
-          }).format(value);
-        },
-        montant_restant: (value, row) => {
-          if (row?.__summaryType) return '';
-          if (value === null || value === undefined) return '-';
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'MAD',
-          }).format(value);
-        },
-      };
-
-      await exportToExcelAdvanced(
-        dataForExcel,
-        columnsForExport,
-        `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
-        'Transactions',
-        customFormatters
-      );
+      const namedRows = await resolveTransactionExportRows(rowsForExport, {
+        clients: clientsMap, fournisseurs: fournisseursMap, produits: produitsMap, batiments: batimentsMap,
+      }, get);
+      const rows = namedRows.map(row => ({
+        ...row,
+        etat_transaction: row.est_actif === false ? 'Annulée' : 'Active',
+        quantite_a_produire: row.est_promesse && row.est_actif !== false
+          ? Math.max(0, Number(row.quantite_en_attente ?? 0) - Number(row.quantite_reservee ?? 0))
+          : null,
+      }));
+      if (format === 'pdf') exportTransactionsReportPDF(rows);
+      else await exportTransactionWorkbook(rows);
     } catch (error) {
-      console.error('Erreur lors de l\'export Excel:', error);
-      setError('Une erreur est survenue lors de l\'export Excel');
-    }
-  };
-
-  /**
-   * Gère l'export PDF des transactions filtrées.
-   */
-  const handleExportPDF = () => {
-    try {
-      const columnsForExport = columns.filter((col) => col.id !== 'est_actif');
-      const totalMontant = rowsForExport.reduce(
-        (acc, row) => acc + (row?.montant_total ? Number(row.montant_total) : 0),
-        0
-      );
-      const totalMontantFormatted =
-        new Intl.NumberFormat('fr-FR', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })
-          .format(totalMontant)
-          .replace(/\s/g, '\u00A0') + '\u00A0MAD';
-
-      const customFormatters = {
-        date_transaction: (value) => {
-          if (!value) return '-';
-          try {
-            return formatShortDate(value, String(value));
-          } catch {
-            return value;
-          }
-        },
-        produit: (value, row) => {
-          return produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`;
-        },
-        batiment: (value, row) => {
-          return row.id_batiment
-            ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
-            : '-';
-        },
-        reglement: (value, row) => getPaymentReglementSummary(row),
-        montant_total: (value) => {
-          if (value === null || value === undefined) return '-';
-          // Conserver les séparateurs de milliers et empêcher les retours à la ligne
-          return (
-            new Intl.NumberFormat('fr-FR', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-              .format(value)
-              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
-          );
-        },
-        montant_paye: (value) => {
-          if (value === null || value === undefined) return '-';
-          return (
-            new Intl.NumberFormat('fr-FR', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-              .format(value)
-              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
-          );
-        },
-        montant_restant: (value) => {
-          if (value === null || value === undefined) return '-';
-          return (
-            new Intl.NumberFormat('fr-FR', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-              .format(value)
-              .replace(/\s/g, '\u00A0') + '\u00A0MAD'
-          );
-        },
-      };
-
-      exportToPDF(
-        rowsForExport,
-        columnsForExport,
-        'Rapport des Transactions',
-        'rapport_transactions',
-        { 
-          customFormatters,
-          colorByType: (rowIndex) => {
-            // Retourne true si c'est une entrée (client), false si sortie (fournisseur)
-            const transaction = rowsForExport[rowIndex];
-            if (!transaction) return null;
-            return transaction.id_client !== null;
-          },
-          footerTotals: {
-            label: 'Total :',
-            value: totalMontantFormatted,
-            columnId: 'montant_total',
-          },
-        }
-      );
-    } catch (error) {
-      console.error('Erreur lors de l\'export PDF:', error);
-      setError('Une erreur est survenue lors de l\'export PDF');
+      console.error('Erreur lors de l’export des transactions:', error);
+      setError(error?.message || "Une erreur est survenue lors de l’export des transactions.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -791,164 +611,6 @@ function TransactionsList() {
     }
     return '-';
   };
-
-  /**
-   * Configuration des colonnes utilisées pour les exports.
-   * Ordre : ID, Date, Client/Fournisseur, Produit, Bâtiment, Quantité, montants, règlement, statut.
-   * mobilePriority: true pour les colonnes à afficher en priorité sur mobile
-   */
-  const columns = [
-    {
-      id: 'id_transaction',
-      label: 'ID',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      mobilePriority: false,
-    },
-    {
-      id: 'date_transaction',
-      label: 'Date',
-      sortable: true,
-      filterable: false,
-      mobilePriority: true,
-      format: (value) => {
-        if (!value) return '-';
-        try {
-    return formatShortDate(value, String(value));
-        } catch {
-          return value;
-        }
-      },
-    },
-    {
-      id: 'client_ou_fournisseur',
-      label: 'Client / Fournisseur',
-      sortable: false,
-      filterable: false,
-      mobilePriority: true,
-      format: (value, row) => {
-        const isClient = row.id_client !== null;
-        const name = getClientOuFournisseur(row);
-        
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box
-              sx={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                bgcolor: isClient ? 'success.main' : 'error.main',
-                flexShrink: 0,
-              }}
-            />
-            <Typography variant="body2">{name}</Typography>
-          </Box>
-        );
-      },
-    },
-    {
-      id: 'produit',
-      label: 'Produit vendu / acheté',
-      sortable: false,
-      filterable: false,
-      mobilePriority: false,
-      format: (value, row) => {
-        return produitsMap.get(row.id_produit) || `Produit #${row.id_produit}`;
-      },
-    },
-    {
-      id: 'batiment',
-      label: 'Bâtiment',
-      sortable: false,
-      filterable: false,
-      mobilePriority: false,
-      format: (value, row) => {
-        return row.id_batiment
-          ? (batimentsMap.get(row.id_batiment) || `Bâtiment #${row.id_batiment}`)
-          : '-';
-      },
-    },
-    {
-      id: 'quantite',
-      label: 'Quantité',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      mobilePriority: false,
-    },
-    {
-      id: 'montant_total',
-      label: 'Montant total',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      mobilePriority: true,
-      format: (value, row) => {
-        // Vert pour les entrées d'argent (transactions clients)
-        // Rouge pour les sorties d'argent (transactions fournisseurs)
-        const isEntree = row.id_client !== null;
-        const color = isEntree ? 'success.main' : 'error.main';
-        
-        const formatted = formatMontant(value);
-        return (
-          <Typography
-            component="span"
-            variant="body2"
-            fontWeight="bold"
-            sx={{
-              color,
-              display: 'inline-flex',
-              alignItems: 'center',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {formatted}
-          </Typography>
-        );
-      },
-    },
-    {
-      id: 'montant_paye',
-      label: 'Payé',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      mobilePriority: false,
-      format: (value) => formatMontant(value || 0),
-    },
-    {
-      id: 'montant_restant',
-      label: 'Reste',
-      sortable: true,
-      filterable: false,
-      align: 'right',
-      mobilePriority: false,
-      format: (value) => formatMontant(value || 0),
-    },
-    {
-      id: 'reglement',
-      label: 'Règlement',
-      sortable: false,
-      filterable: false,
-      mobilePriority: false,
-      format: (value, row) => getPaymentReglementSummary(row),
-    },
-    {
-      id: 'statut_paiement',
-      label: 'Paiement',
-      sortable: false,
-      filterable: false,
-      mobilePriority: false,
-      format: (value, row) => {
-        // Déterminer le statut : si en retard, afficher "en_retard", sinon le statut normal
-        const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
-        return <PaymentStatusBadge statut={statut} />;
-      },
-    },
-    { id: 'etat_stock', label: 'Stock' },
-    { id: 'date_livraison_prevue', label: 'Livraison prévue' },
-  ];
 
   // Préparer les données pour le registre
   const transactionsForGrid = useMemo(() => {
@@ -1048,8 +710,8 @@ function TransactionsList() {
             <Button
               variant="outlined"
               startIcon={<FileDownloadIcon />}
-              onClick={handleExportExcel}
-              disabled={loading || rowsForExport.length === 0}
+              onClick={() => handleExport('excel')}
+              disabled={loading || exporting || rowsForExport.length === 0}
             >
               Export Excel
             </Button>
@@ -1057,8 +719,8 @@ function TransactionsList() {
               variant="outlined"
               color="error"
               startIcon={<PictureAsPdfIcon />}
-              onClick={handleExportPDF}
-              disabled={loading || rowsForExport.length === 0}
+              onClick={() => handleExport('pdf')}
+              disabled={loading || exporting || rowsForExport.length === 0}
             >
               Export PDF
             </Button>
@@ -1349,6 +1011,61 @@ const getPaymentReglementSummary = (transaction, formatAmount = formatPaymentAmo
     .filter(Boolean);
 
   return reglements.length > 0 ? reglements.join(' | ') : '-';
+};
+
+const transactionExportColumns = [
+  { id: 'date_transaction', label: 'Date' },
+  { id: 'client_ou_fournisseur', label: 'Client / Fournisseur', excelWidth: 38 },
+  { id: 'produit_label', label: 'Produit vendu / acheté', excelWidth: 40 },
+  { id: 'batiment_label', label: 'Bâtiment', excelWidth: 26 },
+  { id: 'quantite', label: 'Quantité' },
+  { id: 'montant_total', label: 'Montant total' },
+  { id: 'montant_paye', label: 'Payé' },
+  { id: 'montant_restant', label: 'Reste' },
+  { id: 'reglement', label: 'Règlement', excelWidth: 62 },
+  { id: 'statut_paiement', label: 'Paiement' },
+  { id: 'etat_stock', label: 'Stock' },
+  { id: 'date_livraison_prevue', label: 'Livraison prévue' },
+  { id: 'etat_transaction', label: 'État' },
+];
+
+const deferredExportColumns = [
+  { id: 'quantite_couverte', label: 'Quantité couverte' },
+  { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
+  { id: 'quantite_en_attente', label: 'Reste à fournir' },
+  { id: 'quantite_a_produire', label: 'À produire' },
+];
+
+const exportTransactionWorkbook = (rows) => {
+  const hasDeferred = rows.some(row => row.est_promesse);
+  const columns = hasDeferred ? [...transactionExportColumns, ...deferredExportColumns] : transactionExportColumns;
+  const data = rows.map(row => {
+    const status = row.est_en_retard ? 'en_retard' : row.statut_paiement;
+    return {
+      ...row,
+      date_transaction: formatShortDate(row.date_transaction, row.date_transaction || '-'),
+      date_livraison_prevue: row.date_livraison_prevue
+        ? formatShortDate(row.date_livraison_prevue, row.date_livraison_prevue)
+        : '',
+      montant_total: formatMontantComplet(row.montant_total),
+      montant_paye: formatMontantComplet(row.montant_paye),
+      montant_restant: formatMontantComplet(row.montant_restant),
+      reglement: getPaymentReglementSummary(row, formatMontantComplet),
+      statut_paiement: {
+        impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
+      }[status] || status || '-',
+      quantite_couverte: row.est_promesse ? row.quantite_couverte : '',
+      quantite_reservee: row.est_promesse ? row.quantite_reservee : '',
+      quantite_en_attente: row.est_promesse ? row.quantite_en_attente : '',
+    };
+  });
+  const total = rows.reduce((sum, row) => sum + (row.est_actif === false ? 0 : Number(row.montant_total || 0)), 0);
+  return exportToExcelAdvanced(
+    [...data, {}, { quantite: 'Total :', montant_total: formatMontantComplet(total) }],
+    columns,
+    `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
+    'Transactions',
+  );
 };
 
 const getSignedAmount = (transaction, field = 'montant_total') => {
