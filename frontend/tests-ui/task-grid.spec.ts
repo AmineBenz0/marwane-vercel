@@ -17,7 +17,7 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
       { id_tache: 5, titre: 'Contrôler le stock de cartons', statut: 'en_cours' },
       { id_tache: 6, titre: 'Compter les plateaux', statut: 'en_attente' },
     ].map(task => ({
-      ...task, description: 'Vérifier le bâtiment A.', priorite: 'haute', categorie: 'travail',
+      ...task, description: 'Vérifier le bâtiment A.', priorite: task.id_tache === 2 ? 'basse' : 'haute', categorie: 'travail',
       date_debut: `${today}T09:00:00`, date_fin: `${today}T10:00:00`, est_toute_la_journee: false,
     }));
     const writes: { method: string; id: number; status?: string }[] = [];
@@ -54,31 +54,45 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
     await count("Aujourd'hui", 5).click();
     const first = card('Vérifier la collecte');
     const second = card('Relever la température');
+    const finish = first.getByRole('button', { name: /^Terminer/ });
     await expect(first).toBeVisible();
     await expect(second).toBeVisible();
+    await expect(finish).toHaveText('Terminer');
+    await expect(first.getByText('Aujourd’hui à 09:00')).toBeVisible();
+    await expect(first.getByText('Prioritaire', { exact: true })).toBeVisible();
+    await expect(second.getByText('Basse', { exact: true })).toHaveCount(0);
+    await expect(second.getByText('En attente', { exact: true })).toHaveCount(0);
+    await expect(first.getByText('Vérifier le bâtiment A.')).toHaveCount(0);
+    const dialog = page.getByRole('dialog');
+    await first.getByRole('button', { name: 'Vérifier la collecte', exact: true }).click();
+    await expect(dialog.getByText('Vérifier le bâtiment A.')).toBeVisible();
+    await expect(dialog.getByText('travail', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('En cours', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Fermer' }).click();
+    await expect(dialog).toBeHidden();
     const firstRowSize = await page.getByRole('main').getByRole('article').evaluateAll(cards => {
       const firstTop = cards[0].getBoundingClientRect().top;
       return cards.filter(item => Math.abs(item.getBoundingClientRect().top - firstTop) < 1).length;
     });
     expect(firstRowSize).toBe(columns);
     if (width === 1200) {
-      await first.getByRole('button', { name: /Marquer comme terminée/ }).click();
+      await finish.click();
       await expect(page.getByText('Impossible de terminer la tâche', { exact: true })).toBeVisible();
       await expect(count("Aujourd'hui", 5)).toBeVisible();
       expect(writes).toEqual([]);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await expect(first.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
-    await first.getByRole('button', { name: /Marquer comme terminée/ }).click();
+    await finish.click();
     await expect(first).toHaveCount(0);
     await expect(count("Aujourd'hui", 4)).toBeVisible();
     await count('Clôturées', 2).click();
     await expect(first.getByText('Terminée', { exact: true })).toBeVisible();
     await expect(card('Confirmer la livraison').getByText('Annulée', { exact: true })).toBeVisible();
-    await expect(first.getByRole('button', { name: /Marquer comme terminée/ })).toHaveCount(0);
+    await expect(finish).toHaveCount(0);
     await page.getByRole('button', { name: 'Annuler', exact: true }).click();
     await count("Aujourd'hui", 5).click();
-    await expect(first.getByText('En cours', { exact: true })).toBeVisible();
+    await expect(finish).toBeVisible();
     expect(writes).toEqual([
       { method: 'PUT', id: 1, status: 'complete' },
       { method: 'PUT', id: 1, status: 'en_cours' },
@@ -86,7 +100,6 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
 
     await first.getByRole('button', { name: /Actions/ }).click();
     await page.getByRole('menuitem', { name: 'Modifier' }).click();
-    const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Modifier la tâche' })).toBeVisible();
     await dialog.getByLabel('Titre').fill('Vérifier la collecte du matin');
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
