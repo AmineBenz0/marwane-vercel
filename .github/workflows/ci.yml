@@ -106,8 +106,10 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
           ENVIRONMENT: development
           SECRET_KEY: ci-only-secret
-      - name: Verify per-building lot API behavior
-        run: python -m pytest --override-ini addopts='' tests/test_independent_lots.py -q
+      - name: Verify per-building lot behavior and monthly ledger cutoffs
+        run: >-
+          python -m pytest --override-ini addopts='' tests/test_independent_lots.py
+          tests/test_enterprise_remediation.py::test_monthly_report_distinguishes_ledger_cutoffs_and_cheque_settlement -q
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
           ENVIRONMENT: testing
