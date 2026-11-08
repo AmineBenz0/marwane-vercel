@@ -117,8 +117,8 @@ function TasksList() {
     }
   };
 
-  const updateTask = async (id, data) => {
-    const saved = await taskService.updateTask(id, data);
+  const updateTask = async (id, data, config) => {
+    const saved = await taskService.updateTask(id, data, config);
     setTasks(current => current.map(task => task.id_tache === id ? saved : task));
   };
 
@@ -142,7 +142,7 @@ function TasksList() {
   const changeTaskStatus = async (id, status) => {
     setPendingStatusIds(current => new Set(current).add(id));
     try {
-      await updateTask(id, { statut: status });
+      await updateTask(id, { statut: status }, { silent: true });
     } finally {
       setPendingStatusIds(current => {
         const next = new Set(current);

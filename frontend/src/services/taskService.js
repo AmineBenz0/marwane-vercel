@@ -29,8 +29,8 @@ const taskService = {
   /**
    * Met à jour une tâche existante.
    */
-  updateTask: async (id, taskData) => {
-    return await put(`/tasks/${id}`, taskData);
+  updateTask: async (id, taskData, config) => {
+    return await put(`/tasks/${id}`, taskData, config);
   },
 
   /**
