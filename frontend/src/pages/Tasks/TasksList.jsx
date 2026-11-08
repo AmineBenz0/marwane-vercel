@@ -411,11 +411,16 @@ function TaskPanel({ title, tasks, emptyText, pendingStatusIds, onComplete, onEd
         {tasks.length === 0 ? (
           <Alert severity="info">{emptyText}</Alert>
         ) : (
-          <Box sx={{
+          <Box sx={theme => ({
             display: 'grid',
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' },
-            gap: 1,
-          }}>
+            '--task-grid-gap': theme.spacing(1),
+            gap: 'var(--task-grid-gap)',
+            gridTemplateColumns: {
+              xs: 'minmax(0, 1fr)',
+              // Each track needs 248px or a quarter of the available width, whichever is larger.
+              sm: 'repeat(auto-fill, minmax(min(100%, max(248px, calc((100% - 3 * var(--task-grid-gap)) / 4))), 1fr))',
+            },
+          })}>
             {tasks.map(task => (
               <TaskCard
                 key={task.id_tache}
