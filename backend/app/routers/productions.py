@@ -217,7 +217,7 @@ def _require_production_cycle(
     db: Session, id_batiment: int, production_date: date, id_cycle: Optional[int] = None,
     *, for_new_entry: bool,
 ) -> CycleProduction:
-    today = date.today()
+    today = business_date()
     if production_date > today:
         raise HTTPException(status_code=400, detail="La saisie ne peut pas être dans le futur.")
     if id_cycle is None:
@@ -232,6 +232,7 @@ def _require_production_cycle(
         if cycle is None or cycle.id_batiment != id_batiment:
             raise HTTPException(status_code=400, detail="Lot introuvable pour ce bâtiment.")
     validate_cycle_date(cycle, production_date)
+    # A closed lot still covers its historical dates, including its closing date.
     if for_new_entry and production_date == today and cycle_schedule(cycle).statut == "termine":
         raise HTTPException(
             status_code=400,

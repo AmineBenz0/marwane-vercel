@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { getBusinessDateInput } from '../../utils/businessDate';
 
-export const localToday = () => {
-  const now = new Date();
-  return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-};
+export const localToday = getBusinessDateInput;
 
 export const isClosingDayToday = (cycle, date) => cycle?.statut === 'termine' && date === localToday();
 

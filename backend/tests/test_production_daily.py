@@ -59,10 +59,14 @@ def test_daily_entry_requires_a_date_covered_by_the_buildings_lot(client, db_ses
         assert {row["id_cycle"] for row in response.json()["records"]} == {cycle.id_cycle}
 
 
-def test_closing_day_blocks_new_entries_until_a_successor_starts(client, db_session, auth_headers):
-    payload = daily_payload(db_session, start_lot=False)
+def test_closing_day_blocks_new_entries_until_a_successor_starts(client, db_session, auth_headers, monkeypatch):
+    # Reproduce the interval when Morocco is already on the next day and the server is still on UTC.
+    today = date.today() + timedelta(days=1)
+    monkeypatch.setattr("app.routers.lots_production.business_date", lambda: today)
+    monkeypatch.setattr("app.routers.productions.business_date", lambda: today)
+    payload = {**daily_payload(db_session, start_lot=False), "date_production": today.isoformat()}
     building = db_session.get(Batiment, payload["id_batiment"])
-    lot, cycle = add_lot_cycle(db_session, building, name="Outgoing lot", date_debut=date.today())
+    lot, cycle = add_lot_cycle(db_session, building, name="Outgoing lot", date_debut=today)
     closed = client.post(f"/api/v1/lots-production/{lot.id_lot}/terminer", json={}, headers=auth_headers)
     assert closed.status_code == 200, closed.text
 
