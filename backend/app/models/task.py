@@ -15,7 +15,7 @@ class Tache(Base):
         id_tache: Identifiant unique de la tâche (PK)
         titre: Titre de la tâche (NOT NULL)
         description: Description détaillée (nullable)
-        date_debut: Date et heure de début (NOT NULL)
+        date_debut: Date prévue ou début de l'événement (nullable)
         date_fin: Date et heure de fin (nullable)
         est_toute_la_journee: Indique si c'est un événement sur toute la journée
         statut: Statut de la tâche (en_attente, en_cours, complete, annule)
@@ -32,7 +32,7 @@ class Tache(Base):
     id_tache = Column(Integer, primary_key=True, index=True)
     titre = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    date_debut = Column(DateTime(timezone=True), nullable=False, index=True)
+    date_debut = Column(DateTime(timezone=True), nullable=True, index=True)
     date_fin = Column(DateTime(timezone=True), nullable=True, index=True)
     est_toute_la_journee = Column(Boolean, default=False, nullable=False)
     
