@@ -31,10 +31,10 @@ export default function ClientDeferredSales({ clientId, produitsMap }) {
   }, [clientId, revision]);
   const fullyReservedSales = sales.filter(sale => sale.quantite_en_attente === 0);
   const displayedSales = sales.filter(sale => sale.quantite_en_attente > 0 || showCompleted);
-  return <Card variant="outlined" sx={{ mb: 3 }}><CardContent>
+  return <Card variant="outlined" sx={{ mb: 3, borderRadius: 2 }}><CardContent>
     <Typography component="h2" variant="h6" fontWeight={800} gutterBottom>Livraisons différées</Typography>
     {loading ? <CircularProgress size={24} aria-label="Chargement des livraisons du client" /> : error ? <Alert severity="warning" action={<Button onClick={() => setRevision(value => value + 1)}>Réessayer</Button>}>{error}</Alert> : !sales.length ? <Typography>Aucune livraison différée.</Typography> : <Stack spacing={2}>
-      {displayedSales.map(sale => <Box key={sale.id_transaction} sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
+      {displayedSales.map(sale => <Box key={sale.id_transaction} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between">
           <Box><Typography fontWeight={700}>Vente #{sale.id_transaction} · {produitsMap.get(sale.id_produit) || `Produit #${sale.id_produit}`}</Typography>
             <Typography variant="body2">Prévue le {formatShortDate(sale.date_livraison_prevue)} · {sale.nom_batiment_source || 'Bâtiment non renseigné'}</Typography>
