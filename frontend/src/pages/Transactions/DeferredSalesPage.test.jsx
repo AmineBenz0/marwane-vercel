@@ -56,7 +56,8 @@ it('offers retry for failed detail requests without showing another sale’s dat
   expect(screen.queryByText('105 MAD')).not.toBeInTheDocument();
   fail = false;
   fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
-  expect(await screen.findByText('65 œufs')).toBeVisible();
+  expect(await screen.findByText('Stock couvert')).toBeVisible();
+  expect(screen.getByText('65')).toBeVisible();
 });
 it('keeps the home return available when the list is empty or fails', async () => {
   get.mockRejectedValueOnce(new Error('Connexion interrompue'));

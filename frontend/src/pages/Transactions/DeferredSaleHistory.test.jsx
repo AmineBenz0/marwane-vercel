@@ -16,8 +16,8 @@ it('shows initial and automatic stock reservations with origins on demand', asyn
   expect(await screen.findByText('Stock réservé à la création')).toBeVisible();
   expect(screen.getByText('Stock réservé automatiquement')).toBeVisible();
   expect(screen.getByText('Stock complété')).toBeVisible();
-  expect(screen.getByText('600 œufs')).toBeVisible();
-  expect(screen.getByText('300 œufs')).toBeVisible();
+  expect(screen.getAllByText('600 œufs')).toHaveLength(2);
+  expect(screen.getAllByText('300 œufs')).toHaveLength(2);
   expect(screen.queryByText(/après ce complément/)).not.toBeInTheDocument();
   expect(screen.getByText('Production du 24/10/26')).toBeVisible();
   expect(screen.getByText(/cet ancien ajout/)).toBeVisible();
