@@ -31,8 +31,8 @@ it('loads audit records only after opening and renders readable before/after val
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
   expect(await screen.findByText('Montant total')).toBeVisible();
   expect(screen.getByText('État de la transaction')).toBeVisible();
-  expect(screen.getByText(text => text.replace(/\\s/g, ' ').includes('100,00 MAD'))).toBeVisible();
-  expect(screen.getByText(text => text.replace(/\\s/g, ' ').includes('150,00 MAD'))).toBeVisible();
+  expect(screen.getByText(text => text.replace(/\s/g, ' ').includes('100,00 MAD'))).toBeVisible();
+  expect(screen.getByText(text => text.replace(/\s/g, ' ').includes('150,00 MAD'))).toBeVisible();
   expect(screen.getByText('Active')).toBeVisible();
   expect(screen.getByText('Annulée')).toBeVisible();
   expect(screen.getByText(/Auteur non identifié/)).toBeVisible();
