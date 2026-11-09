@@ -37,6 +37,8 @@ describe('ProductionForm', () => {
 
     expect(await screen.findByDisplayValue('01/09/26')).toBeVisible();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
+    // Keep numeric field labels above the input even when it starts empty.
+    expect(screen.getByText('Oeufs normaux', { selector: 'label' })).toHaveAttribute('data-shrink', 'true');
     fireEvent.change(screen.getByLabelText("Oeufs normaux"), { target: { value: '120' } });
     fireEvent.change(screen.getByLabelText("Double jaune"), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText("Oeufs blancs"), { target: { value: '10' } });
@@ -237,6 +239,15 @@ describe('ProductionForm', () => {
     expect(screen.getByLabelText('Oeufs casses')).toHaveValue(7);
     expect(screen.getByLabelText('Oeuf perdu')).toHaveValue(3);
     expect(screen.getByLabelText('Poids du plateau (g)')).toHaveValue(1950);
+    // Async react-hook-form reset populates the numeric inputs after mount.
+    // Ensure the labels float above saved values, including prefilled zeros.
+    for (const label of [
+      'Oeufs normaux', 'Double jaune', 'Oeufs blancs', 'Oeufs casses',
+      'Oeuf perdu', 'Poids du plateau (g)', 'Mortalité', 'Aliment consommé (kg)',
+    ]) {
+      expect(screen.getByText(label, { selector: 'label' })).toHaveAttribute('data-shrink', 'true');
+    }
+    expect(screen.getByLabelText('Double jaune')).toHaveValue(0);
     fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Mettre a jour' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
