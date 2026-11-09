@@ -17,7 +17,7 @@ const change = (id, overrides = {}) => ({
   ...overrides,
 });
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.resetAllMocks(); });
 afterEach(cleanup);
 
 it('loads audit records only after opening and renders readable before/after values', async () => {
@@ -44,10 +44,12 @@ it('loads audit records only after opening and renders readable before/after val
 });
 
 it('paginates without duplicating records and keeps the section read-only', async () => {
-  get.mockResolvedValueOnce(Array.from({ length: 10 }, (_, i) => change(i + 1)))
-    .mockResolvedValueOnce([change(11)]);
+  get.mockImplementation(async (_path, { params }) => params.skip === 0
+    ? Array.from({ length: 10 }, (_, i) => change(i + 1))
+    : [change(11)]);
   render(<TransactionAuditHistory transactionId={17} />);
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
+  await waitFor(() => expect(screen.getAllByText('Montant total')).toHaveLength(10));
   const more = await screen.findByRole('button', { name: 'Afficher les modifications précédentes' });
   fireEvent.click(more);
   await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/17/audit',
@@ -59,7 +61,7 @@ it('paginates without duplicating records and keeps the section read-only', asyn
 });
 
 it('explains empty history and distinguishes it from missing payment history', async () => {
-  get.mockResolvedValueOnce([]);
+  get.mockImplementation(async () => []);
   render(<TransactionAuditHistory transactionId={17} />);
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
   expect(await screen.findByText('Aucune modification enregistrée.')).toBeVisible();
@@ -67,7 +69,12 @@ it('explains empty history and distinguishes it from missing payment history', a
 });
 
 it('shows an error instead of an empty audit and supports retry', async () => {
-  get.mockRejectedValueOnce(new Error('API unavailable')).mockResolvedValueOnce([change(4)]);
+  let calls = 0;
+  get.mockImplementation(async () => {
+    calls += 1;
+    if (calls === 1) throw new Error('API unavailable');
+    return [change(4)];
+  });
   render(<TransactionAuditHistory transactionId={17} />);
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
   const error = await screen.findByRole('alert');
