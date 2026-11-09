@@ -162,6 +162,8 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
       await expect(dialog.getByLabel(/^Début/)).toHaveAttribute('type', 'datetime-local');
       await expect(dialog.getByLabel('Fin', { exact: true })).toHaveAttribute('type', 'datetime-local');
       await expect(dialog.getByLabel('Toute la journée')).toBeVisible();
+      await expect(dialog.getByText('Moyenne', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('Travail', { exact: true })).toBeVisible();
       await expect(dialog.getByText('Statut', { exact: true })).toHaveCount(0);
     }
   });

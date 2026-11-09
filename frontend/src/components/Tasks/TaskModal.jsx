@@ -34,6 +34,11 @@ const CATEGORIE_OPTIONS = [
   { value: 'urgent', label: 'Urgent' },
 ];
 
+const CALENDAR_SELECTS = [
+  { name: 'priorite', label: 'Priorité', options: PRIORITE_OPTIONS },
+  { name: 'categorie', label: 'Catégorie', options: CATEGORIE_OPTIONS },
+];
+
 function formatDateForInput(value, allDay) {
   if (!value) return '';
   const date = parseISO(allDay ? value.slice(0, 10) : value);
@@ -243,30 +248,19 @@ function TaskModal({ open, onClose, task, onSave, onDelete, calendar = false }) 
                 </Button>
               )}
             </Grid>
-            {calendar && (
-              <>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    {...register('priorite')}
-                    select
-                    label="Priorité"
-                    fullWidth
-                  >
-                    {PRIORITE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    {...register('categorie')}
-                    select
-                    label="Catégorie"
-                    fullWidth
-                  >
-                    {CATEGORIE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-                  </TextField>
-                </Grid>
-              </>
-            )}
+            {calendar && CALENDAR_SELECTS.map(({ name, label, options }) => (
+              <Grid item xs={12} sm={6} key={name}>
+                <Controller
+                  name={name}
+                  control={control}
+                  render={({ field: { ref, ...field } }) => (
+                    <TextField {...field} inputRef={ref} select label={label} fullWidth>
+                      {options.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+            ))}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
