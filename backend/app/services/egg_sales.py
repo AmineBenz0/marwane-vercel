@@ -404,6 +404,45 @@ def reserved_stock_by_category(db, through_date):
     return totals
 
 
+def promise_stock_by_category(db, through_date):
+    """Current, read-only order demand by building and egg category.
+
+    Already allocated eggs are covered. The temporary FIFO reservations
+    returned by the existing stock engine are also covered by current stock;
+    only the remaining units still need production. No allocation is written.
+    """
+    rows, _, reservations = _stock_state(db, through_date=through_date)
+    reserved_by_category = defaultdict(int)
+    by_id = {row.id_production: row for row in rows}
+    for sources in reservations.values():
+        for production_id, quantity in sources.items():
+            source = by_id[production_id]
+            key = (source.id_batiment, source.type_oeuf,
+                   source.calibre if source.type_oeuf == 'normal' else None)
+            reserved_by_category[key] += quantity
+
+    pending_by_category = defaultdict(int)
+    to_produce_by_category = defaultdict(int)
+    promises = db.query(Transaction, Produit.nom_produit).join(Produit).filter(
+        Transaction.est_actif.is_(True),
+        Transaction.est_promesse.is_(True),
+        Transaction.id_client.isnot(None),
+        Transaction.date_transaction <= through_date,
+    ).options(selectinload(Transaction.allocations)).all()
+    for tx, product_name in promises:
+        category = parse_sellable_egg_product_name(product_name)
+        if not category or category[0] in {'casse', 'perdu'}:
+            continue
+        pending = max(0, tx.quantite_en_attente)
+        if not pending:
+            continue
+        reserved = min(pending, sum(reservations.get(tx.id_transaction, {}).values()))
+        key = (tx.id_batiment, category[0], category[1])
+        pending_by_category[key] += pending
+        to_produce_by_category[key] += pending - reserved
+    return reserved_by_category, pending_by_category, to_produce_by_category
+
+
 def deferred_sale_reservations(db):
     """Unallocated current stock available for each promise, for legacy previews."""
     _, _, reservations = _stock_state(db, through_date=business_date())

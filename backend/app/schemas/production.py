@@ -116,6 +116,9 @@ class ProductionStockTotals(BaseModel):
     reserved_eggs: int = 0
     physical_eggs: int = 0
     available_eggs: int
+    promised_pending_eggs: Optional[int] = None
+    to_produce_eggs: Optional[int] = None
+    balance_after_promises: Optional[int] = None
     unassigned_sold_eggs: int
     buildings_count: int
     missing_buildings_count: int
@@ -131,6 +134,9 @@ class ProductionStockCategory(BaseModel):
     reserved_eggs: int = 0
     physical_eggs: int = 0
     available_eggs: int
+    promised_pending_eggs: Optional[int] = None
+    to_produce_eggs: Optional[int] = None
+    balance_after_promises: Optional[int] = None
 
 
 class ProductionStockBuilding(BaseModel):
@@ -144,6 +150,9 @@ class ProductionStockBuilding(BaseModel):
     reserved_eggs: int = 0
     physical_eggs: int = 0
     available_eggs: int
+    promised_pending_eggs: Optional[int] = None
+    to_produce_eggs: Optional[int] = None
+    balance_after_promises: Optional[int] = None
     mortalite: int
     consommation_aliment_kg: Decimal
     formules: List[str]
