@@ -5,7 +5,10 @@ import MultiPaiementForm from './MultiPaiementForm';
 import PaiementForm from './PaiementForm';
 
 vi.mock('../../services/api', () => ({
-  get: vi.fn(async () => [
+  get: vi.fn(async path => path === '/lettres-credit/disponibles' ? [
+    { id_lc: 7, numero_reference: 'LC-7', montant: '100.00' },
+    { id_lc: 8, numero_reference: 'LC-8', montant: '125.50' },
+  ] : [
     { id_compte: 1, nom_banque: 'Bank A', numero_compte: '001' },
     { id_compte: 2, nom_banque: 'Bank B', numero_compte: '002' },
   ]),
@@ -50,7 +53,89 @@ function EditForm({ existing = payment, onSubmit = vi.fn() }) {
   );
 }
 
+
+function NewSingleForm({ onSubmit }) {
+  const form = useForm({ defaultValues: { ...payment, type_paiement: 'lc', id_lc: null } });
+  return <form noValidate onSubmit={form.handleSubmit(onSubmit)}>
+    <PaiementForm transaction={{ montant_restant: 200, id_client: 3 }} register={form.register}
+      watch={form.watch} setValue={form.setValue} errors={form.formState.errors} />
+    <button type="submit">Enregistrer</button>
+  </form>;
+}
+
 describe('Unpaid transaction payment forms', () => {
+
+  it('shows only the four supported methods for new payments', async () => {
+    render(<NewSingleForm onSubmit={vi.fn()} />);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Type de paiement' }));
+    for (const label of ['Espèces', 'Chèque', 'Virement', 'Lettre de Crédit']) {
+      expect(await screen.findByRole('option', { name: new RegExp(label, 'i') })).toBeVisible();
+    }
+    for (const label of ['Carte bancaire', 'Compensation', 'Autre']) {
+      expect(screen.queryByRole('option', { name: label })).not.toBeInTheDocument();
+    }
+  });
+
+  it('automatically uses the selected LC amount and clears it when switching methods', async () => {
+    const submit = vi.fn();
+    render(<NewSingleForm onSubmit={submit} />);
+    const amount = screen.getByRole('spinbutton', { name: 'Montant de la LC (MAD)' });
+    expect(amount).toHaveAttribute('readonly');
+    await waitFor(() => expect(amount).toHaveValue(null));
+    const select = async label => {
+      await waitFor(() => expect(screen.getByRole('combobox', { name: 'Choisir une Lettre de Crédit' })).not.toHaveAttribute('aria-disabled', 'true'));
+      fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Choisir une Lettre de Crédit' }));
+      fireEvent.click(await screen.findByRole('option', { name: label }));
+    };
+    await select(/LC-7/);
+    await waitFor(() => expect(amount).toHaveValue(100));
+    await select(/LC-8/);
+    await waitFor(() => expect(amount).toHaveValue(125.5));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer', exact: true }));
+    await waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    expect(submit.mock.calls[0][0]).toMatchObject({ id_lc: 8, montant: 125.5, type_paiement: 'lc' });
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Type de paiement' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Espèces/ }));
+    const cash = screen.getByRole('spinbutton', { name: 'Montant (MAD)' });
+    expect(cash).not.toHaveAttribute('readonly');
+    await waitFor(() => expect(cash).toHaveValue(null));
+    fireEvent.change(cash, { target: { value: '12.50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer', exact: true }));
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    expect(submit.mock.calls[1][0]).toMatchObject({ id_lc: null, montant: 12.5, type_paiement: 'cash' });
+  });
+
+  it('keeps legacy payment types visible but disabled for historical edits', () => {
+    render(<EditForm existing={{ ...payment, type_paiement: 'compensation' }} />);
+    const type = screen.getByRole('combobox', { name: 'Type de paiement' });
+    expect(type).toHaveTextContent('Compensation (historique)');
+    expect(type).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByLabelText(/Montant \(MAD\)/)).toHaveValue(40);
+  });
+
+  it('keeps LC amount locked after a batch LC change and resets on method change', async () => {
+    const submit = vi.fn();
+    render(<BatchForm onSubmit={submit} payments={[{ ...payment, type_paiement: 'lc', id_lc: 7, montant: 1 }]}
+      lcs={[lc, { id_lc: 8, numero_reference: 'LC-8', montant: '125.50' }]} />);
+    const select = screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' });
+    expect(select).toHaveTextContent('LC-7');
+    await waitFor(() => expect(select).toHaveTextContent('LC-7'));
+    fireEvent.mouseDown(select);
+    fireEvent.click(await screen.findByRole('option', { name: /LC-8/ }));
+    expect(select).toHaveTextContent('LC-8');
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({ type_paiement: 'lc', id_lc: 8, montant: 125.5 });
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByRole('option', { name: 'Espèces' }));
+    const cash = screen.getByRole('spinbutton', { name: 'Montant du paiement 1' });
+    fireEvent.change(cash, { target: { value: '30' } });
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByRole('option', { name: 'Lettre de crédit' }));
+    expect(screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' })).toHaveTextContent('Sélectionnez une LC');
+  });
+
+
   it('keeps bank funding and the chosen account when the supplier payment method changes to cash', async () => {
     const submit = vi.fn();
     render(<BatchForm onSubmit={submit} supplierSource="banque" payments={[{ ...payment, type_paiement: 'virement' }]} />);
@@ -93,10 +178,10 @@ describe('Unpaid transaction payment forms', () => {
   it('persists the selected LC and its full amount in the submitted form', async () => {
     const submit = vi.fn();
     render(<BatchForm onSubmit={submit} payments={[{ ...payment, type_paiement: 'lc', id_lc: null }]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Développer le paiement 1' }));
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Lettre de Crédit' }));
+    expect(screen.queryByRole('spinbutton', { name: 'Montant du paiement 1' })).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' }));
     fireEvent.click(await screen.findByRole('option', { name: /LC-7/ }));
-    expect(screen.getByRole('spinbutton', { name: 'Montant du paiement 1' })).toHaveValue(100);
+    expect(screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' })).toHaveTextContent('LC-7');
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({ id_lc: 7, montant: 100, type_paiement: 'lc' });
@@ -164,6 +249,6 @@ describe('Unpaid transaction payment forms', () => {
     const select = screen.getByRole('combobox', { name: /Choisir une Lettre de Crédit/ });
     expect(select).toHaveTextContent('LC-7');
     expect(select).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByLabelText(/Montant \(MAD\)/)).toHaveValue(40);
+    expect(screen.getByLabelText(/Montant de la LC \(MAD\)/)).toHaveValue(40);
   });
 });
