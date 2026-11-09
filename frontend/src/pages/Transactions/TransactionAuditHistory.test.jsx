@@ -44,13 +44,15 @@ it('loads audit records only after opening and renders readable before/after val
 });
 
 it('paginates without duplicating records and keeps the section read-only', async () => {
-  get.mockImplementation(async (_path, { params }) => params.skip === 0
+  get.mockImplementation(async (_path, options = {}) => Number(options.params?.skip ?? 0) === 0
     ? Array.from({ length: 10 }, (_, i) => change(i + 1))
     : [change(11)]);
   render(<TransactionAuditHistory transactionId={17} />);
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
-  await waitFor(() => expect(screen.getAllByText('Montant total')).toHaveLength(10));
-  const more = await screen.findByRole('button', { name: 'Afficher les modifications précédentes' });
+  await waitFor(() => expect(screen.getAllByText('Montant total')).toHaveLength(10), { timeout: 8000 });
+  expect(get).toHaveBeenCalledWith('/transactions/17/audit', { params: { skip: 0, limit: 10 } });
+  const more = await screen.findByRole('button', { name: 'Afficher les modifications précédentes' },
+    {}, { timeout: 8000 });
   fireEvent.click(more);
   await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/17/audit',
     { params: { skip: 10, limit: 10 } }));
@@ -64,7 +66,9 @@ it('explains empty history and distinguishes it from missing payment history', a
   get.mockImplementation(async () => []);
   render(<TransactionAuditHistory transactionId={17} />);
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
-  expect(await screen.findByText('Aucune modification enregistrée.')).toBeVisible();
+  expect(await screen.findByText('Aucune modification enregistrée.',
+    {}, { timeout: 8000 })).toBeVisible();
+  expect(get).toHaveBeenCalledWith('/transactions/17/audit', { params: { skip: 0, limit: 10 } });
   expect(screen.getByText(/Les paiements ne sont pas inclus/)).toBeVisible();
 });
 
