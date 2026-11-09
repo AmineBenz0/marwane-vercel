@@ -471,3 +471,92 @@ def test_monthly_report_keeps_historical_debts_separate_from_current_debts(clien
     assert Decimal(current['ventes']) == 200
     assert Decimal(current['creances']) == 200
     assert Decimal(current['creances_actuelles']) == 100
+
+
+def test_stock_after_orders_uses_only_uncovered_current_promises(
+    client, db_session, deferred_sale, monkeypatch,
+):
+    building, _, _, payload = deferred_sale
+    today = date.today()
+    monkeypatch.setattr('app.routers.productions.business_date', lambda: today)
+    tx = create_transaction(payload, db_session, None)
+    assert (tx.quantite_couverte, tx.quantite_en_attente) == (600, 400)
+
+    stock = client.get('/api/v1/productions/stock').json()
+    assert stock['totals']['available_eggs'] == 0
+    assert stock['totals']['reserved_eggs'] == 600
+    assert stock['totals']['promised_pending_eggs'] == 400
+    assert stock['totals']['to_produce_eggs'] == 400
+    assert stock['totals']['balance_after_promises'] == -400
+    only_building = next(b for b in stock['batiments'] if b['id_batiment'] == building.id_batiment)
+    assert only_building['to_produce_eggs'] == 400
+    assert next(c for c in only_building['categories'] if c['type_oeuf'] == 'normal')['to_produce_eggs'] == 400
+
+    # A free 200-egg production is reserved for the oldest promise in the
+    # existing FIFO engine, without being counted as production still needed.
+    enter_production(db_session, building.id_batiment, 200)
+    stock = client.get('/api/v1/productions/stock').json()['totals']
+    assert (stock['available_eggs'], stock['reserved_eggs']) == (0, 800)
+    assert (stock['promised_pending_eggs'], stock['to_produce_eggs']) == (400, 200)
+
+    # Confirming only part of those eggs must not consume demand twice.
+    preview = proposal(client, tx.id_transaction)
+    assert preview['quantite_proposee'] == 200
+    response = client.post(
+        f'/api/v1/transactions/{tx.id_transaction}/completion',
+        json=confirmation(preview, 100),
+    )
+    assert response.status_code == 200, response.text
+    stock = client.get('/api/v1/productions/stock').json()['totals']
+    assert (stock['promised_pending_eggs'], stock['to_produce_eggs']) == (300, 200)
+
+    # Future production cannot fulfill a current commitment.
+    enter_production(db_session, building.id_batiment, 1000, day=today + timedelta(days=1))
+    assert client.get('/api/v1/productions/stock').json()['totals']['to_produce_eggs'] == 200
+
+    tx.est_actif = False
+    db_session.commit()
+    stock = client.get('/api/v1/productions/stock').json()['totals']
+    assert (stock['promised_pending_eggs'], stock['to_produce_eggs']) == (0, 0)
+
+
+def test_stock_after_orders_keeps_missing_categories_and_other_stock_separate(
+    client, db_session, monkeypatch,
+):
+    today = date.today()
+    monkeypatch.setattr('app.routers.productions.business_date', lambda: today)
+    monkeypatch.setattr('app.services.egg_sales.business_date', lambda: today)
+    building = Batiment(nom='Bâtiment sans doubles jaunes', est_actif=True)
+    buyer = Client(nom_client='Commande à produire', est_actif=True)
+    db_session.add_all([building, buyer])
+    db_session.flush()
+    missing_product = ensure_sellable_egg_product(db_session, 'double_jaune', None)
+    # A different egg category is plentiful, but cannot cover double-yolk orders.
+    enter_production(db_session, building.id_batiment, 300, type_oeuf='normal', calibre='moyen')
+    payload = TransactionCreate(
+        date_transaction=today, id_client=buyer.id_client,
+        id_produit=missing_product.id_produit, id_batiment=building.id_batiment,
+        allocation_automatique=True, est_promesse=True,
+        date_livraison_prevue=today + timedelta(days=1),
+        quantite=50, prix_unitaire=Decimal('1.50'),
+    )
+    tx = create_transaction(payload, db_session, None)
+    assert tx.quantite_en_attente == 50
+    stock = client.get('/api/v1/productions/stock').json()
+    assert stock['totals']['available_eggs'] == 300
+    assert (stock['totals']['promised_pending_eggs'], stock['totals']['to_produce_eggs']) == (50, 50)
+    assert stock['totals']['balance_after_promises'] == 250
+    category = next(c for c in stock['categories'] if c['type_oeuf'] == 'double_jaune')
+    assert (category['available_eggs'], category['to_produce_eggs']) == (0, 50)
+    current_building = next(b for b in stock['batiments'] if b['id_batiment'] == building.id_batiment)
+    assert current_building['to_produce_eggs'] == 50
+
+    # Historical and daily summaries do not pretend to reconstruct pending
+    # promises from today's allocations and reservation status.
+    historical = client.get('/api/v1/productions/stock', params={
+        'date_stock': str(today - timedelta(days=1)),
+    }).json()
+    assert historical['totals']['to_produce_eggs'] is None
+    assert all(category['to_produce_eggs'] is None for category in historical['categories'])
+    daily = client.get('/api/v1/productions/stock/daily').json()['totals']
+    assert daily['to_produce_eggs'] is None

@@ -8,7 +8,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 
 const number = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 
-export function StockSummary({ available, categories = [], reserved, physical, embedded = false, asOf, onViewReservations }) {
+export function StockSummary({ available, categories = [], reserved, physical, promisedPending = null, toProduce = null, balanceAfterPromises = null, embedded = false, asOf, onViewReservations }) {
   const sellable = categories.filter(category => !['casse', 'perdu'].includes(category.type_oeuf));
   const content = <Stack spacing={1.5}>
     {asOf && <Typography variant="caption" color="text.secondary">Au {formatShortDate(asOf)}</Typography>}
@@ -23,6 +23,23 @@ export function StockSummary({ available, categories = [], reserved, physical, e
         {Number(reserved) > 0 && onViewReservations && <Button size="small" onClick={onViewReservations} sx={{ mt: 0.5, px: 0 }}>Voir les ventes avec stock réservé</Button>}
       </Box>
     </Stack>
+    {promisedPending != null && Number(promisedPending) > 0 && toProduce != null && (
+      <Stack direction="row" spacing={2} alignItems="center" role="status"
+        sx={{ p: 1.75, borderRadius: 2, bgcolor: 'action.hover', flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" fontWeight={700}>
+            {Number(toProduce) > 0 ? 'À produire pour les commandes' : 'Stock après les commandes'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {Number(toProduce) > 0 ? 'Œufs encore non couverts par le stock réservé' : 'Toutes les commandes en attente sont couvertes par des réservations'}
+          </Typography>
+        </Box>
+        <Typography variant="h6" fontWeight={800} color={Number(toProduce) > 0 ? 'error.main' : 'text.primary'}
+          sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+          {number(Number(toProduce) > 0 ? toProduce : (balanceAfterPromises ?? available))} œufs
+        </Typography>
+      </Stack>
+    )}
     <ExpandableDetails variant="card" label="Détail du stock" icon={<LayersOutlined />}
       meta={`${sellable.length} produit${sellable.length === 1 ? '' : 's'}`} contentSx={{ p: 0 }}>
       {sellable.length > 0 && <Box sx={{ px: { xs: 1, sm: 2 }, py: 1 }}>

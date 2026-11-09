@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { StockSummary } from './ProductionViews';
 afterEach(cleanup);
@@ -69,4 +69,27 @@ it('keeps the default disclosure style available for unrelated pages', async () 
   expect(screen.getByRole('button', { name: 'Informations complémentaires' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Informations complémentaires' }));
   expect(await screen.findByText('Contenu existant')).toBeVisible();
+});
+
+it('shows uncovered deferred demand as eggs to produce even when other categories have stock', () => {
+  render(<StockSummary available={600} reserved={100} physical={700}
+    promisedPending={250} toProduce={150} balanceAfterPromises={450} />);
+  expect(screen.getByText('À produire pour les commandes')).toBeVisible();
+  expect(screen.getByText('150 œufs')).toBeVisible();
+  expect(screen.queryByText('450 œufs')).not.toBeInTheDocument();
+});
+
+it('shows remaining free stock when all pending orders are already reserved', () => {
+  render(<StockSummary available={80} reserved={200} physical={280}
+    promisedPending={100} toProduce={0} balanceAfterPromises={80} />);
+  expect(screen.getByText('Stock après les commandes')).toBeVisible();
+  expect(within(screen.getByRole('status')).getByText('80 œufs')).toBeVisible();
+  expect(screen.queryByText('À produire pour les commandes')).not.toBeInTheDocument();
+});
+
+it('does not show an order balance when there are no outstanding orders or the API has no demand fields', () => {
+  const { rerender } = render(<StockSummary available={100} reserved={0} physical={100} />);
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  rerender(<StockSummary available={100} reserved={0} physical={100} promisedPending={0} toProduce={0} />);
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
