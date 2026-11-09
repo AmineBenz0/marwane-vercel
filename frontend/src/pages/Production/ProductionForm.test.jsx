@@ -219,6 +219,18 @@ describe('ProductionForm', () => {
     },
   );
 
+  it('keeps numeric labels clear on new empty daily entries', async () => {
+    render(<ProductionForm open onClose={vi.fn()} onSuccess={vi.fn()}
+      batiments={[{ id_batiment: 7, nom: 'Batiment 7' }]} preselectedBatimentId={7} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
+    for (const label of ['Oeufs normaux', 'Double jaune', 'Oeufs blancs', 'Oeufs casses', 'Oeuf perdu']) {
+      const input = screen.getByLabelText(label);
+      expect(document.querySelector(`label[for="${input.id}"]`)).toHaveClass('MuiInputLabel-shrink');
+    }
+    fireEvent.change(screen.getByLabelText('Oeufs normaux'), { target: { value: '42' } });
+    expect(screen.getByLabelText('Oeufs normaux')).toHaveValue(42);
+  });
+
   it('loads and updates every type in the selected building day', async () => {
     const rows = [
       { id_production: 1, id_batiment: 7, date_production: '2026-09-01', type_oeuf: 'normal', nombre_oeufs: 120, grammage: '63', mortalite: 2, consommation_aliment_kg: '12', formule: '' },
@@ -237,6 +249,18 @@ describe('ProductionForm', () => {
     expect(screen.getByLabelText('Oeufs casses')).toHaveValue(7);
     expect(screen.getByLabelText('Oeuf perdu')).toHaveValue(3);
     expect(screen.getByLabelText('Poids du plateau (g)')).toHaveValue(1950);
+    // Values arrive after mount via reset(). Labels stay floated even for zero.
+    for (const label of [
+      'Oeufs normaux', 'Double jaune', 'Oeufs blancs', 'Oeufs casses',
+      'Oeuf perdu', 'Poids du plateau (g)', 'Mortalité', 'Aliment consommé (kg)',
+    ]) {
+      const input = screen.getByLabelText(label);
+      expect(input).toBeVisible();
+      const muiLabel = document.querySelector(`label[for="${input.id}"]`);
+      expect(muiLabel).not.toBeNull();
+      expect(muiLabel).toHaveClass('MuiInputLabel-shrink');
+    }
+    expect(screen.getByLabelText('Double jaune')).toHaveValue(0);
     fireEvent.change(screen.getByLabelText('Oeufs blancs'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Mettre a jour' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({

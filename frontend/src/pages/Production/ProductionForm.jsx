@@ -434,8 +434,11 @@ function ProductionForm({
                     })}
                     label={type.label}
                     type="number"
+                    // react-hook-form reset() can fill an already mounted field.
+                    // Shrink its label so it never overlays the numeric value.
+                    InputLabelProps={{ shrink: true }}
                     inputProps={{ min: 0, step: 1 }}
-                        fullWidth
+                    fullWidth
                     disabled={entryBlocked}
                     error={!!quantityError(quantities[type.value])}
                     helperText={quantityError(quantities[type.value])}
@@ -456,6 +459,7 @@ function ProductionForm({
                     })}
                     label="Poids du plateau (g)"
                     type="number"
+                    InputLabelProps={{ shrink: true }}
                     inputProps={{ min: 60.01, step: '0.01' }}
                     value={trayWeight ?? ''}
                     fullWidth
@@ -531,6 +535,7 @@ function ProductionForm({
                 }}
                 label="Mortalité"
                 type="number"
+                InputLabelProps={{ shrink: true }}
                 inputProps={{ min: 0, step: 1 }}
                 fullWidth
                 disabled={entryBlocked}
@@ -545,6 +550,7 @@ function ProductionForm({
                 })}
                 label="Aliment consommé (kg)"
                 type="number"
+                InputLabelProps={{ shrink: true }}
                 inputProps={{ step: '0.01' }}
                 fullWidth
                 disabled={entryBlocked}
