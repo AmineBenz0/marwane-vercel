@@ -159,7 +159,7 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
 
       await page.goto('/calendar');
       await page.getByRole('button', { name: /^Nouvelle t[âa]che$/ }).click();
-      await expect(dialog.getByLabel('Début', { exact: true })).toHaveAttribute('type', 'datetime-local');
+      await expect(dialog.getByLabel(/^Début/)).toHaveAttribute('type', 'datetime-local');
       await expect(dialog.getByLabel('Fin', { exact: true })).toHaveAttribute('type', 'datetime-local');
       await expect(dialog.getByLabel('Toute la journée')).toBeVisible();
       await expect(dialog.getByText('Statut', { exact: true })).toHaveCount(0);
