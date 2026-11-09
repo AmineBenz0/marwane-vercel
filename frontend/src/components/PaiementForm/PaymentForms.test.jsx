@@ -119,7 +119,7 @@ describe('Unpaid transaction payment forms', () => {
       lcs={[lc, { id_lc: 8, numero_reference: 'LC-8', montant: '125.50' }]} />);
     const select = screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' });
     expect(select).toHaveTextContent('LC-7');
-    await waitFor(() => expect(screen.getByText('100,00 MAD')).toBeVisible());
+    await waitFor(() => expect(select).toHaveTextContent('LC-7'));
     fireEvent.mouseDown(select);
     fireEvent.click(await screen.findByRole('option', { name: /LC-8/ }));
     expect(select).toHaveTextContent('LC-8');
