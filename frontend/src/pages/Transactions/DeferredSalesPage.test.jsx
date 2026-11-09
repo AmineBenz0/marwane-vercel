@@ -30,11 +30,14 @@ it('orders pending sales by expected date, searches clients without accents and 
   fireEvent.click(screen.getByRole('button', { name: 'Retour à l’accueil' }));
   expect(await screen.findByRole('heading', { name: 'Accueil quotidien' })).toBeVisible();
 });
-it('opens stock origins and existing payment totals directly, then closes the panel', async () => {
+it('opens clear stock coverage and existing payment totals, then closes the panel', async () => {
   show();
   fireEvent.click(await screen.findByRole('button', { name: /Voir le détail de la vente #7/ }));
   const panel = await screen.findByRole('dialog', { name: 'Vente #7' });
-  expect(await within(panel).findByText('65 œufs')).toBeVisible();
+  expect(await within(panel).findByText('Stock couvert')).toBeVisible();
+  expect(within(panel).getByText('65')).toBeVisible();
+  expect(within(panel).getByText('À produire')).toBeVisible();
+  expect(within(panel).queryByText('Production utilisée')).not.toBeInTheDocument();
   const payment = within(panel).getByRole('region', { name: 'Paiement de la vente' });
   expect(within(payment).getByText('0 MAD')).toBeVisible();
   expect(within(payment).getAllByText('105 MAD')).toHaveLength(2);
@@ -63,4 +66,14 @@ it('keeps the home return available when the list is empty or fails', async () =
   fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
   expect(await screen.findByText('Aucune livraison en attente de production.')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Retour à l’accueil' })).toBeVisible();
+});
+
+it('counts stock reserved for completion separately from eggs still to produce', async () => {
+  const reserved = { ...summary, quantite_reservee: 3 };
+  get.mockImplementation(async path => path === '/transactions/deferred-sales' ? [reserved] : sale);
+  show();
+  expect(await screen.findByText('1 vente · 2 œufs à produire')).toBeVisible();
+  expect(screen.getByText(/65 \/ 70 couverts/)).toBeVisible();
+  expect(screen.getByText(/3 prêts à compléter/)).toBeVisible();
+  expect(screen.getByText(/2 à produire/)).toBeVisible();
 });

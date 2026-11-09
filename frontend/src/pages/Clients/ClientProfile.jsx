@@ -690,8 +690,6 @@ function ClientProfile() {
         </Tabs>
       </Card>
 
-      <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} />
-
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Depuis le début</Typography>
       {/* Cartes statistiques */}
@@ -978,6 +976,7 @@ function ClientProfile() {
       </Box>
 
       <Box sx={{ display: activeTab === 'transactions' ? 'block' : 'none' }}>
+        {activeTab === 'transactions' && <ClientDeferredSales key={id} clientId={id} produitsMap={produitsMap} />}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: { xs: 1.5, sm: 2 } }}>
           <Button
             variant="outlined"

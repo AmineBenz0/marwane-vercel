@@ -5,6 +5,7 @@ import { ArrowBack, ArrowForward, Search } from '@mui/icons-material';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useDeferredSales from './useDeferredSales';
 import DeferredSaleDrawer from './DeferredSaleDrawer';
+import { deferredStockQuantities } from './deferredStockQuantities';
 
 const number = value => Number(value || 0).toLocaleString('fr-FR');
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
@@ -18,7 +19,7 @@ export default function DeferredSalesPage() {
   const pending = useMemo(() => sales.filter(sale => sale.est_actif !== false && Number(sale.quantite_en_attente) > 0)
     .sort((a, b) => (a.date_livraison_prevue || '9999').localeCompare(b.date_livraison_prevue || '9999') || a.id_transaction - b.id_transaction), [sales]);
   const visible = pending.filter(sale => normalize(sale.nom_client).includes(normalize(search.trim())));
-  const remaining = pending.reduce((total, sale) => total + Number(sale.quantite_en_attente), 0);
+  const remaining = pending.reduce((total, sale) => total + deferredStockQuantities(sale).toProduce, 0);
   const selectedId = /^\d+$/.test(params.get('vente') || '') ? Number(params.get('vente')) : null;
   const selected = sales.find(sale => sale.id_transaction === selectedId);
   const today = todayInMorocco();
@@ -44,13 +45,15 @@ export default function DeferredSalesPage() {
                 <CardContent sx={{ p: 2.5 }}>
                   <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                     <Typography variant="caption" color="text.secondary">Vente #{sale.id_transaction}</Typography>
-                    {(overdue || expected === today) && <Chip size="small" variant="outlined" label={overdue ? 'En retard' : 'Aujourd’hui'} sx={{ bgcolor: 'action.hover', color: 'text.primary', borderColor: overdue ? 'warning.main' : 'divider' }} />}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      {(overdue || expected === today) && <Chip size="small" variant="outlined" label={overdue ? 'En retard' : 'Aujourd’hui'} sx={{ bgcolor: 'action.hover', color: 'text.primary', borderColor: overdue ? 'warning.main' : 'divider' }} />}
+                      <ArrowForward fontSize="small" color="action" aria-hidden="true" />
+                    </Stack>
                   </Stack>
                   <Typography component="h2" variant="h6" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{sale.nom_client}</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, overflowWrap: 'anywhere' }}>{sale.nom_produit}{sale.nom_batiment ? ` · ${sale.nom_batiment}` : ''}</Typography>
-                  <Typography fontWeight={700}>{number(sale.quantite_couverte)} réservés · {number(sale.quantite_en_attente)} à produire</Typography>
+                  <Typography fontWeight={700}>{number(sale.quantite_couverte || 0)} / {number(Number(sale.quantite_couverte || 0) + Number(sale.quantite_en_attente || 0))} couverts{deferredStockQuantities(sale).reserved > 0 ? ` · ${number(deferredStockQuantities(sale).reserved)} prêts à compléter` : ''} · {number(deferredStockQuantities(sale).toProduce)} à produire</Typography>
                   {expected && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Prévue le {formatShortDate(expected)}</Typography>}
-                  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, mt: 2, px: 1.5, py: 0.75, borderRadius: 1, bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 700 }}>Voir le détail <ArrowForward fontSize="small" /></Box>
                 </CardContent>
               </CardActionArea>
             </Card>
