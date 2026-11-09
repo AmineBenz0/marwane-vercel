@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { StockSummary } from './ProductionViews';
 afterEach(cleanup);
@@ -83,7 +83,7 @@ it('shows remaining free stock when all pending orders are already reserved', ()
   render(<StockSummary available={80} reserved={200} physical={280}
     promisedPending={100} toProduce={0} balanceAfterPromises={80} />);
   expect(screen.getByText('Stock après les commandes')).toBeVisible();
-  expect(screen.getByText('80 œufs')).toBeVisible();
+  expect(within(screen.getByRole('status')).getByText('80 œufs')).toBeVisible();
   expect(screen.queryByText('À produire pour les commandes')).not.toBeInTheDocument();
 });
 

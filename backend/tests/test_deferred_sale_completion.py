@@ -553,9 +553,10 @@ def test_stock_after_orders_keeps_missing_categories_and_other_stock_separate(
 
     # Historical and daily summaries do not pretend to reconstruct pending
     # promises from today's allocations and reservation status.
-    history = client.get('/api/v1/productions/stock', params={
+    historical = client.get('/api/v1/productions/stock', params={
         'date_stock': str(today - timedelta(days=1)),
-    }).json()['totals']
-    assert history['to_produce_eggs'] is None
+    }).json()
+    assert historical['totals']['to_produce_eggs'] is None
+    assert all(category['to_produce_eggs'] is None for category in historical['categories'])
     daily = client.get('/api/v1/productions/stock/daily').json()['totals']
     assert daily['to_produce_eggs'] is None
