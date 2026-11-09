@@ -55,6 +55,7 @@ import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
+import TransactionAuditHistory from './TransactionAuditHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
 import ExpandableDetails from '../../components/ExpandableDetails';
 
@@ -742,6 +743,10 @@ function TransactionDetail() {
             )}
         </ExpandableDetails>
       </CardContent></Card>}
+
+      <Box sx={{ mb: { xs: 2, sm: 3 } }}>
+        <TransactionAuditHistory key={transaction.id_transaction} transactionId={transaction.id_transaction} />
+      </Box>
 
       {/* Modal d'ajout/édition de paiement */}
       <Dialog
