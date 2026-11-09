@@ -320,6 +320,9 @@ function TransactionForm({
   // État pour gérer les paiements par ligne (tableau de booleans)
   // État pour stocker les paiements existants (en mode édition)
   const [paiementsExistants, setPaiementsExistants] = useState([]);
+  const [editReview, setEditReview] = useState(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   // Initialiser react-hook-form avec le resolver Yup
   const {
@@ -529,6 +532,11 @@ function TransactionForm({
     loadFormData();
   }, [open, initialValues, reset, clearErrors, prefillClientId, prefillFournisseurId, prefillBatimentId]);
 
+  useEffect(() => {
+    setEditReview(null);
+    setReviewError('');
+  }, [open, initialValues?.id_transaction]);
+
   // Nettoyer les erreurs serveur lorsque la modal se ferme
   useEffect(() => {
     if (!open) {
@@ -604,7 +612,9 @@ function TransactionForm({
           });
           if (transactionData.date_transaction === initialValues.date_transaction?.slice(0, 10)) delete transactionData.date_transaction;
         }
-        await onSubmit({ ...transactionData, paiements: paiementsData });
+        // Read-only client-side review: existing API applies final validations.
+        setReviewError('');
+        setEditReview({ payload: { ...transactionData, paiements: paiementsData } });
       } else {
         // Mode création : on crée N transactions via l'endpoint batch
         const transactionsData = data.lignes.map((ligne) => ({
@@ -628,8 +638,8 @@ function TransactionForm({
         await onSubmit({ batch: true, transactions: transactionsData, lignesData: data.lignes });
       }
 
-      // Si la soumission réussit, réinitialiser le formulaire
-      reset();
+      // Keep the edit draft until review confirmation succeeds.
+      if (!isEditing) reset();
     } catch (error) {
       // Gérer les erreurs de validation serveur
       if (error?.data?.detail) {
@@ -671,6 +681,21 @@ function TransactionForm({
 
       // Re-throw pour que le composant parent puisse aussi gérer l'erreur
       throw error;
+    }
+  };
+
+  const confirmEditReview = async () => {
+    if (!editReview || reviewSaving || loading) return;
+    setReviewSaving(true);
+    setReviewError('');
+    try {
+      await onSubmit(editReview.payload);
+      setEditReview(null);
+      reset();
+    } catch (error) {
+      setReviewError(error?.message || 'Impossible d’enregistrer les modifications.');
+    } finally {
+      setReviewSaving(false);
     }
   };
 
@@ -729,6 +754,8 @@ function TransactionForm({
     if (!loading) {
       reset();
       clearErrors();
+      setEditReview(null);
+      setReviewError('');
       onClose();
     }
   };
@@ -1230,7 +1257,7 @@ function TransactionForm({
           {loading
             ? 'Enregistrement...'
             : isEditing
-              ? 'Enregistrer les modifications'
+              ? 'Vérifier les modifications'
               : watchedTypeEntite === 'client'
                 ? 'Enregistrer la vente'
                 : "Enregistrer l’achat"}
@@ -1240,6 +1267,7 @@ function TransactionForm({
   );
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={handleClose}
@@ -1813,6 +1841,83 @@ function TransactionForm({
           {totalsAndActions}
         </DialogActions>}
     </Dialog>
+
+    <Dialog open={Boolean(editReview && open)}
+      onClose={reviewSaving ? undefined : () => setEditReview(null)}
+      fullWidth maxWidth="sm" aria-labelledby="edit-review-title">
+      <DialogTitle id="edit-review-title">Vérifier les modifications</DialogTitle>
+      <DialogContent>
+        <Box sx={{ pt: 1 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Cet aperçu compare les valeurs saisies. Il ne valide ni le stock ni les mouvements
+            comptables. Les règles du serveur seront appliquées à l’enregistrement.
+          </Alert>
+          {reviewError && <Alert severity="error" sx={{ mb: 2 }}>{reviewError}</Alert>}
+          {editReview && (() => {
+            const keys = [
+              ['date_transaction', 'Date de transaction'], ['date_echeance', 'Date d’échéance'],
+              ['id_client', 'Client'], ['id_fournisseur', 'Fournisseur'],
+              ['id_produit', 'Produit'], ['id_batiment', 'Bâtiment source'],
+              ['id_production', 'Saisie source'], ['quantite', 'Quantité'],
+              ['prix_unitaire', 'Prix unitaire'], ['est_promesse', 'Livraison différée'],
+              ['date_livraison_prevue', 'Date prévue de livraison'],
+            ];
+            const normalize = (key, value) => {
+              if (value === undefined || value === null || value === '') return null;
+              if (key === 'est_promesse') return Boolean(value);
+              if (['quantite', 'prix_unitaire', 'id_client', 'id_fournisseur',
+                'id_produit', 'id_batiment', 'id_production'].includes(key)) return Number(value);
+              if (key.startsWith('date_')) return String(value).slice(0, 10);
+              return value;
+            };
+            const changed = keys.filter(([key]) => key in editReview.payload
+              && normalize(key, initialValues[key]) !== normalize(key, editReview.payload[key]));
+            const labelValue = (key, value) => {
+              const normalized = normalize(key, value);
+              if (normalized === null) return 'Non renseigné';
+              if (key === 'est_promesse') return normalized ? 'Oui' : 'Non';
+              if (key.startsWith('date_')) return normalized.split('-').reverse().join('/');
+              if (key === 'prix_unitaire') return formatMontant(normalized, { useCompactNotation: false });
+              return String(normalized);
+            };
+            return <Box>
+              {changed.length === 0 && <Typography variant="body2" color="text.secondary">
+                Aucun champ de la transaction n’a changé. Vérifiez les paiements associés.
+              </Typography>}
+              {changed.map(([key, label]) => <Box key={key} sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2" fontWeight={700}>{label}</Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 0.5 }}>
+                  <Box><Typography variant="caption" color="text.secondary">Avant</Typography>
+                    <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{labelValue(key, initialValues[key])}</Typography></Box>
+                  <Box><Typography variant="caption" color="text.secondary">Après</Typography>
+                    <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{labelValue(key, editReview.payload[key])}</Typography></Box>
+                </Box>
+              </Box>)}
+              {changed.some(([key]) => ['quantite', 'prix_unitaire'].includes(key)) && (
+                <Typography variant="body2" sx={{ mt: 2 }} fontWeight={700}>
+                  Montant total estimé : {formatMontant(
+                    Number(editReview.payload.quantite ?? initialValues.quantite) *
+                    Number(editReview.payload.prix_unitaire ?? initialValues.prix_unitaire),
+                    { useCompactNotation: false })}
+                </Typography>
+              )}
+              {paiementsExistants.length > 0 && <Alert severity="warning" sx={{ mt: 2 }}>
+                Cette transaction possède des paiements. Les modifications financières restent
+                limitées par le serveur.
+              </Alert>}
+            </Box>;
+          })()}
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ p: 2, gap: 1 }}>
+        <Button color="inherit" disabled={reviewSaving || loading}
+          onClick={() => { setEditReview(null); setReviewError(''); }}>Retour aux modifications</Button>
+        <Button variant="contained" disabled={reviewSaving || loading} onClick={confirmEditReview}>
+          {reviewSaving || loading ? 'Enregistrement…' : 'Confirmer l’enregistrement'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }
 
