@@ -20,9 +20,7 @@ describe('task list grouping', () => {
     expect(result.upcoming.map(task => task.id_tache)).toEqual([4]);
     expect(result.unscheduled.map(task => task.id_tache)).toEqual([3, 6]);
     expect(result.completed.map(task => task.id_tache)).toEqual([5]);
-    expect(result.allInActionOrder.map(task => task.id_tache)).toEqual([1, 2, 4, 3, 6, 5]);
-    expect(result.allInActionOrder).toHaveLength(tasks.length);
-    expect(result.counts.toutes).toBe(tasks.length);
+    expect(result.counts).toEqual({ open: 5, closed: 1 });
   });
 
   it('counts today tasks by calendar day and excludes completed tasks from action counts', () => {
@@ -34,6 +32,6 @@ describe('task list grouping', () => {
     ];
     const result = groupTasks(tasks, new Date('2026-10-28T12:00:00Z'));
     expect(result.today.map(task => task.id_tache)).toEqual([1]);
-    expect(result.counts).toMatchObject({ toutes: 4, aujourdhui: 1, en_attente: 2, urgentes: 2, terminees: 1 });
+    expect(result.counts).toEqual({ open: 3, closed: 1 });
   });
 });

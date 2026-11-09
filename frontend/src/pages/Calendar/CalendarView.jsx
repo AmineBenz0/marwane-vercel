@@ -344,6 +344,7 @@ function CalendarView() {
       )}
 
       <TaskModal
+        calendar
         key={selectedTask?.id_tache || (selectedTask?.date_debut ? `new-${selectedTask.date_debut}` : 'new')}
         open={modalOpen}
         onClose={() => setModalOpen(false)}

@@ -1,28 +1,25 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Box,
   Button,
-  TextField,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   Grid,
   MenuItem,
-  FormControlLabel,
-  Switch,
   Stack,
-  CircularProgress,
-  Box
+  Switch,
+  TextField,
 } from '@mui/material';
-import { useForm, Controller } from 'react-hook-form';
-import { format, parseISO } from 'date-fns';
+import { Controller, useForm } from 'react-hook-form';
+import { addDays, addHours, differenceInCalendarDays, format, isValid, parseISO } from 'date-fns';
+import DateField from '../../utils/DateField';
 
-const STATUT_OPTIONS = [
-  { value: 'en_attente', label: 'En attente' },
-  { value: 'en_cours', label: 'En cours' },
-  { value: 'complete', label: 'Complétée' },
-  { value: 'annule', label: 'Annulée' },
-];
+const DATE = 'yyyy-MM-dd';
+const DATE_TIME = "yyyy-MM-dd'T'HH:mm";
 
 const PRIORITE_OPTIONS = [
   { value: 'basse', label: 'Basse' },
@@ -31,15 +28,58 @@ const PRIORITE_OPTIONS = [
 ];
 
 const CATEGORIE_OPTIONS = [
+  { value: '', label: 'Sans catégorie' },
   { value: 'travail', label: 'Travail' },
   { value: 'personnel', label: 'Personnel' },
   { value: 'rdv', label: 'Rendez-vous' },
   { value: 'urgent', label: 'Urgent' },
 ];
 
-function TaskModal({ open, onClose, task, onSave, onDelete }) {
-  const isEdit = !!task?.id_tache;
+const CALENDAR_SELECTS = [
+  { name: 'priorite', label: 'Priorité', options: PRIORITE_OPTIONS },
+  { name: 'categorie', label: 'Catégorie', options: CATEGORIE_OPTIONS },
+];
 
+function formatDateForInput(value, allDay) {
+  if (!value) return '';
+  const date = parseISO(allDay ? value.slice(0, 10) : value);
+  return isValid(date) ? format(date, allDay ? DATE : DATE_TIME) : '';
+}
+
+function serializeCalendarDate(value, allDay) {
+  if (!value) return null;
+  return allDay ? value : parseISO(value).toISOString();
+}
+
+function updatePlannedDate(task, plannedDate) {
+  const allDay = Boolean(task?.est_toute_la_journee);
+  const start = formatDateForInput(task?.date_debut, allDay);
+  const currentDate = start.split('T')[0];
+  if (plannedDate === currentDate) return {};
+  if (!plannedDate) {
+    return { date_debut: null, date_fin: null, est_toute_la_journee: false };
+  }
+  if (!currentDate) return { date_debut: plannedDate, est_toute_la_journee: true };
+
+  // Moving a dated task from the checklist preserves its calendar time and span.
+  const dayShift = differenceInCalendarDays(parseISO(plannedDate), parseISO(currentDate));
+  const shiftDate = (value) => {
+    if (!value) return null;
+    const date = parseISO(allDay ? value.slice(0, 10) : value);
+    if (!isValid(date)) return null;
+    const shifted = addDays(date, dayShift);
+    return allDay ? format(shifted, DATE) : shifted.toISOString();
+  };
+
+  return {
+    date_debut: shiftDate(task.date_debut),
+    date_fin: shiftDate(task.date_fin),
+  };
+}
+
+function TaskModal({ open, onClose, task, onSave, onDelete, calendar = false }) {
+  const isEdit = Boolean(task?.id_tache);
+  const [showNotes, setShowNotes] = useState(false);
   const {
     register,
     handleSubmit,
@@ -47,8 +87,8 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
     reset,
     setValue,
     getValues,
-    formState: { errors, isSubmitting },
-    watch
+    formState: { dirtyFields, errors, isSubmitting },
+    watch,
   } = useForm({
     defaultValues: {
       titre: '',
@@ -56,62 +96,80 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
       date_debut: '',
       date_fin: '',
       est_toute_la_journee: false,
-      statut: 'en_attente',
       priorite: 'moyenne',
       categorie: 'travail',
-    }
+    },
   });
-
-  const estTouteLaJournee = watch('est_toute_la_journee');
-
-  // Helper to safely format dates from either ISO string or Date object
-  const formatDateForInput = (dateValue, allDay) => {
-    if (!dateValue) return '';
-    try {
-      const date = typeof dateValue === 'string' ? parseISO(dateValue) : new Date(dateValue);
-      return format(date, allDay ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm");
-    } catch (e) {
-      console.error("Format error", e);
-      return '';
-    }
-  };
+  const allDay = watch('est_toute_la_journee');
 
   useEffect(() => {
-    if (open) {
-      if (task) {
-        const isAllDay = !!task.est_toute_la_journee;
-        reset({
-          ...task,
-          date_debut: task.date_debut ? formatDateForInput(task.date_debut, isAllDay) : formatDateForInput(new Date(), isAllDay),
-          date_fin: task.date_fin ? formatDateForInput(task.date_fin, isAllDay) : formatDateForInput(new Date(), isAllDay),
-          statut: task.statut || 'en_attente',
-          priorite: task.priorite || 'moyenne',
-          categorie: task.categorie || 'travail',
-        });
-      } else {
-        reset({
-          titre: '',
-          description: '',
-          date_debut: formatDateForInput(new Date(), false),
-          date_fin: formatDateForInput(new Date(new Date().getTime() + 3600000), false),
-          est_toute_la_journee: false,
-          statut: 'en_attente',
-          priorite: 'moyenne',
-          categorie: 'travail',
-        });
-      }
-    }
-  }, [open, task, reset]);
+    if (!open) return;
+    const eventAllDay = Boolean(task?.est_toute_la_journee);
+    const start = formatDateForInput(task?.date_debut, eventAllDay);
+    const now = new Date();
+    reset({
+      titre: task?.titre ?? '',
+      description: task?.description ?? '',
+      date_debut: calendar
+        ? start || format(now, eventAllDay ? DATE : DATE_TIME)
+        : start.split('T')[0],
+      date_fin: formatDateForInput(task?.date_fin, eventAllDay)
+        || (calendar && !task ? format(addHours(now, 1), DATE_TIME) : ''),
+      est_toute_la_journee: eventAllDay,
+      priorite: task?.priorite ?? 'moyenne',
+      categorie: task?.categorie ?? (isEdit ? '' : 'travail'),
+    });
+    setShowNotes(Boolean(task?.description));
+  }, [calendar, isEdit, open, reset, task]);
 
   const handleFormSubmit = async (data) => {
-    // Transformer les dates ISO si nécessaire ou envoyer tel quel (FastAPI accepte ISO)
-    await onSave(data);
-    onClose();
+    const values = {
+      titre: data.titre.trim(),
+      description: data.description?.trim() || null,
+    };
+    if (calendar) {
+      if (!isEdit || dirtyFields.date_debut || dirtyFields.est_toute_la_journee) {
+        values.date_debut = serializeCalendarDate(data.date_debut, allDay);
+      }
+      if (!isEdit || dirtyFields.date_fin || dirtyFields.est_toute_la_journee) {
+        values.date_fin = serializeCalendarDate(data.date_fin, allDay);
+      }
+      if (!isEdit || dirtyFields.est_toute_la_journee) values.est_toute_la_journee = allDay;
+      if (!isEdit || dirtyFields.priorite) values.priorite = data.priorite;
+      if (!isEdit || dirtyFields.categorie) values.categorie = data.categorie || null;
+    } else {
+      Object.assign(values, updatePlannedDate(task, data.date_debut));
+    }
+    try {
+      await onSave(values);
+      onClose();
+    } catch {
+      // The page reports the save failure. Keep the form open for a retry.
+    }
   };
 
+  const toggleAllDay = (checked) => {
+    const [start, end] = getValues(['date_debut', 'date_fin']);
+    const convert = (value, time) => {
+      if (!value) return '';
+      const day = value.split('T')[0];
+      return checked ? day : `${day}T${time}`;
+    };
+    setValue('date_debut', convert(start, '09:00'), { shouldDirty: true });
+    setValue('date_fin', convert(end, '10:00'), { shouldDirty: true });
+  };
+
+  const showDescription = calendar || showNotes;
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
+    <Dialog
+      open={open}
+      onClose={isSubmitting ? undefined : onClose}
+      aria-labelledby="task-form-title"
+      maxWidth={calendar ? 'sm' : 'xs'}
+      fullWidth
+    >
+      <DialogTitle id="task-form-title">
         {isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'}
       </DialogTitle>
       <form onSubmit={handleSubmit(handleFormSubmit)}>
@@ -119,128 +177,107 @@ function TaskModal({ open, onClose, task, onSave, onDelete }) {
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <TextField
-                {...register('titre', { required: 'Le titre est requis' })}
+                {...register('titre', { validate: value => Boolean(value.trim()) || 'Le titre est requis' })}
                 label="Titre"
                 fullWidth
                 required
-                error={!!errors.titre}
+                error={Boolean(errors.titre)}
                 helperText={errors.titre?.message}
+                inputProps={{ maxLength: 255 }}
                 autoFocus
               />
             </Grid>
-            <Grid item xs={12}>
-              <TextField
-                {...register('description')}
-                label="Description"
-                fullWidth
-                multiline
-                rows={3}
-              />
+            <Grid item xs={12} sm={calendar ? 6 : 12}>
+              {calendar ? (
+                <TextField
+                  {...register('date_debut', { required: 'Requis' })}
+                  label="Début"
+                  type={allDay ? 'date' : 'datetime-local'}
+                  fullWidth
+                  required
+                  error={Boolean(errors.date_debut)}
+                  helperText={errors.date_debut?.message}
+                  InputLabelProps={{ shrink: true }}
+                />
+              ) : (
+                <DateField {...register('date_debut')} label="Date prévue (facultative)" fullWidth />
+              )}
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('date_debut', { required: 'Requis' })}
-                label="Début"
-                type={estTouteLaJournee ? "date" : "datetime-local"}
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('date_fin')}
-                label="Fin"
-                type={estTouteLaJournee ? "date" : "datetime-local"}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Controller
-                    name="est_toute_la_journee"
-                    control={control}
-                    render={({ field }) => (
-                      <Switch 
-                        {...field} 
-                        checked={field.value} 
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          
-                          // 1. Get current values
-                          const currentDebut = getValues('date_debut');
-                          const currentFin = getValues('date_fin');
-                          
-                          // 2. Prepare new values based on the toggle
-                          let newDebut = currentDebut;
-                          let newFin = currentFin;
-
-                          if (checked) {
-                            // If switching to All-Day, strip time
-                            if (currentDebut?.includes('T')) newDebut = currentDebut.split('T')[0];
-                            if (currentFin?.includes('T')) newFin = currentFin.split('T')[0];
-                          } else {
-                            // If switching to Timed, add default time
-                            if (currentDebut && !currentDebut.includes('T')) newDebut = `${currentDebut}T09:00`;
-                            if (currentFin && !currentFin.includes('T')) newFin = `${currentFin}T10:00`;
-                          }
-                          
-                          // 3. Update date values FIRST or together
-                          setValue('date_debut', newDebut);
-                          setValue('date_fin', newFin);
-                          field.onChange(checked);
-                        }}
-                      />
-                    )}
+            {calendar && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    {...register('date_fin')}
+                    label="Fin"
+                    type={allDay ? 'date' : 'datetime-local'}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
                   />
-                }
-                label="Toute la journée"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('statut')}
-                select
-                label="Statut"
-                fullWidth
-              >
-                {STATUT_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('priorite')}
-                select
-                label="Priorité"
-                fullWidth
-              >
-                {PRIORITE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-              </TextField>
-            </Grid>
+                </Grid>
+                <Grid item xs={12}>
+                  <FormControlLabel
+                    control={
+                      <Controller
+                        name="est_toute_la_journee"
+                        control={control}
+                        render={({ field }) => (
+                          <Switch
+                            {...field}
+                            checked={field.value}
+                            onChange={(_, checked) => {
+                              toggleAllDay(checked);
+                              field.onChange(checked);
+                            }}
+                          />
+                        )}
+                      />
+                    }
+                    label="Toute la journée"
+                  />
+                </Grid>
+              </>
+            )}
             <Grid item xs={12}>
-              <TextField
-                {...register('categorie')}
-                select
-                label="Catégorie"
-                fullWidth
-              >
-                {CATEGORIE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-              </TextField>
+              {showDescription ? (
+                <TextField
+                  {...register('description')}
+                  label={calendar ? 'Description' : 'Consignes'}
+                  fullWidth
+                  multiline
+                  rows={3}
+                  autoFocus={!calendar && !task?.description}
+                />
+              ) : (
+                <Button onClick={() => setShowNotes(true)} sx={{ textTransform: 'none' }}>
+                  Ajouter des consignes
+                </Button>
+              )}
             </Grid>
+            {calendar && CALENDAR_SELECTS.map(({ name, label, options }) => (
+              <Grid item xs={12} sm={6} key={name}>
+                <Controller
+                  name={name}
+                  control={control}
+                  render={({ field: { ref, ...field } }) => (
+                    <TextField {...field} inputRef={ref} select label={label} fullWidth>
+                      {options.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+            ))}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
           <Box>
             {isEdit && onDelete && (
-              <Button color="error" onClick={() => onDelete(task.id_tache)}>
+              <Button color="error" onClick={() => onDelete(task.id_tache)} disabled={isSubmitting}>
                 Supprimer
               </Button>
             )}
           </Box>
           <Stack direction="row" spacing={1}>
-            <Button onClick={onClose}>Annuler</Button>
+            <Button onClick={onClose} disabled={isSubmitting}>Annuler</Button>
             <Button
               type="submit"
               variant="contained"

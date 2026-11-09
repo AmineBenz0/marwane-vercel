@@ -5,7 +5,10 @@ export const isTaskDone = task => task.statut === 'complete' || task.statut === 
 export const getTaskDate = task => {
   if (!task?.date_debut) return null;
   try {
-    const date = typeof task.date_debut === 'string' ? parseISO(task.date_debut) : new Date(task.date_debut);
+    const start = task.date_debut;
+    const date = typeof start === 'string'
+      ? parseISO(task.est_toute_la_journee ? start.slice(0, 10) : start)
+      : new Date(start);
     return isValid(date) ? date : null;
   } catch {
     return null;
@@ -41,19 +44,14 @@ export const groupTasks = (tasks, referenceDate = new Date()) => {
   const completed = sortedTasks.filter(isTaskDone);
 
   return {
-    sortedTasks,
     overdue,
     today: todayTasks,
     upcoming,
     unscheduled,
     completed,
-    allInActionOrder: [...overdue, ...todayTasks, ...upcoming, ...unscheduled, ...completed],
     counts: {
-      toutes: tasks.length,
-      aujourdhui: todayTasks.length,
-      en_attente: tasks.filter(task => task.statut === 'en_attente').length,
-      urgentes: tasks.filter(task => task.priorite === 'haute' && !isTaskDone(task)).length,
-      terminees: completed.length,
+      open: openTasks.length,
+      closed: completed.length,
     },
   };
 };
