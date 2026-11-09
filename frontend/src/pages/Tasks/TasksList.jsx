@@ -14,12 +14,13 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Grid,
   IconButton,
   Menu,
   MenuItem,
   Snackbar,
   Stack,
+  Tab,
+  Tabs,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -34,25 +35,9 @@ import TaskModal from '../../components/Tasks/TaskModal';
 import taskService from '../../services/taskService';
 import useNotificationStore from '../../store/notificationStore';
 
-const STATUS_LABELS = {
-  en_attente: 'En attente',
-  en_cours: 'En cours',
-  complete: 'Terminée',
-  annule: 'Annulée',
-};
-
-const PRIORITY_LABELS = {
-  basse: 'Basse',
-  moyenne: 'Moyenne',
-  haute: 'Haute',
-};
-
-const FILTERS = [
-  { key: 'toutes', label: 'Toutes' },
-  { key: 'aujourdhui', label: "Aujourd'hui" },
-  { key: 'en_attente', label: 'En attente' },
-  { key: 'urgentes', label: 'Urgentes' },
-  { key: 'terminees', label: 'Clôturées' },
+const VIEWS = [
+  { key: 'open', label: 'À faire' },
+  { key: 'closed', label: 'Clôturées' },
 ];
 
 const formatTaskDate = (task, relative = false) => {
@@ -69,7 +54,7 @@ function TasksList() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [activeFilter, setActiveFilter] = useState('toutes');
+  const [view, setView] = useState('open');
   const [pendingStatusIds, setPendingStatusIds] = useState(() => new Set());
   const [completionToUndo, setCompletionToUndo] = useState(null);
   const [taskToViewId, setTaskToViewId] = useState(null);
@@ -135,6 +120,7 @@ function TasksList() {
       } else {
         const saved = await taskService.createTask(data);
         setTasks(current => [...current.filter(task => task.id_tache !== saved.id_tache), saved]);
+        setView('open');
         notifySuccess('Tâche créée');
       }
     } catch (err) {
@@ -165,54 +151,28 @@ function TasksList() {
     }
   };
 
-  const handleUndo = async () => {
-    const { id, previousStatus } = completionToUndo;
+  const handleReopen = async (id, status = 'en_attente') => {
     try {
-      await changeTaskStatus(id, previousStatus);
+      await changeTaskStatus(id, status);
       dismissUndoFor(id);
+      setView('open');
       notifySuccess('Tâche rouverte');
     } catch {
       notifyError('Impossible de rouvrir la tâche');
     }
   };
 
-  const taskGroups = groupTasks(tasks);
-  const { sortedTasks, overdue: overdueTasks, today: todayTasks, upcoming: upcomingTasks,
-    unscheduled: unscheduledTasks, completed: completedTasks,
-    counts: taskCounts } = taskGroups;
+  const { overdue, today, upcoming, unscheduled, completed, counts } = groupTasks(tasks);
+  const panels = (view === 'open' ? [
+    { key: 'overdue', title: 'En retard', tasks: overdue },
+    { key: 'today', title: 'Aujourd’hui', tasks: today },
+    { key: 'upcoming', title: 'À venir', tasks: upcoming },
+    { key: 'unscheduled', title: 'Sans date', tasks: unscheduled },
+  ] : [{ key: 'closed', tasks: completed }]).filter(panel => panel.tasks.length);
 
-  const filteredTasks = {
-    aujourdhui: todayTasks,
-    en_attente: sortedTasks.filter(task => task.statut === 'en_attente'),
-    urgentes: sortedTasks.filter(task => task.priorite === 'haute' && !isTaskDone(task)),
-    terminees: completedTasks,
-  }[activeFilter];
-  const panels = activeFilter === 'toutes' ? [
-    { title: 'En retard', tasks: overdueTasks },
-    { title: "À faire aujourd’hui", tasks: todayTasks },
-    { title: 'Prochaines tâches', tasks: upcomingTasks },
-    { title: 'Sans date prévue', tasks: unscheduledTasks },
-    { title: 'Tâches clôturées', tasks: completedTasks },
-  ].filter(panel => panel.tasks.length) : [{
-    title: FILTERS.find(filter => filter.key === activeFilter).label,
-    tasks: filteredTasks,
-    emptyText: 'Aucune tâche pour ce filtre.',
-  }];
   const undoBusy = completionToUndo && (pendingStatusIds.has(completionToUndo.id)
     || (modalOpen && selectedTask?.id_tache === completionToUndo.id)
     || taskToDelete?.id_tache === completionToUndo.id);
-
-  const stats = [
-    { label: "Aujourd'hui", value: taskCounts.aujourdhui },
-    { label: 'En attente', value: taskCounts.en_attente },
-    { label: 'Urgentes', value: taskCounts.urgentes },
-    { label: 'Clôturées', value: taskCounts.terminees, helper: 'Terminées ou annulées' },
-  ];
-
-  const filterOptions = FILTERS.map((filter) => ({
-    ...filter,
-    count: taskCounts[filter.key] ?? taskCounts.toutes,
-  }));
 
   return (
     <Box>
@@ -223,14 +183,9 @@ function TasksList() {
         spacing={2}
         sx={{ mb: 3 }}
       >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 900, color: '#17211D' }}>
-            Mes tâches
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 680 }}>
-            Ce qui doit être fait maintenant, puis ce qui arrive ensuite.
-          </Typography>
-        </Box>
+        <Typography component="h1" variant="h4" sx={{ fontWeight: 900 }}>
+          Mes tâches
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -242,128 +197,58 @@ function TasksList() {
         </Button>
       </Stack>
 
-      <Grid container spacing={2} sx={{ mb: 2.5 }}>
-        {stats.map((stat) => (
-          <Grid item xs={6} md={3} key={stat.label}>
-            <Card sx={{ height: '100%', borderRadius: 3 }}>
-              <CardContent sx={{ p: { xs: 1.75, md: 2.25 } }}>
-                <Typography
-                  variant="overline"
-                  sx={{ color: 'text.secondary', fontWeight: 900, letterSpacing: '0.08em' }}
-                >
-                  {stat.label}
-                </Typography>
-                <Typography sx={{ mt: 1, fontSize: { xs: '1.75rem', md: '2.1rem' }, fontWeight: 900, lineHeight: 1 }}>
-                  {stat.value}
-                </Typography>
-                {stat.helper && <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ mt: 0.75, display: { xs: 'none', sm: 'block' } }}
-                >
-                  {stat.helper}
-                </Typography>}
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Card
-        sx={{
-          mb: 2.5,
-          borderRadius: 3,
-          backgroundColor: '#F8FAF7',
-          border: '1px solid',
-          borderColor: 'divider',
-        }}
+      <Tabs
+        value={view}
+        onChange={(_, nextView) => setView(nextView)}
+        aria-label="Liste des tâches"
+        sx={{ mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}
       >
-        <CardContent sx={{ p: { xs: 1.25, sm: 1.5 }, '&:last-child': { pb: { xs: 1.25, sm: 1.5 } } }}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: 'repeat(2, minmax(0, 1fr))',
-                sm: 'repeat(auto-fit, minmax(145px, 1fr))',
-              },
-              gap: 1,
-            }}
-          >
-            {filterOptions.map((filter) => {
-              const selected = activeFilter === filter.key;
-              return (
-                <Button
-                  key={filter.key}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setActiveFilter(filter.key)}
-                  variant={selected ? 'contained' : 'outlined'}
-                  sx={{
-                    minHeight: { xs: 48, sm: 52 },
-                    px: { xs: 1.25, sm: 1.5 },
-                    borderRadius: 2.25,
-                    justifyContent: 'space-between',
-                    textTransform: 'none',
-                    fontWeight: 900,
-                    color: selected ? 'primary.contrastText' : '#26352F',
-                    backgroundColor: selected ? undefined : '#FFFFFF',
-                    borderColor: selected ? undefined : 'rgba(23, 33, 29, 0.14)',
-                    boxShadow: selected ? '0 10px 22px rgba(10, 128, 105, 0.18)' : 'none',
-                    '&:hover': {
-                      backgroundColor: selected ? undefined : '#FFFFFF',
-                      borderColor: selected ? undefined : 'primary.main',
-                    },
-                  }}
-                >
-                  <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {filter.label}
-                  </Box>
-                  <Box
-                    component="span"
-                    sx={{
-                      ml: 1,
-                      minWidth: 28,
-                      height: 28,
-                      px: 0.75,
-                      borderRadius: 999,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      fontSize: '0.82rem',
-                      backgroundColor: selected ? 'rgba(255,255,255,0.2)' : '#EEF4EF',
-                    }}
-                  >
-                    {filter.count}
-                  </Box>
-                </Button>
-              );
-            })}
-          </Box>
-        </CardContent>
-      </Card>
+        {VIEWS.map(({ key, label }) => (
+          <Tab
+            key={key}
+            id={`tasks-tab-${key}`}
+            aria-controls={`tasks-panel-${key}`}
+            value={key}
+            label={loading ? label : `${label} (${counts[key]})`}
+            sx={{ textTransform: 'none', fontWeight: 800 }}
+          />
+        ))}
+      </Tabs>
 
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-          <CircularProgress size={24} aria-label="Chargement des tâches" />
-        </Box>
-      ) : panels.length === 0 ? (
-        <Alert severity="info">Aucune tâche pour le moment.</Alert>
-      ) : (
-        <Stack spacing={2}>
-          {panels.map(panel => (
-            <TaskPanel
-              key={panel.title}
-              {...panel}
-              pendingStatusIds={pendingStatusIds}
-              onComplete={handleComplete}
-              onView={setTaskToViewId}
-              onEdit={handleEdit}
-              onDelete={setTaskToDelete}
-            />
+      {VIEWS.map(({ key }) => (
+        <Box
+          key={key}
+          role="tabpanel"
+          id={`tasks-panel-${key}`}
+          aria-labelledby={`tasks-tab-${key}`}
+          hidden={view !== key}
+        >
+          {view === key && (loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress size={24} aria-label="Chargement des tâches" />
+            </Box>
+          ) : panels.length === 0 ? (
+            <Alert severity="info">
+              {view === 'open' ? 'Aucune tâche à faire.' : 'Aucune tâche clôturée.'}
+            </Alert>
+          ) : (
+            <Stack spacing={2}>
+              {panels.map(({ key: panelKey, ...panel }) => (
+                <TaskPanel
+                  key={panelKey}
+                  {...panel}
+                  pendingStatusIds={pendingStatusIds}
+                  onComplete={handleComplete}
+                  onReopen={handleReopen}
+                  onView={setTaskToViewId}
+                  onEdit={handleEdit}
+                  onDelete={setTaskToDelete}
+                />
+              ))}
+            </Stack>
           ))}
-        </Stack>
-      )}
+        </Box>
+      ))}
 
       <TaskModal
         key={selectedTask?.id_tache || 'new'}
@@ -390,19 +275,11 @@ function TasksList() {
                 {taskToView.description}
               </Typography>
             )}
-            <Stack component="dl" spacing={0.5} sx={{ m: 0 }}>
-              {[
-                ['Date prévue', formatTaskDate(taskToView)],
-                ['Statut', STATUS_LABELS[taskToView.statut] || taskToView.statut],
-                ['Priorité', PRIORITY_LABELS[taskToView.priorite] || taskToView.priorite],
-                ['Catégorie', taskToView.categorie],
-              ].filter(([, value]) => value).map(([label, value]) => (
-                <Box key={label} sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 1 }}>
-                  <Typography component="dt" variant="body2" color="text.secondary">{label}</Typography>
-                  <Typography component="dd" variant="body2" sx={{ m: 0 }}>{value}</Typography>
-                </Box>
-              ))}
-            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              {getTaskDate(taskToView)
+                ? `Date prévue · ${formatTaskDate(taskToView)}`
+                : 'Sans date prévue'}
+            </Typography>
           </DialogContent>
         )}
         <DialogActions>
@@ -434,48 +311,52 @@ function TasksList() {
         autoHideDuration={8000}
         onClose={(_, reason) => reason !== 'clickaway' && setCompletionToUndo(null)}
         message="Tâche terminée"
-        action={<Button color="inherit" onClick={handleUndo} disabled={Boolean(undoBusy)}>Annuler</Button>}
+        action={completionToUndo && (
+          <Button
+            color="inherit"
+            onClick={() => handleReopen(completionToUndo.id, completionToUndo.previousStatus)}
+            disabled={Boolean(undoBusy)}
+          >
+            Annuler
+          </Button>
+        )}
       />
     </Box>
   );
 }
 
-function TaskPanel({ title, tasks, emptyText, pendingStatusIds, onComplete, onView, onEdit, onDelete }) {
+function TaskPanel({ title, tasks, pendingStatusIds, onComplete, onReopen, onView, onEdit, onDelete }) {
   return (
     <Card component="section" sx={{ borderRadius: 3 }}>
       <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
-        <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 1.25 }}>
-          <Typography component="h2" variant="subtitle1" sx={{ fontWeight: 800 }}>{title}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {tasks.length} {tasks.length === 1 ? 'tâche' : 'tâches'}
+        {title && (
+          <Typography component="h2" variant="subtitle1" sx={{ mb: 1.25, fontWeight: 800 }}>
+            {title}
           </Typography>
-        </Stack>
-        {tasks.length === 0 ? (
-          <Alert severity="info">{emptyText}</Alert>
-        ) : (
-          <Box sx={theme => ({
-            display: 'grid',
-            '--task-grid-gap': theme.spacing(1),
-            gap: 'var(--task-grid-gap)',
-            gridTemplateColumns: {
-              xs: 'minmax(0, 1fr)',
-              // Each track needs 248px or a quarter of the available width, whichever is larger.
-              sm: 'repeat(auto-fill, minmax(min(100%, max(248px, calc((100% - 3 * var(--task-grid-gap)) / 4))), 1fr))',
-            },
-          })}>
-            {tasks.map(task => (
-              <TaskCard
-                key={task.id_tache}
-                task={task}
-                busy={pendingStatusIds.has(task.id_tache)}
-                onComplete={onComplete}
-                onView={onView}
-                onEdit={onEdit}
-                onDelete={onDelete}
-              />
-            ))}
-          </Box>
         )}
+        <Box sx={theme => ({
+          display: 'grid',
+          '--task-grid-gap': theme.spacing(1),
+          gap: 'var(--task-grid-gap)',
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr)',
+            // Each track needs 248px or a quarter of the available width, whichever is larger.
+            sm: 'repeat(auto-fill, minmax(min(100%, max(248px, calc((100% - 3 * var(--task-grid-gap)) / 4))), 1fr))',
+          },
+        })}>
+          {tasks.map(task => (
+            <TaskCard
+              key={task.id_tache}
+              task={task}
+              busy={pendingStatusIds.has(task.id_tache)}
+              onComplete={onComplete}
+              onReopen={onReopen}
+              onView={onView}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          ))}
+        </Box>
       </CardContent>
     </Card>
   );
@@ -483,9 +364,10 @@ function TaskPanel({ title, tasks, emptyText, pendingStatusIds, onComplete, onVi
 
 const taskActionSize = { width: { xs: 44, md: 36 }, height: { xs: 44, md: 36 } };
 
-function TaskCard({ task, busy, onComplete, onView, onEdit, onDelete }) {
+function TaskCard({ task, busy, onComplete, onReopen, onView, onEdit, onDelete }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const done = isTaskDone(task);
+  const action = done ? 'Rouvrir' : 'Terminer';
   const date = getTaskDate(task);
   const overdue = !done && date && date < startOfToday();
   const closeMenu = () => setMenuAnchor(null);
@@ -551,37 +433,43 @@ function TaskCard({ task, busy, onComplete, onView, onEdit, onDelete }) {
         sx={{ mt: 'auto', pt: 0.5, borderTop: '1px solid', borderColor: 'divider' }}
       >
         <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.5} sx={{ minWidth: 0 }}>
-          <Typography variant="caption" color={overdue ? 'error.dark' : 'text.secondary'}>
-            {overdue && 'En retard · '}{formatTaskDate(task, !done)}
-          </Typography>
+          {date && (
+            <Typography variant="caption" color={overdue ? 'error.dark' : 'text.secondary'}>
+              {formatTaskDate(task, !done)}
+            </Typography>
+          )}
           {!done && task.priorite === 'haute' && (
             <Chip label="Prioritaire" color="warning" size="small" variant="outlined" />
           )}
-          {done && <StatusChip value={task.statut} />}
+          {done && (
+            <Chip
+              label={task.statut === 'annule' ? 'Annulée' : 'Terminée'}
+              color={task.statut === 'annule' ? 'default' : 'success'}
+              size="small"
+            />
+          )}
         </Stack>
-        {!done && (
-          <Button
-            aria-label={`Terminer — ${task.titre}`}
-            aria-busy={busy}
-            disabled={busy}
-            onClick={() => onComplete(task)}
-            startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
-            size="small"
-            sx={theme => ({
-              flexShrink: 0,
-              minHeight: taskActionSize.height,
-              px: 1.25,
-              borderRadius: 1.5,
-              textTransform: 'none',
-              fontWeight: 800,
-              color: 'primary.dark',
-              bgcolor: alpha(theme.palette.primary.main, 0.1),
-              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.18) },
-            })}
-          >
-            Terminer
-          </Button>
-        )}
+        <Button
+          aria-label={`${action} — ${task.titre}`}
+          aria-busy={busy}
+          disabled={busy}
+          onClick={() => done ? onReopen(task.id_tache) : onComplete(task)}
+          startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
+          size="small"
+          sx={theme => ({
+            flexShrink: 0,
+            minHeight: taskActionSize.height,
+            px: 1.25,
+            borderRadius: 1.5,
+            textTransform: 'none',
+            fontWeight: 800,
+            color: 'primary.dark',
+            bgcolor: alpha(theme.palette.primary.main, 0.1),
+            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.18) },
+          })}
+        >
+          {action}
+        </Button>
       </Stack>
       <Menu
         anchorEl={menuAnchor}
@@ -593,24 +481,6 @@ function TaskCard({ task, busy, onComplete, onView, onEdit, onDelete }) {
         <MenuItem sx={{ color: 'error.main' }} onClick={() => { closeMenu(); onDelete(task); }}>Supprimer</MenuItem>
       </Menu>
     </Box>
-  );
-}
-
-function StatusChip({ value }) {
-  const colors = {
-    en_attente: 'default',
-    en_cours: 'primary',
-    complete: 'success',
-    annule: 'error',
-  };
-
-  return (
-    <Chip
-      label={STATUS_LABELS[value] || value || 'Statut'}
-      color={colors[value] || 'default'}
-      size="small"
-      sx={{ fontWeight: 800 }}
-    />
   );
 }
 

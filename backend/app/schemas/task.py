@@ -12,7 +12,7 @@ class TacheBase(BaseModel):
     """
     titre: str = Field(..., min_length=1, max_length=255, description="Titre de la tâche")
     description: Optional[str] = Field(None, description="Description de la tâche")
-    date_debut: datetime = Field(..., description="Date et heure de début")
+    date_debut: Optional[datetime] = Field(None, description="Date prévue ou début de l’événement")
     date_fin: Optional[datetime] = Field(None, description="Date et heure de fin")
     est_toute_la_journee: bool = Field(False, description="Événement sur toute la journée")
     statut: str = Field('en_attente', description="Statut (en_attente, en_cours, complete, annule)")

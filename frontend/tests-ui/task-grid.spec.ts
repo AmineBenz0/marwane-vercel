@@ -21,6 +21,7 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
       date_debut: `${today}T09:00:00`, date_fin: `${today}T10:00:00`, est_toute_la_journee: false,
     }));
     const writes: { method: string; id: number; status?: string }[] = [];
+    const savedForms: Record<string, unknown>[] = [];
     let rejectCompletion = width === 1200;
     await mockAuthenticatedSession(page);
     await page.route('**/api/v1/**', async route => {
@@ -28,7 +29,16 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
       const path = new URL(request.url()).pathname;
       const method = request.method();
       if (path === '/api/v1/auth/refresh') return route.fallback();
-      if (path === '/api/v1/tasks') return route.fulfill({ json: tasks });
+      if (path === '/api/v1/tasks') {
+        if (method === 'POST') {
+          const values = request.postDataJSON();
+          savedForms.push(values);
+          const created = { id_tache: 7, statut: 'en_attente', date_debut: null, ...values };
+          tasks.push(created);
+          return route.fulfill({ status: 201, json: created });
+        }
+        return route.fulfill({ json: tasks });
+      }
       const match = /^\/api\/v1\/tasks\/(\d+)$/.exec(path);
       if (!match) return route.fulfill({ json: path.endsWith('/alerts/summary') ? { unread_count: 0 } : [] });
       const id = Number(match[1]);
@@ -44,14 +54,15 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
         return route.fulfill({ status: 500, json: { detail: 'Test de reprise' } });
       }
       writes.push({ method, id, status: update.statut });
+      if (update.titre) savedForms.push(update);
       tasks[index] = { ...tasks[index], ...update };
       return route.fulfill({ json: tasks[index] });
     });
 
     await page.goto('/tasks');
     const card = (name: string) => page.getByRole('article', { name, exact: true });
-    const count = (name: string, value: number) => page.getByRole('button', { name: new RegExp(`^${name}\\s*${value}$`) });
-    await count("Aujourd'hui", 5).click();
+    const count = (name: string, value: number) => page.getByRole('tab', { name: `${name} (${value})`, exact: true });
+    await expect(count('À faire', 5)).toHaveAttribute('aria-selected', 'true');
     const first = card('Vérifier la collecte');
     const second = card('Relever la température');
     const finish = first.getByRole('button', { name: /^Terminer/ });
@@ -66,8 +77,7 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
     const dialog = page.getByRole('dialog');
     await first.getByRole('button', { name: 'Vérifier la collecte', exact: true }).click();
     await expect(dialog.getByText('Vérifier le bâtiment A.')).toBeVisible();
-    await expect(dialog.getByText('travail', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('En cours', { exact: true })).toBeVisible();
+    await expect(dialog.getByText(/^Date prévue · /)).toBeVisible();
     await dialog.getByRole('button', { name: 'Fermer' }).click();
     await expect(dialog).toBeHidden();
     const firstRowSize = await page.getByRole('main').getByRole('article').evaluateAll(cards => {
@@ -78,20 +88,20 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
     if (width === 1200) {
       await finish.click();
       await expect(page.getByText('Impossible de terminer la tâche', { exact: true })).toBeVisible();
-      await expect(count("Aujourd'hui", 5)).toBeVisible();
+      await expect(count('À faire', 5)).toBeVisible();
       expect(writes).toEqual([]);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await expect(first.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
     await finish.click();
     await expect(first).toHaveCount(0);
-    await expect(count("Aujourd'hui", 4)).toBeVisible();
+    await expect(count('À faire', 4)).toBeVisible();
     await count('Clôturées', 2).click();
     await expect(first.getByText('Terminée', { exact: true })).toBeVisible();
     await expect(card('Confirmer la livraison').getByText('Annulée', { exact: true })).toBeVisible();
     await expect(finish).toHaveCount(0);
     await page.getByRole('button', { name: 'Annuler', exact: true }).click();
-    await count("Aujourd'hui", 5).click();
+    await expect(count('À faire', 5)).toHaveAttribute('aria-selected', 'true');
     await expect(finish).toBeVisible();
     expect(writes).toEqual([
       { method: 'PUT', id: 1, status: 'complete' },
@@ -104,6 +114,12 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
     await dialog.getByLabel('Titre').fill('Vérifier la collecte du matin');
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(card('Vérifier la collecte du matin')).toBeVisible();
+    expect(savedForms.at(-1)).toEqual({ titre: 'Vérifier la collecte du matin', description: 'Vérifier le bâtiment A.' });
+
+    await card('Vérifier la collecte du matin').getByRole('button', { name: /^Terminer/ }).click();
+    await count('Clôturées', 2).click();
+    await card('Vérifier la collecte du matin').getByRole('button', { name: /^Rouvrir/ }).click();
+    await expect(count('À faire', 5)).toHaveAttribute('aria-selected', 'true');
 
     await second.getByRole('button', { name: /Actions/ }).click();
     await page.getByRole('menuitem', { name: 'Supprimer' }).click();
@@ -114,7 +130,39 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
     await page.getByRole('menuitem', { name: 'Supprimer' }).click();
     await dialog.getByRole('button', { name: 'Supprimer' }).click();
     await expect(second).toHaveCount(0);
-    await expect(count("Aujourd'hui", 4)).toBeVisible();
+    await expect(count('À faire', 4)).toBeVisible();
     expect(writes.filter(write => write.method === 'DELETE')).toEqual([{ method: 'DELETE', id: 2 }]);
+
+    if (width === 390) {
+      await page.getByRole('button', { name: 'Nouvelle tâche' }).click();
+      await expect(dialog.getByText('Statut', { exact: true })).toHaveCount(0);
+      await expect(dialog.getByLabel(/Date prévue/)).toHaveValue('');
+      await expect(dialog.getByLabel('Consignes', { exact: true })).toHaveCount(0);
+      await dialog.getByLabel('Titre').fill('Ranger la réserve');
+      await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+      await expect(card('Ranger la réserve')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Sans date', exact: true })).toBeVisible();
+      expect(savedForms.at(-1)).toEqual({ titre: 'Ranger la réserve', description: null });
+    }
+
+    if (width === 1440) {
+      const nextDay = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
+      await card('Vérifier la collecte du matin').getByRole('button', { name: /Actions/ }).click();
+      await page.getByRole('menuitem', { name: 'Modifier' }).click();
+      await dialog.getByLabel(/Date prévue/).fill(nextDay);
+      await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+      await expect(card('Vérifier la collecte du matin').getByText('Demain à 09:00')).toBeVisible();
+      expect(savedForms.at(-1)).toMatchObject({
+        date_debut: `${nextDay}T09:00:00.000Z`,
+        date_fin: `${nextDay}T10:00:00.000Z`,
+      });
+
+      await page.goto('/calendar');
+      await page.getByRole('button', { name: /^Nouvelle t[âa]che$/ }).click();
+      await expect(dialog.getByLabel('Début', { exact: true })).toHaveAttribute('type', 'datetime-local');
+      await expect(dialog.getByLabel('Fin', { exact: true })).toHaveAttribute('type', 'datetime-local');
+      await expect(dialog.getByLabel('Toute la journée')).toBeVisible();
+      await expect(dialog.getByText('Statut', { exact: true })).toHaveCount(0);
+    }
   });
 }
