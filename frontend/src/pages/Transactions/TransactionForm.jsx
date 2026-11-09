@@ -1145,55 +1145,99 @@ function TransactionForm({
       </Grid>
     </>;
   };
-  const totalsAndActions = (<>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: watchedTypeEntite === 'client' ? '1fr' : 'repeat(3, minmax(0, 1fr))',
-              '& > div': watchedTypeEntite === 'client' ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 } : undefined,
-              gap: { xs: 1, sm: 3 },
-              width: { xs: '100%', sm: 'auto' },
-            }}
-          >
-            <Box>
-              <Typography variant="caption" color="text.secondary">{watchedTypeEntite === 'client' ? 'Montant de la vente' : 'Montant de l’achat'}</Typography>
-              <Typography variant="subtitle1" fontWeight={800}>{montantTotal.toFixed(2)} MAD</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Déjà payé</Typography>
-              <Typography variant="subtitle1" fontWeight={700}>{montantPaye.toFixed(2)} MAD</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Reste à payer</Typography>
-              <Typography variant="subtitle1" fontWeight={800} color="primary.main">{montantRestant.toFixed(2)} MAD</Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: watchedTypeEntite === 'client' ? 'column-reverse' : 'row', gap: 1, mt: watchedTypeEntite === 'client' ? 2 : 0, width: '100%' }}>
-            <Button
-              onClick={handleClose}
-              disabled={loading}
-              color="inherit"
-              sx={{ flex: { xs: 1, sm: 'initial' } }}
-            >
-              Annuler
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={loading || !isDirty || saleBlocked}
-              startIcon={loading ? <CircularProgress size={16} /> : null}
-              sx={{ flex: { xs: 1, sm: 'initial' } }}
-            >
-              {loading
-                ? 'Enregistrement...'
-                : isEditing
-                  ? 'Enregistrer les modifications'
-                  : watchedTypeEntite === 'client'
-                    ? 'Enregistrer la vente'
-                    : "Enregistrer l’achat"}
-            </Button>
-          </Box>
-  </>);
+  const totalsAndActions = (
+    <Box sx={{
+      display: 'flex',
+      flexDirection: watchedTypeEntite === 'client' ? 'column' : { xs: 'column', md: 'row' },
+      alignItems: 'stretch',
+      justifyContent: 'space-between',
+      gap: { xs: 1.5, md: 3 },
+      width: '100%',
+      minWidth: 0,
+    }}>
+      <Box
+        role="group"
+        aria-label="Récapitulatif des montants"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: watchedTypeEntite === 'client'
+            ? 'minmax(0, 1fr)'
+            : { xs: 'minmax(0, 1fr)', sm: 'repeat(3, minmax(0, 1fr))' },
+          flex: '1 1 auto',
+          minWidth: 0,
+          width: watchedTypeEntite === 'client' ? '100%' : { xs: '100%', md: 'auto' },
+          gap: { xs: 1, sm: 2, md: 2.5 },
+          '& > div': {
+            minWidth: 0,
+            display: watchedTypeEntite === 'client' ? 'flex' : { xs: 'flex', sm: 'block' },
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+          },
+        }}
+      >
+        <Box>
+          <Typography variant="caption" color="text.secondary"
+            sx={{ whiteSpace: watchedTypeEntite === 'client' ? 'normal' : 'nowrap' }}>
+            {watchedTypeEntite === 'client' ? 'Montant de la vente' : 'Montant de l’achat'}
+          </Typography>
+          <Typography variant="subtitle1" fontWeight={800}
+            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {montantTotal.toFixed(2)} MAD
+          </Typography>
+        </Box>
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Déjà payé</Typography>
+          <Typography variant="subtitle1" fontWeight={700}
+            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {montantPaye.toFixed(2)} MAD
+          </Typography>
+        </Box>
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Reste à payer</Typography>
+          <Typography variant="subtitle1" fontWeight={800} color="primary.main"
+            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {montantRestant.toFixed(2)} MAD
+          </Typography>
+        </Box>
+      </Box>
+      <Box sx={{
+        display: 'flex',
+        flexDirection: watchedTypeEntite === 'client' ? 'column-reverse' : { xs: 'column-reverse', sm: 'row' },
+        alignItems: 'stretch',
+        justifyContent: 'flex-end',
+        gap: 1,
+        mt: watchedTypeEntite === 'client' ? 2 : 0,
+        ml: watchedTypeEntite === 'client' ? 0 : { md: 'auto' },
+        width: watchedTypeEntite === 'client' ? '100%' : { xs: '100%', sm: 'auto' },
+        flexShrink: 0,
+      }}>
+        <Button
+          onClick={handleClose}
+          disabled={loading}
+          color="inherit"
+          sx={{ flex: { xs: 1, sm: 'initial' }, whiteSpace: 'nowrap' }}
+        >
+          Annuler
+        </Button>
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={loading || !isDirty || saleBlocked}
+          startIcon={loading ? <CircularProgress size={16} /> : null}
+          sx={{ flex: { xs: 1, sm: 'initial' }, whiteSpace: 'nowrap' }}
+        >
+          {loading
+            ? 'Enregistrement...'
+            : isEditing
+              ? 'Enregistrer les modifications'
+              : watchedTypeEntite === 'client'
+                ? 'Enregistrer la vente'
+                : "Enregistrer l’achat"}
+        </Button>
+      </Box>
+    </Box>
+  );
 
   return (
     <Dialog

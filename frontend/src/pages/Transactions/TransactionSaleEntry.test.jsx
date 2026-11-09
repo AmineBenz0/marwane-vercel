@@ -32,6 +32,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
+  it('keeps the sale summary and actions in their sidebar', async () => {
+    render(<TransactionForm {...props} />);
+    expect(await screen.findByRole('complementary', { name: 'Résumé de la vente' })).toBeVisible();
+    const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
+    expect(summary).toHaveTextContent('Montant de la vente');
+    expect(summary).toHaveTextContent('Déjà payé');
+    expect(summary).toHaveTextContent('Reste à payer');
+    expect(screen.getByRole('button', { name: 'Enregistrer la vente' })).toBeVisible();
+  });
+
+
   it('keeps the saved deferred status when editing a sale that is fully covered', async () => {
     render(<TransactionForm {...props} initialValues={{
       id_transaction: 32, id_client: 1, id_produit: 7, id_batiment: 1,

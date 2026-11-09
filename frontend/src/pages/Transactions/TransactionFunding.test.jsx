@@ -27,6 +27,31 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+describe('Transaction purchase footer', () => {
+  it('keeps the total, paid and remaining figures together in the purchase footer', async () => {
+    render(<TransactionForm open initialValues={transaction} onClose={vi.fn()} onSubmit={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Fournisseur/ })).toHaveTextContent('Supplier'));
+    const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
+    expect(summary).toBeVisible();
+    expect(summary).toHaveTextContent('Montant de l’achat');
+    expect(summary).toHaveTextContent('100.00 MAD');
+    expect(summary).toHaveTextContent('Déjà payé');
+    expect(summary).toHaveTextContent('0.00 MAD');
+    expect(summary).toHaveTextContent('Reste à payer');
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Enregistrer les modifications' })).toBeVisible();
+  });
+
+  it('retains supplier purchase totals even when payments exist', async () => {
+    existingPayments = [{ id_paiement: 12, date_paiement: '2026-10-22', montant: 40, type_paiement: 'cash' }];
+    render(<TransactionForm open initialValues={transaction} onClose={vi.fn()} onSubmit={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Fournisseur/ })).toHaveTextContent('Supplier'));
+    const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
+    expect(summary).toHaveTextContent('100.00 MAD');
+    expect(summary).toHaveTextContent('Reste à payer');
+  });
+});
+
 describe('Supplier funding while editing a transaction', () => {
   it('allows a new cash payment to use the second bank account on an existing unpaid transaction', async () => {
     const submit = vi.fn();
