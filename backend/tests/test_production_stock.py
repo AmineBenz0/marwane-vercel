@@ -384,6 +384,8 @@ def test_cumulative_stock_carries_history_and_deducts_only_sellable_sales(
     ).json()
     assert historical["totals"]["available_eggs"] == 175
     assert historical["totals"]["lost_eggs"] == 3
+    assert historical["totals"]["to_produce_eggs"] is None
+    assert all(category["to_produce_eggs"] is None for category in historical["categories"])
 
     daily = client.get("/api/v1/productions/stock/daily", headers=auth_headers).json()
     assert daily["totals"]["produced_eggs"] == 50

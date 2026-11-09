@@ -884,7 +884,7 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
         total = global_categories.setdefault(key, {
             "type_oeuf": key[0], "calibre": key[1], "label": _category_label(*key),
             "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0, "available_eggs": 0, "reserved_eggs": 0, "physical_eggs": 0,
-            "promised_pending_eggs": 0, "to_produce_eggs": 0,
+            **({"promised_pending_eggs": 0, "to_produce_eggs": 0} if current_demand else {}),
         })
         total["sold_eggs"] += quantity
         total["available_eggs"] -= quantity
@@ -900,7 +900,7 @@ def _stock_report(db: Session, target_date: date, *, cumulative: bool = False):
                 "label": _category_label(type_key, calibre_key),
                 "produced_eggs": 0, "sold_eggs": 0, "lost_eggs": 0,
                 "available_eggs": 0, "reserved_eggs": 0, "physical_eggs": 0,
-                **({"promised_pending_eggs": 0, "to_produce_eggs": 0} if current_demand else {}),
+                "promised_pending_eggs": 0, "to_produce_eggs": 0,
             })
             total["promised_pending_eggs"] += pending
             total["to_produce_eggs"] += to_produce_by_category.get((building_id, type_key, calibre_key), 0)
