@@ -116,9 +116,12 @@ describe('sale entry preserves user input', () => {
     await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
     await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/production-sources', expect.objectContaining({ params: expect.objectContaining({ through_date: new Date().toISOString().slice(0, 10), exclude_transaction_id: 31 }) })));
     fireEvent.change(price(), { target: { value: '1.6' } });
-    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
+    const save = screen.getByRole('button', { name: 'Vérifier les modifications' });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
+    expect(await screen.findByRole('dialog', { name: 'Vérifier les modifications' })).toBeVisible();
+    expect(submit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’enregistrement' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(submit.mock.calls[0][0]).toMatchObject({
       est_promesse: true, date_livraison_prevue: '2099-10-29', prix_unitaire: 1.6,
@@ -138,9 +141,12 @@ describe('sale entry preserves user input', () => {
     }} />);
     const expectedDate = await screen.findByLabelText(/Date prévue de livraison/);
     fireEvent.change(expectedDate, { target: { value: '2099-10-30' } });
-    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
+    const save = screen.getByRole('button', { name: 'Vérifier les modifications' });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
+    expect(await screen.findByRole('dialog', { name: 'Vérifier les modifications' })).toBeVisible();
+    expect(submit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’enregistrement' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     const sent = submit.mock.calls[0][0];
     expect(sent.date_livraison_prevue).toBe('2099-10-30');
