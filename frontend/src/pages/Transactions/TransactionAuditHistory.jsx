@@ -62,15 +62,18 @@ export default function TransactionAuditHistory({ transactionId }) {
         const result = Array.isArray(rows) ? rows : [];
         setEntries(result);
         setHasMore(result.length === PAGE_SIZE);
-        setLoaded(true);
       })
       .catch(() => {
         if (!active) return;
         setError('Impossible de charger cet historique.');
-        setLoaded(true);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        // Keep loading and loaded in sync. Setting loaded in .then/.catch
+        // would run the effect cleanup before .finally, leaving loading true.
+        if (active) {
+          setLoading(false);
+          setLoaded(true);
+        }
       });
     return () => { active = false; };
   }, [expanded, loaded, transactionId]);
