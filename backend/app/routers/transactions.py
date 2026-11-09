@@ -572,6 +572,8 @@ def get_transactions(
 @router.get("/{id}/audit", response_model=List[TransactionAuditRead], status_code=status.HTTP_200_OK)
 def get_transaction_audit(
     id: int,
+    skip: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
@@ -604,17 +606,25 @@ def get_transaction_audit(
     
     # Récupérer tous les enregistrements d'audit pour cette transaction
     # avec les informations de l'utilisateur (jointure)
-    audits = db.query(
+    audit_query = db.query(
         TransactionAudit,
         Utilisateur.nom_utilisateur,
         Utilisateur.email
-    ).join(
+    ).outerjoin(
         Utilisateur, TransactionAudit.id_utilisateur == Utilisateur.id_utilisateur
     ).filter(
         TransactionAudit.id_transaction == id
     ).order_by(
-        TransactionAudit.date_changement.desc()
-    ).all()
+        TransactionAudit.date_changement.desc(),
+        TransactionAudit.id_audit.desc(),
+    )
+    # Existing callers without pagination still receive the full audit list.
+    # A paged reader avoids downloading unbounded history into the detail view.
+    if skip is not None:
+        audit_query = audit_query.offset(skip)
+    if limit is not None:
+        audit_query = audit_query.limit(limit)
+    audits = audit_query.all()
     
     # Construire la liste de réponses avec les informations utilisateur
     audit_list = []
