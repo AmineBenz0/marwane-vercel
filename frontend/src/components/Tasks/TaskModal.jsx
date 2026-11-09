@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { Controller, useForm } from 'react-hook-form';
 import { addDays, addHours, differenceInCalendarDays, format, isValid, parseISO } from 'date-fns';
+import DateField from '../../utils/DateField';
 
 const DATE = 'yyyy-MM-dd';
 const DATE_TIME = "yyyy-MM-dd'T'HH:mm";
@@ -187,16 +188,20 @@ function TaskModal({ open, onClose, task, onSave, onDelete, calendar = false }) 
               />
             </Grid>
             <Grid item xs={12} sm={calendar ? 6 : 12}>
-              <TextField
-                {...register('date_debut', { required: calendar && 'Requis' })}
-                label={calendar ? 'Début' : 'Date prévue (facultative)'}
-                type={calendar && !allDay ? 'datetime-local' : 'date'}
-                fullWidth
-                required={calendar}
-                error={Boolean(errors.date_debut)}
-                helperText={errors.date_debut?.message}
-                InputLabelProps={{ shrink: true }}
-              />
+              {calendar ? (
+                <TextField
+                  {...register('date_debut', { required: 'Requis' })}
+                  label="Début"
+                  type={allDay ? 'date' : 'datetime-local'}
+                  fullWidth
+                  required
+                  error={Boolean(errors.date_debut)}
+                  helperText={errors.date_debut?.message}
+                  InputLabelProps={{ shrink: true }}
+                />
+              ) : (
+                <DateField {...register('date_debut')} label="Date prévue (facultative)" fullWidth />
+              )}
             </Grid>
             {calendar && (
               <>

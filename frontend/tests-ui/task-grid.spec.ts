@@ -149,7 +149,7 @@ for (const [width, columns] of [[390, 1], [768, 2], [1200, 3], [1440, 4]]) {
       const nextDay = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
       await card('Vérifier la collecte du matin').getByRole('button', { name: /Actions/ }).click();
       await page.getByRole('menuitem', { name: 'Modifier' }).click();
-      await dialog.getByLabel(/Date prévue/).fill(nextDay);
+      await dialog.getByLabel(/Date prévue/).fill(nextDay.slice(2).split('-').reverse().join('/'));
       await dialog.getByRole('button', { name: 'Enregistrer' }).click();
       await expect(card('Vérifier la collecte du matin').getByText('Demain à 09:00')).toBeVisible();
       expect(savedForms.at(-1)).toMatchObject({
