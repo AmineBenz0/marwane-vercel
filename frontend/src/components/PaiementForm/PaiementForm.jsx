@@ -79,7 +79,18 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
       };
       fetchLcs();
     }
-    return (
+    return () => { active = false; };
+  }, [typePaiement, clientId, supplierId, isEditing]);
+
+  // Si une LC est sélectionnée, mettre à jour le montant
+  useEffect(() => {
+    if (!isEditing && typePaiement === 'lc') {
+      const selectedLc = availableLcs.find(l => Number(l.id_lc) === Number(selectedLcId));
+      setValue('montant', selectedLc ? Number(selectedLc.montant) : '');
+    }
+  }, [selectedLcId, availableLcs, typePaiement, setValue, isEditing]);
+
+  return (
     <Box>
       {isEditing && defaultValues.source_reglement && (
         <Alert severity="info" sx={{ mb: 2 }}>
