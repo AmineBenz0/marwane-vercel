@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { StockSummary } from './ProductionViews';
 afterEach(cleanup);
@@ -35,7 +35,7 @@ it('keeps the stock breakdown compact and accessible, with readable per-product 
   expect(screen.getByText('1 450 œufs')).toBeVisible();
   expect(screen.getByText('Disponible + réservé')).toBeVisible();
   fireEvent.click(details);
-  expect(screen.queryByText('Stock total')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByText('Stock total')).not.toBeInTheDocument());
 });
 
 it('shows movement counts in the daily activity panel without changing the signed quantities', async () => {
