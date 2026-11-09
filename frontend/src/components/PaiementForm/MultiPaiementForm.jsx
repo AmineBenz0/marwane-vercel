@@ -1,5 +1,5 @@
 import DateField from '../../utils/DateField';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import {
   Box,
   TextField,
@@ -30,13 +30,10 @@ import PropTypes from 'prop-types';
 import { get } from '../../services/api';
 
 const TYPES_PAIEMENT = [
-  { value: 'cash', label: '💵 Espèces' },
-  { value: 'cheque', label: '💳 Chèque' },
-  { value: 'virement', label: '🏦 Virement' },
-  { value: 'carte', label: '💳 Carte' },
-  { value: 'compensation', label: '↔️ Compensation' },
-  { value: 'lc', label: '📜 LC' },
-  { value: 'autre', label: '📄 Autre' },
+  { value: 'cash', label: 'Espèces' },
+  { value: 'cheque', label: 'Chèque' },
+  { value: 'virement', label: 'Virement' },
+  { value: 'lc', label: 'Lettre de crédit' },
 ];
 
 /**
@@ -44,9 +41,21 @@ const TYPES_PAIEMENT = [
  */
 function MultiPaiementForm({ transaction, fields, append, remove, register, errors, watch, setValue, availableLcs, loadingLcs, supplierSource = null }) {
   const watchedFields = watch('paiements');
+  const detailsId = useId();
   const [expandedRows, setExpandedRows] = useState({});
   const [accounts, setAccounts] = useState([]);
   const [accountError, setAccountError] = useState('');
+
+  useEffect(() => {
+    (watchedFields || []).forEach((payment, index) => {
+      if (payment.type_paiement !== 'lc') return;
+      const lc = availableLcs.find(row => Number(row.id_lc) === Number(payment.id_lc));
+      const amount = lc ? Number(lc.montant) : '';
+      const differs = lc ? Number(payment.montant) !== amount
+        : payment.montant !== '' && !Number.isNaN(payment.montant);
+      if (differs) setValue(`paiements.${index}.montant`, amount);
+    });
+  }, [watchedFields, availableLcs, setValue]);
 
   useEffect(() => {
     if (supplierSource !== 'banque') return;
@@ -103,9 +112,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
     const selectedId = lcId === '' ? null : Number(lcId);
     setValue(`paiements.${index}.id_lc`, selectedId, { shouldDirty: true, shouldValidate: true });
     const selectedLc = availableLcs.find(l => Number(l.id_lc) === selectedId);
-    if (selectedLc) {
-      setValue(`paiements.${index}.montant`, Number(selectedLc.montant), { shouldDirty: true, shouldValidate: true });
-    }
+    setValue(`paiements.${index}.montant`, selectedLc ? Number(selectedLc.montant) : '', { shouldDirty: true, shouldValidate: true });
   };
 
   return (
@@ -117,10 +124,10 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
         </Alert>
       )}
       {accountError && <Alert severity="error" sx={{ mb: 2 }}>{accountError}</Alert>}
-      <Alert severity={difference < 0 ? "warning" : "info"} sx={{ mb: 3 }}>
+      <Alert icon={false} severity={difference < 0 ? "warning" : "info"} sx={{ mb: 3, '& .MuiAlert-message': { width: '100%' } }}>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={4}>
-            <Typography variant="caption" color="text.secondary">Total à régler</Typography>
+            <Typography variant="caption" color="text.secondary">À régler</Typography>
             <Typography variant="h6">{formatMontant(montantRestant)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -128,7 +135,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
             <Typography variant="h6" color="primary">{formatMontant(totalSaisi)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
-            <Typography variant="caption" color="text.secondary">Reste</Typography>
+            <Typography variant="caption" color="text.secondary">Reste à régler</Typography>
             <Typography variant="h6" color={difference < 0 ? "warning.main" : "text.primary"}>
               {formatMontant(difference)}
             </Typography>
@@ -142,7 +149,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
             <TableRow sx={{ bgcolor: 'grey.50' }}>
               <TableCell width="50"></TableCell>
               <TableCell>Date</TableCell>
-              <TableCell>Type</TableCell>
+              <TableCell>Mode de paiement</TableCell>
               <TableCell>Montant (MAD)</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -150,6 +157,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
           <TableBody>
             {fields.map((item, index) => {
               const type = watch(`paiements.${index}.type_paiement`);
+              const typeRegistration = register(`paiements.${index}.type_paiement`);
               // Register even while details are collapsed so a missing LC blocks submission.
               const lcRegistration = register(`paiements.${index}.id_lc`, {
                 validate: (value) => type !== 'lc' || (
@@ -163,6 +171,8 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         <IconButton
                           size="small"
                           onClick={() => toggleExpand(index)}
+                          aria-expanded={Boolean(expandedRows[index])}
+                          aria-controls={`${detailsId}-${item.id}`}
                           aria-label={`${expandedRows[index] ? 'Réduire' : 'Développer'} le paiement ${index + 1}`}
                         >
                         {expandedRows[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -185,13 +195,17 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                     </TableCell>
                     <TableCell>
                       <TextField
-                        {...register(`paiements.${index}.type_paiement`)}
+                        {...typeRegistration}
+                        onChange={event => {
+                          typeRegistration.onChange(event);
+                          setValue(`paiements.${index}.id_lc`, null);
+                          if (event.target.value === 'lc') setValue(`paiements.${index}.montant`, '');
+                        }}
                         value={type || 'cash'}
                         select
                         size="small"
                         fullWidth
-                        error={!!errors?.paiements?.[index]?.type_paiement || !!errors?.paiements?.[index]?.id_lc}
-                        helperText={errors?.paiements?.[index]?.id_lc?.message}
+                        error={!!errors?.paiements?.[index]?.type_paiement}
                       >
                         {TYPES_PAIEMENT.map(t => (
                           <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
@@ -222,7 +236,26 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                       )}
                     </TableCell>
                     <TableCell>
+                      {type === 'lc' ? <>
+                      <input type="hidden" {...register(`paiements.${index}.montant`, { valueAsNumber: true, validate: value => Number.isFinite(value) && value > 0 || 'Le montant doit être supérieur à 0' })} />
                       <TextField
+                        {...lcRegistration}
+                        select
+                        value={watch(`paiements.${index}.id_lc`) || ''}
+                        onChange={(event) => handleLcChange(index, event.target.value)}
+                        size="small"
+                        fullWidth
+                        SelectProps={{ displayEmpty: true, inputProps: { 'aria-label': `Lettre de crédit du paiement ${index + 1}` }, renderValue: value => {
+                          const selected = availableLcs.find(lc => Number(lc.id_lc) === Number(value));
+                          return selected ? `${selected.numero_reference} (${formatMontant(selected.montant)})` : 'Sélectionnez une LC';
+                        } }}
+                        disabled={loadingLcs}
+                        error={!!errors?.paiements?.[index]?.id_lc}
+                        helperText={errors?.paiements?.[index]?.id_lc?.message || ''}
+                      >
+                        {availableLcs.map(lc => <MenuItem key={lc.id_lc} value={lc.id_lc}>{lc.numero_reference} ({formatMontant(lc.montant)})</MenuItem>)}
+                      </TextField>
+                      </> : <TextField
                         {...register(`paiements.${index}.montant`, {
                           valueAsNumber: true,
                           required: 'Le montant est requis',
@@ -234,7 +267,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         inputProps={{ step: '0.01', min: '0.01', 'aria-label': `Montant du paiement ${index + 1}` }}
                         error={!!errors?.paiements?.[index]?.montant}
                         helperText={errors?.paiements?.[index]?.montant?.message}
-                      />
+                      />}
                     </TableCell>
                     <TableCell align="right">
                       <IconButton 
@@ -253,7 +286,8 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                   <TableRow>
                     <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
                       <Collapse in={expandedRows[index]} timeout="auto" unmountOnExit>
-                        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, mb: 1 }}>
+                        <Box id={`${detailsId}-${item.id}`} role="region" aria-label={`Détails du paiement ${index + 1}`} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1.5, mb: 1.5 }}>
+                          <Typography variant="body2" fontWeight={700} sx={{ mb: 2 }}>Détails du paiement</Typography>
                           <Grid container spacing={2}>
                             {/* Détails Chèque */}
                             {type === 'cheque' && (
@@ -313,30 +347,6 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                               </Grid>
                             )}
 
-                            {/* Détails LC */}
-                            {type === 'lc' && (
-                              <Grid item xs={12} sm={6}>
-                                <TextField
-                                  {...lcRegistration}
-                                  value={watch(`paiements.${index}.id_lc`) || ''}
-                                  select
-                                  label="Lettre de Crédit"
-                                  size="small"
-                                  fullWidth
-                                  onChange={(e) => handleLcChange(index, e.target.value)}
-                                  error={!!errors?.paiements?.[index]?.id_lc}
-                                  helperText={errors?.paiements?.[index]?.id_lc?.message || (availableLcs.length === 0 && !loadingLcs ? 'Aucune LC disponible pour ce partenaire' : '')}
-                                  disabled={loadingLcs}
-                                >
-                                  {availableLcs.map((l) => (
-                                    <MenuItem key={l.id_lc} value={l.id_lc}>
-                                      {l.numero_reference} ({formatMontant(l.montant)})
-                                    </MenuItem>
-                                  ))}
-                                </TextField>
-                              </Grid>
-                            )}
-
                             {/* Notes */}
                             <Grid item xs={12}>
                               <TextField
@@ -348,6 +358,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                                 rows={1}
                               />
                             </Grid>
+
                           </Grid>
                         </Box>
                       </Collapse>
@@ -370,7 +381,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
               statut_cheque: 'a_encaisser'
             })}
           >
-            Ajouter une ligne de paiement
+            Ajouter un autre paiement
           </Button>
         </Box>
       </TableContainer>
@@ -413,3 +424,4 @@ MultiPaiementForm.propTypes = {
 };
 
 export default MultiPaiementForm;
+

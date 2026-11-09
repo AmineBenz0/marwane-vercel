@@ -4,7 +4,7 @@ import DateField from '../../utils/DateField';
  * 
  * Permet de créer un paiement avec :
  * - Montant et date
- * - Type de paiement (cash, chèque, virement, carte, etc.)
+ * - Type de paiement (espèces, chèque, virement, lettre de crédit)
  * - Informations spécifiques selon le type (chèque, virement)
  * - Validation du montant (ne doit pas dépasser le montant restant)
  */
@@ -29,10 +29,7 @@ const TYPES_PAIEMENT = [
   { value: 'cash', label: '💵 Espèces' },
   { value: 'cheque', label: '💳 Chèque' },
   { value: 'virement', label: '🏦 Virement' },
-  { value: 'carte', label: '💳 Carte bancaire' },
-  { value: 'compensation', label: '↔️ Compensation' },
   { value: 'lc', label: '📜 Lettre de Crédit' },
-  { value: 'autre', label: '📄 Autre' },
 ];
 
 /**
@@ -50,6 +47,9 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
   const typePaiement = watch('type_paiement');
   const montant = watch('montant');
   const selectedLcId = watch('id_lc');
+  const clientId = transaction?.id_client;
+  const supplierId = transaction?.id_fournisseur;
+  const typeRegistration = register('type_paiement');
   const [availableLcs, setAvailableLcs] = useState([]);
   const [loadingLcs, setLoadingLcs] = useState(false);
   
@@ -59,37 +59,27 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
 
   // Charger les LC disponibles quand le type est LC
   useEffect(() => {
+    let active = true;
     if (typePaiement === 'lc' && !isEditing) {
       const fetchLcs = async () => {
         setLoadingLcs(true);
+        setAvailableLcs([]);
         try {
           const params = {};
-          if (transaction?.id_client) params.id_client = transaction.id_client;
-          if (transaction?.id_fournisseur) params.id_fournisseur = transaction.id_fournisseur;
+          if (clientId) params.id_client = clientId;
+          if (supplierId) params.id_fournisseur = supplierId;
           
           const data = await get('/lettres-credit/disponibles', { params });
-          setAvailableLcs(data || []);
+          if (active) setAvailableLcs(data || []);
         } catch (err) {
           console.error('Erreur chargement LC:', err);
         } finally {
-          setLoadingLcs(false);
+          if (active) setLoadingLcs(false);
         }
       };
       fetchLcs();
     }
-  }, [typePaiement, transaction, isEditing]);
-
-  // Si une LC est sélectionnée, mettre à jour le montant
-  useEffect(() => {
-    if (!isEditing && typePaiement === 'lc' && selectedLcId) {
-      const selectedLc = availableLcs.find(l => Number(l.id_lc) === Number(selectedLcId));
-      if (selectedLc) {
-        setValue('montant', parseFloat(selectedLc.montant));
-      }
-    }
-  }, [selectedLcId, availableLcs, typePaiement, setValue, isEditing]);
-
-  return (
+    return (
     <Box>
       {isEditing && defaultValues.source_reglement && (
         <Alert severity="info" sx={{ mb: 2 }}>
@@ -143,13 +133,15 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
                 return true;
               }
             })}
-            label="Montant (MAD)"
+            label={typePaiement === 'lc' ? 'Montant de la LC (MAD)' : 'Montant (MAD)'}
             disabled={isEditing}
             type="number"
             fullWidth
             required
             error={!!errors.montant}
-            helperText={errors.montant?.message || 'Montant en dirhams'}
+            helperText={errors.montant?.message || (typePaiement === 'lc' ? '' : 'Montant en dirhams')}
+            placeholder={typePaiement === 'lc' ? 'Sélectionnez une LC' : undefined}
+            InputProps={{ readOnly: typePaiement === 'lc' }}
             inputProps={{ 
               step: '0.01',
               min: '0.01',
@@ -160,8 +152,14 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
         {/* Type de paiement */}
         <Grid item xs={12}>
           <TextField
-            {...register('type_paiement')}
+            {...typeRegistration}
+            onChange={event => {
+              typeRegistration.onChange(event);
+              setValue('id_lc', null);
+              if (typePaiement === 'lc' || event.target.value === 'lc') setValue('montant', '');
+            }}
             select
+            value={typePaiement || 'cash'}
             label="Type de paiement"
             disabled={isEditing}
             fullWidth
@@ -169,7 +167,9 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
             error={!!errors.type_paiement}
             helperText={errors.type_paiement?.message}
           >
-            {TYPES_PAIEMENT.map((type) => (
+            {(isEditing && ['compensation', 'carte', 'autre'].includes(defaultValues.type_paiement)
+              ? [...TYPES_PAIEMENT, { value: defaultValues.type_paiement, label: `${({ compensation: 'Compensation', carte: 'Carte bancaire', autre: 'Autre' })[defaultValues.type_paiement]} (historique)` }]
+              : TYPES_PAIEMENT).map((type) => (
               <MenuItem key={type.value} value={type.value}>
                 {type.label}
               </MenuItem>
@@ -278,7 +278,7 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
                 value={selectedLcId || ''}
                 fullWidth
                 error={!!errors.id_lc}
-                helperText={errors.id_lc?.message || (availableLcs.length === 0 && !loadingLcs ? 'Aucune LC disponible pour ce partenaire' : '')}
+                helperText={errors.id_lc?.message || ''}
                 disabled={loadingLcs || isEditing}
               >
                 {isEditing && defaultValues.id_lc && (
