@@ -89,6 +89,10 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
           ENVIRONMENT: development
           SECRET_KEY: ci-only-secret
+      - name: Verify production correction foundation on isolated PostgreSQL
+        run: python -m pytest --override-ini addopts='' tests/test_production_correction_foundation_pg.py -q
+        env:
+          POSTGRES_MIGRATION_TEST_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
