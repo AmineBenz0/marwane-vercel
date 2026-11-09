@@ -64,6 +64,7 @@ import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportTransactionsReportPDF } from '../../utils/exportTransactionsReportPDF';
 import { resolveTransactionExportRows } from './resolveTransactionExportReferences';
 import { loadTransactionPages } from './transactionPages';
+import { countTransactionQuickFilters, filterTransactions, summarizeTransactions } from './transactionListModel';
 import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
@@ -618,52 +619,23 @@ function TransactionsList() {
     }));
   }, [transactions, clientsMap, fournisseursMap, produitsMap]);
 
-  const transactionSummary = useMemo(() => {
-    const active = transactionsForGrid.filter(transaction => transaction.est_actif !== false);
-    const ventes = active.filter((transaction) => transaction.id_client !== null);
-    const achats = active.filter((transaction) => transaction.id_fournisseur !== null);
-    const nonPayees = active.filter((transaction) => {
-      const statut = transaction.est_en_retard ? 'en_retard' : (transaction.statut_paiement || 'impaye');
-      return statut === 'impaye' || statut === 'partiel' || statut === 'en_retard';
-    });
+  const quickFilterCounts = useMemo(() => countTransactionQuickFilters(transactionsForGrid), [transactionsForGrid]);
+  const quickFilterOptions = [
+    { id: 'all', label: 'Tout', count: quickFilterCounts.all },
+    { id: 'ventes', label: 'Ventes', count: quickFilterCounts.ventes },
+    { id: 'achats', label: 'Achats', count: quickFilterCounts.achats },
+    { id: 'non_payees', label: 'Non payées', count: quickFilterCounts.non_payees },
+    { id: 'deferred', label: 'Livraisons différées', count: quickFilterCounts.deferred },
+  ];
 
-    return {
-      total: transactionsForGrid.length,
-      ventes: ventes.length,
-      achats: achats.length,
-      nonPayees: nonPayees.length,
-      totalVentes: ventes.reduce((sum, transaction) => sum + parseFloat(transaction.montant_total || 0), 0),
-      totalAchats: achats.reduce((sum, transaction) => sum + parseFloat(transaction.montant_total || 0), 0),
-    };
-  }, [transactionsForGrid]);
-
-  const quickFilterOptions = useMemo(() => [
-    { id: 'all', label: 'Tout', count: transactionSummary.total },
-    { id: 'ventes', label: 'Ventes', count: transactionSummary.ventes },
-    { id: 'achats', label: 'Achats', count: transactionSummary.achats },
-    { id: 'non_payees', label: 'Non payées', count: transactionSummary.nonPayees },
-    { id: 'deferred', label: 'Livraisons différées' },
-  ], [transactionSummary]);
-
-  const displayedTransactions = useMemo(() => {
-    return transactionsForGrid.filter((transaction) => {
-      if (quickFilter === 'deferred') return transaction.est_promesse && (
-        stockFilter === 'all' || (stockFilter === 'pending'
-          ? transaction.est_actif !== false && Number(transaction.quantite_en_attente || 0) > 0
-          : stockFilter === 'reserved'
-          ? transaction.est_actif !== false && Number(transaction.quantite_couverte || 0) > 0
-          : deferredSaleStatus(transaction)?.id === stockFilter)
-      );
-      if (quickFilter === 'ventes') return transaction.id_client !== null;
-      if (quickFilter === 'achats') return transaction.id_fournisseur !== null;
-      if (quickFilter === 'non_payees') {
-        if (transaction.est_actif === false) return false;
-        const statut = transaction.est_en_retard ? 'en_retard' : (transaction.statut_paiement || 'impaye');
-        return statut === 'impaye' || statut === 'partiel' || statut === 'en_retard';
-      }
-      return true;
-    });
-  }, [quickFilter, stockFilter, transactionsForGrid]);
+  const displayedTransactions = useMemo(
+    () => filterTransactions(transactionsForGrid, quickFilter, stockFilter),
+    [quickFilter, stockFilter, transactionsForGrid],
+  );
+  const transactionSummary = useMemo(
+    () => summarizeTransactions(displayedTransactions),
+    [displayedTransactions],
+  );
 
   /**
    * Lignes actuellement affichées dans le registre, utilisées pour les exports.
@@ -781,10 +753,13 @@ function TransactionsList() {
                   key={option.id}
                   variant={quickFilter === option.id ? 'contained' : 'outlined'}
                   size="small"
+                  aria-pressed={quickFilter === option.id}
                   onClick={() => selectQuickFilter(option.id)}
                   sx={{ borderRadius: 999 }}
                 >
-                  {option.label}{!deferredOnly && option.count !== undefined ? ` (${option.count})` : ''}
+                  {option.label}{!loading && (!deferredOnly || option.id === 'deferred') && (
+                    ` (${deferredOnly ? displayedTransactions.length : option.count})`
+                  )}
                 </Button>
               ))}
             </Stack>
@@ -871,7 +846,7 @@ function TransactionsList() {
 
 function TransactionMetric({ label, value, helper, icon, color }) {
   return (
-    <Card sx={{ height: '100%', borderRadius: 2 }}>
+    <Card role="group" aria-label={label} sx={{ height: '100%', borderRadius: 2 }}>
       <CardContent sx={{ p: 2.25 }}>
         <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
           <Box>

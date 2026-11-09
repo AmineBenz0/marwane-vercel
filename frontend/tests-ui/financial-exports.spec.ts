@@ -49,7 +49,10 @@ async function mockFinancialApi(page: Page, transactions = txData, partnerName =
     let result: unknown = [];
     if (p === '/transactions') {
       const filterActive = u.searchParams.get('est_actif');
-      const filtered = filterActive === null ? transactions : transactions.filter(tx => tx.est_actif === (filterActive === 'true'));
+      const filterDeferred = u.searchParams.get('est_promesse');
+      const filtered = transactions.filter(tx =>
+        (filterActive === null || tx.est_actif === (filterActive === 'true')) &&
+        (filterDeferred === null || tx.est_promesse === (filterDeferred === 'true')));
       result = filtered.slice(Number(u.searchParams.get('skip') || 0),
         Number(u.searchParams.get('skip') || 0) + Number(u.searchParams.get('limit') || 500));
     } else if (p === '/clients') result = [{ id_client: 1, nom_client: partnerName, est_actif: true }];
@@ -110,6 +113,67 @@ test('monthly downloads agree on dated balances, projection labels and fractiona
   const source = await readPdf(page, 'PDF');
   for (const label of ['Rapport mensuel', 'PROJECTION AU 30/11/26', 'ACTUEL AU 08/11/26', '195,00 MAD',
     '175,00 MAD', '510,00 MAD', '460,00 MAD', '7,125']) expect(source).toContain(label);
+  expect(writes).toEqual([]);
+});
+
+test('quick filters share register rows and financial totals with Excel and PDF', async ({ page }) => {
+  const transactions = [
+    { ...txData[0], statut_paiement: 'partiel' },
+    { ...txData[1], statut_paiement: 'impaye' },
+    { ...txData[2], statut_paiement: 'paye', montant_paye: '25.50', montant_restant: '0' },
+  ];
+  const writes = await mockFinancialApi(page, transactions);
+  await page.goto('/transactions');
+  const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
+  const metric = (label: string) => page.getByRole('group', { name: label, exact: true }).locator('p');
+  const table = page.getByRole('table');
+  const allPartners = ['Client Test', 'Client historique', 'Fournisseur Test'];
+
+  for (const { filter, partners, sales, purchases, unpaid } of [
+    { filter: 'Ventes', partners: ['Client Test', 'Client historique'], sales: 100, purchases: 0, unpaid: 1 },
+    { filter: 'Achats', partners: ['Fournisseur Test'], sales: 0, purchases: 25.5, unpaid: 0 },
+    { filter: 'Non payées', partners: ['Client Test'], sales: 100, purchases: 0, unpaid: 1 },
+    { filter: 'Livraisons différées', partners: ['Client Test'], sales: 100, purchases: 0, unpaid: 1 },
+  ]) {
+    const button = page.getByRole('button', { name: `${filter} (${partners.length})`, exact: true });
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(metric('Toutes les opérations')).toHaveText(String(partners.length));
+    await expect(metric('À suivre')).toHaveText(String(unpaid));
+    expect(amount(await metric('Ventes').textContent())).toBe(sales);
+    expect(amount(await metric('Achats').textContent())).toBe(purchases);
+    await expect(table.getByText('Service Test', { exact: true })).toHaveCount(partners.length);
+    for (const partner of allPartners) {
+      // The register has an inactive label fallback until the export resolves its name.
+      const label = partner === 'Client historique' ? 'Client #3' : partner;
+      await expect(table.getByText(label, { exact: true })).toHaveCount(partners.includes(partner) ? 1 : 0);
+    }
+
+    const sheet = await exportSheet(page, () => excel.click());
+    const exportedPartners: string[] = [];
+    let excelTotal: number | undefined;
+    sheet.eachRow((row, index) => {
+      if (index === 1) return;
+      if (row.getCell(1).value) exportedPartners.push(String(row.getCell(2).value));
+      if (row.getCell(5).value === 'Total :') excelTotal = amount(row.getCell(6).value);
+    });
+    expect(exportedPartners).toEqual(partners);
+    expect(excelTotal).toBe(sales + purchases);
+
+    const pdf = await readPdf(page);
+    for (const partner of allPartners) {
+      expect(pdf.includes(partner)).toBe(partners.includes(partner));
+    }
+    const pdfTotal = pdf.split('TOTAL ACTIF')[1]?.match(/\(([-\d][\d ,.]+)\) Tj/)?.[1];
+    expect(pdfTotal).toBeDefined();
+    expect(amount(pdfTotal)).toBe(sales + purchases);
+  }
+
+  await page.getByRole('button', { name: 'Réservation complète', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Livraisons différées (0)', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(metric('Toutes les opérations')).toHaveText('0');
+  await expect(excel).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Export PDF', exact: true })).toBeDisabled();
   expect(writes).toEqual([]);
 });
 
