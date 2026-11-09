@@ -249,6 +249,6 @@ describe('Unpaid transaction payment forms', () => {
     const select = screen.getByRole('combobox', { name: /Choisir une Lettre de Crédit/ });
     expect(select).toHaveTextContent('LC-7');
     expect(select).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByLabelText(/Montant \(MAD\)/)).toHaveValue(40);
+    expect(screen.getByLabelText(/Montant de la LC \(MAD\)/)).toHaveValue(40);
   });
 });
