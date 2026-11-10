@@ -9,6 +9,7 @@ from app.models.produit import Produit
 from app.models.transaction import Transaction
 from app.models.paiement import Paiement
 from app.models.lettre_credit import LettreDeCredit
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.cession_lc import CessionLC
 from app.models.caisse import Caisse
 from app.models.caisse_solde_historique import CaisseSoldeHistorique
@@ -39,6 +40,7 @@ __all__ = [
     "Transaction",
     "Paiement",
     "LettreDeCredit",
+    "LettreCreditUtilisation",
     "CessionLC",
     "Caisse",
     "CaisseSoldeHistorique",
