@@ -117,5 +117,5 @@ it('shows grouped verified corrections without hiding the legacy audit', async (
   expect(await screen.findByText('Corrections vérifiées')).toBeVisible();
   expect(screen.getByText('Correction de la transaction')).toBeVisible();
   expect(screen.getByText('Montant total')).toBeVisible();
-  expect(screen.getByText('Date d’échéance')).toBeVisible();
+  expect(screen.getByText(/Date d’échéance\s*:/)).toBeVisible();
 });
