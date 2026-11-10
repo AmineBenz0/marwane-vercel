@@ -5,6 +5,8 @@ ephemeral user. This test refuses non-local or non-testing database targets.
 """
 import os
 from datetime import date, timedelta
+from decimal import Decimal
+from uuid import uuid4
 from urllib.parse import urlsplit
 
 from app.config import settings
@@ -16,6 +18,7 @@ from app.models.fournisseur import Fournisseur
 from app.models.lettre_credit import LettreDeCredit
 from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.paiement import Paiement
+from app.models.transaction import Transaction
 
 
 def _assert_disposable_native(db_session):
@@ -181,3 +184,80 @@ def test_authenticated_lc_transfer_cancel_reuse_and_bank_deposit(
     ).count() == 0
     db_session.refresh(db_session.get(LettreDeCredit, lc_id))
     assert db_session.get(LettreDeCredit, lc_id).statut_cycle == "detenue"
+
+    # Real authenticated cheque preview/apply: pending -> cleared -> rejected.
+    # The effective clearing date, not the cheque's issue date, controls ledger.
+    cheque_tx = Transaction(
+        date_transaction=today - timedelta(days=4),
+        date_echeance=today + timedelta(days=4),
+        id_client=holder.id_client, id_produit=test_produit.id_produit,
+        quantite=1, prix_unitaire=Decimal("100.00"),
+        montant_total=Decimal("100.00"), est_actif=True,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(cheque_tx)
+    db_session.commit()
+    pending = client.post("/api/v1/paiements", headers=auth_headers, json={
+        "id_transaction": cheque_tx.id_transaction,
+        "date_paiement": (today - timedelta(days=3)).isoformat(),
+        "montant": "100.00", "type_paiement": "cheque",
+        "numero_cheque": "R3-CI-AUTH-CHEQUE",
+        "statut_cheque": "a_encaisser",
+        "date_encaissement_prevue": (today - timedelta(days=1)).isoformat(),
+    })
+    assert pending.status_code == 201, pending.text
+    cheque_id = pending.json()["id_paiement"]
+    assert db_session.get(Paiement, cheque_id).statut == "en_attente"
+    assert db_session.query(Caisse).filter_by(
+        id_paiement=cheque_id, statut="active"
+    ).count() == 0
+
+    def correct_cheque(changes):
+        db_session.expire_all()
+        payment = db_session.get(Paiement, cheque_id)
+        command = {
+            "operation_id": str(uuid4()),
+            "reason": "Test de correction du chèque",
+            "target": {
+                "entity_type": "paiement", "entity_id": cheque_id,
+                "expected_version": payment.row_version,
+            },
+            "changes": changes,
+        }
+        preview = client.post("/api/v1/corrections/preview",
+                              headers=auth_headers, json=command)
+        assert preview.status_code == 200, preview.text
+        confirmed = {
+            **command,
+            "dependency_fingerprint": preview.json()["dependency_fingerprint"],
+        }
+        applied = client.post("/api/v1/corrections/apply",
+                              headers=auth_headers, json=confirmed)
+        assert applied.status_code == 200, applied.text
+        replayed = client.post("/api/v1/corrections/apply",
+                               headers=auth_headers, json=confirmed)
+        assert replayed.status_code == 200, replayed.text
+        assert replayed.json()["replayed"] is True
+        return applied.json()
+
+    correct_cheque({
+        "statut_cheque": "encaisse",
+        "date_encaissement_effective": (today - timedelta(days=1)).isoformat(),
+    })
+    db_session.expire_all()
+    assert db_session.get(Paiement, cheque_id).statut == "valide"
+    active = db_session.query(Caisse).filter_by(
+        id_paiement=cheque_id, statut="active"
+    ).one()
+    assert active.date_mouvement.date() == today - timedelta(days=1)
+    assert active.montant == Decimal("100.00")
+
+    correct_cheque({"statut_cheque": "rejete"})
+    db_session.expire_all()
+    assert db_session.get(Paiement, cheque_id).statut == "rejete"
+    assert db_session.query(Caisse).filter_by(
+        id_paiement=cheque_id, statut="active"
+    ).count() == 0
+    assert db_session.query(Caisse).filter_by(
+        id_paiement=cheque_id, statut="annule"
+    ).count() >= 1
