@@ -86,8 +86,9 @@ class Transaction(Base):
 
     @property
     def repartition_stock(self):
+        # Keep the production API's public stock-origin response unchanged.
+        # Correction audit previews expose delivered quantities separately.
         return [dict(id_production=a.id_production, quantite=a.quantite,
-                     quantite_livree=(a.quantite_livree or 0) if self.est_promesse else a.quantite,
                      date_production=a.production.date_production, id_cycle=a.production.id_cycle)
                 for a in self.allocations]
 
@@ -99,7 +100,11 @@ class Transaction(Base):
 
     @property
     def quantite_en_attente(self):
-        return max(0, self.quantite - self.quantite_completee - (self.quantite_annulee or 0)) if self.est_promesse else 0
+        # In the current production workflow, automatic FIFO allocations are
+        # completed immediately; pending quantity means *not yet allocated*.
+        # The separate quantite_completee still tracks delivery evidence for
+        # safe stock corrections and future explicit delivery workflows.
+        return max(0, self.quantite - self.quantite_couverte - (self.quantite_annulee or 0)) if self.est_promesse else 0
 
     @property
     def quantite_completee(self):
