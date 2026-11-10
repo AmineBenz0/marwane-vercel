@@ -42,6 +42,7 @@ from app.services.financial_ledger import void_payment, sync_payment_cash_moveme
 from app.services.financial import validate_payment_date, validate_payment_idempotency
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
+from app.services.lc_lifecycle import payment_lc_role, record_lc_payment_event
 from app.services.ledger import record_correction
 from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations, assign_pending_promises, source_balances
 from app.utils.business_date import business_date
@@ -432,11 +433,13 @@ def create_transactions_with_payments_batch(
                 payment = Paiement(
                     **payment_data.model_dump(exclude={"source_reglement", "id_compte"}),
                     **funding,
+                    role_lc=payment_lc_role(transaction, payment_data.type_paiement),
                     statut=payment_status,
                     id_utilisateur_creation=current_user.id_utilisateur if current_user else None,
                 )
                 db.add(payment)
                 db.flush()
+                record_lc_payment_event(db, payment, transaction, current_user=current_user)
                 sync_payment_cash_movement(
                     db,
                     payment,

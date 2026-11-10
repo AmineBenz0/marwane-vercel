@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Paiements.
 """
-from sqlalchemy import Column, Integer, BigInteger, String, Date, Numeric, case, DateTime, ForeignKey, CheckConstraint, Text, Uuid, UniqueConstraint
+from sqlalchemy import Column, Integer, BigInteger, String, Date, Numeric, case, DateTime, ForeignKey, CheckConstraint, Text, Uuid, UniqueConstraint, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from decimal import Decimal
@@ -50,6 +50,8 @@ class Paiement(Base):
     row_version = Column(BigInteger, nullable=False, server_default='1')
     id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=False, index=True)
     id_lc = Column(Integer, ForeignKey("lettres_credit.id_lc"), nullable=True, index=True)
+    # Direction du règlement LC, indépendante de l’utilisation sortante.
+    role_lc = Column(String(20), nullable=True, index=True)
     id_compte = Column(Integer, ForeignKey("comptes_bancaires.id_compte"), nullable=True, index=True)
     # Snapshot of the supplier's funding source when this payment was created.
     # NULL preserves the routing of historical payments and client payments.
@@ -88,6 +90,13 @@ class Paiement(Base):
     
     # Contraintes
     __table_args__ = (
+        CheckConstraint(
+            "role_lc IS NULL OR (type_paiement = 'lc' AND id_lc IS NOT NULL AND role_lc IN ('reception', 'utilisation'))",
+            name='check_paiement_role_lc',
+        ),
+        Index('uq_lc_payment_role_active', 'id_lc', 'role_lc', unique=True,
+              postgresql_where=text("id_lc IS NOT NULL AND role_lc IS NOT NULL AND statut <> 'annule'"),
+              sqlite_where=text("id_lc IS NOT NULL AND role_lc IS NOT NULL AND statut <> 'annule'")),
         CheckConstraint("nature IN ('paiement','remboursement','credit_recu','credit_transfere')", name='check_paiement_nature'),
         CheckConstraint("(nature IN ('credit_recu','credit_transfere') AND id_affectation IS NOT NULL AND type_paiement='compensation' AND id_compte IS NULL AND id_lc IS NULL AND source_reglement IS NULL AND statut IN ('valide','annule')) OR (nature IN ('paiement','remboursement') AND id_affectation IS NULL)", name='check_paiement_affectation'),
         UniqueConstraint('id_affectation','nature',name='uq_affectation_settlement_side'),

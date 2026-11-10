@@ -53,7 +53,12 @@ const databaseRole = (connectionString) => {
 };
 
 const isRuntimeDatabaseRole = (role) =>
-  role === "app_runtime" || /^app_runtime\.[a-z0-9]+$/.test(role);
+  role === "app_runtime" ||
+  /^app_runtime\.[a-z0-9]+$/.test(role) ||
+  // A Release 3 QA login inherits the existing least-privilege app_runtime
+  // policy. Supabase's shared pooler appends the project ref to that role.
+  (environment === "preview" &&
+    /^app_runtime\.r3preview\.[a-z0-9]+$/.test(role));
 
 if (!databaseUrl || isLocalDatabase(databaseUrl)) {
   errors.push("DATABASE_URL must point to a managed database");

@@ -1,5 +1,7 @@
 from datetime import date, timedelta
 
+import pytest
+
 from app.models.cession_lc import CessionLC
 from app.models.caisse import Caisse
 from app.models.client import Client
@@ -7,6 +9,7 @@ from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.fournisseur import Fournisseur
 from app.models.lettre_credit import LettreDeCredit
+from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.models.paiement import Paiement
 from app.models.produit import Produit
 from app.models.transaction import Transaction
@@ -29,6 +32,8 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
         montant=1000,
         date_emission=date.today() - timedelta(days=10),
         date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=date.today() - timedelta(days=2),
+        id_client_origine=original_holder.id_client,
         type_detenteur="client",
         id_client=original_holder.id_client,
         statut="active",
@@ -64,25 +69,24 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     assert first_use.json()["statut"] == "utilisee"
     assert first_use.json()["version_utilisation"] == 1
     original_cession_1 = db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).one()
-    original_cash_movement = db_session.query(Caisse).filter_by(
-        id_cession=original_cession_1.id_cession,
+    original_usage = db_session.query(LettreCreditUtilisation).filter_by(
+        id_lc=lc.id_lc, id_cession=original_cession_1.id_cession,
         statut="active",
     ).one()
-    assert original_cash_movement.type_mouvement == "SORTIE"
-    assert original_cash_movement.montant == lc.montant
+    assert original_usage.type_utilisation == "fournisseur"
+    assert original_usage.id_fournisseur == supplier.id_fournisseur
+    # A transfer consumes the LC instrument, not physical cash.
+    assert db_session.query(Caisse).filter_by(id_cession=original_cession_1.id_cession).count() == 0
     cash_response = client.get("/api/v1/caisse/mouvements", headers=auth_headers)
     assert cash_response.status_code == 200, cash_response.text
-    cash_row = next(row for row in cash_response.json() if row["id_cession"] == original_cession_1.id_cession)
-    assert cash_row["numero_reference_lc"] == lc.numero_reference
+    assert all(row["id_cession"] is None for row in cash_response.json())
 
     first_cancel = cancel(1)
     assert first_cancel.status_code == 200, first_cancel.text
     assert first_cancel.json()["statut"] == "active"
     assert first_cancel.json()["version_utilisation"] == 1
     db_session.expire_all()
-    assert db_session.query(Caisse).filter_by(
-        id_mouvement=original_cash_movement.id_mouvement
-    ).one().statut == "annule"
+    assert db_session.get(LettreCreditUtilisation, original_usage.id_utilisation).statut == "annulee"
 
     stored_lc = db_session.query(LettreDeCredit).filter_by(id_lc=lc.id_lc).one()
     assert stored_lc.est_disponible
@@ -95,8 +99,8 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     ).one()
     assert first_reversal.type_cedant == "fournisseur"
     assert first_reversal.id_cedant_fournisseur == supplier.id_fournisseur
-    assert first_reversal.type_cessionnaire == "client"
-    assert first_reversal.id_cessionnaire_client == original_holder.id_client
+    assert first_reversal.type_cessionnaire == "entreprise"
+    assert first_reversal.id_cessionnaire_client is None
     assert original_cession_1.motif is not None
     assert "Contrepassation" in first_reversal.motif
 
@@ -127,6 +131,8 @@ def test_supplier_use_can_be_undone_reused_and_undone_again(
     cessions = db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).order_by(CessionLC.id_cession).all()
     assert len(cessions) == 4
     assert [row.id_cession_origine for row in cessions] == [None, cessions[0].id_cession, None, cessions[2].id_cession]
+    assert db_session.query(LettreCreditUtilisation).filter_by(id_lc=lc.id_lc, statut="active").count() == 0
+    assert db_session.query(LettreCreditUtilisation).filter_by(id_lc=lc.id_lc, statut="annulee").count() == 2
     assert db_session.query(CorrectionFinanciere).filter_by(
         type_entite="cession_lc", action="annulation"
     ).count() == 2
@@ -144,8 +150,9 @@ def test_payment_use_reversal_restores_amount_due_across_reuse_cycles(
     app.dependency_overrides[get_current_active_user] = lambda: test_user
 
     holder = Client(nom_client="LC payment holder")
-    product = Produit(nom_produit="LC payment product")
-    db_session.add_all([holder, product])
+    supplier = Fournisseur(nom_fournisseur="LC payment supplier")
+    product = Produit(nom_produit="LC payment product", type_produit="service")
+    db_session.add_all([holder, supplier, product])
     db_session.flush()
     transaction = Transaction(
         date_transaction=date.today(),
@@ -154,7 +161,7 @@ def test_payment_use_reversal_restores_amount_due_across_reuse_cycles(
         prix_unitaire=1000,
         montant_total=1000,
         est_actif=True,
-        id_client=holder.id_client,
+        id_fournisseur=supplier.id_fournisseur,
         id_utilisateur_creation=test_user.id_utilisateur,
     )
     lc = LettreDeCredit(
@@ -162,6 +169,8 @@ def test_payment_use_reversal_restores_amount_due_across_reuse_cycles(
         montant=1000,
         date_emission=date.today() - timedelta(days=10),
         date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=date.today() - timedelta(days=2),
+        id_client_origine=holder.id_client,
         type_detenteur="client",
         id_client=holder.id_client,
         statut="active",
@@ -253,6 +262,8 @@ def test_bank_deposit_uses_a_new_idempotency_key_after_each_cancellation(
         montant=1000,
         date_emission=date.today() - timedelta(days=10),
         date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=date.today() - timedelta(days=2),
+        id_client_origine=holder.id_client,
         type_detenteur="client",
         id_client=holder.id_client,
         statut="active",
@@ -292,6 +303,10 @@ def test_bank_deposit_uses_a_new_idempotency_key_after_each_cancellation(
             id_compte=account.id_compte
         ).one()
         assert stored_account.solde_actuel == 250
+        stored_lc = db_session.get(LettreDeCredit, lc.id_lc)
+        assert stored_lc.statut_cycle == "detenue"
+        assert stored_lc.id_client == holder.id_client
+        assert db_session.query(LettreCreditUtilisation).filter_by(id_lc=lc.id_lc, statut="active").count() == 0
         assert db_session.query(MouvementBancaire).filter_by(
             cle_idempotence=f"lc-bank-deposit-{lc.id_lc}-{expected_version + 1}",
             statut="annule",
@@ -303,3 +318,84 @@ def test_bank_deposit_uses_a_new_idempotency_key_after_each_cancellation(
     stored_lc = db_session.query(LettreDeCredit).filter_by(id_lc=lc.id_lc).one()
     assert stored_lc.statut == "active"
     assert stored_lc.version_utilisation == 2
+
+
+@pytest.mark.parametrize("provenance", ["missing_origin", "missing_receipt", "future_receipt"])
+def test_unverified_lc_cannot_be_transferred_or_deposited(
+    client, db_session, auth_headers, test_user, provenance,
+):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+
+    holder = Client(nom_client="Unverified LC origin")
+    supplier = Fournisseur(nom_fournisseur="Unverified LC supplier")
+    account = CompteBancaire(nom_banque="Unverified LC account", numero_compte="UNVERIFIED-001", solde_actuel=0)
+    db_session.add_all([holder, supplier, account])
+    db_session.flush()
+    lc = LettreDeCredit(
+        numero_reference=f"LC-UNVERIFIED-{provenance}",
+        montant=100,
+        date_emission=date.today() - timedelta(days=10),
+        date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=None if provenance == "missing_receipt" else (
+            date.today() + timedelta(days=1) if provenance == "future_receipt"
+            else date.today() - timedelta(days=2)),
+        id_client_origine=None if provenance == "missing_origin" else holder.id_client,
+        statut_cycle="detenue",
+        type_detenteur="client", id_client=holder.id_client,
+        statut="active", version_utilisation=0,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(lc)
+    db_session.commit()
+
+    transfer = client.post(f"/api/v1/lettres-credit/{lc.id_lc}/payer-fournisseur", json={
+        "id_fournisseur": supplier.id_fournisseur,
+        "date_cession": date.today().isoformat(),
+        "version_utilisation": 0,
+    }, headers=auth_headers)
+    deposit = client.post(f"/api/v1/lettres-credit/{lc.id_lc}/verser-banque", json={
+        "id_compte": account.id_compte, "version_utilisation": 0,
+    }, headers=auth_headers)
+    assert transfer.status_code == 409, transfer.text
+    assert deposit.status_code == 409, deposit.text
+    db_session.refresh(lc)
+    assert lc.statut == "active" and lc.version_utilisation == 0
+    assert db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).count() == 0
+    assert db_session.query(LettreCreditUtilisation).filter_by(id_lc=lc.id_lc).count() == 0
+    assert db_session.query(MouvementBancaire).filter_by(source="lc").count() == 0
+
+
+def test_supplier_lc_transfer_cannot_be_backdated_before_receipt(
+    client, db_session, auth_headers, test_user,
+):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    holder = Client(nom_client="Transfer-date holder")
+    supplier = Fournisseur(nom_fournisseur="Transfer-date supplier")
+    db_session.add_all([holder, supplier])
+    db_session.flush()
+    lc = LettreDeCredit(
+        numero_reference="LC-TRANSFER-DATE-VALIDATION",
+        montant=100,
+        date_emission=date.today() - timedelta(days=10),
+        date_disponibilite=date.today() - timedelta(days=5),
+        date_reception=date.today() - timedelta(days=1),
+        id_client_origine=holder.id_client, statut_cycle="detenue",
+        type_detenteur="client", id_client=holder.id_client,
+        statut="active", version_utilisation=0,
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(lc)
+    db_session.commit()
+    response = client.post(f"/api/v1/lettres-credit/{lc.id_lc}/payer-fournisseur", json={
+        "id_fournisseur": supplier.id_fournisseur,
+        "date_cession": (date.today() - timedelta(days=2)).isoformat(),
+        "version_utilisation": 0,
+    }, headers=auth_headers)
+    assert response.status_code == 422, response.text
+    db_session.refresh(lc)
+    assert lc.statut == "active" and lc.version_utilisation == 0
+    assert db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).count() == 0

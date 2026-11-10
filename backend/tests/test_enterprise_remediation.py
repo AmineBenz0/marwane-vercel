@@ -229,8 +229,8 @@ def test_receivables_payment_summary_and_void_are_auditable(client, db_session, 
     assert db_session.query(Alerte).count() == 0
 
 
-def test_client_letter_of_credit_cannot_pay_supplier_transaction(client, auth_headers):
-    """A client-owned LC must never be accepted for a supplier payable."""
+def test_client_received_letter_of_credit_can_pay_supplier_transaction(client, auth_headers):
+    """A received LC may settle a supplier debt while retaining its originating client."""
     client_row = client.post(
         "/api/v1/clients",
         json={"nom_client": "Client LC propriétaire"},
@@ -254,6 +254,7 @@ def test_client_letter_of_credit_cannot_pay_supplier_transaction(client, auth_he
 
     lc = client.post("/api/v1/lettres-credit", json={
         "numero_reference": "LC-CLIENT-SUPPLIER-MISMATCH",
+        "date_reception": date.today().isoformat(),
         "montant": 100,
         "date_emission": date.today().isoformat(),
         "date_disponibilite": date.today().isoformat(),
@@ -268,8 +269,7 @@ def test_client_letter_of_credit_cannot_pay_supplier_transaction(client, auth_he
         "type_paiement": "lc",
         "id_lc": lc.json()["id_lc"],
     }, headers=auth_headers)
-    assert payment.status_code == 400
-    assert "fournisseur" in payment.json()["detail"].lower()
+    assert payment.status_code == 201, payment.text
 
 
 def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_headers):

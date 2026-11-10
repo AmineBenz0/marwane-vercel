@@ -43,7 +43,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import LCFormModal from './LCFormModal';
 
 const FILTERS = [
-  { value: 'disponibles', label: 'Disponibles' },
+  { value: 'disponibles', label: 'Non utilisées' },
   { value: 'utilisees', label: 'Utilisées' },
   { value: 'toutes', label: 'Toutes' },
 ];
@@ -55,14 +55,22 @@ const formatDate = (value) => {
   return new Date(`${value}T00:00:00`).toLocaleDateString('fr-FR');
 };
 
-const isActiveLc = (lc) => lc?.statut === 'active';
-const isUsedLc = (lc) => lc?.statut === 'utilisee';
+const isActiveLc = (lc) => lc?.statut_cycle === 'detenue'
+  || (lc?.statut_cycle === 'a_verifier' ? lc?.statut === 'active' : !lc?.statut_cycle && lc?.statut === 'active');
+const isUsedLc = (lc) => ['transferee', 'deposee', 'annulee'].includes(lc?.statut_cycle)
+  || (lc?.statut_cycle === 'a_verifier' ? lc?.statut === 'utilisee' : !lc?.statut_cycle && lc?.statut === 'utilisee');
 const canUseLc = (lc) => isActiveLc(lc) && Boolean(lc?.est_disponible);
 
 const getLcState = (lc) => {
   if (canUseLc(lc)) {
     return { label: 'Disponible', tone: 'success' };
   }
+
+  if (lc?.statut_cycle === 'transferee') return { label: 'Transférée au fournisseur', tone: 'default' };
+  if (lc?.statut_cycle === 'deposee') return { label: 'Déposée en banque', tone: 'info' };
+  if (lc?.statut_cycle === 'annulee') return { label: 'Annulée', tone: 'error' };
+  if (lc?.statut_cycle === 'a_verifier') return lc.statut === 'active'
+    ? { label: 'Non utilisée', tone: 'default' } : { label: 'Utilisée', tone: 'default' };
 
   if (isActiveLc(lc)) {
     return { label: `Le ${formatDate(lc.date_disponibilite)}`, tone: 'warning' };
@@ -86,7 +94,6 @@ function LettresCreditList() {
   const [activeFilter, setActiveFilter] = useState('disponibles');
   const [actionDialog, setActionDialog] = useState(null);
   const [targetId, setTargetId] = useState('');
-  const [notes, setNotes] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [cancelDialogLc, setCancelDialogLc] = useState(null);
@@ -156,14 +163,12 @@ function LettresCreditList() {
   const openActionDialog = (type, lc) => {
     setActionDialog({ type, lc });
     setTargetId('');
-    setNotes('');
   };
 
   const closeActionDialog = () => {
     if (actionLoading) return;
     setActionDialog(null);
     setTargetId('');
-    setNotes('');
   };
 
   const handleConfirmAction = async () => {
@@ -171,11 +176,9 @@ function LettresCreditList() {
 
     setActionLoading(true);
     try {
-      const payloadNotes = notes.trim() || null;
       if (actionDialog.type === 'bank') {
         await lettreCreditService.verserBanque(actionDialog.lc.id_lc, {
           id_compte: Number(targetId),
-          notes: payloadNotes,
           version_utilisation: actionDialog.lc.version_utilisation,
         });
         notification.success('LC versée en banque');
@@ -183,7 +186,6 @@ function LettresCreditList() {
         await lettreCreditService.payerFournisseur(actionDialog.lc.id_lc, {
           id_fournisseur: Number(targetId),
           date_cession: format(new Date(), 'yyyy-MM-dd'),
-          notes: payloadNotes,
           version_utilisation: actionDialog.lc.version_utilisation,
         });
         notification.success('Fournisseur payé avec la LC');
@@ -257,9 +259,6 @@ function LettresCreditList() {
           <Typography variant="h4" component="h1" sx={{ fontWeight: 900, letterSpacing: '-0.04em' }}>
             Lettres de crédit
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 720, lineHeight: 1.6 }}>
-            Les LC disponibles sont comptées dans la caisse jusqu'à leur versement en banque ou leur utilisation pour payer un fournisseur.
-          </Typography>
         </Box>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
@@ -293,9 +292,9 @@ function LettresCreditList() {
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <SummaryCard
-            title="LC disponibles"
+            title="LC non utilisées"
             value={stats.activeCount}
-            helper={stats.futureCount > 0 ? `${stats.futureCount} à venir` : 'Prêtes à suivre'}
+            helper={stats.futureCount > 0 ? `${stats.futureCount} à venir` : ''}
             tone="info"
             icon={<BankIcon />}
           />
@@ -374,12 +373,9 @@ function LettresCreditList() {
                 Registre des LC
               </Typography>
               <Typography color="text.secondary">
-                {filteredLcs.length} résultat(s), avec le montant visible sur chaque LC.
+                {filteredLcs.length} LC
               </Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 360 }}>
-              Une LC active reste dans la caisse. Dès qu'elle est versée ou utilisée, elle passe en utilisée.
-            </Typography>
           </Stack>
         </Box>
 
@@ -416,8 +412,6 @@ function LettresCreditList() {
         fournisseurs={fournisseurs}
         targetId={targetId}
         setTargetId={setTargetId}
-        notes={notes}
-        setNotes={setNotes}
         loading={actionLoading}
         onClose={closeActionDialog}
         onConfirm={handleConfirmAction}
@@ -493,9 +487,9 @@ function SummaryCard({ title, value, helper, icon, tone }) {
             <Typography variant="h4" sx={{ fontWeight: 900, mt: 1, letterSpacing: '-0.04em' }}>
               {value}
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            {helper && <Typography color="text.secondary" sx={{ mt: 0.5 }}>
               {helper}
-            </Typography>
+            </Typography>}
           </Box>
           <Box
             sx={{
@@ -581,7 +575,7 @@ function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) 
 
           {isActiveLc(lc) && !usable && (
             <Alert severity="info" sx={{ borderRadius: 3 }}>
-              Cette LC est enregistrée, mais pas encore utilisable.
+              Utilisable à partir du {formatDate(lc.date_disponibilite)}.
             </Alert>
           )}
 
@@ -712,8 +706,6 @@ function ActionDialog({
   fournisseurs,
   targetId,
   setTargetId,
-  notes,
-  setNotes,
   loading,
   onClose,
   onConfirm,
@@ -764,20 +756,11 @@ function ActionDialog({
                   key={isBank ? option.id_compte : option.id_fournisseur}
                   value={isBank ? option.id_compte : option.id_fournisseur}
                 >
-                  {isBank ? option.nom_compte : option.nom_fournisseur}
+                  {isBank ? `${option.nom_banque} · ${option.numero_compte}` : option.nom_fournisseur}
                 </MenuItem>
               ))}
             </TextField>
 
-            <TextField
-              label="Note optionnelle"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-              placeholder="Ex: dépôt du matin, paiement aliment..."
-            />
           </Stack>
         )}
       </DialogContent>
@@ -799,3 +782,4 @@ function ActionDialog({
 }
 
 export default LettresCreditList;
+
