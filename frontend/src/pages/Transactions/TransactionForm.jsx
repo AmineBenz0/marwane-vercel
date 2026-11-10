@@ -66,6 +66,7 @@ import { get, post, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
+import { auditedCorrectionChanges } from './auditedCorrectionChanges';
 
 const EMPTY_INITIAL_VALUES = {};
 
@@ -613,30 +614,14 @@ function TransactionForm({
           if (transactionData.date_transaction === initialValues.date_transaction?.slice(0, 10)) delete transactionData.date_transaction;
         }
         const payload = { ...transactionData, paiements: paiementsData };
-        // Route only independently safe changes through the audited command.
-        // Other existing edits retain their current route and validations;
-        // stock, financial settlement and instrument corrections are never
-        // silently sent to the restricted command.
-        const normalize = (key, value) => {
-          if (value === undefined || value === null || value === '') return null;
-          if (key.startsWith('date_')) return String(value).slice(0, 10);
-          if (['est_actif', 'est_promesse', 'allocation_automatique'].includes(key)) return Boolean(value);
-          return Number(value);
-        };
-        const comparable = [
-          'date_transaction', 'date_echeance', 'id_client', 'id_fournisseur',
-          'id_produit', 'id_production', 'id_batiment', 'id_cycle',
-          'quantite', 'prix_unitaire', 'est_actif', 'est_promesse',
-          'allocation_automatique', 'date_livraison_prevue',
-        ];
-        const changed = comparable.filter(key => key in payload
-          && normalize(key, initialValues[key]) !== normalize(key, payload[key]));
-        const allowed = new Set(['date_echeance', 'prix_unitaire', 'id_client']);
-        const audited = changed.length > 0 && changed.every(key => allowed.has(key))
-          && paiementsData.length === 0 && initialValues.row_version > 0;
+        // Only the safe, unchanged-payment slice uses the new command.
+        const auditedChanges = auditedCorrectionChanges(
+          initialValues, payload, paiementsData, paiementsExistants,
+        );
         let correction = null;
-        if (audited) {
-          const changes = Object.fromEntries(changed.map(key => [key, payload[key]]));
+        if (auditedChanges) {
+          const changes = { ...auditedChanges };
+          if ('prix_unitaire' in changes) changes.prix_unitaire = String(data.lignes[0].prix_unitaire);
           const command = {
             operation_id: crypto.randomUUID(),
             reason: 'Correction de la transaction',
