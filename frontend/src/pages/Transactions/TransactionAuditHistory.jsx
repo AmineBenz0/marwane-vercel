@@ -12,6 +12,9 @@ const PAGE_SIZE = 10;
 
 const fieldLabels = {
   date_transaction: 'Date de transaction',
+  date_echeance: 'Date d’échéance',
+  prix_unitaire: 'Prix unitaire',
+  notes: 'Note de règlement',
   montant_total: 'Montant total',
   est_actif: 'État de la transaction',
   id_client: 'Client',
@@ -50,6 +53,13 @@ export default function TransactionAuditHistory({ transactionId }) {
   const [entries, setEntries] = useState([]);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState('');
+  const [correctionEntries, setCorrectionEntries] = useState([]);
+  const [correctionNames, setCorrectionNames] = useState({});
+  const [correctionsLoaded, setCorrectionsLoaded] = useState(false);
+  const [correctionsLoading, setCorrectionsLoading] = useState(false);
+  const [correctionsError, setCorrectionsError] = useState('');
+  const [nextCorrectionsOffset, setNextCorrectionsOffset] = useState(null);
+
 
   useEffect(() => {
     if (!expanded || loaded || !transactionId) return undefined;
@@ -77,6 +87,59 @@ export default function TransactionAuditHistory({ transactionId }) {
       });
     return () => { active = false; };
   }, [expanded, loaded, transactionId]);
+
+  useEffect(() => {
+    if (!expanded || correctionsLoaded || !transactionId) return undefined;
+    let active = true;
+    setCorrectionsLoading(true);
+    setCorrectionsError('');
+    get('/corrections/history', { params: { transaction_id: transactionId, offset: 0, limit: 20 } })
+      .then(result => {
+        if (!active) return;
+        setCorrectionEntries(result.items || []);
+        setCorrectionNames(result.names || {});
+        setNextCorrectionsOffset(result.has_more ? result.next_offset : null);
+      })
+      .catch(() => {
+        if (active) setCorrectionsError('Historique des corrections temporairement indisponible.');
+      })
+      .finally(() => {
+        if (active) {
+          setCorrectionsLoading(false);
+          setCorrectionsLoaded(true);
+        }
+      });
+    return () => { active = false; };
+  }, [expanded, correctionsLoaded, transactionId]);
+
+  const loadMoreCorrections = async () => {
+    if (nextCorrectionsOffset === null || correctionsLoading) return;
+    setCorrectionsLoading(true);
+    setCorrectionsError('');
+    try {
+      const result = await get('/corrections/history', {
+        params: { transaction_id: transactionId, offset: nextCorrectionsOffset, limit: 20 },
+      });
+      setCorrectionEntries(previous => [...previous, ...(result.items || [])]);
+      setCorrectionNames(previous => ({ ...previous, ...(result.names || {}) }));
+      setNextCorrectionsOffset(result.has_more ? result.next_offset : null);
+    } catch {
+      setCorrectionsError('Impossible de charger les corrections précédentes.');
+    } finally {
+      setCorrectionsLoading(false);
+    }
+  };
+
+  const correctionValue = (field, value) => {
+    if (value == null) return 'Non renseigné';
+    const known = correctionNames[field]?.[String(value)];
+    if (known) return known;
+    if (field === 'date_echeance') return formatShortDate(value);
+    if (['prix_unitaire', 'montant_total', 'montant'].includes(field)) {
+      return formatMontant(Number(value), { useCompactNotation: false, minimumFractionDigits: 2 });
+    }
+    return displayValue(field, value);
+  };
 
   const loadMore = async () => {
     if (loading || !hasMore) return;
@@ -143,6 +206,60 @@ export default function TransactionAuditHistory({ transactionId }) {
         )}
         {loaded && !loading && !error && entries.length === 0 && (
           <Typography variant="body2" color="text.secondary">Aucune modification enregistrée.</Typography>
+        )}
+        {correctionsLoading && correctionEntries.length === 0 && (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <CircularProgress size={16} /><Typography variant="body2">Vérification des corrections…</Typography>
+          </Stack>
+        )}
+        {correctionsError && (
+          <Alert severity="warning" sx={{ mb: 2 }}
+            action={<Button size="small" onClick={() => {
+              setCorrectionsLoaded(false);
+              setCorrectionsError('');
+            }}>Réessayer</Button>}>
+            {correctionsError}
+          </Alert>
+        )}
+        {correctionEntries.length > 0 && (
+          <Box sx={{ mb: 2.5 }}>
+            <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
+              Corrections vérifiées
+            </Typography>
+            <Stack spacing={1.5}>
+              {correctionEntries.map(entry => (
+                <Box key={entry.operation_id} sx={{
+                  border: '1px solid', borderColor: 'divider',
+                  borderRadius: 2, p: 1.5, bgcolor: 'background.default',
+                }}>
+                  <Typography variant="body2" fontWeight={700}>
+                    {entry.reason || 'Correction enregistrée'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatShortDateTime(entry.recorded_at)} · {entry.actor_name || 'Utilisateur'}
+                  </Typography>
+                  {Object.keys(entry.changes || {}).filter(field => field in (entry.before || {})).map(field => (
+                    <Stack key={field} direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="caption" fontWeight={600}>
+                        {fieldLabels[field] || field} :
+                      </Typography>
+                      <Typography variant="caption">{correctionValue(field, entry.before[field])}</Typography>
+                      <ArrowForward color="disabled" sx={{ fontSize: 16 }} />
+                      <Typography variant="caption" fontWeight={700}>
+                        {correctionValue(field, entry.after?.[field])}
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Box>
+              ))}
+            </Stack>
+            {nextCorrectionsOffset !== null && (
+              <Button size="small" sx={{ mt: 1 }} onClick={loadMoreCorrections}
+                disabled={correctionsLoading}>
+                {correctionsLoading ? 'Chargement…' : 'Voir les corrections précédentes'}
+              </Button>
+            )}
+          </Box>
         )}
         <Stack spacing={0} divider={<Divider />}>
           {entries.map(entry => (
