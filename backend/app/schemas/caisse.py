@@ -1,6 +1,7 @@
 """
 Schémas Pydantic pour la validation des données caisse.
 """
+from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Literal
 from datetime import datetime
@@ -67,6 +68,8 @@ class MouvementCaisseRead(MouvementCaisseBase):
     Inclut les champs générés automatiquement (id, date).
     """
     numero_reference_lc: str | None = Field(None, description="Référence de la lettre de crédit associée")
+    id_avance: UUID | None = None
+    nature_reglement: str | None = None
     id_mouvement: int = Field(..., description="Identifiant unique du mouvement de caisse")
     date_mouvement: datetime = Field(..., description="Date et heure du mouvement")
     motif_annulation: str | None = None
