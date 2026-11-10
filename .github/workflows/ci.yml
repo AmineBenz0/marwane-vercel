@@ -93,6 +93,18 @@ jobs:
         run: python -m pytest --override-ini addopts='' tests/test_production_correction_foundation_pg.py -q
         env:
           POSTGRES_MIGRATION_TEST_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Apply existing correction foundation to disposable PostgreSQL only
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Rehearse integrated correction schema and payment/stock guards
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_correction_compatibility.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/stock_correction_revisions.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/audited_payment_corrections.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/20261029210000_phase3_cash_bank_payment_corrections.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
