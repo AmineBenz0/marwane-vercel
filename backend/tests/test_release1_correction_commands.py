@@ -129,26 +129,9 @@ def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test
     assert exc.value.status_code == 409
 
 
-def test_native_paid_sale_price_is_blocked(db_session, sale, test_user):
-    _postgres_only(db_session)
-    cmd = prepared(db_session, command_for(sale, prix_unitaire=Decimal("15.00")))
-    payment = Paiement(
-        id_transaction=sale.id_transaction, date_paiement=sale.date_transaction,
-        montant=Decimal("5.00"), type_paiement="cash", statut="valide",
-        id_utilisateur_creation=test_user.id_utilisateur,
-    )
-    db_session.add(payment)
-    db_session.commit()
-    with pytest.raises(HTTPException) as exc:
-        apply_correction(db_session, cmd, test_user)
-    assert exc.value.status_code == 409
-    db_session.refresh(sale)
-    assert sale.montant_total == Decimal("50.00")
-    assert db_session.query(CorrectionOperation).count() == 0
-
-
-def test_native_payment_note_change_is_recorded_without_cash_or_bank(db_session, sale, test_user):
-    _postgres_only(db_session)
+    # A new payment makes a previously valid price preview stale. It must
+    # invalidate the correction without changing the sale or audit operation.
+    to_change = prepared(db_session, command_for(sale, prix_unitaire=Decimal("16.00")))
     payment = Paiement(
         id_transaction=sale.id_transaction, date_paiement=sale.date_transaction,
         montant=Decimal("5.00"), type_paiement="cash", statut="valide",
@@ -156,21 +139,35 @@ def test_native_payment_note_change_is_recorded_without_cash_or_bank(db_session,
     )
     db_session.add(payment)
     db_session.commit()
+    with pytest.raises(HTTPException) as exc:
+        apply_correction(db_session, to_change, test_user)
+    assert exc.value.status_code == 409
+    db_session.refresh(sale)
+    assert sale.montant_total == Decimal("57.00")
+    assert db_session.query(CorrectionOperation).count() == 1
+
+    # Payment notes are safe even when the payment is effective. They must
+    # generate their own linked immutable revision, not a new cash movement.
     db_session.refresh(payment)
-    cmd = CorrectionCommand(
+    note_cmd = CorrectionCommand(
         operation_id=uuid4(), reason="Correction de référence",
         target={"entity_type": "paiement", "entity_id": payment.id_paiement,
                 "expected_version": payment.row_version},
         changes={"notes": "Après"},
     )
-    response = apply_correction(db_session, prepared(db_session, cmd), test_user)
+    note_apply = prepared(db_session, note_cmd)
+    note_result = apply_correction(db_session, note_apply, test_user)
     db_session.refresh(payment)
-    assert response["record"]["notes"] == "Après"
     assert payment.notes == "Après"
     assert payment.row_version == 2
-    assert db_session.query(EntityRevision).filter(
+    assert note_result["record"]["notes"] == "Après"
+    assert note_result["impact"]["cash"] == "unchanged"
+    assert note_result["impact"]["bank"] == "unchanged"
+    assert db_session.query(CorrectionOperation).count() == 2
+    payment_revisions = db_session.query(EntityRevision).filter(
         EntityRevision.entity_type == "paiement",
         EntityRevision.entity_id == payment.id_paiement,
-    ).count() == 2
-    assert response["impact"]["cash"] == "unchanged"
-    assert response["impact"]["bank"] == "unchanged"
+    ).order_by(EntityRevision.revision).all()
+    assert [r.revision for r in payment_revisions] == [1, 2]
+    assert payment_revisions[1].operation_id == note_cmd.operation_id
+    assert apply_correction(db_session, note_apply, test_user)["replayed"] is True
