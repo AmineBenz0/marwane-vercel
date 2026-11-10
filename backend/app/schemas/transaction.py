@@ -318,6 +318,7 @@ class TransactionRead(TransactionBase):
     date_production: Optional[date] = None
     nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")
+    row_version: int = Field(default=1, description="Révision pour détecter les changements concurrents")
     date_creation: datetime = Field(..., description="Date de création de la transaction")
     date_modification: datetime = Field(..., description="Date de dernière modification")
     id_utilisateur_creation: Optional[int] = Field(None, description="ID de l'utilisateur qui a créé la transaction")
