@@ -254,6 +254,7 @@ def test_client_letter_of_credit_cannot_pay_supplier_transaction(client, auth_he
 
     lc = client.post("/api/v1/lettres-credit", json={
         "numero_reference": "LC-CLIENT-SUPPLIER-MISMATCH",
+        "date_reception": date.today().isoformat(),
         "montant": 100,
         "date_emission": date.today().isoformat(),
         "date_disponibilite": date.today().isoformat(),
