@@ -188,6 +188,7 @@ class StatutPaiementTransaction(BaseModel):
     id_transaction: int = Field(..., description="ID de la transaction")
     montant_total: Decimal = Field(..., description="Montant total de la transaction")
     montant_paye: Decimal = Field(..., description="Montant déjà payé")
+    montant_rembourse: Decimal = Decimal('0')
     montant_restant: Decimal = Field(..., description="Montant restant à payer")
     pourcentage_paye: float = Field(..., description="Pourcentage payé (0-100)")
     statut_paiement: str = Field(..., description="Statut du paiement (paye, partiel, impaye)")
