@@ -9,6 +9,20 @@ from decimal import Decimal
 from uuid import uuid4
 from urllib.parse import urlsplit
 
+import pytest
+
+# Fail closed at module collection time. The ordinary SQLite test run should
+# skip this native acceptance; a misconfigured non-local URL must never reach
+# the db_session fixture, which creates and drops test tables.
+_native_target = urlsplit(os.getenv("TEST_DATABASE_URL", ""))
+if (
+    not _native_target.scheme.startswith("postgresql")
+    or _native_target.hostname not in {"localhost", "127.0.0.1"}
+    or _native_target.path != "/comptabilite_db"
+    or os.getenv("ENVIRONMENT") != "testing"
+):
+    pytest.skip("Release 3 authenticated acceptance requires disposable local PostgreSQL", allow_module_level=True)
+
 from app.config import settings
 from app.models.caisse import Caisse
 from app.models.cession_lc import CessionLC
