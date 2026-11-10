@@ -1,0 +1,176 @@
+"""Guarded preview/apply tests. Native write tests require disposable PostgreSQL."""
+from datetime import date, timedelta
+from decimal import Decimal
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
+from app.models.client import Client
+from app.models.correction_operation import CorrectionOperation, EntityRevision
+from app.models.paiement import Paiement
+from app.models.produit import Produit
+from app.models.transaction import Transaction
+from app.schemas.correction import CorrectionApplyCommand, CorrectionCommand
+from app.services.correction_commands import apply_correction, preview_correction
+
+
+@pytest.fixture
+def sale(db_session, test_user):
+    client = Client(nom_client="Client test de correction", est_actif=True)
+    product = Produit(
+        nom_produit="Service de correction", type_produit="service",
+        pour_clients=True, pour_fournisseurs=False, est_actif=True,
+    )
+    db_session.add_all([client, product])
+    db_session.flush()
+    transaction = Transaction(
+        date_transaction=date.today(), date_echeance=date.today() + timedelta(days=7),
+        id_client=client.id_client, id_produit=product.id_produit,
+        quantite=4, prix_unitaire=Decimal("12.50"), montant_total=Decimal("50.00"),
+        est_actif=True, id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(transaction)
+    db_session.commit()
+    db_session.refresh(transaction)
+    return transaction
+
+
+def command_for(sale, **changes):
+    return CorrectionCommand(
+        operation_id=uuid4(), reason="Correction validée",
+        target={"entity_type": "transaction", "entity_id": sale.id_transaction,
+                "expected_version": sale.row_version},
+        changes=changes,
+    )
+
+
+def prepared(db_session, command):
+    preview = preview_correction(db_session, command)
+    return CorrectionApplyCommand(
+        **command.model_dump(exclude_unset=True),
+        dependency_fingerprint=preview["dependency_fingerprint"],
+    )
+
+
+def test_preview_is_read_only_and_shows_exact_financial_impact(db_session, sale):
+    cmd = command_for(sale, prix_unitaire=Decimal("13.33"),
+                      date_echeance=date.today() + timedelta(days=15))
+    preview = preview_correction(db_session, cmd)
+    assert preview["before"]["montant_total"] == "50.00"
+    assert preview["after"]["montant_total"] == "53.32"
+    assert preview["impact"]["balance"]["remaining"] == "53.32"
+    assert preview["impact"]["cash"] == "unchanged"
+    assert preview["impact"]["stock"] == "unchanged"
+    assert db_session.query(CorrectionOperation).count() == 0
+    db_session.refresh(sale)
+    assert sale.montant_total == Decimal("50.00")
+
+
+@pytest.mark.parametrize("changes", [
+    {"quantite": 5}, {"date_transaction": date.today()},
+    {"id_batiment": 1}, {"id_production": 1}, {"type_paiement": "cash"},
+    {"stock_allocations": []}, {"id_fournisseur": 9},
+])
+def test_unsupported_stock_and_financial_changes_are_rejected(db_session, sale, changes):
+    with pytest.raises(HTTPException) as exc:
+        preview_correction(db_session, command_for(sale, **changes))
+    assert exc.value.status_code == 422
+
+
+def test_due_date_cannot_precede_transaction(db_session, sale):
+    with pytest.raises(HTTPException) as exc:
+        preview_correction(db_session, command_for(sale, date_echeance=date.today() - timedelta(days=1)))
+    assert exc.value.status_code == 422
+
+
+def test_stale_revision_is_rejected_before_preview(db_session, sale):
+    cmd = command_for(sale, date_echeance=None)
+    cmd.target.expected_version = 999
+    with pytest.raises(HTTPException) as exc:
+        preview_correction(db_session, cmd)
+    assert exc.value.status_code == 409
+
+
+def _postgres_only(db_session):
+    if db_session.bind.dialect.name != "postgresql":
+        pytest.skip("Native immutable-revision tests require disposable PostgreSQL")
+
+
+def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test_user):
+    _postgres_only(db_session)
+    cmd = prepared(db_session, command_for(sale, prix_unitaire=Decimal("14.25")))
+    result = apply_correction(db_session, cmd, test_user)
+    db_session.refresh(sale)
+    assert sale.prix_unitaire == Decimal("14.25")
+    assert sale.montant_total == Decimal("57.00")
+    assert sale.row_version == 2
+    assert result["record"]["row_version"] == 2
+    assert db_session.query(CorrectionOperation).count() == 1
+    revisions = db_session.query(EntityRevision).filter(
+        EntityRevision.entity_type == "transaction",
+        EntityRevision.entity_id == sale.id_transaction,
+    ).order_by(EntityRevision.revision).all()
+    assert [r.revision for r in revisions] == [1, 2]
+    assert revisions[1].operation_id == cmd.operation_id
+    assert Decimal(str(revisions[1].before_snapshot["montant_total"])) == Decimal("50.00")
+    assert apply_correction(db_session, cmd, test_user)["replayed"] is True
+    assert db_session.query(CorrectionOperation).count() == 1
+
+    with pytest.raises(HTTPException) as exc:
+        apply_correction(db_session, cmd.model_copy(update={"reason": "Autre demande"}), test_user)
+    assert exc.value.status_code == 409
+    stale = CorrectionCommand(
+        operation_id=uuid4(), reason="Ancienne version",
+        target={"entity_type": "transaction", "entity_id": sale.id_transaction, "expected_version": 1},
+        changes={"prix_unitaire": Decimal("15.00")},
+    )
+    with pytest.raises(HTTPException) as exc:
+        preview_correction(db_session, stale)
+    assert exc.value.status_code == 409
+
+
+def test_native_paid_sale_price_is_blocked(db_session, sale, test_user):
+    _postgres_only(db_session)
+    cmd = prepared(db_session, command_for(sale, prix_unitaire=Decimal("15.00")))
+    payment = Paiement(
+        id_transaction=sale.id_transaction, date_paiement=sale.date_transaction,
+        montant=Decimal("5.00"), type_paiement="cash", statut="valide",
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(payment)
+    db_session.commit()
+    with pytest.raises(HTTPException) as exc:
+        apply_correction(db_session, cmd, test_user)
+    assert exc.value.status_code == 409
+    db_session.refresh(sale)
+    assert sale.montant_total == Decimal("50.00")
+    assert db_session.query(CorrectionOperation).count() == 0
+
+
+def test_native_payment_note_change_is_recorded_without_cash_or_bank(db_session, sale, test_user):
+    _postgres_only(db_session)
+    payment = Paiement(
+        id_transaction=sale.id_transaction, date_paiement=sale.date_transaction,
+        montant=Decimal("5.00"), type_paiement="cash", statut="valide",
+        notes="Avant", id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(payment)
+    db_session.commit()
+    db_session.refresh(payment)
+    cmd = CorrectionCommand(
+        operation_id=uuid4(), reason="Correction de référence",
+        target={"entity_type": "paiement", "entity_id": payment.id_paiement,
+                "expected_version": payment.row_version},
+        changes={"notes": "Après"},
+    )
+    response = apply_correction(db_session, prepared(db_session, cmd), test_user)
+    db_session.refresh(payment)
+    assert response["record"]["notes"] == "Après"
+    assert payment.notes == "Après"
+    assert payment.row_version == 2
+    assert db_session.query(EntityRevision).filter(
+        EntityRevision.entity_type == "paiement",
+        EntityRevision.entity_id == payment.id_paiement,
+    ).count() == 2
+    assert response["impact"]["cash"] == "unchanged"
+    assert response["impact"]["bank"] == "unchanged"
