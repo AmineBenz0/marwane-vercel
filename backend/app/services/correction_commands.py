@@ -8,6 +8,7 @@ from copy import deepcopy
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from hashlib import sha256
+import logging
 import json
 
 from fastapi import HTTPException
@@ -234,7 +235,12 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
     row.date_modification = modified_at
     db.flush()
     db.refresh(row)
-    if _snapshot(row) != after:
+    saved = _snapshot(row)
+    if saved != after:
+        logging.getLogger(__name__).error(
+            "Correction saved snapshot differs from expected: %s",
+            sorted(key for key in set(saved) | set(after) if saved.get(key) != after.get(key)),
+        )
         db.rollback()
         raise HTTPException(409, "Le résultat enregistré ne correspond pas à l'aperçu.")
     db.commit()
