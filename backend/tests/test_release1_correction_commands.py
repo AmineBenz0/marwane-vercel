@@ -1,5 +1,8 @@
 """Guarded preview/apply tests. Native write tests require disposable PostgreSQL."""
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
+from threading import Barrier
+from types import SimpleNamespace
 from decimal import Decimal
 from uuid import uuid4
 
@@ -198,3 +201,34 @@ def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test
         assert client.post("/api/v1/corrections/apply", json=apply_payload).json()["replayed"] is True
     finally:
         app.dependency_overrides.pop(get_current_active_user, None)
+
+    # Two concurrent corrections prepared at the same revision cannot both
+    # commit. The losing operation must not create any history or partial write.
+    from sqlalchemy.orm import Session
+    db_session.refresh(sale)
+    before_version = sale.row_version
+    first = prepared(db_session, command_for(sale, date_echeance=date.today() + timedelta(days=40)))
+    second = prepared(db_session, command_for(sale, date_echeance=date.today() + timedelta(days=45)))
+    ready = Barrier(2)
+    actor = SimpleNamespace(id_utilisateur=test_user.id_utilisateur)
+
+    def concurrent_apply(command):
+        with Session(bind=db_session.get_bind()) as session:
+            ready.wait(timeout=15)
+            try:
+                return apply_correction(session, command, actor)
+            except HTTPException as conflict:
+                session.rollback()
+                return conflict.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(concurrent_apply, (first, second)))
+    assert sum(isinstance(item, dict) for item in outcomes) == 1
+    assert outcomes.count(409) == 1
+    db_session.expire_all()
+    assert db_session.get(Transaction, sale.id_transaction).row_version == before_version + 1
+    assert db_session.query(CorrectionOperation).count() == 4
+    assert db_session.query(EntityRevision).filter(
+        EntityRevision.entity_type == "transaction",
+        EntityRevision.entity_id == sale.id_transaction,
+    ).count() == before_version + 1
