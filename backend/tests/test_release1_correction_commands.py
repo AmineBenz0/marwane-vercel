@@ -70,11 +70,13 @@ def test_preview_is_read_only_and_shows_exact_financial_impact(db_session, sale)
 
 
 @pytest.mark.parametrize("changes", [
-    {"quantite": 5}, {"date_transaction": date.today()},
-    {"id_batiment": 1}, {"id_production": 1}, {"type_paiement": "cash"},
-    {"stock_allocations": []}, {"id_fournisseur": 9},
+    {"date_paiement": date.today()},
+    {"montant": Decimal("5.00")},
+    {"type_paiement": "cash"},
+    {"source_reglement": "banque"},
+    {"statut_cheque": "rejete"},
 ])
-def test_unsupported_stock_and_financial_changes_are_rejected(db_session, sale, changes):
+def test_payment_only_fields_cannot_be_applied_to_transactions(db_session, sale, changes):
     with pytest.raises(HTTPException) as exc:
         preview_correction(db_session, command_for(sale, **changes))
     assert exc.value.status_code == 422
