@@ -30,7 +30,7 @@ def _assert_disposable_native(db_session):
 
 
 def test_authenticated_lc_transfer_cancel_reuse_and_bank_deposit(
-    client, db_session, test_user, auth_headers
+    client, db_session, test_user, test_produit, auth_headers
 ):
     _assert_disposable_native(db_session)
     assert auth_headers.get("Authorization", "").startswith("Bearer ")
@@ -136,11 +136,7 @@ def test_authenticated_lc_transfer_cancel_reuse_and_bank_deposit(
     assert db_session.query(Paiement).filter_by(id_lc=second).count() == 0
 
 
-def test_authenticated_lc_receipt_is_not_cash(
-    client, db_session, test_user, test_produit, auth_headers
-):
-    _assert_disposable_native(db_session)
-    assert auth_headers.get("Authorization", "").startswith("Bearer ")
+    # Complete an authenticated receipt/payment batch on the same migrated DB.
     today = date.today()
     holder = Client(nom_client="Release3 CI receipt origin")
     db_session.add(holder)
