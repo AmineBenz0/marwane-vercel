@@ -238,8 +238,9 @@ def apply_correction(db: Session, command: CorrectionApplyCommand, actor) -> dic
     saved = _snapshot(row)
     if saved != after:
         logging.getLogger(__name__).error(
-            "Correction saved snapshot differs from expected: %s",
+            "Correction saved snapshot differs from expected: %s (revision %s -> %s)",
             sorted(key for key in set(saved) | set(after) if saved.get(key) != after.get(key)),
+            after.get("row_version"), saved.get("row_version"),
         )
         db.rollback()
         raise HTTPException(409, "Le résultat enregistré ne correspond pas à l'aperçu.")
