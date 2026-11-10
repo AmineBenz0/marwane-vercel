@@ -157,6 +157,7 @@ class PaiementRead(PaiementBase):
     id_paiement: int = Field(..., description="Identifiant unique du paiement")
     row_version: int = Field(default=1, description="Révision pour détecter les changements concurrents")
     id_transaction: int = Field(..., description="ID de la transaction associée")
+    nature: str = "paiement"
     date_encaissement_effective: Optional[date] = Field(None, description="Date effective d'encaissement")
     motif_rejet: Optional[str] = Field(None, description="Motif du rejet")
     motif_annulation: Optional[str] = Field(None, max_length=1000, description="Motif de l'annulation")
