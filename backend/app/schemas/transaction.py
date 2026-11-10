@@ -270,9 +270,10 @@ class TransactionUpdate(BaseModel):
 
 
 class EggAllocationRead(BaseModel):
+    # Keep the existing production API contract for sale sources.
+    # Audited correction snapshots expose delivery evidence separately.
     id_production: int
     quantite: int
-    quantite_livree: int = 0
     date_production: date
     id_cycle: Optional[int] = None
 
