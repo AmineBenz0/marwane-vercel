@@ -1,11 +1,8 @@
-"""Read-only correction history for the first controlled production increment.
-
-The mutation endpoints from staging are deliberately *not* mounted: they depend on
-later financial/stock/cheque migrations and acceptance tests.
-"""
+"""Versioned correction API; mutation routes are disabled until release approval."""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.transaction import Transaction
 from app.schemas.correction import CorrectionApplyCommand, CorrectionCommand
@@ -38,6 +35,8 @@ def preview(
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
     """Read-only validation and impact fingerprint."""
+    if not settings.ENABLE_CORRECTION_WRITES:
+        raise HTTPException(503, "Les corrections avancées ne sont pas encore activées.")
     return preview_correction(db, command)
 
 
@@ -48,4 +47,6 @@ def apply(
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
     """Atomic, idempotent audited correction; unsupported fields are rejected."""
+    if not settings.ENABLE_CORRECTION_WRITES:
+        raise HTTPException(503, "Les corrections avancées ne sont pas encore activées.")
     return apply_correction(db, command, current_user)
