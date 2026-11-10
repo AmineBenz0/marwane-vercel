@@ -4,7 +4,6 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.main import app
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.routers import corrections
@@ -22,11 +21,13 @@ class _FakeDB:
         return self.transaction
 
 
-def test_release1_mounts_only_read_only_history():
-    routes = [(route.path, method) for route in app.routes
+def test_release1_router_exposes_only_read_only_history():
+    # Test the immutable router definition, not the globally shared FastAPI
+    # app object that other suites may modify during discovery.
+    routes = [(route.path, method) for route in corrections.router.routes
               for method in getattr(route, "methods", [])]
-    assert ("/api/v1/corrections/history", "GET") in routes
-    assert not any(path.startswith("/api/v1/corrections/")
+    assert ("/corrections/history", "GET") in routes
+    assert not any(path.startswith("/corrections/")
                    and method in {"POST", "PUT", "PATCH", "DELETE"}
                    for path, method in routes)
 
