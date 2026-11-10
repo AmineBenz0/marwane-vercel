@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Transactions.
 """
-from sqlalchemy import Column, Integer, Date, Numeric, Boolean, DateTime, ForeignKey, CheckConstraint, Text
+from sqlalchemy import Column, Integer, BigInteger, Date, Numeric, Boolean, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from decimal import Decimal
@@ -37,6 +37,8 @@ class Transaction(Base):
     __tablename__ = "transactions"
     
     id_transaction = Column(Integer, primary_key=True, index=True)
+    row_version = Column(BigInteger, nullable=False, server_default='1')
+    stock_revision = Column(BigInteger, nullable=False, server_default='0', default=0)
     date_transaction = Column(Date, nullable=False, index=True)
     id_produit = Column(Integer, ForeignKey("produits.id_produit"), nullable=False, index=True)
     quantite = Column(Integer, nullable=False)
@@ -49,6 +51,7 @@ class Transaction(Base):
     allocation_automatique = Column(Boolean, nullable=False, default=False, server_default="false")
     est_promesse = Column(Boolean, nullable=False, default=False, server_default="false")
     date_livraison_prevue = Column(Date, nullable=True, index=True)
+    quantite_annulee = Column(Integer, nullable=False, default=0, server_default='0')
     allocations = relationship("EggAllocation", cascade="all, delete-orphan", lazy="selectin")
     id_production = Column(Integer, ForeignKey("productions.id_production", ondelete="RESTRICT"), nullable=True, index=True)
     id_cycle = Column(Integer, ForeignKey("cycles_production.id_cycle"), nullable=True, index=True)
@@ -63,6 +66,8 @@ class Transaction(Base):
     
     # Contraintes au niveau SQLAlchemy (seront aussi ajoutées via migrations)
     __table_args__ = (
+        CheckConstraint('stock_revision >= 0', name='check_stock_revision_nonnegative'),
+        CheckConstraint('quantite_annulee >= 0 AND quantite_annulee <= quantite', name='check_quantite_annulee_bounded'),
         CheckConstraint('montant_total > 0', name='check_montant_positif'),
         CheckConstraint('quantite > 0', name='check_quantite_positive'),
         CheckConstraint('prix_unitaire > 0', name='check_prix_unitaire_positive'),
@@ -82,6 +87,7 @@ class Transaction(Base):
     @property
     def repartition_stock(self):
         return [dict(id_production=a.id_production, quantite=a.quantite,
+                     quantite_livree=(a.quantite_livree or 0) if self.est_promesse else a.quantite,
                      date_production=a.production.date_production, id_cycle=a.production.id_cycle)
                 for a in self.allocations]
 
@@ -93,7 +99,13 @@ class Transaction(Base):
 
     @property
     def quantite_en_attente(self):
-        return max(0, self.quantite - self.quantite_couverte) if self.est_promesse else 0
+        return max(0, self.quantite - self.quantite_completee - (self.quantite_annulee or 0)) if self.est_promesse else 0
+
+    @property
+    def quantite_completee(self):
+        if not self.est_promesse:
+            return self.quantite
+        return sum(allocation.quantite_livree or 0 for allocation in self.allocations)
 
     @property
     def date_production(self):
@@ -127,7 +139,7 @@ class Transaction(Base):
         total = Decimal('0')
         for paiement in self.paiements:
             if paiement.est_effectif:
-                total += Decimal(str(paiement.montant))
+                total += paiement.montant_net
         
         return total
     
