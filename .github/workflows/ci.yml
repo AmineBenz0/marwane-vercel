@@ -97,6 +97,25 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Prove an interrupted migration rolls back completely
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          # Intentional SQL error appended in the same transaction; no changes may survive.
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+            -f migrations/production_integrated_corrections_atomic.sql \
+            -c 'SELECT 1 / 0' >/dev/null 2>&1; then
+            echo "Rollback probe unexpectedly succeeded"
+            exit 1
+          fi
+          remaining="$(psql "$DATABASE_URL" -At -c "
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_schema='public' AND (
+              (table_name='transactions' AND column_name IN ('stock_revision','quantite_annulee'))
+              OR (table_name='paiements' AND column_name='nature')
+              OR (table_name='egg_sale_allocations' AND column_name='quantite_livree')
+            )")"
+          test "$remaining" = 0
       - name: Rehearse integrated correction schema and payment/stock guards
         run: |
           # One PostgreSQL transaction; failure rolls back all schema and guard changes.
