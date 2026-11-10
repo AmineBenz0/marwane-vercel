@@ -62,7 +62,7 @@ import {
   AccountBalanceOutlined as BankTransferIcon,
   DescriptionOutlined as CreditLetterIcon,
 } from '@mui/icons-material';
-import { get, getProduitsParType } from '../../services/api';
+import { get, post, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
@@ -612,9 +612,49 @@ function TransactionForm({
           });
           if (transactionData.date_transaction === initialValues.date_transaction?.slice(0, 10)) delete transactionData.date_transaction;
         }
-        // Read-only client-side review: existing API applies final validations.
+        const payload = { ...transactionData, paiements: paiementsData };
+        // Route only independently safe changes through the audited command.
+        // Other existing edits retain their current route and validations;
+        // stock, financial settlement and instrument corrections are never
+        // silently sent to the restricted command.
+        const normalize = (key, value) => {
+          if (value === undefined || value === null || value === '') return null;
+          if (key.startsWith('date_')) return String(value).slice(0, 10);
+          if (['est_actif', 'est_promesse', 'allocation_automatique'].includes(key)) return Boolean(value);
+          return Number(value);
+        };
+        const comparable = [
+          'date_transaction', 'date_echeance', 'id_client', 'id_fournisseur',
+          'id_produit', 'id_production', 'id_batiment', 'id_cycle',
+          'quantite', 'prix_unitaire', 'est_actif', 'est_promesse',
+          'allocation_automatique', 'date_livraison_prevue',
+        ];
+        const changed = comparable.filter(key => key in payload
+          && normalize(key, initialValues[key]) !== normalize(key, payload[key]));
+        const allowed = new Set(['date_echeance', 'prix_unitaire', 'id_client']);
+        const audited = changed.length > 0 && changed.every(key => allowed.has(key))
+          && paiementsData.length === 0 && initialValues.row_version > 0;
+        let correction = null;
+        if (audited) {
+          const changes = Object.fromEntries(changed.map(key => [key, payload[key]]));
+          const command = {
+            operation_id: crypto.randomUUID(),
+            reason: 'Correction de la transaction',
+            target: {
+              entity_type: 'transaction',
+              entity_id: initialValues.id_transaction,
+              expected_version: initialValues.row_version,
+            },
+            changes,
+          };
+          const preview = await post('/corrections/preview', command);
+          correction = {
+            command: { ...command, dependency_fingerprint: preview.dependency_fingerprint },
+            preview,
+          };
+        }
         setReviewError('');
-        setEditReview({ payload: { ...transactionData, paiements: paiementsData } });
+        setEditReview({ payload, correction });
       } else {
         // Mode création : on crée N transactions via l'endpoint batch
         const transactionsData = data.lignes.map((ligne) => ({
@@ -689,7 +729,9 @@ function TransactionForm({
     setReviewSaving(true);
     setReviewError('');
     try {
-      await onSubmit(editReview.payload);
+      await onSubmit(editReview.correction
+        ? { auditedCorrection: editReview.correction.command }
+        : editReview.payload);
       setEditReview(null);
       reset();
     } catch (error) {
@@ -1848,10 +1890,17 @@ function TransactionForm({
       <DialogTitle id="edit-review-title">Vérifier les modifications</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 1 }}>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Cet aperçu compare les valeurs saisies. Il ne valide ni le stock ni les mouvements
-            comptables. Les règles du serveur seront appliquées à l’enregistrement.
-          </Alert>
+          {editReview?.correction ? (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Modification vérifiée par le serveur. Les paiements et le stock restent inchangés.
+              Le système contrôlera de nouveau les données avant l’enregistrement.
+            </Alert>
+          ) : (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Cet aperçu compare les valeurs saisies. Les validations du serveur
+              seront appliquées lors de l’enregistrement.
+            </Alert>
+          )}
           {reviewError && <Alert severity="error" sx={{ mb: 2 }}>{reviewError}</Alert>}
           {editReview && (() => {
             const keys = [
@@ -1900,6 +1949,14 @@ function TransactionForm({
                     Number(editReview.payload.prix_unitaire ?? initialValues.prix_unitaire),
                     { useCompactNotation: false })}
                 </Typography>
+              )}
+              {editReview.correction?.preview?.impact?.balance && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  Solde prévu après correction : {formatMontant(
+                    Number(editReview.correction.preview.impact.balance.remaining),
+                    { useCompactNotation: false }
+                  )}. Aucun mouvement de caisse, de banque ou de stock.
+                </Alert>
               )}
               {paiementsExistants.length > 0 && <Alert severity="warning" sx={{ mt: 2 }}>
                 Cette transaction possède des paiements. Les modifications financières restent
