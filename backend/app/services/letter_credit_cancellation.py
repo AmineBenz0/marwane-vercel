@@ -85,6 +85,18 @@ def cancel_letter_credit(
             create_reversal_record=True,
         )
 
+    # Apply the LC status and holder transition together before the first
+    # reversal flush. PostgreSQL's instrument guard deliberately rejects a
+    # standalone holder change while an LC remains "utilisee".
+    # The inverse cession, active-use cancellation and correction events all
+    # commit in this same transaction.
+    lc.statut = "active"
+    lc.statut_cycle = "detenue" if lc.id_client_origine is not None else "a_verifier"
+    lc.type_detenteur = "client"
+    lc.id_client = lc.id_client_origine
+    lc.id_fournisseur = None
+    lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
+
     for cession in linked_cessions:
         reversal_cession = CessionLC(
             id_lc=cession.id_lc,
@@ -115,11 +127,6 @@ def cancel_letter_credit(
                 create_reversal_record=True,
             )
 
-        # Reverse in newest-first order to restore the original LC holder.
-        lc.type_detenteur = "client"
-        lc.id_client = lc.id_client_origine
-        lc.id_fournisseur = None
-
         record_correction(
             db,
             type_entite="cession_lc",
@@ -137,9 +144,6 @@ def cancel_letter_credit(
         LettreCreditUtilisation.id_lc == id_lc,
         LettreCreditUtilisation.statut == "active",
     ).update({"statut": "annulee", "motif_annulation": reason[:1000]}, synchronize_session=False)
-    lc.statut = "active"
-    lc.statut_cycle = "detenue" if lc.id_client_origine is not None else "a_verifier"
-    lc.id_utilisateur_modification = current_user.id_utilisateur if current_user else None
     record_correction(
         db,
         type_entite="lettre_credit",
