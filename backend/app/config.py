@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     # IMPORTANT: En production, mettre ENABLE_AUTH=True et ENABLE_RATE_LIMITING=True
     ENABLE_AUTH: bool = DEFAULT_ENVIRONMENT.lower() in {"production", "preview"}
     ENABLE_RATE_LIMITING: bool = DEFAULT_ENVIRONMENT.lower() in {"production", "preview"}
+    # Keep new audited financial/stock writers unavailable until the
+    # integrated schema, preview and recovery gates are explicitly approved.
+    ENABLE_CORRECTION_WRITES: bool = False
 
     # Secret utilisé exclusivement par les routes de tâches planifiées.
     CRON_SECRET: str = ""
