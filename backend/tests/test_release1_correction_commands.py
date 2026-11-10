@@ -96,7 +96,7 @@ def _postgres_only(db_session):
         pytest.skip("Native immutable-revision tests require disposable PostgreSQL")
 
 
-def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test_user):
+def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test_user, client):
     _postgres_only(db_session)
     cmd = prepared(db_session, command_for(sale, prix_unitaire=Decimal("14.25")))
     result = apply_correction(db_session, cmd, test_user)
@@ -171,3 +171,30 @@ def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test
     assert [r.revision for r in payment_revisions] == [1, 2]
     assert payment_revisions[1].operation_id == note_cmd.operation_id
     assert apply_correction(db_session, note_apply, test_user)["replayed"] is True
+
+    # Exercise the actual FastAPI route contract on the same disposable PG
+    # service, with explicit test-only authentication dependency override.
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    try:
+        api_command = command_for(sale, date_echeance=date.today() + timedelta(days=30))
+        preview_response = client.post(
+            "/api/v1/corrections/preview", json=api_command.model_dump(mode="json")
+        )
+        assert preview_response.status_code == 200, preview_response.text
+        apply_payload = {
+            **api_command.model_dump(mode="json"),
+            "dependency_fingerprint": preview_response.json()["dependency_fingerprint"],
+        }
+        apply_response = client.post("/api/v1/corrections/apply", json=apply_payload)
+        assert apply_response.status_code == 200, apply_response.text
+        assert apply_response.json()["record"]["row_version"] == 3
+        history_response = client.get(
+            "/api/v1/corrections/history", params={"transaction_id": sale.id_transaction}
+        )
+        assert history_response.status_code == 200, history_response.text
+        assert len(history_response.json()["items"]) == 3
+        assert client.post("/api/v1/corrections/apply", json=apply_payload).json()["replayed"] is True
+    finally:
+        app.dependency_overrides.pop(get_current_active_user, None)
