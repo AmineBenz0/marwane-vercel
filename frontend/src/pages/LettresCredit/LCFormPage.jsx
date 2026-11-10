@@ -11,7 +11,6 @@ import {
   MenuItem,
   Stack,
   CircularProgress,
-  Divider,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
@@ -25,6 +24,7 @@ function LCFormPage() {
   const navigate = useNavigate();
   const notification = useNotification();
   const isEdit = !!id;
+  useEffect(() => { if (id) navigate(`/lettres-credit/${id}`, { replace: true }); }, [id, navigate]);
 
   const [loading, setLoading] = useState(isEdit);
   const [clients, setClients] = useState([]);
@@ -37,6 +37,7 @@ function LCFormPage() {
   } = useForm({
     defaultValues: {
       date_emission: format(new Date(), 'yyyy-MM-dd'),
+      date_reception: format(new Date(), 'yyyy-MM-dd'),
       date_disponibilite: format(new Date(), 'yyyy-MM-dd'),
     }
   });
@@ -52,6 +53,7 @@ function LCFormPage() {
           reset({
             ...lcData,
             date_emission: format(new Date(lcData.date_emission), 'yyyy-MM-dd'),
+            date_reception: lcData.date_reception ? format(new Date(lcData.date_reception), 'yyyy-MM-dd') : '',
             date_disponibilite: format(new Date(lcData.date_disponibilite), 'yyyy-MM-dd'),
           });
         }
@@ -69,13 +71,12 @@ function LCFormPage() {
     try {
       const payload = {
         numero_reference: data.numero_reference,
-        numero_serie: data.numero_serie || null,
         banque_emettrice: data.banque_emettrice || null,
         montant: parseFloat(data.montant),
         date_emission: data.date_emission,
+        date_reception: data.date_reception,
         date_disponibilite: data.date_disponibilite,
         id_client: data.id_client,
-        notes: data.notes || null,
       };
 
       if (isEdit) {
@@ -120,24 +121,6 @@ function LCFormPage() {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                {...register('numero_serie')}
-                label="Numéro de série"
-                fullWidth
-                error={!!errors.numero_serie}
-                helperText={errors.numero_serie?.message}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                {...register('banque_emettrice')}
-                label="Banque Émettrice (optionnel)"
-                fullWidth
-                error={!!errors.banque_emettrice}
-                helperText={errors.banque_emettrice?.message}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
                 {...register('montant', { required: 'Le montant est requis', valueAsNumber: true })}
                 label="Montant (MAD)"
                 type="number"
@@ -148,35 +131,10 @@ function LCFormPage() {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_emission', { required: 'Requis' })}
-                label="Date d'émission"
-
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <DateField
-                {...register('date_disponibilite', { required: 'Requis' })}
-                label="Date de disponibilité"
-
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-                helperText="Date à partir de laquelle la LC peut être utilisée"
-              />
-            </Grid>
-
-            <Grid item xs={12}><Divider sx={{ my: 1 }}>Client détenteur de la LC</Divider></Grid>
-
-            <Grid item xs={12} sm={6}>
               <TextField
                 {...register('id_client', { required: 'Le client est requis' })}
                 select
-                label="Sélectionner le Client"
+                label="Client d'origine"
                 fullWidth
                 required
                 error={!!errors.id_client}
@@ -186,14 +144,41 @@ function LCFormPage() {
                 {clients.map(c => <MenuItem key={c.id_client} value={c.id_client}>{c.nom_client}</MenuItem>)}
               </TextField>
             </Grid>
-
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
-                {...register('notes')}
-                label="Notes"
+                {...register('banque_emettrice')}
+                label="Banque Émettrice (optionnel)"
                 fullWidth
-                multiline
-                rows={3}
+                error={!!errors.banque_emettrice}
+                helperText={errors.banque_emettrice?.message}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_emission', { required: 'Requis' })}
+                label="Date d'émission"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_reception', { required: 'Requis' })}
+                label="Date de réception"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <DateField
+                {...register('date_disponibilite', { required: 'Requis' })}
+                label="Date de disponibilité"
+                fullWidth
+                required
+                InputLabelProps={{ shrink: true }}
+                helperText="Date à partir de laquelle la LC peut être utilisée"
               />
             </Grid>
 
@@ -216,3 +201,4 @@ function LCFormPage() {
 }
 
 export default LCFormPage;
+
