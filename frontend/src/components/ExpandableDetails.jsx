@@ -4,10 +4,10 @@ import { alpha } from '@mui/material/styles';
 import { ChevronRight, ExpandMore } from '@mui/icons-material';
 
 /** The card variant is opt-in: existing disclosure surfaces retain their layout. */
-export default function ExpandableDetails({ label, children, variant = 'inline', icon, meta, headingComponent = 'span', contentSx }) {
+export default function ExpandableDetails({ label, children, variant = 'inline', icon, meta, headingComponent = 'span', contentSx, defaultExpanded = false }) {
   const id = useId();
   if (variant === 'card') {
-    return <Accordion disableGutters elevation={0} TransitionProps={{ unmountOnExit: true }}
+    return <Accordion defaultExpanded={defaultExpanded} disableGutters elevation={0} TransitionProps={{ unmountOnExit: true }}
       sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
         borderRadius: '12px !important', overflow: 'hidden', minWidth: 0, m: 0,
         boxShadow: 'none', '&:before': { display: 'none' } }}>
@@ -33,7 +33,7 @@ export default function ExpandableDetails({ label, children, variant = 'inline',
       <AccordionDetails id={`${id}-content`} sx={{ p: { xs: 1.75, sm: 2.5 }, minWidth: 0, ...contentSx }}>{children}</AccordionDetails>
     </Accordion>;
   }
-  return <Accordion disableGutters elevation={0} TransitionProps={{ unmountOnExit: true }}
+  return <Accordion defaultExpanded={defaultExpanded} disableGutters elevation={0} TransitionProps={{ unmountOnExit: true }}
     sx={{ bgcolor: 'transparent', '&:before': { display: 'none' }, boxShadow: 'none !important' }}>
     <AccordionSummary id={`${id}-header`} aria-controls={`${id}-content`} expandIcon={<ChevronRight />}
       sx={{ px: 0, minHeight: 44, flexDirection: 'row-reverse', gap: 0.75,

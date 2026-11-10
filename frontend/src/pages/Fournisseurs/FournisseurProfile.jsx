@@ -12,6 +12,10 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import PartyCreditPanel from '../../components/Corrections/PartyCreditPanel';
+import PartyCreditMenu from '../../components/Corrections/PartyCreditMenu';
+
+const CREDIT_REFUNDS_ENABLED = import.meta.env.VITE_ENABLE_CREDIT_REFUND_WRITES === 'true';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -125,6 +129,7 @@ function FournisseurProfile() {
   const [transactionFormLoading, setTransactionFormLoading] = useState(false);
   const [transactionFormError, setTransactionFormError] = useState(null);
   const [activeTab, setActiveTab] = useState('resume');
+  const [creditPanelOpen, setCreditPanelOpen] = useState(false);
   const [balancePeriod, setBalancePeriod] = useState('month');
 
   /**
@@ -645,6 +650,7 @@ function FournisseurProfile() {
           >
             Nouvel achat
           </Button>
+          {CREDIT_REFUNDS_ENABLED && <PartyCreditMenu onOpen={() => setCreditPanelOpen(true)} />}
         </Box>
       </Box>
 
@@ -662,6 +668,12 @@ function FournisseurProfile() {
           <Tab value="analyse" label="Analyse" />
         </Tabs>
       </Card>
+
+      {CREDIT_REFUNDS_ENABLED && <PartyCreditPanel key={id} partyType="fournisseur" partyId={id}
+        partyName={fournisseur.nom_fournisseur} totalActivity={statistiques?.montant_total_achats ?? null}
+        totalTransactions={statistiques?.total_transactions ?? null}
+        showSummary={activeTab === 'resume'} open={creditPanelOpen}
+        onOpen={() => setCreditPanelOpen(true)} onClose={() => setCreditPanelOpen(false)} />}
 
       <Box sx={{ display: activeTab === 'resume' ? 'block' : 'none' }}>
       {/* Cartes statistiques */}

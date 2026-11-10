@@ -1,7 +1,7 @@
 """
 Modèle SQLAlchemy pour la table Paiements.
 """
-from sqlalchemy import Column, Integer, BigInteger, String, Date, Numeric, case, DateTime, ForeignKey, CheckConstraint, Text
+from sqlalchemy import Column, Integer, BigInteger, String, Date, Numeric, case, DateTime, ForeignKey, CheckConstraint, Text, Uuid, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from decimal import Decimal
@@ -59,6 +59,7 @@ class Paiement(Base):
     date_paiement = Column(Date, nullable=False, index=True)
     montant = Column(Numeric(15, 2), nullable=False)
     nature = Column(String(20), nullable=False, default='paiement', server_default='paiement')
+    id_affectation = Column(Uuid, ForeignKey('affectations_credit.id_affectation', ondelete='RESTRICT'), index=True)
     type_paiement = Column(String(20), nullable=False, index=True)  # cash, cheque, virement, carte, autre
     
     # Informations pour les chèques
@@ -87,6 +88,10 @@ class Paiement(Base):
     
     # Contraintes
     __table_args__ = (
+        CheckConstraint("nature IN ('paiement','remboursement','credit_recu','credit_transfere')", name='check_paiement_nature'),
+        CheckConstraint("(nature IN ('credit_recu','credit_transfere') AND id_affectation IS NOT NULL AND type_paiement='compensation' AND id_compte IS NULL AND id_lc IS NULL AND source_reglement IS NULL AND statut IN ('valide','annule')) OR (nature IN ('paiement','remboursement') AND id_affectation IS NULL)", name='check_paiement_affectation'),
+        UniqueConstraint('id_affectation','nature',name='uq_affectation_settlement_side'),
+        CheckConstraint("nature <> 'remboursement' OR (type_paiement IN ('cash','virement') AND id_lc IS NULL AND statut IN ('valide','annule'))", name='check_remboursement_simple'),
         CheckConstraint('montant > 0', name='check_paiement_montant_positif'),
         CheckConstraint(
             "CASE WHEN source_reglement IS NULL THEN (id_compte IS NULL OR type_paiement = 'virement') "

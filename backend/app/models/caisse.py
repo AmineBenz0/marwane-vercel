@@ -4,6 +4,7 @@ Modèle SQLAlchemy pour la table Caisse.
 from sqlalchemy import Column, Integer, DateTime, Numeric, String, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy import Uuid
 from app.database import Base
 
 
@@ -37,6 +38,7 @@ class Caisse(Base):
     id_paiement = Column(Integer, ForeignKey("paiements.id_paiement"), nullable=True, index=True)
     id_charge = Column(Integer, ForeignKey("charges.id_charge"), nullable=True, index=True)
     id_cession = Column(Integer, ForeignKey("cessions_lc.id_cession"), nullable=True, index=True)
+    id_avance = Column(Uuid, ForeignKey("avances.id_avance", ondelete="RESTRICT"), nullable=True, index=True)
     
     # Contraintes au niveau SQLAlchemy (seront aussi ajoutées via migrations)
     __table_args__ = (
@@ -44,9 +46,10 @@ class Caisse(Base):
         CheckConstraint("type_mouvement IN ('ENTREE', 'SORTIE')", name='check_type_mouvement'),
         CheckConstraint("statut IN ('active', 'annule')", name='check_statut_caisse_valide'),
         CheckConstraint(
-            "(id_charge IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_cession IS NULL) OR "
+            "(id_avance IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_charge IS NULL AND id_cession IS NULL) OR "
+            "(id_avance IS NULL AND ((id_charge IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_cession IS NULL) OR "
             "(id_cession IS NOT NULL AND id_transaction IS NULL AND id_paiement IS NULL AND id_charge IS NULL) OR "
-            "(id_charge IS NULL AND id_cession IS NULL AND (id_transaction IS NOT NULL OR id_paiement IS NOT NULL))",
+            "(id_charge IS NULL AND id_cession IS NULL AND (id_transaction IS NOT NULL OR id_paiement IS NOT NULL))))",
             name='check_caisse_origine'
         ),
     )
@@ -57,6 +60,13 @@ class Caisse(Base):
     charge = relationship("Charge", back_populates="mouvements_caisse")
     historiques_solde = relationship("CaisseSoldeHistorique", back_populates="mouvement")
     cession = relationship("CessionLC", foreign_keys=[id_cession])
+    avance = relationship('Avance')
+
+    @property
+    def nature_reglement(self):
+        """Mark refund and advance movements without changing their financial direction."""
+        return self.paiement.nature if self.paiement else self.avance.nature if self.avance else None
+
 
 
     @property

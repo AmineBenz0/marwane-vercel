@@ -484,6 +484,7 @@ def get_statut_paiement_transaction(
         id_transaction=transaction.id_transaction,
         montant_total=transaction.montant_total,
         montant_paye=transaction.montant_paye,
+        montant_rembourse=transaction.montant_rembourse,
         montant_restant=transaction.montant_restant,
         pourcentage_paye=transaction.pourcentage_paye,
         statut_paiement=payment_status(transaction),

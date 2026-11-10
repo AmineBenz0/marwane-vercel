@@ -57,11 +57,14 @@ import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
 import TransactionAuditHistory from './TransactionAuditHistory';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
+import RefundDialog from '../../components/Corrections/RefundDialog';
+import TransactionCreditPanel from '../../components/Corrections/TransactionCreditPanel';
 import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
 import ExpandableDetails from '../../components/ExpandableDetails';
 
 const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
+const CREDIT_REFUNDS_ENABLED = import.meta.env.VITE_ENABLE_CREDIT_REFUND_WRITES === 'true';
 
 /**
  * Composant TransactionDetail.
@@ -86,6 +89,7 @@ function TransactionDetail() {
   const [paiements, setPaiements] = useState([]);
   const [statutPaiement, setStatutPaiement] = useState(null);
   const [loadingPaiements, setLoadingPaiements] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
 
   // États pour les données de référence
   const [produits, setProduits] = useState([]);
@@ -656,10 +660,21 @@ function TransactionDetail() {
           <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
           {Number(statutPaiement.montant_restant) > 0 && <Box><Typography variant="body2" color="text.secondary">{transaction.id_client ? 'Reste à encaisser' : 'Reste à payer'}</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_restant)}</Typography></Box>}
         </Stack>
+        {CREDIT_REFUNDS_ENABLED && transaction.est_actif && Number(statutPaiement.montant_restant) < -0.009 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Crédit disponible : {formatMontant(-Number(statutPaiement.montant_restant))}
+            </Typography>
+            <Button variant="outlined" onClick={() => setRefundOpen(true)}>
+              {transaction.id_client ? 'Rembourser le client' : 'Enregistrer un remboursement fournisseur'}
+            </Button>
+          </Box>
+        )}
         {Number(statutPaiement.montant_restant) > 0 && <Stack direction="row" spacing={2} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
           <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddPaiement}>Ajouter un paiement</Button>
           {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard ? 'error.main' : 'text.secondary'}>Échéance : {formatDate(transaction.date_echeance)}</Typography>}
         </Stack>}
+        {CREDIT_REFUNDS_ENABLED && <TransactionCreditPanel transaction={transaction} />}
       </CardContent></Card>}
 
       {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
@@ -686,13 +701,15 @@ function TransactionDetail() {
                       <TableRow key={paiement.id_paiement}>
                         <TableCell>{formatDate(paiement.date_paiement)}</TableCell>
                         <TableCell align="right">
-                          <Typography variant="body2" fontWeight="medium" color="success.main">
-                            {formatMontant(paiement.montant)}
+                          <Typography variant="body2" fontWeight="medium" color={paiement.nature === 'remboursement' ? 'error.main' : 'success.main'}>
+                            {paiement.nature === 'remboursement' ? '− ' : ''}{formatMontant(paiement.montant)}
                           </Typography>
                         </TableCell>
                         {!isMobile && (
                           <TableCell>
-                            <PaymentTypeBadge type={paiement.type_paiement} />
+                            {paiement.nature === 'remboursement' ? 'Remboursement' :
+                              paiement.est_affectation || ['credit_recu','credit_transfere'].includes(paiement.nature) ? 'Crédit affecté' :
+                              <PaymentTypeBadge type={paiement.type_paiement} />}
                           </TableCell>
                         )}
                         {!isMobile && (
@@ -719,7 +736,7 @@ function TransactionDetail() {
                         </TableCell>
                         <TableCell align="center">
                           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                            <Tooltip title="Modifier">
+                            {!['remboursement','credit_recu','credit_transfere'].includes(paiement.nature) && <Tooltip title="Modifier">
                               <IconButton
                                 size="small"
                                 color="primary"
@@ -727,8 +744,8 @@ function TransactionDetail() {
                               >
                                 <EditIcon fontSize="small" />
                               </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Supprimer">
+                            </Tooltip>}
+                            {!['credit_recu','credit_transfere'].includes(paiement.nature) && <Tooltip title="Annuler ce règlement">
                               <IconButton
                                 size="small"
                                 color="error"
@@ -736,7 +753,7 @@ function TransactionDetail() {
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
-                            </Tooltip>
+                            </Tooltip>}
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -761,6 +778,15 @@ function TransactionDetail() {
           <CorrectionHistory transactionId={transaction.id_transaction} readOnly revision={transaction.row_version} />
         )}
       </Box>
+      {CREDIT_REFUNDS_ENABLED && refundOpen && statutPaiement && (
+        <RefundDialog transaction={transaction} credit={-Number(statutPaiement.montant_restant)}
+          onClose={() => setRefundOpen(false)}
+          onSaved={async () => {
+            setRefundOpen(false);
+            await Promise.all([fetchTransaction(), refreshPaiements(), fetchStatutPaiement()]);
+            notification.success('Remboursement enregistré');
+          }} />
+      )}
       {CORRECTION_WRITES_ENABLED && editingPaiement && !paiementDialogOpen && (
         <PaymentCorrectionDialog
           payment={editingPaiement}

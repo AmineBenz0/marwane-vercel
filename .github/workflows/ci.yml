@@ -122,6 +122,21 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_corrections_atomic.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Verify atomic credits/refunds rollback on disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+            -f migrations/production_party_credits_refunds_atomic.sql \
+            -c 'SELECT 1 / 0' > /dev/null 2>&1; then
+            echo "Unexpected successful rollback probe"; exit 1
+          fi
+          count="$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('avances','affectations_credit')")"
+          test "$count" = 0
+      - name: Apply atomic credits/refunds schema to disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_party_credits_refunds_atomic.sql
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
@@ -189,6 +204,7 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
           # One PostgreSQL transaction; failure rolls back all schema and guard changes.
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_corrections_atomic.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_party_credits_refunds_atomic.sql
       - name: Verify native operation journal, ledger replacement and retries
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
@@ -197,6 +213,14 @@ jobs:
         run: >-
           python -m pytest --override-ini addopts=''
           tests/test_production_integrated_corrections_pg.py -q
+      - name: Validate credits/refunds on native PostgreSQL with audit and credit triggers
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          SECRET_KEY: ci-only-secret
+        run: >-
+          python -m pytest --override-ini addopts=''
+          tests/test_credits.py tests/test_refunds.py -q
 
 
   frontend:

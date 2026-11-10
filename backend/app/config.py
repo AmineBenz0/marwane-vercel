@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     ENABLE_RATE_LIMITING: bool = DEFAULT_ENVIRONMENT.lower() in {"production", "preview"}
     # Mutating corrections require explicit release approval and verified migration.
     ENABLE_CORRECTION_WRITES: bool = False
+    # Separate release gate. Disabled by default on production and previews.
+    ENABLE_CREDIT_REFUND_WRITES: bool = DEFAULT_ENVIRONMENT.lower() not in {"production", "preview"}
 
     # Secret utilisé exclusivement par les routes de tâches planifiées.
     CRON_SECRET: str = ""
