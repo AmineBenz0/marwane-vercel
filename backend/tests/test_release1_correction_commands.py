@@ -180,11 +180,11 @@ def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test
     try:
         api_command = command_for(sale, date_echeance=date.today() + timedelta(days=30))
         preview_response = client.post(
-            "/api/v1/corrections/preview", json=api_command.model_dump(mode="json")
+            "/api/v1/corrections/preview", json=api_command.model_dump(mode="json", exclude_unset=True)
         )
         assert preview_response.status_code == 200, preview_response.text
         apply_payload = {
-            **api_command.model_dump(mode="json"),
+            **api_command.model_dump(mode="json", exclude_unset=True),
             "dependency_fingerprint": preview_response.json()["dependency_fingerprint"],
         }
         apply_response = client.post("/api/v1/corrections/apply", json=apply_payload)
