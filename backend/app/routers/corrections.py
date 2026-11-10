@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.transaction import Transaction
+from app.schemas.correction import CorrectionApplyCommand, CorrectionCommand
+from app.services.correction_commands import apply_correction, preview_correction
 from app.models.user import Utilisateur
 from app.services.correction_history import transaction_correction_history
 from app.utils.dependencies import get_current_active_user
@@ -27,3 +29,23 @@ def history(
     if db.get(Transaction, transaction_id) is None:
         raise HTTPException(status_code=404, detail="Transaction introuvable.")
     return transaction_correction_history(db, transaction_id, offset=offset, limit=limit)
+
+
+@router.post("/preview")
+def preview(
+    command: CorrectionCommand,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Read-only validation and impact fingerprint."""
+    return preview_correction(db, command)
+
+
+@router.post("/apply")
+def apply(
+    command: CorrectionApplyCommand,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Atomic, idempotent audited correction; unsupported fields are rejected."""
+    return apply_correction(db, command, current_user)
