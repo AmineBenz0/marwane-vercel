@@ -39,3 +39,9 @@ Refunds, advances, credit allocations, advanced cheque/LC lifecycle, deferred-de
 5. Obtain GO, apply only approved additive migration effects, deploy the matching app, and perform read-only financial/stock reconciliation and smoke tests.
 
 No production writes, environment changes or activation should be performed until these checks pass.
+
+## Migration execution (10 November 2026 update)
+
+The single release migration is now **`backend/migrations/production_integrated_corrections_atomic.sql`**. It combines the four candidate SQL effects in one transaction, requires the existing history foundation, refuses unexpected financial data, and validates the resulting payment identity guard. Do **not** run four SQL files individually or replay the correction-history foundation. CI exercises an intentionally interrupted migration first to prove rollback.
+
+The operational preflight, backup/recovery and postflight steps are in `docs/prod-corrections-database-migration-runbook.md`. **Database migration remains unexecuted in production:** complete disposable PostgreSQL CI and a verified full production dump/restore before the live migration. The correction writers must remain disabled throughout the DB-only phase.
