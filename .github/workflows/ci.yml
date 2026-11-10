@@ -100,6 +100,10 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Verify correction history foundation on disposable PostgreSQL
+        run: python scripts/check_release1_schema_contract.py --scope foundation --require-local
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
