@@ -565,8 +565,9 @@ BEGIN
     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='protect_lc_correction' AND tgrelid='public.lettres_credit'::regclass AND NOT tgisinternal)
     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='protect_lc_cession_history' AND tgrelid='public.cessions_lc'::regclass AND NOT tgisinternal)
     OR NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.utilisations_lettre_credit'::regclass)
-    OR has_table_privilege('anon','public.utilisations_lettre_credit','SELECT')
-    OR has_table_privilege('authenticated','public.utilisations_lettre_credit','SELECT')
+    OR EXISTS (SELECT 1 FROM pg_roles exposed
+        WHERE exposed.rolname IN ('anon','authenticated')
+          AND has_table_privilege(exposed.oid,'public.utilisations_lettre_credit','SELECT'))
     OR NOT has_table_privilege('app_runtime','public.utilisations_lettre_credit','SELECT,INSERT') THEN
    RAISE EXCEPTION 'Release 3 schema, guards or runtime permissions not installed correctly';
  END IF;
