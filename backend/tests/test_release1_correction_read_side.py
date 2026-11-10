@@ -67,3 +67,20 @@ def test_transaction_and_payment_revisions_match_sql_foundation():
         assert column.server_default.arg == "1"
     assert "row_version" in TransactionRead.model_fields
     assert "row_version" in PaiementRead.model_fields
+
+
+def test_unapproved_correction_write_routes_are_disabled(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "ENABLE_CORRECTION_WRITES", False)
+    body = {
+        "operation_id": "8cac2f45-1d41-41cf-979d-736d8b3cc493",
+        "reason": "Correction test",
+        "target": {"entity_type": "transaction", "entity_id": 9999, "expected_version": 1},
+        "changes": {"date_echeance": "2026-11-30"},
+    }
+    preview = client.post("/api/v1/corrections/preview", json=body)
+    assert preview.status_code == 503
+    apply = client.post("/api/v1/corrections/apply", json={
+        **body, "dependency_fingerprint": "a" * 64,
+    })
+    assert apply.status_code == 503
