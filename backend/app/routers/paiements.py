@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
+from app.services.financial_locking import lock_payment, lock_transaction
 from app.services.ledger import record_correction
 from app.services.financial import payment_status, validate_payment_date, validate_payment_idempotency
 from app.services.financial_ledger import (
@@ -23,6 +24,7 @@ from app.services.financial_ledger import (
 )
 from app.services.payment_validation import validate_lc_payment as _validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
+from app.services.lc_lifecycle import payment_lc_role, record_lc_payment_event
 from app.utils.business_date import business_date
 from app.schemas.paiement import (
     PaiementCreate, PaiementUpdate, PaiementRead, 
@@ -31,6 +33,11 @@ from app.schemas.paiement import (
 from app.utils.dependencies import get_current_active_user
 
 router = APIRouter(prefix="/paiements", tags=["Paiements"])
+
+
+def _require_active_transaction(transaction: Optional[Transaction]) -> None:
+    if transaction and transaction.est_actif is False:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une vente annulée est en lecture seule pour ses paiements")
 
 
 def _release_lc_if_unused(
@@ -67,6 +74,16 @@ def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> Non
     if next_state is None:
         return
 
+    if (
+        current_state == "encaisse"
+        and "date_encaissement_effective" in update_data
+        and update_data["date_encaissement_effective"] != paiement.date_encaissement_effective
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La date d’encaissement d’un chèque déjà encaissé nécessite son parcours de correction dédié.",
+        )
+
     allowed_transitions = {
         None: {"emis", "a_encaisser", "encaisse", "rejete", "annule"},
         "emis": {"a_encaisser", "encaisse", "rejete", "annule"},
@@ -83,7 +100,8 @@ def _apply_cheque_state_transition(paiement: Paiement, update_data: dict) -> Non
 
     if next_state == "encaisse":
         update_data["statut"] = "valide"
-        update_data.setdefault("date_encaissement_effective", business_date())
+        if current_state != "encaisse":
+            update_data.setdefault("date_encaissement_effective", business_date())
     elif next_state in {"rejete", "annule"}:
         update_data["statut"] = "rejete"
     else:
@@ -206,16 +224,9 @@ def create_paiement(
             response.status_code = status.HTTP_200_OK
             return existing
 
-    # Vérifier que la transaction existe
-    transaction = db.query(Transaction).filter(
-        Transaction.id_transaction == paiement_data.id_transaction
-    ).first()
-    
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction avec l'ID {paiement_data.id_transaction} introuvable"
-        )
+    transaction = lock_transaction(db, paiement_data.id_transaction)
+
+    _require_active_transaction(transaction)
 
     validate_payment_date(transaction, paiement_data.date_paiement)
     funding = resolve_payment_funding(db, paiement_data, transaction)
@@ -249,6 +260,7 @@ def create_paiement(
         reference_virement=paiement_data.reference_virement,
         **funding,
         id_lc=paiement_data.id_lc if paiement_data.type_paiement == 'lc' else None,
+        role_lc=payment_lc_role(transaction, paiement_data.type_paiement),
         notes=paiement_data.notes,
         cle_idempotence=paiement_data.cle_idempotence,
         statut=statut_initial,
@@ -258,6 +270,7 @@ def create_paiement(
     db.add(nouveau_paiement)
     try:
         db.flush() # Pour obtenir l'ID
+        record_lc_payment_event(db, nouveau_paiement, transaction, current_user=current_user)
     except IntegrityError as exc:
         db.rollback()
         if paiement_data.cle_idempotence:
@@ -310,18 +323,13 @@ def update_paiement(
     Raises:
         HTTPException 404: Si le paiement n'existe pas
     """
-    paiement = db.query(Paiement).filter(Paiement.id_paiement == id).first()
-    
-    if not paiement:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Paiement avec l'ID {id} introuvable"
-        )
+    paiement, transaction = lock_payment(db, id)
+    _require_active_transaction(transaction)
 
     if paiement.statut == "annule":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un paiement annulé est immuable")
-    
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == paiement.id_transaction).first()
+    if paiement.nature not in {None, "paiement"}:
+        raise HTTPException(409, "Un remboursement ou une affectation de crédit ne peut pas être modifié isolément. Annulez l’opération liée erronée puis recréez-la.")
     old_lc_id = paiement.id_lc
     update_data = paiement_data.model_dump(exclude_unset=True)
     if "type_paiement" in update_data and update_data["type_paiement"]:
@@ -425,14 +433,11 @@ def delete_paiement(
     Raises:
         HTTPException 404: Si le paiement n'existe pas
     """
-    paiement = db.query(Paiement).filter(Paiement.id_paiement == id).first()
-    
-    if not paiement:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Paiement avec l'ID {id} introuvable"
-        )
+    paiement, transaction = lock_payment(db, id)
+    _require_active_transaction(transaction)
 
+    if paiement.est_affectation:
+        raise HTTPException(409, "Annulez l’affectation de crédit pour rétablir ses deux côtés ensemble.")
     void_payment(db, paiement, current_user=current_user, reason=raison.strip())
     db.commit()
     
@@ -515,7 +520,7 @@ def get_statistiques_paiements_par_type(
     stats = db.query(
         Paiement.type_paiement,
         func.count(Paiement.id_paiement).label('nombre_paiements'),
-        func.sum(Paiement.montant).label('montant_total')
+        func.sum(Paiement.montant_net).label('montant_total')
     ).filter(
         Paiement.statut.in_(['valide', 'en_attente'])  # Exclure les annulés et rejetés
     ).group_by(
@@ -548,6 +553,11 @@ def create_paiements_batch(
     created_paiements = []
     
     try:
+        # Acquire every parent before any child, in stable order across batches.
+        locked_transactions = {
+            transaction_id: lock_transaction(db, transaction_id)
+            for transaction_id in sorted({p.id_transaction for p in batch_data.paiements})
+        }
         for p_data in batch_data.paiements:
             if p_data.cle_idempotence:
                 existing = db.query(Paiement).filter(Paiement.cle_idempotence == p_data.cle_idempotence).first()
@@ -556,10 +566,9 @@ def create_paiements_batch(
                     created_paiements.append(existing)
                     continue
 
-            # Récupérer la transaction
-            transaction = db.query(Transaction).filter(Transaction.id_transaction == p_data.id_transaction).first()
-            if not transaction:
-                raise HTTPException(status_code=404, detail=f"Transaction {p_data.id_transaction} introuvable")
+            transaction = locked_transactions[p_data.id_transaction]
+
+            _require_active_transaction(transaction)
 
             validate_payment_date(transaction, p_data.date_paiement)
             funding = resolve_payment_funding(db, p_data, transaction)
@@ -580,11 +589,13 @@ def create_paiements_batch(
             nouveau_paiement = Paiement(
                 **p_data.model_dump(exclude={"source_reglement", "id_compte"}),
                 **funding,
+                role_lc=payment_lc_role(transaction, p_data.type_paiement),
                 statut=statut_initial,
                 id_utilisateur_creation=current_user.id_utilisateur if current_user else None
             )
             db.add(nouveau_paiement)
             db.flush()
+            record_lc_payment_event(db, nouveau_paiement, transaction, current_user=current_user)
             
             # Mouvement de caisse
             sync_payment_cash_movement(
@@ -608,6 +619,7 @@ def create_paiements_batch(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 
 
