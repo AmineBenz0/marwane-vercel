@@ -221,6 +221,10 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_corrections_atomic.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_party_credits_refunds_atomic.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
+      - name: Verify native cheque settlement, LC correction and refund guards
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/release3_native_pg_checks.sql
       - name: Verify native operation journal, ledger replacement and retries
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
@@ -237,10 +241,6 @@ jobs:
         run: >-
           python -m pytest --override-ini addopts=''
           tests/test_credits.py tests/test_refunds.py -q
-      - name: Verify native cheque settlement, LC correction and refund guards
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/release3_native_pg_checks.sql
 
 
   frontend:
