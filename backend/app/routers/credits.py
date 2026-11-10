@@ -4,6 +4,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from uuid import UUID
 from datetime import date
+from app.config import settings
 from app.database import get_db
 from app.models.credit import Avance, AffectationCredit
 from app.models.correction_operation import CorrectionOperation
@@ -18,6 +19,11 @@ from app.schemas.advance_settlement import AdvanceSettlementCommand, AdvanceSett
 from app.services.advance_settlements import apply_settlement
 
 router = APIRouter(prefix='/credits', tags=['Avances et crédits'])
+
+
+def _require_release():
+    if not settings.ENABLE_CREDIT_REFUND_WRITES:
+        raise HTTPException(503, "Les avances, crédits et remboursements ne sont pas encore activés.")
 
 
 def _allocation_retired():
@@ -81,6 +87,7 @@ def allocations(transaction_id: int = Query(gt=0), db: Session = Depends(get_db)
 
 @router.post('/preview')
 def preview(command: CreditCommand, db: Session = Depends(get_db), actor: Utilisateur = Depends(get_current_active_user)):
+    _require_release()
     if command.action == 'allocate':
         _allocation_retired()
     return preview_credit(db, command)
@@ -88,6 +95,7 @@ def preview(command: CreditCommand, db: Session = Depends(get_db), actor: Utilis
 
 @router.post('/apply')
 def apply(body: CreditApply, db: Session = Depends(get_db), actor: Utilisateur = Depends(get_current_active_user)):
+    _require_release()
     if body.command.action == 'allocate' and db.get(CorrectionOperation, body.command.operation_id) is None:
         _allocation_retired()
     return apply_credit(db, body.command, body.dependency_fingerprint, actor)
