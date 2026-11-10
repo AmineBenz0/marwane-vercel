@@ -117,7 +117,7 @@ def test_correction_native_revision_ledger_and_replay(db_session, test_user, tes
     # without recording a partial operation or altering the original payment.
     stale = _cmd("paiement", payment.id_paiement, payment.row_version, {"montant": Decimal("7.00")})
     _, stale_apply = _ready(db, stale)
-    db.query(Caisse).filter_by(id_mouvement=active[0].id_mouvement).update({"notes": "changed since preview"})
+    db.query(Caisse).filter_by(id_mouvement=active[0].id_mouvement).update({"motif_annulation": "changed since preview"})
     db.commit()
     with pytest.raises(HTTPException) as exc:
         apply_correction(db, stale_apply, test_user)
