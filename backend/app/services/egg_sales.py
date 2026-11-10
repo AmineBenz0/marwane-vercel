@@ -80,7 +80,7 @@ def _stock_state(db, *, exclude_transaction_id=None, through_date=None,
             if not category:
                 continue
             covered = sum(a.quantite for a in tx.allocations)
-            pending = max(0, tx.quantite - covered)
+            pending = max(0, tx.quantite - covered - (tx.quantite_annulee or 0))
             for p in by_category.get(category, []):
                 if p.id_batiment != tx.id_batiment:
                     continue
@@ -110,15 +110,29 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
     are distributed, so repeated production saves are safe and canceled sales
     naturally release their allocations to the next promise.
     """
+    # Lock before loading promises and their allocations. Loading first
+    # leaves an ORM snapshot that can go stale while another writer holds
+    # these building locks, causing a duplicate (sale, source) allocation.
+    # Keep the established lock order: buildings, then products, then stock.
+    scoped_buildings = {building for building in (building_ids or ()) if building is not None}
+    if building_id is not None:
+        scoped_buildings.add(building_id)
+    building_scope = db.query(Batiment)
+    if scoped_buildings:
+        building_scope = building_scope.filter(Batiment.id_batiment.in_(sorted(scoped_buildings)))
+    # When unscoped, serialize against all building stock writers: the
+    # owner app has few buildings and legacy unassigned sales are global.
+    building_scope.order_by(Batiment.id_batiment).with_for_update().all()
+
     query = db.query(Transaction).join(Produit).filter(
         Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
         Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
     ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit))
-    scoped_buildings = {building for building in (building_ids or ()) if building is not None}
-    if building_id is not None:
-        scoped_buildings.add(building_id)
     if scoped_buildings:
         query = query.filter(Transaction.id_batiment.in_(sorted(scoped_buildings)))
+    # Preserve pending in-session cancellation/quantity edits. Locking the
+    # building *before* the SELECT ensures other transactions cannot race;
+    # the normal identity map must not be forcibly overwritten here.
     promises = query.order_by(Transaction.date_creation, Transaction.id_transaction).all()
     grouped = defaultdict(list)
     for tx in promises:
@@ -128,11 +142,8 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
     if not grouped:
         return []
 
-    # Match the established stock-write lock order: buildings, then products.
-    building_ids = sorted({building for building, _ in grouped})
-    db.query(Batiment).filter(Batiment.id_batiment.in_(building_ids)).order_by(
-        Batiment.id_batiment
-    ).with_for_update().all()
+    # Building locks are already held, so the loaded allocation collections
+    # are fresh. Product locks still precede the stock-balance calculation.
     product_ids = sorted({tx.id_produit for items in grouped.values() for tx in items})
     db.query(Produit).filter(Produit.id_produit.in_(product_ids)).order_by(
         Produit.id_produit
@@ -162,7 +173,7 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
         ]
         for tx in items:
             before = sum(a.quantite for a in tx.allocations)
-            pending = max(0, tx.quantite - before)
+            pending = max(0, tx.quantite - before - (tx.quantite_annulee or 0))
             allocated = 0
             used_sources = []
             existing = {allocation.id_production: allocation for allocation in tx.allocations}
@@ -444,10 +455,31 @@ def promise_stock_by_category(db, through_date):
 
 
 def deferred_sale_reservations(db):
-    """Unallocated current stock available for each promise, for legacy previews."""
+    """Stock reserved but not yet confirmed as completed, including virtual FIFO reservations."""
     _, _, reservations = _stock_state(db, through_date=business_date())
-    return {transaction_id: sum(sources.values())
-            for transaction_id, sources in reservations.items()}
+    result = {transaction_id: sum(sources.values())
+              for transaction_id, sources in reservations.items()}
+    promises = db.query(Transaction).filter(
+        Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
+    ).options(selectinload(Transaction.allocations)).all()
+    for tx in promises:
+        allocated_but_not_completed = sum(max(0, a.quantite - (a.quantite_livree or 0)) for a in tx.allocations)
+        result[tx.id_transaction] = min(
+            max(0, tx.quantite_en_attente),
+            result.get(tx.id_transaction, 0) + allocated_but_not_completed,
+        )
+    return result
+
+
+def deferred_stock_quantities(transaction, reserved=0):
+    """Return the shared per-sale stock breakdown used by every transaction view."""
+    pending = max(0, int(transaction.quantite_en_attente or 0)) if transaction.est_promesse else 0
+    reserved = min(pending, max(0, int(reserved or 0))) if transaction.est_actif else 0
+    return {
+        "quantite_completee": max(0, int(transaction.quantite_completee or 0)),
+        "quantite_reservee": reserved,
+        "quantite_a_produire": max(0, pending - reserved),
+    }
 
 
 def deferred_sales_overview(db):
@@ -463,9 +495,11 @@ def deferred_sales_overview(db):
                  nom_produit=tx.produit.nom_produit,
                  nom_batiment=tx.batiment.nom if tx.batiment else None,
                  date_livraison_prevue=tx.date_livraison_prevue,
+                 quantite=tx.quantite,
                  quantite_couverte=tx.quantite_couverte,
                  quantite_en_attente=tx.quantite_en_attente,
-                 quantite_reservee=reservations.get(tx.id_transaction, 0))
+                 quantite_annulee=tx.quantite_annulee or 0,
+                 **deferred_stock_quantities(tx, reservations.get(tx.id_transaction, 0)))
             for tx in sales if tx.quantite_en_attente > 0]
 
 
@@ -477,12 +511,37 @@ def completion_preview(db, transaction):
         raise HTTPException(409, "L’origine du stock de cette vente doit être renseignée.")
     rows, _, reservations = _stock_state(db, through_date=business_date())
     owned = reservations.get(transaction.id_transaction, {})
-    sources = [dict(id_production=p.id_production, date_production=p.date_production,
-                    quantite=owned[p.id_production], id_cycle=p.id_cycle)
-               for p in rows if owned.get(p.id_production, 0) > 0]
+    sources_by_id = {}
+    for allocation in transaction.allocations:
+        pending_quantity = max(0, allocation.quantite - (allocation.quantite_livree or 0))
+        if pending_quantity:
+            production = next((row for row in rows if row.id_production == allocation.id_production), None)
+            if production:
+                sources_by_id[production.id_production] = dict(
+                    id_production=production.id_production, date_production=production.date_production,
+                    quantite=pending_quantity, quantite_deja_reservee=pending_quantity,
+                    id_cycle=production.id_cycle,
+                )
+    for production in rows:
+        if owned.get(production.id_production, 0) > 0:
+            source = sources_by_id.setdefault(production.id_production, dict(
+                id_production=production.id_production, date_production=production.date_production,
+                quantite=0, quantite_deja_reservee=0, id_cycle=production.id_cycle,
+            ))
+            source['quantite'] += owned[production.id_production]
+    sources = sorted(sources_by_id.values(), key=lambda source: (source['date_production'], source['id_production']))
+    # Never propose more than the undelivered, uncanceled part of the sale.
+    capacity = transaction.quantite_en_attente
+    trimmed = []
+    for source in sources:
+        quantity = min(capacity, source['quantite'])
+        if quantity:
+            trimmed.append({**source, 'quantite': quantity})
+            capacity -= quantity
     fingerprint = sha256(json.dumps([
         transaction.id_transaction, transaction.quantite, transaction.quantite_couverte,
-        transaction.id_batiment, transaction.id_produit, sources,
+        transaction.quantite_completee, transaction.quantite_annulee,
+        transaction.id_batiment, transaction.id_produit, trimmed,
     ], default=str, sort_keys=True).encode()).hexdigest()
     return dict(id_transaction=transaction.id_transaction,
                 nom_client=transaction.client.nom_client if transaction.client else None,
@@ -490,8 +549,8 @@ def completion_preview(db, transaction):
                 nom_batiment=transaction.batiment.nom if transaction.batiment else None,
                 quantite_couverte=transaction.quantite_couverte,
                 quantite_en_attente=transaction.quantite_en_attente,
-                quantite_proposee=sum(source['quantite'] for source in sources),
-                repartition_stock=sources, empreinte_stock=fingerprint)
+                quantite_proposee=sum(source['quantite'] for source in trimmed),
+                repartition_stock=trimmed, empreinte_stock=fingerprint)
 
 
 def complete_deferred_sale(db, transaction_id, payload, current_user):
@@ -514,7 +573,7 @@ def complete_deferred_sale(db, transaction_id, payload, current_user):
         raise HTTPException(409, "Le stock ou la vente a changé. Rechargez la proposition avant de confirmer.")
     if payload.quantite > preview['quantite_proposee']:
         raise HTTPException(409, "La quantité dépasse le stock réservé disponible pour cette vente.")
-    before = transaction.quantite_couverte
+    before = transaction.quantite_completee
     remaining = payload.quantite
     consumed = []
     existing = {allocation.id_production: allocation for allocation in transaction.allocations}
@@ -523,10 +582,15 @@ def complete_deferred_sale(db, transaction_id, payload, current_user):
         if not used:
             break
         allocation = existing.get(source['id_production'])
+        already_reserved = min(used, source.get('quantite_deja_reservee', 0))
+        newly_reserved = used - already_reserved
         if allocation:
-            allocation.quantite += used
+            allocation.quantite += newly_reserved
+            allocation.quantite_livree = (allocation.quantite_livree or 0) + used
         else:
-            transaction.allocations.append(EggAllocation(id_production=source['id_production'], quantite=used))
+            transaction.allocations.append(EggAllocation(
+                id_production=source['id_production'], quantite=used, quantite_livree=used,
+            ))
         if transaction.id_production is None:
             transaction.id_production = source['id_production']
             transaction.id_cycle = source['id_cycle']
@@ -537,9 +601,10 @@ def complete_deferred_sale(db, transaction_id, payload, current_user):
         db.add(TransactionAudit(id_transaction=transaction_id,
             id_utilisateur=current_user.id_utilisateur, champ_modifie='completion_livraison_differee',
             ancienne_valeur=str(before),
-            nouvelle_valeur=json.dumps(dict(quantite_couverte=before + payload.quantite,
+            nouvelle_valeur=json.dumps(dict(quantite_couverte=transaction.quantite_couverte,
                                            date=business_date().isoformat(),
                                            quantite_completee=payload.quantite,
+                                           total_complete=before + payload.quantite,
                                            quantite_totale=transaction.quantite,
                                            repartition_stock=consumed))))
     transaction.date_modification = datetime.now(timezone.utc)
