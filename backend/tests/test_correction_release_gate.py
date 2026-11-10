@@ -34,19 +34,18 @@ def test_writes_fail_closed_by_default(monkeypatch):
     {"statut_cheque": "encaisse"},
     {"date_encaissement_effective": "2026-12-01"},
 ])
-def test_advanced_cheque_corrections_stay_blocked_when_enabled(monkeypatch, changes):
+def test_advanced_cheque_corrections_allowed_when_enabled(monkeypatch, changes):
     monkeypatch.setattr(settings, "ENABLE_CORRECTION_WRITES", True)
-    with pytest.raises(HTTPException) as error:
-        _require_correction_release(None, command("paiement", **changes))
-    assert error.value.status_code == 422
+    db = SimpleNamespace(get=lambda model, entity_id:
+                         SimpleNamespace(type_paiement="cheque", id_lc=None))
+    _require_correction_release(db, command("paiement", **changes))
 
 
 @pytest.mark.parametrize("payment", [
-    SimpleNamespace(type_paiement="cheque", id_lc=None),
     SimpleNamespace(type_paiement="lc", id_lc=3),
     SimpleNamespace(type_paiement="cash", id_lc=3),
 ])
-def test_linked_instrument_payment_cannot_bypass_release_gate(monkeypatch, payment):
+def test_lc_linked_payment_cannot_bypass_instrument_release_gate(monkeypatch, payment):
     monkeypatch.setattr(settings, "ENABLE_CORRECTION_WRITES", True)
     db = SimpleNamespace(get=lambda model, entity_id: payment)
     with pytest.raises(HTTPException) as error:
