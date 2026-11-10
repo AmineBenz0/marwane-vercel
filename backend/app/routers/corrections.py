@@ -52,12 +52,10 @@ def _require_correction_release(db: Session, command: CorrectionCommand) -> None
     # is installed. This switch must be explicitly approved after reconciliation.
     if not settings.ENABLE_CORRECTION_WRITES:
         raise HTTPException(503, "Les corrections avancées ne sont pas encore activées.")
-    # LC/cheque financial status and lifecycle changes are a separate release:
-    # instrument_corrections.sql and lc_lifecycle.sql are NOT installed here.
-    fields = command.changes.model_fields_set
-    if fields & {"statut_cheque", "date_encaissement_effective"}:
-        raise HTTPException(422, "La correction des chèques nécessite le module dédié.")
+    # Cheque corrections are now supported by the audited payment correction
+    # engine once the atomic Release 3 migration is installed. LC payments
+    # retain their separate, instrument-aware preview/apply workflow.
     if command.target.entity_type == "paiement":
         row = db.get(Paiement, command.target.entity_id)
-        if row is not None and (row.type_paiement in {"cheque", "lc"} or row.id_lc is not None):
-            raise HTTPException(422, "Ce règlement nécessite la correction dédiée aux instruments.")
+        if row is not None and (row.type_paiement == "lc" or row.id_lc is not None):
+            raise HTTPException(422, "Ce règlement LC nécessite la correction dédiée aux lettres de crédit.")
