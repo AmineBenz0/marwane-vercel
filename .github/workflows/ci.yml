@@ -237,6 +237,14 @@ jobs:
         run: >-
           python -m pytest --override-ini addopts=''
           tests/test_credits.py tests/test_refunds.py -q
+      - name: Verify native cheque settlement, LC corrections and refund dependencies
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          SECRET_KEY: ci-only-secret
+        run: >-
+          python -m pytest --override-ini addopts=''
+          tests/test_instrument_corrections.py tests/test_lc_cession_cancellation.py -q
 
 
   frontend:
