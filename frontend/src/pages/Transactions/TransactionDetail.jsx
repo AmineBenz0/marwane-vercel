@@ -56,8 +56,12 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
 import TransactionAuditHistory from './TransactionAuditHistory';
+import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
+import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
 import ExpandableDetails from '../../components/ExpandableDetails';
+
+const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
 
 /**
  * Composant TransactionDetail.
@@ -312,6 +316,13 @@ function TransactionDetail() {
    * Ouvre le dialog pour éditer un paiement existant.
    */
   const handleEditPaiement = (paiement) => {
+    // For ordinary payments use the staged atomic correction flow. Cheques
+    // and LCs retain the existing notes-only editor until their later release.
+    if (CORRECTION_WRITES_ENABLED && !['cheque', 'lc'].includes(paiement.type_paiement) && !paiement.id_lc) {
+      setEditingPaiement(paiement);
+      setPaiementDialogOpen(false);
+      return;
+    }
     setEditingPaiement(paiement);
     resetPaiement({
       date_paiement: format(new Date(paiement.date_paiement), 'yyyy-MM-dd'),
@@ -746,7 +757,22 @@ function TransactionDetail() {
 
       <Box sx={{ mb: { xs: 2, sm: 3 } }}>
         <TransactionAuditHistory key={transaction.id_transaction} transactionId={transaction.id_transaction} />
+        {CORRECTION_WRITES_ENABLED && (
+          <CorrectionHistory transactionId={transaction.id_transaction} readOnly revision={transaction.row_version} />
+        )}
       </Box>
+      {CORRECTION_WRITES_ENABLED && editingPaiement && !paiementDialogOpen && (
+        <PaymentCorrectionDialog
+          payment={editingPaiement}
+          transaction={transaction}
+          onClose={() => setEditingPaiement(null)}
+          onSaved={async () => {
+            await Promise.all([fetchTransaction(), refreshPaiements()]);
+            setEditingPaiement(null);
+            notification.success('Correction enregistrée');
+          }}
+        />
+      )}
 
       {/* Modal d'ajout/édition de paiement */}
       <Dialog
