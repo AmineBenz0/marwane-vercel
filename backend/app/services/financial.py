@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.caisse import Caisse
 from app.models.charge import Charge
-from app.models.compte_bancaire import MouvementBancaire
+from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.credit import Avance
 from app.services.credit_balances import advance_balances
 from app.models.paiement import Paiement
@@ -190,7 +190,9 @@ def bank_ledgers_as_of(db: Session, as_of: date) -> dict[int, Decimal]:
             else_=-MouvementBancaire.montant,
         )).label("balance"),
     ).group_by(MouvementBancaire.id_compte).all()
-    return {row.id_compte: Decimal(str(row.balance or 0)) for row in rows}
+    balances = {account.id_compte: Decimal("0") for account in db.query(CompteBancaire.id_compte).all()}
+    balances.update({row.id_compte: Decimal(str(row.balance or 0)) for row in rows})
+    return balances
 
 
 def bank_activity_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
