@@ -99,7 +99,7 @@ def _postgres_only(db_session):
         pytest.skip("Native immutable-revision tests require disposable PostgreSQL")
 
 
-def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test_user, client):
+def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test_user, client, monkeypatch):
     _postgres_only(db_session)
     cmd = prepared(db_session, command_for(sale, prix_unitaire=Decimal("14.25")))
     result = apply_correction(db_session, cmd, test_user)
@@ -177,8 +177,10 @@ def test_native_apply_is_atomic_idempotent_and_revisioned(db_session, sale, test
 
     # Exercise the actual FastAPI route contract on the same disposable PG
     # service, with explicit test-only authentication dependency override.
+    from app.config import settings
     from app.main import app
     from app.utils.dependencies import get_current_active_user
+    monkeypatch.setattr(settings, "ENABLE_CORRECTION_WRITES", True)
     app.dependency_overrides[get_current_active_user] = lambda: test_user
     try:
         api_command = command_for(sale, date_echeance=date.today() + timedelta(days=30))
