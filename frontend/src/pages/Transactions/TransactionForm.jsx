@@ -619,7 +619,7 @@ function TransactionForm({
           initialValues, payload, paiementsData, paiementsExistants,
         );
         let correction = null;
-        if (auditedChanges) {
+        if (import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true' && auditedChanges) {
           const changes = { ...auditedChanges };
           if ('prix_unitaire' in changes) changes.prix_unitaire = String(data.lignes[0].prix_unitaire);
           const command = {
