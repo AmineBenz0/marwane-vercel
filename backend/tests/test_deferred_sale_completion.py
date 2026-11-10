@@ -75,6 +75,10 @@ def test_complete_300_then_100_preserves_sale_payments_and_origins(client, db_se
     else:
         tx = create_transaction(payload, db_session, None)
     assert (tx.quantite_couverte, tx.quantite_en_attente) == (600, 400)
+    # The production FIFO workflow treats allocated eggs as delivered.
+    # The correction engine needs the new delivery field to agree.
+    assert tx.quantite_completee == tx.quantite_couverte
+    assert all(a.quantite_livree == a.quantite for a in tx.allocations)
     original = (tx.id_transaction, tx.date_transaction, tx.quantite, tx.prix_unitaire, tx.montant_total)
     payments = [(p.id_paiement, p.montant, p.date_paiement, p.statut) for p in db_session.query(Paiement)]
     cash_entries = db_session.query(Caisse).count()
@@ -92,6 +96,8 @@ def test_complete_300_then_100_preserves_sale_payments_and_origins(client, db_se
     assert client.post(f'/api/v1/transactions/{tx.id_transaction}/completion', json=request).status_code == 409
     db_session.expire_all()
     assert [(a.id_production, a.quantite) for a in tx.allocations] == [(original_source.id_production, 600), (late_source.id_production, 300)]
+    assert tx.quantite_completee == 900
+    assert all(a.quantite_livree == a.quantite for a in tx.allocations)
     assert proposal(client, tx.id_transaction)['quantite_proposee'] == 0
     last = enter_production(db_session, building.id_batiment, 100)
     data = proposal(client, tx.id_transaction)
@@ -130,6 +136,8 @@ def test_automatic_reservation_keeps_stock_for_the_older_promise(client, db_sess
     assert denied.status_code == 409
     assert tx.quantite_couverte == 900
     assert tx.quantite_en_attente == 100
+    assert tx.quantite_completee == 900
+    assert all(a.quantite_livree == a.quantite for a in tx.allocations)
     assert proposal(client, tx.id_transaction)['quantite_proposee'] == 0
     assert later.quantite_couverte == 0
     assert proposal(client, later.id_transaction)['quantite_proposee'] == 0

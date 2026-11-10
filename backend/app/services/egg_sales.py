@@ -172,10 +172,14 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
                     allocation = existing.get(production.id_production)
                     if allocation:
                         allocation.quantite += quantity
+                        # Production's automatic allocation is an immediate
+                        # fulfillment, not a future deferred reservation.
+                        allocation.quantite_livree = (allocation.quantite_livree or 0) + quantity
                     else:
                         allocation = EggAllocation(
                             id_production=production.id_production,
                             quantite=quantity,
+                            quantite_livree=quantity,
                         )
                         tx.allocations.append(allocation)
                         existing[production.id_production] = allocation
@@ -310,7 +314,7 @@ def validate_sale_stock(db, transaction, current_user=None, *, preserve_allocati
         for p in eligible:
             used = min(quantity, max(0, balances[p.id_production]))
             if used:
-                allocations.append(EggAllocation(id_production=p.id_production, quantite=used))
+                allocations.append(EggAllocation(id_production=p.id_production, quantite=used, quantite_livree=used))
                 quantity -= used
             if quantity == 0:
                 break
@@ -338,7 +342,7 @@ def validate_sale_stock(db, transaction, current_user=None, *, preserve_allocati
     if transaction.allocations:
         transaction.allocations.clear()
         db.flush()
-        transaction.allocations.append(EggAllocation(id_production=source.id_production, quantite=transaction.quantite))
+        transaction.allocations.append(EggAllocation(id_production=source.id_production, quantite=transaction.quantite, quantite_livree=transaction.quantite))
         db.flush()
 
 
@@ -525,8 +529,11 @@ def complete_deferred_sale(db, transaction_id, payload, current_user):
         allocation = existing.get(source['id_production'])
         if allocation:
             allocation.quantite += used
+            allocation.quantite_livree = (allocation.quantite_livree or 0) + used
         else:
-            transaction.allocations.append(EggAllocation(id_production=source['id_production'], quantite=used))
+            transaction.allocations.append(EggAllocation(
+                id_production=source['id_production'], quantite=used, quantite_livree=used,
+            ))
         if transaction.id_production is None:
             transaction.id_production = source['id_production']
             transaction.id_cycle = source['id_cycle']

@@ -270,6 +270,8 @@ class TransactionUpdate(BaseModel):
 
 
 class EggAllocationRead(BaseModel):
+    # Keep the existing production API contract for sale sources.
+    # Audited correction snapshots expose delivery evidence separately.
     id_production: int
     quantite: int
     date_production: date
@@ -302,7 +304,9 @@ class DeferredSaleSummary(BaseModel):
     nom_batiment: Optional[str] = None
     date_livraison_prevue: Optional[date] = None
     quantite_couverte: int
+    quantite_completee: int = 0
     quantite_en_attente: int
+    quantite_annulee: int = 0
     quantite_reservee: int
 
 
@@ -314,10 +318,13 @@ class TransactionRead(TransactionBase):
     repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
     quantite_reservee: int = 0
     quantite_couverte: int = 0
+    quantite_completee: int = 0
     quantite_en_attente: int = 0
+    quantite_annulee: int = 0
     date_production: Optional[date] = None
     nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")
+    row_version: int = Field(default=1, description="Révision pour détecter les changements concurrents")
     date_creation: datetime = Field(..., description="Date de création de la transaction")
     date_modification: datetime = Field(..., description="Date de dernière modification")
     id_utilisateur_creation: Optional[int] = Field(None, description="ID de l'utilisateur qui a créé la transaction")

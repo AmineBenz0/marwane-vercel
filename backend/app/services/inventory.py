@@ -31,6 +31,10 @@ def validate_stock_idempotency(existing: MouvementStock, requested: dict) -> Non
         and existing.type_mouvement == requested["type_mouvement"]
         and existing.source_type == requested["source_type"]
         and (
+            requested.get("id_mouvement_inverse") is None
+            or existing.id_mouvement_inverse == requested["id_mouvement_inverse"]
+        )
+        and (
             existing.source_id == requested["source_id"]
             or (
                 requested["source_id"] is None
@@ -90,6 +94,7 @@ def record_movement(
     source_type: str,
     source_id: Optional[int] = None,
     cle_idempotence: Optional[str] = None,
+    id_mouvement_inverse: Optional[int] = None,
     id_utilisateur: Optional[int] = None,
     notes: Optional[str] = None,
     date_mouvement: Optional[datetime] = None,
@@ -114,6 +119,7 @@ def record_movement(
                 "type_mouvement": type_mouvement,
                 "source_type": source_type,
                 "source_id": source_id,
+                "id_mouvement_inverse": id_mouvement_inverse,
             })
             return existing
 
@@ -125,6 +131,7 @@ def record_movement(
         source_type=source_type,
         source_id=source_id,
         cle_idempotence=cle_idempotence,
+        id_mouvement_inverse=id_mouvement_inverse,
         id_utilisateur=id_utilisateur,
         notes=notes,
         date_mouvement=date_mouvement,
@@ -148,6 +155,12 @@ def record_transaction_movement(
         preserve_allocations=preserve_egg_allocations,
         skip_promise_audit=is_new_transaction,
     )
+    if is_new_transaction and transaction.est_promesse:
+        # Stock available at sale creation is covered immediately. Stock added
+        # by later production stays only reserved until the user confirms it.
+        for allocation in transaction.allocations:
+            allocation.quantite_livree = allocation.quantite
+        db.flush()
     # Lock the product row while checking and writing its ledger impact. This
     # serializes concurrent sales of the same product on PostgreSQL and
     # prevents two requests from consuming the same available stock.
@@ -217,6 +230,11 @@ def reverse_source_movements(
     reason: str,
 ) -> list[MouvementStock]:
     """Append inverse movements for all active movements from a source."""
+    product_ids = [row[0] for row in db.query(MouvementStock.id_produit).filter(
+        MouvementStock.source_type == source_type, MouvementStock.source_id == source_id,
+        MouvementStock.id_mouvement_inverse.is_(None)).distinct().all()]
+    db.query(Produit).filter(Produit.id_produit.in_(product_ids)).order_by(
+        Produit.id_produit).populate_existing().with_for_update().all()
     originals = db.query(MouvementStock).filter(
         MouvementStock.source_type == source_type,
         MouvementStock.source_id == source_id,
@@ -251,6 +269,11 @@ def reverse_source_movements(
             type_mouvement="reversal",
             source_type=f"{source_type}_reversal",
             source_id=source_id,
+            # Pair the inverse at INSERT time. Otherwise it looks like another
+            # active source movement and the next edit/cancel collides with the
+            # earlier reversal under uq_stock_source_movement_active.
+            id_mouvement_inverse=original.id_mouvement_stock,
+            cle_idempotence=f"stock-reversal:{original.id_mouvement_stock}",
             id_utilisateur=user_id,
             notes=reason,
         )
@@ -331,7 +354,7 @@ def record_adjustment(
     cle_idempotence: Optional[str] = None,
 ) -> MouvementStock:
     """Record an explicit, auditable stock adjustment."""
-    produit = db.query(Produit).filter(Produit.id_produit == id_produit).first()
+    produit = db.query(Produit).filter(Produit.id_produit == id_produit).populate_existing().with_for_update().first()
     if not produit:
         raise HTTPException(status_code=404, detail="Produit introuvable")
     if not is_inventory_tracked(produit):
@@ -354,3 +377,4 @@ def record_adjustment(
     movement.source_id = movement.id_mouvement_stock
     db.flush()
     return movement
+

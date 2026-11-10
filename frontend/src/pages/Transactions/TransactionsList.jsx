@@ -53,6 +53,9 @@ import {
   ReceiptLong as ReceiptLongIcon,
 } from '@mui/icons-material';
 import TransactionForm from './TransactionForm';
+import TransactionEditForm from './TransactionEditForm';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
+
 import { deferredSaleStatus } from './deferredSaleStatus';
 import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
@@ -68,6 +71,8 @@ import { countTransactionQuickFilters, filterTransactions, summarizeTransactions
 import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
+
+const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
 
 /**
  * Composant TransactionsList.
@@ -389,6 +394,8 @@ function TransactionsList() {
   /**
    * Gère l'ouverture de la page de détails d'une transaction.
    */
+  useCorrectionRefresh(() => fetchTransactions());
+
   const handleViewDetails = (transaction) => {
     navigate(`/transactions/${transaction.id_transaction}`);
   };
@@ -805,15 +812,28 @@ function TransactionsList() {
         onReactivate={handleReactivate}
       />
 
-      <TransactionForm
-        open={modalOpen}
-        onClose={handleCloseModal}
-        onSubmit={handleSubmit}
-        initialValues={editingTransaction || {}}
-        loading={formLoading}
-        errorMessage={formError}
-        prefillBatimentId={prefillBatimentId}
-      />
+      {CORRECTION_WRITES_ENABLED && editingTransaction && modalOpen ? (
+        <TransactionEditForm
+          open
+          initialValues={editingTransaction}
+          onClose={handleCloseModal}
+          onCorrected={async () => {
+            handleCloseModal();
+            await fetchTransactions();
+            notification.success('Correction enregistrée');
+          }}
+        />
+      ) : (
+        <TransactionForm
+          open={modalOpen}
+          onClose={handleCloseModal}
+          onSubmit={handleSubmit}
+          initialValues={editingTransaction || {}}
+          loading={formLoading}
+          errorMessage={formError}
+          prefillBatimentId={prefillBatimentId}
+        />
+      )}
 
       <Dialog
         open={deleteDialogOpen}

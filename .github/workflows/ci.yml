@@ -93,6 +93,35 @@ jobs:
         run: python -m pytest --override-ini addopts='' tests/test_production_correction_foundation_pg.py -q
         env:
           POSTGRES_MIGRATION_TEST_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Apply existing correction foundation to disposable PostgreSQL only
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Prove an interrupted migration rolls back completely
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          # Intentional SQL error appended in the same transaction; no changes may survive.
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+            -f migrations/production_integrated_corrections_atomic.sql \
+            -c 'SELECT 1 / 0' >/dev/null 2>&1; then
+            echo "Rollback probe unexpectedly succeeded"
+            exit 1
+          fi
+          remaining="$(psql "$DATABASE_URL" -At -c "
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_schema='public' AND (
+              (table_name='transactions' AND column_name IN ('stock_revision','quantite_annulee'))
+              OR (table_name='paiements' AND column_name='nature')
+              OR (table_name='egg_sale_allocations' AND column_name='quantite_livree')
+            )")"
+          test "$remaining" = 0
+      - name: Rehearse integrated correction schema and payment/stock guards
+        run: |
+          # One PostgreSQL transaction; failure rolls back all schema and guard changes.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_corrections_atomic.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
@@ -118,6 +147,57 @@ jobs:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
           ENVIRONMENT: testing
           SECRET_KEY: ci-only-secret
+
+
+  release1-integrated-native:
+    # The normal backend suite runs SQLite fixtures. This isolated job keeps
+    # real PostgreSQL revision triggers installed for the entire writer test.
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: comptabilite_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d comptabilite_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Migrate disposable PostgreSQL only
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: development
+          SECRET_KEY: ci-only-secret
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE app_runtime NOLOGIN"
+          python -m alembic upgrade heads
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
+          # One PostgreSQL transaction; failure rolls back all schema and guard changes.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_corrections_atomic.sql
+      - name: Verify native operation journal, ledger replacement and retries
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          SECRET_KEY: ci-only-secret
+        run: >-
+          python -m pytest --override-ini addopts=''
+          tests/test_production_integrated_corrections_pg.py -q
+
 
   frontend:
     # Pin a Playwright-supported OS; ubuntu-latest is now Ubuntu 26.04.

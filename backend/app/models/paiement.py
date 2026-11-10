@@ -1,8 +1,10 @@
 """
 Modèle SQLAlchemy pour la table Paiements.
 """
-from sqlalchemy import Column, Integer, String, Date, Numeric, DateTime, ForeignKey, CheckConstraint, Text
+from sqlalchemy import Column, Integer, BigInteger, String, Date, Numeric, case, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
+from decimal import Decimal
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -45,6 +47,7 @@ class Paiement(Base):
     
     # Identifiants
     id_paiement = Column(Integer, primary_key=True, index=True)
+    row_version = Column(BigInteger, nullable=False, server_default='1')
     id_transaction = Column(Integer, ForeignKey("transactions.id_transaction"), nullable=False, index=True)
     id_lc = Column(Integer, ForeignKey("lettres_credit.id_lc"), nullable=True, index=True)
     id_compte = Column(Integer, ForeignKey("comptes_bancaires.id_compte"), nullable=True, index=True)
@@ -55,6 +58,7 @@ class Paiement(Base):
     # Informations de base du paiement
     date_paiement = Column(Date, nullable=False, index=True)
     montant = Column(Numeric(15, 2), nullable=False)
+    nature = Column(String(20), nullable=False, default='paiement', server_default='paiement')
     type_paiement = Column(String(20), nullable=False, index=True)  # cash, cheque, virement, carte, autre
     
     # Informations pour les chèques
@@ -131,6 +135,25 @@ class Paiement(Base):
         if self.type_paiement == "cheque":
             return self.statut_cheque == "encaisse"
         return True
+
+    @hybrid_property
+    def montant_net(self):
+        amount = Decimal(str(self.montant))
+        return -amount if self.nature in {'remboursement', 'credit_transfere'} else amount
+
+    @montant_net.expression
+    def montant_net(cls):
+        return case((cls.nature.in_(['remboursement','credit_transfere']), -cls.montant), else_=cls.montant)
+
+    @property
+    def est_affectation(self):
+        return self.nature in {'credit_recu','credit_transfere'}
+
+    def ledger_direction(self, transaction):
+        incoming = transaction.id_client is not None
+        if self.nature == 'remboursement':
+            incoming = not incoming
+        return 'ENTREE' if incoming else 'SORTIE'
 
     @property
     def numero_reference_lc(self):
