@@ -17,7 +17,12 @@ const change = (id, overrides = {}) => ({
   ...overrides,
 });
 
-beforeEach(() => { vi.resetAllMocks(); });
+beforeEach(() => {
+  vi.resetAllMocks();
+  get.mockImplementation(async (path) => path === '/corrections/history'
+    ? { items: [], names: {}, has_more: false, next_offset: 0 }
+    : []);
+});
 afterEach(cleanup);
 
 it('loads audit records only after opening and renders readable before/after values', async () => {
@@ -40,7 +45,10 @@ it('loads audit records only after opening and renders readable before/after val
   expect(get).toHaveBeenCalledWith('/transactions/17/audit', { params: { skip: 0, limit: 10 } });
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
   fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
-  expect(get).toHaveBeenCalledTimes(1);
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(get).toHaveBeenCalledWith('/corrections/history', {
+    params: { transaction_id: 17, offset: 0, limit: 20 },
+  });
 });
 
 it('paginates without duplicating records and keeps the section read-only', async () => {
@@ -85,5 +93,29 @@ it('shows an error instead of an empty audit and supports retry', async () => {
   expect(within(error).getByText(/Impossible de charger/)).toBeVisible();
   fireEvent.click(within(error).getByRole('button', { name: 'Réessayer' }));
   expect(await screen.findByText('Montant total')).toBeVisible();
-  expect(get).toHaveBeenCalledTimes(2);
+  expect(get.mock.calls.filter(([path]) => path === '/transactions/17/audit')).toHaveLength(2);
+  expect(get.mock.calls.filter(([path]) => path === '/corrections/history')).toHaveLength(1);
+});
+
+
+it('shows grouped verified corrections without hiding the legacy audit', async () => {
+  get.mockImplementation(async (path) => {
+    if (path === '/corrections/history') return {
+      items: [{
+        operation_id: 'test-operation', reason: 'Correction de la transaction',
+        recorded_at: '2026-11-10T10:00:00Z', actor_name: 'Responsable',
+        changes: { date_echeance: '2026-12-01' },
+        before: { date_echeance: '2026-11-30' },
+        after: { date_echeance: '2026-12-01' },
+      }],
+      names: {}, has_more: false, next_offset: 1,
+    };
+    return [change(2)];
+  });
+  render(<TransactionAuditHistory transactionId={17} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Historique des modifications' }));
+  expect(await screen.findByText('Corrections vérifiées')).toBeVisible();
+  expect(screen.getByText('Correction de la transaction')).toBeVisible();
+  expect(screen.getByText('Montant total')).toBeVisible();
+  expect(screen.getByText('Date d’échéance')).toBeVisible();
 });
