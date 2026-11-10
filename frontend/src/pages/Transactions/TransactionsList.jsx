@@ -420,7 +420,14 @@ function TransactionsList() {
     try {
       let result = null;
       
-      if (editingTransaction) {
+      if (editingTransaction && data.auditedCorrection) {
+        // The server already validated the proposed non-stock/non-financial edit.
+        // Do not send a second PUT or edit payment records after applying it.
+        result = await post('/corrections/apply', data.auditedCorrection);
+        notification.success(result.no_op
+          ? 'Aucune modification à enregistrer'
+          : 'Transaction corrigée et enregistrée dans l’historique');
+      } else if (editingTransaction) {
         // Mode édition : PUT (une seule transaction)
         // Extraire les données de paiement si présentes
         const transactionData = { ...data };
