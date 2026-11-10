@@ -56,7 +56,6 @@ import TransactionForm from './TransactionForm';
 import TransactionEditForm from './TransactionEditForm';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 
-const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
 import { deferredSaleStatus } from './deferredSaleStatus';
 import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
@@ -72,6 +71,8 @@ import { countTransactionQuickFilters, filterTransactions, summarizeTransactions
 import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
+
+const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
 
 /**
  * Composant TransactionsList.
