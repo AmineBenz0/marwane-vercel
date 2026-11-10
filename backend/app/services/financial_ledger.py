@@ -8,6 +8,7 @@ are kept in this service so every workflow follows the same append-only rules.
 from datetime import datetime, time, timezone
 from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import case, func
@@ -254,13 +255,14 @@ def sync_payment_cash_movement(
     *,
     current_user: Optional[Utilisateur] = None,
     reason: str = "Synchronisation du mouvement de caisse",
+    operation_id: Optional[UUID] = None,
 ) -> Optional[Caisse]:
     """Synchronize a payment's effective cash impact append-only.
 
     A changed movement is voided and replaced by a new row. A movement that
     ceases to be effective is voided with an explicit inverse audit row.
     """
-    should_create = payment.est_effectif and (
+    should_create = payment.est_effectif and not payment.est_affectation and (
         payment.type_paiement in IMMEDIATE_PAYMENT_TYPES
         or payment.type_paiement == "cheque"
     )
@@ -282,6 +284,7 @@ def sync_payment_cash_movement(
                 raison=reason,
                 current_user=current_user,
                 create_reversal_record=True,
+                operation_id=operation_id,
             )
             create_cash_snapshot(db, existing.id_mouvement)
         if existing_bank:
@@ -290,11 +293,19 @@ def sync_payment_cash_movement(
                 existing_bank,
                 raison=reason,
                 current_user=current_user,
+                operation_id=operation_id,
             )
         return None
 
-    movement_type = "ENTREE" if transaction.id_client is not None else "SORTIE"
-    expected_date = _source_datetime(payment.date_paiement)
+    movement_type = payment.ledger_direction(transaction)
+    # A cleared cheque affects the ledger on the encashment date. The issue
+    # date remains visible on the payment record but is not its cash/bank date.
+    effective_payment_date = (
+        payment.date_encaissement_effective or payment.date_paiement
+        if payment.type_paiement == "cheque"
+        else payment.date_paiement
+    )
+    expected_date = _source_datetime(effective_payment_date)
 
     # New supplier payments use their saved funding source, independently of
     # the method. Client/historical payments retain their previous routing.
@@ -312,6 +323,7 @@ def sync_payment_cash_movement(
                 raison=reason,
                 current_user=current_user,
                 create_reversal_record=True,
+                operation_id=operation_id,
             )
             create_cash_snapshot(db, existing.id_mouvement)
         if existing_bank and (
@@ -319,6 +331,8 @@ def sync_payment_cash_movement(
             and _money(existing_bank.montant) == _money(payment.montant)
             and existing_bank.type_mouvement == movement_type
             and _same_datetime(existing_bank.date_mouvement, expected_date)
+            and existing_bank.source == payment.type_paiement
+            and existing_bank.reference == (payment.reference_virement or payment.numero_cheque)
         ):
             return None
         if existing_bank:
@@ -328,6 +342,7 @@ def sync_payment_cash_movement(
                 raison=reason,
                 current_user=current_user,
                 create_reversal_record=False,
+                operation_id=operation_id,
             )
         record_bank_movement(
             db,
@@ -336,7 +351,7 @@ def sync_payment_cash_movement(
             type_mouvement=movement_type,
             source=payment.type_paiement,
             reference=payment.reference_virement or payment.numero_cheque,
-            notes=reason,
+            notes=reason[:255],
             id_paiement=payment.id_paiement,
             current_user=current_user,
             date_mouvement=expected_date,
@@ -350,6 +365,7 @@ def sync_payment_cash_movement(
             raison=reason,
             current_user=current_user,
             create_reversal_record=True,
+            operation_id=operation_id,
         )
 
     if existing and (
@@ -367,6 +383,7 @@ def sync_payment_cash_movement(
             raison=reason,
             current_user=current_user,
             create_reversal_record=False,
+            operation_id=operation_id,
         )
 
     replacement = Caisse(
@@ -393,6 +410,7 @@ def sync_payment_cash_movement(
             id_mouvement_original=original_id,
             id_mouvement_inverse=replacement.id_mouvement,
             details={"table": "caisse"},
+            operation_id=operation_id,
         )
     create_cash_snapshot(db, replacement.id_mouvement)
     return replacement
