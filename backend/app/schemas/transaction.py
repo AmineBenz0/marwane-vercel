@@ -272,6 +272,7 @@ class TransactionUpdate(BaseModel):
 class EggAllocationRead(BaseModel):
     id_production: int
     quantite: int
+    quantite_livree: int = 0
     date_production: date
     id_cycle: Optional[int] = None
 
@@ -302,7 +303,9 @@ class DeferredSaleSummary(BaseModel):
     nom_batiment: Optional[str] = None
     date_livraison_prevue: Optional[date] = None
     quantite_couverte: int
+    quantite_completee: int = 0
     quantite_en_attente: int
+    quantite_annulee: int = 0
     quantite_reservee: int
 
 
@@ -314,7 +317,9 @@ class TransactionRead(TransactionBase):
     repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
     quantite_reservee: int = 0
     quantite_couverte: int = 0
+    quantite_completee: int = 0
     quantite_en_attente: int = 0
+    quantite_annulee: int = 0
     date_production: Optional[date] = None
     nom_batiment_source: Optional[str] = None
     id_transaction: int = Field(..., description="Identifiant unique de la transaction")
