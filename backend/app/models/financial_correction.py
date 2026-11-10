@@ -5,7 +5,7 @@ journal preserves the correction event and its links to the original and
 replacement movement records.
 """
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -17,6 +17,7 @@ class CorrectionFinanciere(Base):
     __tablename__ = "corrections_financieres"
 
     id_correction = Column(Integer, primary_key=True, index=True)
+    operation_id = Column(Uuid, ForeignKey('correction_operations.operation_id'), nullable=True, index=True)
     type_entite = Column(String(30), nullable=False, index=True)
     id_entite = Column(Integer, nullable=False, index=True)
     action = Column(String(30), nullable=False)
