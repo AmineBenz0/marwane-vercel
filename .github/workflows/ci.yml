@@ -137,6 +137,21 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_party_credits_refunds_atomic.sql
+      - name: Prove Release 3 migration rollback and retry on isolated PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+            -f migrations/production_cheque_lc_lifecycle_atomic.sql \
+            -c 'SELECT 1 / 0' > /dev/null 2>&1; then
+            echo "Release 3 rollback probe unexpectedly succeeded"; exit 1
+          fi
+          test "$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='paiements' AND column_name='role_lc'")" = 0
+          test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('public.utilisations_lettre_credit') IS NULL")" = t
+      - name: Apply atomic cheque and LC lifecycle migration to disposable PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
@@ -205,6 +220,7 @@ jobs:
           # One PostgreSQL transaction; failure rolls back all schema and guard changes.
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_corrections_atomic.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_party_credits_refunds_atomic.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
       - name: Verify native operation journal, ledger replacement and retries
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
