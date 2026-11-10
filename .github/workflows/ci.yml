@@ -268,6 +268,22 @@ jobs:
           ENABLE_AUTH: "true"
           ENABLE_RATE_LIMITING: "true"
         run: node scripts/check_vercel_environment.mjs
+      - name: Verify branch-specific Supabase pooler login is preview-only
+        working-directory: .
+        env:
+          DATABASE_URL: postgresql://app_runtime.r3preview.exampleprojectref:ci-only@pooler.example.com:5432/postgres
+          SECRET_KEY: ci-preview-secret-value-for-tests-only-0123456789
+          CRON_SECRET: ci-preview-cron-value-for-tests-only-0123456789
+          CORS_ORIGINS: https://preview.example.com
+          DEBUG: "false"
+          ENABLE_AUTH: "true"
+          ENABLE_RATE_LIMITING: "true"
+        run: |
+          VERCEL_ENV=preview node scripts/check_vercel_environment.mjs
+          if VERCEL_ENV=production node scripts/check_vercel_environment.mjs >/dev/null 2>&1; then
+            echo "Preview-only database role must be rejected in production"
+            exit 1
+          fi
       - name: Reject mojibake in frontend source
         run: node ../scripts/check_frontend_encoding.mjs
       - run: npm ci
