@@ -60,6 +60,13 @@ class Caisse(Base):
     charge = relationship("Charge", back_populates="mouvements_caisse")
     historiques_solde = relationship("CaisseSoldeHistorique", back_populates="mouvement")
     cession = relationship("CessionLC", foreign_keys=[id_cession])
+    avance = relationship('Avance')
+
+    @property
+    def nature_reglement(self):
+        """Mark refund and advance movements without changing their financial direction."""
+        return self.paiement.nature if self.paiement else self.avance.nature if self.avance else None
+
 
 
     @property
