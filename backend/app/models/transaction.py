@@ -149,6 +149,12 @@ class Transaction(Base):
         return total
     
     @property
+    def montant_rembourse(self) -> Decimal:
+        """Gross amount of effective refund settlements, separate from signed net paid."""
+        return sum((Decimal(str(p.montant)) for p in self.paiements
+                    if p.nature == "remboursement" and p.est_effectif), Decimal("0"))
+
+    @property
     def montant_restant(self) -> Decimal:
         """
         Calcule le montant restant à payer pour cette transaction.
