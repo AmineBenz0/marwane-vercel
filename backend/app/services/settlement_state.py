@@ -7,8 +7,6 @@ from sqlalchemy import or_
 from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.paiement import Paiement
-from app.models.lettre_credit import LettreDeCredit
-from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.services.financial import payment_effective_date
 
 
@@ -33,11 +31,9 @@ def settlement_state(db, transactions, *, account_id=None, lock=False, lock_acco
         return (query.with_for_update() if lock else query).all()
 
     by_id = {t.id_transaction: t for t in transactions}
-    lc_ids = {r[0] for r in db.query(Paiement.id_lc).filter(Paiement.id_transaction.in_(sorted(by_id)), Paiement.id_lc.isnot(None))}
-    lcs = rows(LettreDeCredit, LettreDeCredit.id_lc.in_(sorted(lc_ids)), LettreDeCredit.id_lc)
-    lc_by_id = {lc.id_lc: lc for lc in lcs}
-    usages = rows(LettreCreditUtilisation, LettreCreditUtilisation.id_lc.in_(sorted(lc_by_id)), LettreCreditUtilisation.id_utilisation)
-    usage_by_payment = {u.id_paiement: u for u in usages if u.id_paiement is not None and u.statut == 'active'}
+    # Production does not yet have the staging LC lifecycle ledger. Operations
+    # involving LC or cheques are refused below instead of approximating state.
+    lcs = []
     payments = rows(Paiement, Paiement.id_transaction.in_(sorted(by_id)), Paiement.id_paiement)
     by_payment = {p.id_paiement: p for p in payments}
     ids = sorted(by_payment)
@@ -58,16 +54,8 @@ def settlement_state(db, transactions, *, account_id=None, lock=False, lock_acco
             linked.setdefault(movement.id_paiement, []).append(movement)
     for p in payments:
         transaction = by_id[p.id_transaction]
-        if p.statut != 'annule' and p.type_paiement == 'cheque' and (not p.est_effectif or p.date_encaissement_effective is None):
-            raise HTTPException(409, 'Ce chèque doit être encaissé avant de pouvoir utiliser son crédit.')
-        if p.statut != 'annule' and (p.type_paiement == 'lc' or p.id_lc):
-            lc = lc_by_id.get(p.id_lc)
-            role = 'reception' if transaction.id_client is not None else 'utilisation'
-            receipt_valid = role == 'reception' and lc and lc.statut_cycle in {'detenue', 'transferee', 'deposee'} and lc.id_client_origine == transaction.id_client
-            use = usage_by_payment.get(p.id_paiement)
-            usage_valid = role == 'utilisation' and lc and lc.statut_cycle == 'transferee' and use and use.id_lc == lc.id_lc and use.id_fournisseur == transaction.id_fournisseur
-            if not lc or p.type_paiement != 'lc' or p.role_lc != role or not p.est_effectif or lc.montant != p.montant or not (receipt_valid or usage_valid):
-                raise HTTPException(409, 'Réconciliez la lettre de crédit et son paiement avant cette opération.')
+        if p.statut != 'annule' and (p.type_paiement in {'cheque', 'lc'} or p.id_lc is not None):
+            raise HTTPException(409, 'Cette transaction nécessite la gestion dédiée des chèques et lettres de crédit.')
         movements = linked.get(p.id_paiement, [])
         expected_movements = 1 if p.est_effectif and not p.est_affectation and p.type_paiement != 'lc' else 0
         if len(movements) != expected_movements:
