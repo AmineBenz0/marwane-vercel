@@ -476,11 +476,11 @@ function TransactionForm({
             date_transaction: initialValues.date_transaction
               ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
               : today(),
+            // Editing must preserve an empty due date. The creation default
+            // would otherwise silently introduce a new value on save.
             date_echeance: initialValues.date_echeance
               ? new Date(initialValues.date_echeance).toISOString().split('T')[0]
-              : getDefaultDueDate(initialValues.date_transaction
-                ? new Date(initialValues.date_transaction).toISOString().split('T')[0]
-                : today()),
+              : '',
             type_entite: typeEntite,
             id_client: initialValues.id_client || '',
             id_fournisseur: initialValues.id_fournisseur || '',
