@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     # IMPORTANT: En production, mettre ENABLE_AUTH=True et ENABLE_RATE_LIMITING=True
     ENABLE_AUTH: bool = DEFAULT_ENVIRONMENT.lower() in {"production", "preview"}
     ENABLE_RATE_LIMITING: bool = DEFAULT_ENVIRONMENT.lower() in {"production", "preview"}
+    # Mutating corrections require explicit release approval and verified migration.
+    ENABLE_CORRECTION_WRITES: bool = False
     # Explicitly enable only after database and release checks have passed.
     ENABLE_CORRECTION_WRITES: bool = False
 
