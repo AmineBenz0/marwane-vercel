@@ -26,6 +26,7 @@ from app.models.inventory import MouvementStock
 from app.models.alert import Alerte
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.correction_operation import CorrectionOperation, EntityRevision
+from app.models.credit import Avance, AffectationCredit
 from app.models.job_execution import JobExecution
 from app.models.task import Tache
 
