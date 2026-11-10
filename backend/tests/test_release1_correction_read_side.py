@@ -21,15 +21,17 @@ class _FakeDB:
         return self.transaction
 
 
-def test_release1_router_exposes_only_read_only_history():
-    # Test the immutable router definition, not the globally shared FastAPI
-    # app object that other suites may modify during discovery.
-    routes = [(route.path, method) for route in corrections.router.routes
-              for method in getattr(route, "methods", [])]
-    assert ("/corrections/history", "GET") in routes
-    assert not any(path.startswith("/corrections/")
-                   and method in {"POST", "PUT", "PATCH", "DELETE"}
-                   for path, method in routes)
+def test_release1_routes_are_scoped_and_authenticated():
+    routes = {(route.path, method) for route in corrections.router.routes
+              for method in getattr(route, "methods", [])}
+    assert routes == {
+        ("/corrections/history", "GET"),
+        ("/corrections/preview", "POST"),
+        ("/corrections/apply", "POST"),
+    }
+    from app.utils.dependencies import get_current_active_user
+    for route in corrections.router.routes:
+        assert get_current_active_user in [dep.call for dep in route.dependant.dependencies]
 
 
 def test_read_side_rejects_missing_transaction():
