@@ -44,6 +44,9 @@ def _lc(db_session, client, test_user, *, amount="100.00"):
         montant=Decimal(amount),
         date_emission=date.today() - timedelta(days=2),
         date_disponibilite=date.today() - timedelta(days=1),
+        date_reception=date.today() - timedelta(days=1),
+        id_client_origine=client.id_client,
+        statut_cycle="detenue",
         type_detenteur="client",
         id_client=client.id_client,
         statut="active",
@@ -79,8 +82,9 @@ def test_lc_payment_and_transaction_commit_together(
     assert payment.id_transaction == transaction_id
     assert payment.id_lc == lc.id_lc
     db_session.refresh(lc)
-    assert lc.statut == "utilisee"
-    assert db_session.query(Caisse).filter_by(id_paiement=payment_id, statut="active").count() == 1
+    assert lc.statut == "active" and lc.statut_cycle == "detenue"
+    assert payment.role_lc == "reception"
+    assert db_session.query(Caisse).filter_by(id_paiement=payment_id, statut="active").count() == 0
 
 
 def test_invalid_lc_rolls_back_transaction_and_all_ledgers(
