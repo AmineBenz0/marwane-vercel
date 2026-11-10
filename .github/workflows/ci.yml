@@ -93,6 +93,13 @@ jobs:
         run: python -m pytest --override-ini addopts='' tests/test_production_correction_foundation_pg.py -q
         env:
           POSTGRES_MIGRATION_TEST_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Align disposable CI schema with the applied production correction foundation
+        # Production uses versioned Supabase SQL for this foundation. The temporary
+        # Alembic fixture must apply the same reviewed SQL before ORM compatibility
+        # checks, but must never replay it against the live database.
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
