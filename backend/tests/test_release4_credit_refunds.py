@@ -241,16 +241,27 @@ def test_phase5_existing_advances_stay_separate_from_avoir_balance(
     assert db_session.query(DeferredSaleAdjustment).count() == 1
 
 
-def test_phase5_credit_capacity_uses_future_adjustments_to_protect_debt(
-    db_session, canceled_paid_sale,
-):
-    tx = canceled_paid_sale
-    # The sale was originally 1500 MAD; an 600 MAD avoir posts today.
-    # Before cancellation, accepting a new historic advance of 1000 MAD
-    # would over-allocate the final corrected debt of only 900 MAD.
-    assert settlement_capacity(tx, business_date() - timedelta(days=1), credit=False) == Decimal("0.00")
-    # Already fully paid: there is no outstanding debt to allocate.
-    assert settlement_capacity(tx, business_date(), credit=False) == Decimal("0.00")
+def test_phase5_credit_capacity_uses_future_adjustments_to_protect_debt():
+    # A 600 MAD avoir posts today. A new backdated advance allocation
+    # yesterday must not consume 1500 MAD when the remaining corrected debt
+    # today is 900 MAD. Test this without unrelated existing payments.
+    sale = Transaction(
+        id_client=1, id_produit=1,
+        date_transaction=business_date() - timedelta(days=4),
+        quantite=1000, prix_unitaire=Decimal("1.50"),
+        montant_total=Decimal("1500.00"),
+        est_promesse=True, allocation_automatique=True,
+    )
+    sale.paiements = []
+    sale.avoirs_livraison_differee = [
+        DeferredSaleAdjustment(
+            date_effet=business_date(), montant_avoir=Decimal("600.00"),
+        )
+    ]
+    assert settlement_capacity(sale, business_date() - timedelta(days=1), credit=False) == Decimal("900.00")
+    assert settlement_capacity(sale, business_date(), credit=False) == Decimal("900.00")
+    # The reverse direction is not allowed before the commercial credit exists.
+    assert settlement_capacity(sale, business_date() - timedelta(days=1), credit=True) == Decimal("0.00")
 
 
 def test_phase5_refund_cash_provenance_rejects_lc_and_compensation_only():
