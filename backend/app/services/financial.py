@@ -508,8 +508,8 @@ def summarize_financial_transactions(
     ).one()
     return {
         "total": Decimal(str(summary.total or 0)),
-        "total_brut": Decimal(str(summary.total_brut or 0)),
-        "total_avoirs": Decimal(str(summary.total_avoirs or 0)),
+        "total_brut": Decimal(str(summary.total_brut if summary.total_brut is not None else "0.00")).quantize(Decimal("0.01")),
+        "total_avoirs": Decimal(str(summary.total_avoirs if summary.total_avoirs is not None else "0.00")).quantize(Decimal("0.01")),
         "paye": Decimal(str(summary.paye or 0)),
         "reste": Decimal(str(summary.reste or 0)),
         "count": int(summary.count or 0),
