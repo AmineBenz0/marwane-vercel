@@ -568,3 +568,111 @@ def test_stock_after_orders_keeps_missing_categories_and_other_stock_separate(
     assert all(category['to_produce_eggs'] is None for category in historical['categories'])
     daily = client.get('/api/v1/productions/stock/daily').json()['totals']
     assert daily['to_produce_eggs'] is None
+
+
+def test_release4_reschedule_updates_date_and_audits_without_stock_or_money(
+    client, db_session, deferred_sale, test_user,
+):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    building, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    before = (tx.quantite_couverte, tx.quantite_en_attente, tx.montant_total)
+    result = client.patch(f'/api/v1/transactions/{tx.id_transaction}/delivery-date', json={
+        'expected_version': tx.row_version,
+        'date_livraison_prevue': (payload.date_livraison_prevue + timedelta(days=7)).isoformat(),
+    })
+    assert result.status_code == 200, result.text
+    assert result.json()['date_livraison_prevue'] == (payload.date_livraison_prevue + timedelta(days=7)).isoformat()
+    db_session.refresh(tx)
+    assert (tx.quantite_couverte, tx.quantite_en_attente, tx.montant_total) == before
+    assert db_session.query(Paiement).count() == 0
+    assert db_session.query(Caisse).count() == 0
+    history = client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history', params={'include_initial': True}).json()
+    assert history[-1]['type'] == 'reschedule'
+    assert history[-1]['date_avant'] == payload.date_livraison_prevue.isoformat()
+    assert history[-1]['date_apres'] == (payload.date_livraison_prevue + timedelta(days=7)).isoformat()
+    bad = client.patch(f'/api/v1/transactions/{tx.id_transaction}/delivery-date', json={
+        'expected_version': tx.row_version + 999,
+        'date_livraison_prevue': (payload.date_livraison_prevue + timedelta(days=8)).isoformat(),
+    })
+    assert bad.status_code == 409
+    earlier = client.patch(f'/api/v1/transactions/{tx.id_transaction}/delivery-date', json={
+        'expected_version': tx.row_version,
+        'date_livraison_prevue': (tx.date_transaction - timedelta(days=1)).isoformat(),
+    })
+    assert earlier.status_code == 400
+
+
+def test_release4_closing_remainder_stops_future_stock_allocation_and_preserves_finances(
+    client, db_session, deferred_sale, test_user,
+):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    from app.services.egg_sales import assign_pending_promises
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    building, customer, original_source, payload = deferred_sale
+    batch = TransactionPaymentBatchCreate(items=[dict(client_ref='paid-r4',
+        transaction=payload.model_dump(), paiements=[dict(
+            date_paiement=payload.date_transaction, montant='1500', type_paiement='cash')])])
+    tx = create_transactions_with_payments_batch(batch, db_session, test_user)[0]['transaction']
+    before_finances = (tx.quantite, tx.montant_total, tx.montant_paye, tx.quantite_couverte)
+    before_money = [(p.id_paiement, p.statut, p.montant) for p in db_session.query(Paiement).all()]
+    before_cash = db_session.query(Caisse).count()
+    bad = client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder', json={
+        'expected_version': tx.row_version, 'quantite_en_attente_attendue': 399,
+    })
+    assert bad.status_code == 409
+    success = client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder', json={
+        'expected_version': tx.row_version, 'quantite_en_attente_attendue': 400,
+    })
+    assert success.status_code == 200, success.text
+    assert success.json()['quantite_annulee'] == 400
+    assert success.json()['quantite_en_attente'] == 0
+    assert client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder', json={
+        'expected_version': tx.row_version, 'quantite_en_attente_attendue': 400,
+    }).status_code == 409
+    db_session.refresh(tx)
+    assert (tx.quantite, tx.montant_total, tx.montant_paye, tx.quantite_couverte) == before_finances
+    assert [(p.id_paiement, p.statut, p.montant) for p in db_session.query(Paiement).all()] == before_money
+    assert db_session.query(Caisse).count() == before_cash
+    newcomer = Client(nom_client='Client après clôture', est_actif=True)
+    db_session.add(newcomer)
+    db_session.commit()
+    later = create_transaction(payload.model_copy(update={
+        'id_client': newcomer.id_client, 'quantite': 400, 'montant_total': Decimal('600'),
+    }), db_session, test_user)
+    enter_production(db_session, building.id_batiment, 400)
+    assign_pending_promises(db_session, building_id=building.id_batiment, current_user=test_user)
+    db_session.commit()
+    db_session.expire_all()
+    assert tx.quantite_couverte == 600
+    assert tx.quantite_en_attente == 0
+    assert later.quantite_couverte == 400
+    assert tx.allocations[0].id_production == original_source.id_production
+    history = client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history', params={'include_initial': True}).json()
+    assert history[0]['type'] == 'initial'
+    assert history[-1]['type'] == 'cancel_remainder'
+    assert history[-1]['quantite'] == 400
+    assert client.get('/api/v1/transactions/deferred-sales').json() == []
+
+
+def test_release4_remainder_rejects_stale_and_non_delivered_reservations(
+    client, db_session, deferred_sale, test_user,
+):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    endpoint = f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder'
+    assert client.post(endpoint, json={
+        'expected_version': tx.row_version + 1, 'quantite_en_attente_attendue': 400,
+    }).status_code == 409
+    tx.allocations[0].quantite_livree = 0
+    db_session.commit()
+    assert client.post(endpoint, json={
+        'expected_version': tx.row_version, 'quantite_en_attente_attendue': 400,
+    }).status_code == 409
+    assert tx.quantite_annulee == 0

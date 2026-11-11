@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DeferredSalesPage from './DeferredSalesPage';
-import { get } from '../../services/api';
-vi.mock('../../services/api', () => ({ get: vi.fn() }));
-const sale = { id_transaction: 7, id_client: 1, id_produit: 1, est_promesse: true, est_actif: true, quantite: 70, quantite_couverte: 65, quantite_en_attente: 5, date_transaction: '2026-10-24', date_livraison_prevue: '2026-10-25', montant_total: 105, montant_paye: 105, montant_restant: 0, repartition_stock: [{ id_production: 1, date_production: '2026-10-24', quantite: 65 }] };
+import { get, patch, post } from '../../services/api';
+vi.mock('../../services/api', () => ({ get: vi.fn(), patch: vi.fn(), post: vi.fn() }));
+const sale = { id_transaction: 7, id_client: 1, id_produit: 1, est_promesse: true, est_actif: true, quantite: 70, quantite_couverte: 65, quantite_en_attente: 5, date_transaction: '2026-10-24', date_livraison_prevue: '2026-10-25', montant_total: 105, montant_paye: 105, montant_restant: 0, row_version: 1, repartition_stock: [{ id_production: 1, date_production: '2026-10-24', quantite: 65 }] };
 const summary = { ...sale, nom_client: 'Marché Central', nom_produit: 'Œufs démarrage', nom_batiment: 'Bâtiment A' };
 const later = { ...summary, id_transaction: 8, nom_client: 'Épicerie', quantite_couverte: 0, quantite_en_attente: 50, date_livraison_prevue: '2030-01-01' };
 const show = (url = '/livraisons-a-suivre') => render(<MemoryRouter initialEntries={[url]}><Routes><Route path="/livraisons-a-suivre" element={<DeferredSalesPage />} /><Route path="/dashboard" element={<h1>Accueil quotidien</h1>} /><Route path="/transactions/:id" element={<h1>Vente et paiements</h1>} /></Routes></MemoryRouter>);
@@ -77,4 +77,32 @@ it('counts stock reserved for completion separately from eggs still to produce',
   expect(screen.getByText(/65 \/ 70 couverts/)).toBeVisible();
   expect(screen.getByText(/3 prêts à compléter/)).toBeVisible();
   expect(screen.getByText(/2 à produire/)).toBeVisible();
+});
+
+it('changes only the expected delivery date using the versioned delivery endpoint', async () => {
+  patch.mockResolvedValueOnce({ ...sale, date_livraison_prevue: '2026-12-12', row_version: 2 });
+  show('/livraisons-a-suivre?vente=7');
+  const panel = await screen.findByRole('dialog', { name: 'Vente #7' });
+  await within(panel).findByRole('button', { name: 'Modifier la date prévue' });
+  fireEvent.click(within(panel).getByRole('button', { name: 'Modifier la date prévue' }));
+  fireEvent.change(within(panel).getByLabelText('Nouvelle date prévue'), { target: { value: '2026-12-12' } });
+  fireEvent.click(within(panel).getByRole('button', { name: 'Enregistrer la date' }));
+  await waitFor(() => expect(patch).toHaveBeenCalledWith('/transactions/7/delivery-date', {
+    date_livraison_prevue: '2026-12-12', expected_version: 1,
+  }));
+  expect(post).not.toHaveBeenCalled();
+});
+
+it('asks confirmation before closing the remainder and warns that money is unchanged', async () => {
+  post.mockResolvedValueOnce({ ...sale, quantite_en_attente: 0, quantite_annulee: 5 });
+  show('/livraisons-a-suivre?vente=7');
+  const panel = await screen.findByRole('dialog', { name: 'Vente #7' });
+  fireEvent.click(await within(panel).findByRole('button', { name: 'Clore le reste à produire' }));
+  const confirmation = screen.getByRole('dialog', { name: 'Clore le reste à produire ?' });
+  expect(within(confirmation).getByText(/ne rembourse pas le client/)).toBeVisible();
+  expect(post).not.toHaveBeenCalled();
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Confirmer la clôture' }));
+  await waitFor(() => expect(post).toHaveBeenCalledWith('/transactions/7/cancel-remainder', {
+    expected_version: 1, quantite_en_attente_attendue: 5,
+  }));
 });
