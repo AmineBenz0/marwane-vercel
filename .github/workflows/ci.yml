@@ -159,12 +159,6 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
-      - name: Seed a synthetic historical canceled-and-deactivated sale for Phase 8 compatibility
-        # No live staging data or credentials are used. This reproduces the
-        # pre-ledger unpaid closure documented in the shared staging audit.
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f scripts/release4_legacy_migration_fixture.sql
       - name: Prove Release 4 commercial-ledger migration rolls back atomically
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
@@ -180,29 +174,6 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avoirs_atomic.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
-      - name: Verify historical legacy sale is frozen without any invented financial credit
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
-        run: |
-          test "$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM public.legacy_deferred_cancellations")" = 1
-          test "$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM public.avoirs_livraison_differee")" = 0
-          test "$(psql "$DATABASE_URL" -At -c "
-            SELECT count(*) FROM public.legacy_deferred_cancellations b
-            JOIN public.transactions t USING(id_transaction)
-            WHERE b.original_row=to_jsonb(t)
-              AND t.est_actif IS FALSE AND t.quantite_annulee=6
-              AND NOT EXISTS(SELECT 1 FROM public.paiements p WHERE p.id_transaction=t.id_transaction)
-          ")" = 1
-          # Reopening or changing the existing canceled sale must fail at
-          # deferred constraint commit; this probe auto-rolls back on error.
-          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1             -c "UPDATE public.transactions SET quantite=7 WHERE id_transaction=(SELECT id_transaction FROM public.legacy_deferred_cancellations LIMIT 1)"             -c "SET CONSTRAINTS ALL IMMEDIATE" > /dev/null 2>&1; then
-            echo "Immutable historical cancellation was changed"; exit 1
-          fi
-          test "$(psql "$DATABASE_URL" -At -c "
-            SELECT count(*) FROM public.legacy_deferred_cancellations b
-            JOIN public.transactions t USING(id_transaction)
-            WHERE b.original_row=to_jsonb(t)
-          ")" = 1
       - name: Prove Release 4 Phase 5 refund guard migration rolls back atomically
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
@@ -517,6 +488,42 @@ jobs:
           tests/test_deferred_sale_completion.py
           -k "release4_reschedule or release4_cancellation_is_gated"
           --tb=short -q
+
+  release4-legacy-compat-native:
+    # Extra disposable PostgreSQL instance: legacy fixtures deliberately stay
+    # OUT of migration-validation because its ORM tests drop/create tables.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: comptabilite_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d comptabilite_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Rehearse legacy canceled-sale migration and audit in isolated PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: development
+          SECRET_KEY: release4-legacy-fixture-disposable-only
+        run: bash scripts/release4_legacy_migration_native.sh
 
   release4-ledger-native:
     # Phase 2: test append-only avoir constraints against disposable PostgreSQL,
