@@ -180,6 +180,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_refund_guards_atomic.sql
+      - name: Phase 8 fail-closed Release 4 readiness on disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/release4_staging_readiness.sql
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
@@ -513,6 +517,10 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avoirs_atomic.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_refund_guards_atomic.sql
+      - name: Validate Release 4 database readiness and ledger privileges
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/release4_staging_readiness.sql
       - name: Verify ledger immutability, atomic parity, refund settlement and role permissions
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
