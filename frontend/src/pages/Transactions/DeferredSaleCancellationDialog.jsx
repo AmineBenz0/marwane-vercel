@@ -66,6 +66,8 @@ export default function DeferredSaleCancellationDialog({
         operation_id: operationId.current,
         expected_version: preview.expected_version,
         quantite_en_attente_attendue: preview.quantite_en_attente_attendue,
+        montant_paye_attendu: preview.montant_paye,
+        date_effet_attendue: preview.date_effet,
       });
       await onCompleted?.(result);
       onClose?.();
