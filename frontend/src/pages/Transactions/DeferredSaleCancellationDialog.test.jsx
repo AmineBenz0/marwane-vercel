@@ -57,6 +57,7 @@ it('uses identical UUID and stock snapshot on lost-response retry, never an auto
     operation_id: expect.any(String),
     expected_version: 3,
     quantite_en_attente_attendue: 400,
+    montant_paye_attendu: '1500.00', date_effet_attendue: '2026-11-11',
   });
   expect(first[1]).toEqual(second[1]);
   await waitFor(() => expect(actions.onCompleted).toHaveBeenCalledOnce());
