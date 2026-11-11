@@ -7,7 +7,7 @@ import { get, post } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 
-const money = value => formatMontant(value, { useCompactNotation: false });
+const money = value => formatMontant(value, { useCompactNotation: false, minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const eggs = value => `${Number(value || 0).toLocaleString('fr-FR')} œufs`;
 
 const Row = ({ label, value, strong = false }) => <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={2}>
@@ -117,7 +117,7 @@ export default function DeferredSaleCancellationDialog({
       <Button onClick={close} disabled={submitting}>Retour</Button>
       {stale ? <Button variant="contained" onClick={() => { onStale?.(); close(); }}>Actualiser la vente</Button>
         : <Button variant="contained" color="error" disabled={!preview || loading || submitting}
-          onClick={confirm} aria-label="Confirmer l'annulation des œufs restants">
+          onClick={confirm} aria-label={error ? 'Réessayer' : "Confirmer l'annulation des œufs restants"}>
           {submitting ? 'Enregistrement…' : error ? 'Réessayer' : "Confirmer l'annulation"}
         </Button>}
     </DialogActions>
