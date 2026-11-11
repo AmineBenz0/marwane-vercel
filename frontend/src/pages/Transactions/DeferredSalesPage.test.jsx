@@ -93,16 +93,9 @@ it('changes only the expected delivery date using the versioned delivery endpoin
   expect(post).not.toHaveBeenCalled();
 });
 
-it('asks confirmation before closing the remainder and warns that money is unchanged', async () => {
-  post.mockResolvedValueOnce({ ...sale, quantite_en_attente: 0, quantite_annulee: 5 });
+it('does not offer stock-only remainder closure before the financial workflow is ready', async () => {
   show('/livraisons-a-suivre?vente=7');
   const panel = await screen.findByRole('dialog', { name: 'Vente #7' });
-  fireEvent.click(await within(panel).findByRole('button', { name: 'Clore le reste à produire' }));
-  const confirmation = screen.getByRole('dialog', { name: 'Clore le reste à produire ?' });
-  expect(within(confirmation).getByText(/ne rembourse pas le client/)).toBeVisible();
+  expect(within(panel).queryByRole('button', { name: 'Clore le reste à produire' })).not.toBeInTheDocument();
   expect(post).not.toHaveBeenCalled();
-  fireEvent.click(within(confirmation).getByRole('button', { name: 'Confirmer la clôture' }));
-  await waitFor(() => expect(post).toHaveBeenCalledWith('/transactions/7/cancel-remainder', {
-    expected_version: 1, quantite_en_attente_attendue: 5,
-  }));
 });
