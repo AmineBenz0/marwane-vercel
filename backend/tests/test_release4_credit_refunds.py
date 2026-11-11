@@ -117,7 +117,8 @@ def test_phase5_avoir_is_not_cash_and_refund_requires_explicit_settlement(
     assert quote["credit_after"] == "0.00"
     assert db_session.query(Caisse).filter_by(statut="active").count() == cash_before
 
-    result = apply_refund(db_session, ready(db_session, command), test_user)
+    approved = ready(db_session, command)
+    result = apply_refund(db_session, approved, test_user)
     assert result["replayed"] is False
     assert result["record"]["nature"] == "remboursement"
     assert result["credit_after"] == "0.00"
@@ -132,7 +133,9 @@ def test_phase5_avoir_is_not_cash_and_refund_requires_explicit_settlement(
     assert db_session.query(Caisse).filter_by(statut="active").count() == cash_before + 1
     assert db_session.query(Avance).count() == 0
 
-    replay = apply_refund(db_session, ready(db_session, command), test_user)
+    # Lost-response retry keeps the original signed approval and UUID; a new
+    # preview after a fully settled refund is correctly no longer possible.
+    replay = apply_refund(db_session, approved, test_user)
     assert replay["replayed"] is True and replay["record"] == result["record"]
     assert db_session.query(Paiement).count() == 2
     assert db_session.query(Caisse).filter_by(statut="active").count() == cash_before + 1
