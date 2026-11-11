@@ -349,6 +349,17 @@ class DeferredSaleSummary(BaseModel):
     quantite_reservee: int
 
 
+class CommercialAvoirRead(BaseModel):
+    """Posted immutable commercial adjustment, distinct from a cash refund."""
+    id_avoir: UUID
+    date_effet: date
+    quantite_annulee: int
+    montant_avoir: Decimal
+    avoir_cumule: Decimal
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TransactionRead(TransactionBase):
     """
     Schéma pour lire une transaction.
@@ -384,6 +395,11 @@ class TransactionRead(TransactionBase):
     est_en_retard: bool = Field(default=False, description="Indique si le paiement est en retard (calculé)")
     pourcentage_paye: float = Field(default=0.0, description="Pourcentage du montant payé (calculé)")
     
+    # Separate ledgers: these entries are issued on their own effective
+    # dates, not payments or automatic advances.
+    avoirs_livraison_differee: List[CommercialAvoirRead] = Field(
+        default_factory=list, description="Avoirs commerciaux datés et immuables"
+    )
     # Liste des paiements associés
     paiements: List[PaiementRead] = Field(default_factory=list, description="Liste des paiements associés")
 
