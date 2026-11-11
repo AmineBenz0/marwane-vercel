@@ -351,6 +351,8 @@ class TransactionRead(TransactionBase):
     date_echeance: Optional[date] = Field(None, description="Date d'échéance du paiement")
     
     # Champs calculés (via les propriétés @property du modèle Transaction)
+    montant_avoir: Decimal = Field(default=Decimal('0'), description="Total des avoirs commerciaux (calculé)")
+    montant_net: Decimal = Field(default=Decimal('0'), description="Vente nette après avoirs (calculé)")
     montant_paye: Decimal = Field(default=Decimal('0'), description="Montant total payé (calculé)")
     montant_restant: Decimal = Field(default=Decimal('0'), description="Montant restant à payer (calculé)")
     statut_paiement: str = Field(default='impaye', description="Statut du paiement (calculé)")
