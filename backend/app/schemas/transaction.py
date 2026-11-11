@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator, ConfigD
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 from app.schemas.paiement import PaiementRead
 
 
@@ -293,10 +294,34 @@ class DeferredSaleReschedule(BaseModel):
 
 
 class DeferredSaleRemainderClose(BaseModel):
-    """Confirm the unallocated stock commitment seen by the operator."""
+    """One idempotent request to close all currently unallocated eggs.
+
+    The client creates a UUID once and reuses it unchanged on retry. There
+    is no optional reason or refund request in this stock operation.
+    """
     model_config = ConfigDict(extra='forbid')
+    operation_id: UUID
     expected_version: int = Field(gt=0, strict=True)
     quantite_en_attente_attendue: int = Field(gt=0, strict=True)
+
+
+class DeferredSaleCancellationRead(BaseModel):
+    """Committed cancellation and independent commercial adjustment receipt."""
+    model_config = ConfigDict(extra='ignore')
+    id_avoir: UUID
+    id_transaction: int
+    date_effet: date
+    quantite_annulee: int
+    quantite_annulee_cumulee: int
+    quantite_en_attente: int
+    montant_initial: Decimal
+    montant_avoir: Decimal
+    montant_avoirs_cumule: Decimal
+    montant_net: Decimal
+    montant_paye: Decimal
+    montant_restant: Decimal
+    credit_client: Decimal
+    rejoue: bool = False
 
 
 class DeferredSalePreview(BaseModel):
