@@ -1,0 +1,201 @@
+-- Release 4 Phase 2: append-only commercial credit-note foundation.
+-- CANDIDATE ONLY. Do not apply to staging or production until Phase 8 approval.
+-- Apply as ONE transaction against the exact Release 3 production baseline:
+--   psql -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avoirs_atomic.sql
+-- Requires audited operations, app_runtime and the Release 3 financial guards.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '90s';
+
+DO $preflight$
+BEGIN
+  IF to_regclass('public.transactions') IS NULL
+     OR to_regclass('public.clients') IS NULL
+     OR to_regclass('public.utilisateurs') IS NULL
+     OR to_regclass('public.correction_operations') IS NULL
+     OR to_regclass('public.utilisations_lettre_credit') IS NULL
+     OR to_regprocedure('public.protect_financial_identity()') IS NULL
+     OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='app_runtime') THEN
+    RAISE EXCEPTION 'Release 4 requires the complete Release 3 financial baseline';
+  END IF;
+  IF to_regclass('public.avoirs_livraison_differee') IS NOT NULL THEN
+    RAISE EXCEPTION 'Release 4 commercial ledger already exists; reconcile migration history';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='transactions'
+      AND column_name='quantite_annulee'
+  ) THEN
+    RAISE EXCEPTION 'Release 4 requires the production deferred-sale quantity foundation';
+  END IF;
+  -- Never fabricate an avoir for an unknown historic closure.
+  IF EXISTS (SELECT 1 FROM public.transactions WHERE quantite_annulee <> 0) THEN
+    RAISE EXCEPTION 'Existing closed remainder must be reconciled before installing the ledger';
+  END IF;
+END $preflight$;
+
+CREATE TABLE public.avoirs_livraison_differee (
+  id_avoir uuid PRIMARY KEY REFERENCES public.correction_operations(operation_id)
+    DEFERRABLE INITIALLY DEFERRED,
+  id_transaction integer NOT NULL REFERENCES public.transactions(id_transaction) ON DELETE RESTRICT,
+  id_client integer NOT NULL REFERENCES public.clients(id_client) ON DELETE RESTRICT,
+  id_utilisateur_creation integer NOT NULL REFERENCES public.utilisateurs(id_utilisateur) ON DELETE RESTRICT,
+  date_effet date NOT NULL,
+  date_creation timestamptz NOT NULL DEFAULT now(),
+  quantite_initiale integer NOT NULL,
+  montant_initial numeric(15,2) NOT NULL,
+  quantite_annulee_avant integer NOT NULL,
+  quantite_annulee integer NOT NULL,
+  quantite_annulee_cumulee integer NOT NULL,
+  avoir_cumule_avant numeric(15,2) NOT NULL,
+  montant_avoir numeric(15,2) NOT NULL,
+  avoir_cumule numeric(15,2) NOT NULL,
+  CONSTRAINT ck_avoir_q_initiale CHECK (quantite_initiale > 0),
+  CONSTRAINT ck_avoir_m_initial CHECK (montant_initial > 0),
+  CONSTRAINT ck_avoir_qty CHECK (quantite_annulee > 0 AND quantite_annulee_avant >= 0
+    AND quantite_annulee_cumulee = quantite_annulee_avant + quantite_annulee
+    AND quantite_annulee_cumulee <= quantite_initiale),
+  CONSTRAINT ck_avoir_m CHECK (montant_avoir >= 0 AND avoir_cumule_avant >= 0
+    AND avoir_cumule = avoir_cumule_avant + montant_avoir
+    AND avoir_cumule <= montant_initial),
+  CONSTRAINT uq_avoir_chain UNIQUE (id_transaction, quantite_annulee_cumulee)
+);
+CREATE INDEX ix_avoirs_livraison_transaction_date
+  ON public.avoirs_livraison_differee(id_transaction, date_effet, date_creation);
+
+-- Integrity is enforced by an invoker trigger, not an exposed definer RPC.
+-- Operation journal rows MUST be inserted before the matching avoir.
+CREATE FUNCTION public.verify_deferred_avoir_insert() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $fn$
+DECLARE
+  sale public.transactions%ROWTYPE;
+  op public.correction_operations%ROWTYPE;
+  already_qty integer;
+  already_amount numeric(15,2);
+BEGIN
+  SELECT * INTO sale FROM public.transactions
+    WHERE id_transaction=NEW.id_transaction FOR UPDATE;
+  IF NOT FOUND OR NOT sale.est_promesse OR NOT sale.est_actif
+     OR NOT sale.allocation_automatique OR sale.id_client IS NULL
+     OR sale.id_fournisseur IS NOT NULL OR sale.id_batiment IS NULL
+     OR sale.id_produit IS NULL THEN
+    RAISE EXCEPTION 'Avoir requires an active, automatically allocated deferred customer egg sale';
+  END IF;
+  IF NEW.id_client IS DISTINCT FROM sale.id_client
+     OR NEW.quantite_initiale IS DISTINCT FROM sale.quantite
+     OR NEW.montant_initial IS DISTINCT FROM sale.montant_total
+     OR NEW.date_effet < sale.date_transaction THEN
+    RAISE EXCEPTION 'Avoir sale identity, original terms or effective date mismatch';
+  END IF;
+  SELECT * INTO op FROM public.correction_operations WHERE operation_id=NEW.id_avoir;
+  IF NOT FOUND OR op.id_utilisateur IS DISTINCT FROM NEW.id_utilisateur_creation
+    OR op.request_payload->>'kind' IS DISTINCT FROM 'deferred_avoir'
+    OR op.request_payload->>'action' IS DISTINCT FROM 'cancel_unallocated'
+    OR op.request_payload->>'transaction_id' IS DISTINCT FROM NEW.id_transaction::text
+    OR op.request_payload->>'cancel_quantity' IS DISTINCT FROM NEW.quantite_annulee::text
+    OR op.request_payload->>'effective_date' IS DISTINCT FROM NEW.date_effet::text
+    OR op.result_payload->>'adjustment_amount' IS DISTINCT FROM NEW.montant_avoir::text
+    OR op.result_payload->>'cumulative_canceled' IS DISTINCT FROM NEW.quantite_annulee_cumulee::text THEN
+    RAISE EXCEPTION 'Avoir must match an immutable audited cancellation operation';
+  END IF;
+  SELECT coalesce(sum(quantite_annulee),0), coalesce(sum(montant_avoir),0)
+    INTO already_qty, already_amount
+    FROM public.avoirs_livraison_differee WHERE id_transaction=NEW.id_transaction;
+  IF already_qty IS DISTINCT FROM NEW.quantite_annulee_avant
+    OR already_amount IS DISTINCT FROM NEW.avoir_cumule_avant THEN
+    RAISE EXCEPTION 'Avoir chain is stale or out of order';
+  END IF;
+  -- PostgreSQL numeric round(,2) is half away from zero on positive amounts,
+  -- matching the Phase 1 Decimal ROUND_HALF_UP contract.
+  IF NEW.avoir_cumule_avant IS DISTINCT FROM
+       round(NEW.montant_initial * NEW.quantite_annulee_avant / NEW.quantite_initiale,2)
+     OR NEW.avoir_cumule IS DISTINCT FROM
+       round(NEW.montant_initial * NEW.quantite_annulee_cumulee / NEW.quantite_initiale,2) THEN
+    RAISE EXCEPTION 'Avoir does not respect the negotiated sale total and cumulative rounding';
+  END IF;
+  -- The server, not request JSON, is the source of the creation timestamp.
+  NEW.date_creation := now();
+  RETURN NEW;
+END $fn$;
+
+CREATE FUNCTION public.verify_deferred_avoir_parity() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $fn$
+DECLARE
+  tx_id integer;
+  sale public.transactions%ROWTYPE;
+  qty integer;
+  amount numeric(15,2);
+  max_qty integer;
+  max_amount numeric(15,2);
+BEGIN
+  tx_id := CASE WHEN TG_TABLE_NAME='transactions' THEN NEW.id_transaction ELSE NEW.id_transaction END;
+  SELECT * INTO sale FROM public.transactions WHERE id_transaction=tx_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Avoir transaction vanished'; END IF;
+  SELECT coalesce(sum(quantite_annulee),0), coalesce(sum(montant_avoir),0),
+     coalesce(max(quantite_annulee_cumulee),0), coalesce(max(avoir_cumule),0)
+    INTO qty,amount,max_qty,max_amount
+    FROM public.avoirs_livraison_differee WHERE id_transaction=tx_id;
+  IF sale.quantite_annulee IS DISTINCT FROM qty OR max_qty IS DISTINCT FROM qty
+    OR max_amount IS DISTINCT FROM amount
+    OR amount IS DISTINCT FROM
+        round(sale.montant_total * qty / sale.quantite,2)
+    OR qty > sale.quantite THEN
+    RAISE EXCEPTION 'Deferred stock cancellation and commercial avoir must post atomically';
+  END IF;
+  RETURN NULL;
+END $fn$;
+
+-- Prevent UPDATE/DELETE/TRUNCATE even by table owners in ordinary SQL.
+CREATE TRIGGER trg_deferred_avoir_immutable
+  BEFORE UPDATE OR DELETE ON public.avoirs_livraison_differee
+  FOR EACH ROW EXECUTE FUNCTION public.reject_correction_history_mutation();
+CREATE TRIGGER trg_deferred_avoir_no_truncate
+  BEFORE TRUNCATE ON public.avoirs_livraison_differee
+  FOR EACH STATEMENT EXECUTE FUNCTION public.reject_correction_history_mutation();
+CREATE TRIGGER trg_deferred_avoir_validate
+  BEFORE INSERT ON public.avoirs_livraison_differee
+  FOR EACH ROW EXECUTE FUNCTION public.verify_deferred_avoir_insert();
+-- Transaction and avoir are written together; run parity checks at commit.
+CREATE CONSTRAINT TRIGGER trg_deferred_avoir_parity
+  AFTER INSERT ON public.avoirs_livraison_differee
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+  EXECUTE FUNCTION public.verify_deferred_avoir_parity();
+CREATE CONSTRAINT TRIGGER trg_deferred_transaction_parity
+  AFTER INSERT OR UPDATE OF quantite_annulee, quantite, montant_total,
+    id_client, est_promesse, allocation_automatique
+  ON public.transactions
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+  EXECUTE FUNCTION public.verify_deferred_avoir_parity();
+
+-- No browser roles may access this financial journal directly.
+ALTER TABLE public.avoirs_livraison_differee ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.avoirs_livraison_differee FROM PUBLIC;
+DO $roles$
+DECLARE exposed text;
+BEGIN
+  FOR exposed IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated') LOOP
+    EXECUTE format('REVOKE ALL ON public.avoirs_livraison_differee FROM %I',exposed);
+  END LOOP;
+END $roles$;
+REVOKE ALL ON public.avoirs_livraison_differee FROM app_runtime;
+GRANT SELECT, INSERT ON public.avoirs_livraison_differee TO app_runtime;
+CREATE POLICY deferred_avoir_runtime_read ON public.avoirs_livraison_differee
+  FOR SELECT TO app_runtime USING (true);
+CREATE POLICY deferred_avoir_runtime_insert ON public.avoirs_livraison_differee
+  FOR INSERT TO app_runtime WITH CHECK (true);
+
+REVOKE ALL ON FUNCTION public.verify_deferred_avoir_insert() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.verify_deferred_avoir_parity() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.verify_deferred_avoir_insert() TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.verify_deferred_avoir_parity() TO app_runtime;
+
+DO $postflight$
+BEGIN
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.avoirs_livraison_differee'::regclass)
+    OR NOT has_table_privilege('app_runtime','public.avoirs_livraison_differee','SELECT')
+    OR NOT has_table_privilege('app_runtime','public.avoirs_livraison_differee','INSERT')
+    OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','UPDATE')
+    OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','DELETE')
+    OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','TRUNCATE') THEN
+    RAISE EXCEPTION 'Release 4 ledger permissions failed verification';
+  END IF;
+END $postflight$;
