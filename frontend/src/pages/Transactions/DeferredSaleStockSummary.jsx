@@ -15,7 +15,7 @@ export default function DeferredSaleStockSummary({ sale, showStatus = true }) {
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
       <Box>
         <Typography variant="body2" color="text.secondary">Stock couvert</Typography>
-        <Typography fontWeight={700}>{number(covered)} / {number(toFulfill)} œufs à fournir</Typography>
+        <Typography fontWeight={700}>{number(covered)} / {number(toFulfill)} {cancelled > 0 ? 'œufs à fournir' : 'œufs'}</Typography>
         {cancelled > 0 && <Typography variant="body2" color="text.secondary">{number(cancelled)} œufs clôturés sur {number(total)} vendus</Typography>}
       </Box>
       {pending > 0 && <Stack alignItems={{ xs: 'flex-start', sm: 'flex-end' }}>
