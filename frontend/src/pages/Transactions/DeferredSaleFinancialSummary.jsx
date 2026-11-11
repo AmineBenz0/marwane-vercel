@@ -3,7 +3,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import ExpandableDetails from '../../components/ExpandableDetails';
 
-const money = amount => formatMontant(amount, { useCompactNotation: false });
+const money = amount => formatMontant(amount, { useCompactNotation: false, minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const Line = ({ label, value, strong = false }) => <Stack direction="row" spacing={2} alignItems="baseline" justifyContent="space-between">
   <Typography variant="body2" color="text.secondary">{label}</Typography>
   <Typography variant="body2" fontWeight={strong ? 800 : 700} sx={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
