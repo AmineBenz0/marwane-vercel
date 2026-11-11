@@ -131,6 +131,8 @@ def get_payment_summary(
     return StatutPaiementTransaction(
         id_transaction=transaction.id_transaction,
         montant_total=transaction.montant_total,
+        montant_avoir=transaction.montant_avoir,
+        montant_net=transaction.montant_net,
         montant_paye=transaction.montant_paye,
         montant_restant=transaction.montant_restant,
         pourcentage_paye=transaction.pourcentage_paye,
