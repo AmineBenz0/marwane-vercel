@@ -397,7 +397,31 @@ def party_credit_history(db, *, id_client=None, id_fournisseur=None):
     allocations = db.query(AffectationCredit).filter(AffectationCredit.id_transaction_cible.in_(ids)).order_by(AffectationCredit.date_effet.desc(), AffectationCredit.id_affectation).all()
     from app.services.financial import contact_balances
     balance = contact_balances(db, direction='receivable' if id_client is not None else 'payable', contact_ids=[id_client or id_fournisseur])[id_client or id_fournisseur]
-    debt_total = sum((max(Decimal('0'), t.montant_restant) for t in db.query(Transaction).filter(
-        tx_key == (id_client or id_fournisseur), Transaction.est_actif.is_(True)).all()), Decimal('0'))
-    return {'balance': str(balance), 'debt_total': str(debt_total), 'advances': items, 'allocations': [row_snapshot(a) for a in allocations],
-            'available': str(sum((a.montant_disponible for a in records if a.nature == 'avance'), Decimal('0')))}
+    sales = db.query(Transaction).filter(
+        tx_key == (id_client or id_fournisseur), Transaction.est_actif.is_(True),
+    ).order_by(Transaction.id_transaction).all()
+    debt_total = sum((max(Decimal('0.00'), t.montant_restant) for t in sales), Decimal('0.00'))
+    # An avoir is an adjustment to a sale, not a new avance or refundable
+    # cash movement. Keep these classifications separate in the API, so
+    # neither the UI nor exports can accidentally count the same credit twice.
+    adjusted = [t for t in sales if t.montant_avoir > 0]
+    commercial = [{
+        'id_transaction': t.id_transaction,
+        'montant_initial': format(t.montant_total, '.2f'),
+        'montant_avoir': format(t.montant_avoir, '.2f'),
+        'montant_net': format(t.montant_net, '.2f'),
+        'solde_crediteur': format(max(Decimal('0.00'), -t.montant_restant), '.2f'),
+    } for t in adjusted]
+    return {
+        'balance': str(balance), 'debt_total': str(debt_total),
+        'advances': items, 'allocations': [row_snapshot(a) for a in allocations],
+        # Existing "available" means unallocated *cash advances* only.
+        'available': str(sum((a.montant_disponible for a in records if a.nature == 'avance'), Decimal('0'))),
+        'avoirs_commerciaux': commercial,
+        'montant_avoirs_commerciaux': format(
+            sum((t.montant_avoir for t in adjusted), Decimal('0.00')), '.2f',
+        ),
+        'trop_percu_transactions': format(
+            sum((max(Decimal('0.00'), -t.montant_restant) for t in sales), Decimal('0.00')), '.2f',
+        ),
+    }
