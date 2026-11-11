@@ -27,11 +27,47 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Release 4 requires the production deferred-sale quantity foundation';
   END IF;
-  -- Never fabricate an avoir for an unknown historic closure.
-  IF EXISTS (SELECT 1 FROM public.transactions WHERE quantite_annulee <> 0) THEN
-    RAISE EXCEPTION 'Existing closed remainder must be reconciled before installing the ledger';
+  -- Some older staging environments have a canceled/deactivated historical
+  -- QA sale recorded before commercial credits existed. Preserve that inactive
+  -- and unpaid history WITHOUT inventing a backdated financial credit.
+  -- Every other legacy cancellation still fails closed until reconciled.
+  IF EXISTS (
+    SELECT 1 FROM public.transactions t
+    WHERE t.quantite_annulee <> 0 AND (
+      t.quantite_annulee < 0 OR t.quantite_annulee > t.quantite
+      OR t.quantite <= 0 OR t.est_actif IS DISTINCT FROM false
+      OR t.est_promesse IS DISTINCT FROM true
+      OR t.allocation_automatique IS DISTINCT FROM true
+      OR t.id_client IS NULL OR t.id_fournisseur IS NOT NULL
+      OR EXISTS (
+        SELECT 1 FROM public.paiements p WHERE p.id_transaction=t.id_transaction
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM public.transactions_audit h
+        WHERE h.id_transaction=t.id_transaction
+          AND h.champ_modifie='annulation_reste_livraison_differee'
+      )
+    )
+  ) THEN
+    RAISE EXCEPTION 'Unreconciled historic canceled sale: never invent financial avoirs';
   END IF;
 END $preflight$;
+
+-- Frozen evidence of OLD, inactive, unpaid cancellations. Not an avoir.
+-- Keep an immutable full source snapshot, so neither sale terms nor canceled
+-- stock can be edited/reactivated to bypass the new financial contract.
+CREATE TABLE public.legacy_deferred_cancellations (
+  id_transaction integer PRIMARY KEY REFERENCES public.transactions(id_transaction) ON DELETE RESTRICT,
+  historical_canceled_qty integer NOT NULL CHECK (historical_canceled_qty > 0),
+  original_row jsonb NOT NULL,
+  preserved_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.legacy_deferred_cancellations(
+  id_transaction, historical_canceled_qty, original_row
+)
+SELECT t.id_transaction, t.quantite_annulee, to_jsonb(t)
+FROM public.transactions t
+WHERE t.quantite_annulee > 0;
 
 CREATE TABLE public.avoirs_livraison_differee (
   id_avoir uuid PRIMARY KEY REFERENCES public.correction_operations(operation_id)
@@ -139,6 +175,28 @@ BEGIN
   tx_id := CASE WHEN TG_TABLE_NAME='transactions' THEN NEW.id_transaction ELSE NEW.id_transaction END;
   SELECT * INTO sale FROM public.transactions WHERE id_transaction=tx_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Avoir transaction vanished'; END IF;
+
+  -- Only migrations can insert these snapshotted, legacy exceptions. They
+  -- were historical *inactive and unpaid* closures, NOT commercial credits.
+  -- All fields must remain identical, and no new credit note can attach.
+  IF EXISTS (
+    SELECT 1 FROM public.legacy_deferred_cancellations b
+    WHERE b.id_transaction=tx_id
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.legacy_deferred_cancellations b
+      WHERE b.id_transaction=tx_id
+        AND b.original_row=to_jsonb(sale)
+        AND b.historical_canceled_qty=sale.quantite_annulee
+    ) OR EXISTS (
+      SELECT 1 FROM public.avoirs_livraison_differee a
+      WHERE a.id_transaction=tx_id
+    ) THEN
+      RAISE EXCEPTION 'Frozen historical cancellation cannot change or acquire a new avoir';
+    END IF;
+    RETURN NULL;
+  END IF;
+
   SELECT coalesce(sum(quantite_annulee),0), coalesce(sum(montant_avoir),0),
      coalesce(max(quantite_annulee_cumulee),0), coalesce(max(avoir_cumule),0)
     INTO qty,amount,max_qty,max_amount
@@ -164,6 +222,15 @@ BEGIN
   RETURN NULL;
 END $fn$;
 
+-- Immutable historical exception markers are NOT payments or credits.
+-- They are readable by the backend only for audit and preflight.
+CREATE TRIGGER trg_legacy_deferred_cancel_immutable
+  BEFORE UPDATE OR DELETE ON public.legacy_deferred_cancellations
+  FOR EACH ROW EXECUTE FUNCTION public.reject_correction_history_mutation();
+CREATE TRIGGER trg_legacy_deferred_cancel_no_truncate
+  BEFORE TRUNCATE ON public.legacy_deferred_cancellations
+  FOR EACH STATEMENT EXECUTE FUNCTION public.reject_correction_history_mutation();
+
 -- Prevent UPDATE/DELETE/TRUNCATE even by table owners in ordinary SQL.
 CREATE TRIGGER trg_deferred_avoir_immutable
   BEFORE UPDATE OR DELETE ON public.avoirs_livraison_differee
@@ -185,6 +252,21 @@ CREATE CONSTRAINT TRIGGER trg_deferred_transaction_parity
   ON public.transactions
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
   EXECUTE FUNCTION public.verify_deferred_avoir_parity();
+
+-- Closed historical sale snapshots must not be exposed to browsers.
+ALTER TABLE public.legacy_deferred_cancellations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.legacy_deferred_cancellations FROM PUBLIC;
+DO $legacy_roles$
+DECLARE exposed text;
+BEGIN
+  FOR exposed IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated') LOOP
+    EXECUTE format('REVOKE ALL ON public.legacy_deferred_cancellations FROM %I',exposed);
+  END LOOP;
+END $legacy_roles$;
+REVOKE ALL ON public.legacy_deferred_cancellations FROM app_runtime;
+GRANT SELECT ON public.legacy_deferred_cancellations TO app_runtime;
+CREATE POLICY legacy_deferred_cancel_runtime_read ON public.legacy_deferred_cancellations
+  FOR SELECT TO app_runtime USING (true);
 
 -- No browser roles may access this financial journal directly.
 ALTER TABLE public.avoirs_livraison_differee ENABLE ROW LEVEL SECURITY;
@@ -215,7 +297,14 @@ BEGIN
     OR NOT has_table_privilege('app_runtime','public.avoirs_livraison_differee','INSERT')
     OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','UPDATE')
     OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','DELETE')
-    OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','TRUNCATE') THEN
-    RAISE EXCEPTION 'Release 4 ledger permissions failed verification';
+    OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','TRUNCATE')
+    OR NOT has_table_privilege('app_runtime','public.legacy_deferred_cancellations','SELECT')
+    OR has_table_privilege('app_runtime','public.legacy_deferred_cancellations','INSERT')
+    OR has_table_privilege('app_runtime','public.legacy_deferred_cancellations','UPDATE')
+    OR has_table_privilege('app_runtime','public.legacy_deferred_cancellations','DELETE')
+    OR NOT (SELECT relrowsecurity FROM pg_class
+       WHERE oid='public.legacy_deferred_cancellations'::regclass)
+    THEN
+    RAISE EXCEPTION 'Release 4 ledger / historical baseline permissions failed verification';
   END IF;
 END $postflight$;
