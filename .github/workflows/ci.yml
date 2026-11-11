@@ -152,6 +152,20 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Prove Release 4 commercial-ledger migration rolls back atomically
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+            -f migrations/production_deferred_avoirs_atomic.sql \
+            -c 'SELECT 1 / 0' > /dev/null 2>&1; then
+            echo "Release 4 rollback probe unexpectedly succeeded"; exit 1
+          fi
+          test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('public.avoirs_livraison_differee') IS NULL")" = t
+      - name: Apply Release 4 commercial-ledger migration to disposable PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avoirs_atomic.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
