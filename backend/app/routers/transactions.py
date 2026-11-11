@@ -731,7 +731,9 @@ def reschedule_deferred_sale(
         raise
 
 
-@router.post("/{id}/cancel-remainder", response_model=TransactionRead)
+# Release 4 safety gate: stock-only cancellation must not be exposed until
+# a matching financial adjustment is written atomically (Phase 4).
+# This handler remains for Phase 4 work, but is deliberately not registered.
 def close_deferred_sale_remainder(
     id: int, payload: DeferredSaleRemainderClose, db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
