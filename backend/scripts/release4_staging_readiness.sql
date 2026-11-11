@@ -81,7 +81,8 @@ BEGIN
     ) THEN
       blockers := array_append(blockers, 'least privilege app_runtime missing');
     ELSE
-      IF NOT has_table_privilege('app_runtime','public.avoirs_livraison_differee','SELECT,INSERT')
+      IF NOT has_table_privilege('app_runtime','public.avoirs_livraison_differee','SELECT')
+        OR NOT has_table_privilege('app_runtime','public.avoirs_livraison_differee','INSERT')
         OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','UPDATE')
         OR has_table_privilege('app_runtime','public.avoirs_livraison_differee','DELETE') THEN
         blockers := array_append(blockers, 'commercial ledger runtime privileges are unsafe');
