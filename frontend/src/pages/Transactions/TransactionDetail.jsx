@@ -674,7 +674,7 @@ function TransactionDetail() {
           <Typography component="h2" variant="h6" fontWeight={700}>Paiement</Typography>
           <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />
         </Stack>
-        {transaction.est_promesse && Number(transaction.montant_avoir || 0) > 0
+        {transaction.est_promesse && (Number(transaction.montant_avoir || 0) > 0 || (transaction.avoirs_livraison_differee || []).length > 0)
           ? <DeferredSaleFinancialSummary sale={transaction} />
           : <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="space-between">
             <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
