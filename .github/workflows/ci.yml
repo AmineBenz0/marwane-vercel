@@ -159,6 +159,12 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Seed a synthetic historical canceled-and-deactivated sale for Phase 8 compatibility
+        # No live staging data or credentials are used. This reproduces the
+        # pre-ledger unpaid closure documented in the shared staging audit.
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f scripts/release4_legacy_migration_fixture.sql
       - name: Prove Release 4 commercial-ledger migration rolls back atomically
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
@@ -169,10 +175,34 @@ jobs:
             echo "Release 4 rollback probe unexpectedly succeeded"; exit 1
           fi
           test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('public.avoirs_livraison_differee') IS NULL")" = t
+          test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('public.legacy_deferred_cancellations') IS NULL")" = t
       - name: Apply Release 4 commercial-ledger migration to disposable PostgreSQL
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avoirs_atomic.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Verify historical legacy sale is frozen without any invented financial credit
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          test "$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM public.legacy_deferred_cancellations")" = 1
+          test "$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM public.avoirs_livraison_differee")" = 0
+          test "$(psql "$DATABASE_URL" -At -c "
+            SELECT count(*) FROM public.legacy_deferred_cancellations b
+            JOIN public.transactions t USING(id_transaction)
+            WHERE b.original_row=to_jsonb(t)
+              AND t.est_actif IS FALSE AND t.quantite_annulee=6
+              AND NOT EXISTS(SELECT 1 FROM public.paiements p WHERE p.id_transaction=t.id_transaction)
+          ")" = 1
+          # Reopening or changing the existing canceled sale must fail at
+          # deferred constraint commit; this probe auto-rolls back on error.
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1             -c "UPDATE public.transactions SET quantite=7 WHERE id_transaction=(SELECT id_transaction FROM public.legacy_deferred_cancellations LIMIT 1)"             -c "SET CONSTRAINTS ALL IMMEDIATE" > /dev/null 2>&1; then
+            echo "Immutable historical cancellation was changed"; exit 1
+          fi
+          test "$(psql "$DATABASE_URL" -At -c "
+            SELECT count(*) FROM public.legacy_deferred_cancellations b
+            JOIN public.transactions t USING(id_transaction)
+            WHERE b.original_row=to_jsonb(t)
+          ")" = 1
       - name: Prove Release 4 Phase 5 refund guard migration rolls back atomically
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
