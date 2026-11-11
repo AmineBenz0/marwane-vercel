@@ -16,7 +16,7 @@ beforeEach(() => {
     return [];
   });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 it('orders pending sales by expected date, searches clients without accents and returns home', async () => {
   show();
   expect(await screen.findByText('2 ventes · 55 œufs à produire')).toBeVisible();
@@ -98,4 +98,68 @@ it('does not offer stock-only remainder closure before the financial workflow is
   const panel = await screen.findByRole('dialog', { name: 'Vente #7' });
   expect(within(panel).queryByRole('button', { name: 'Clore le reste à produire' })).not.toBeInTheDocument();
   expect(post).not.toHaveBeenCalled();
+});
+
+
+it('confirms a server-quoted financial avoir and keeps delivery history visible after the sale leaves the queue', async () => {
+  vi.stubEnv('VITE_ENABLE_DEFERRED_CANCELLATION_WRITES', 'true');
+  const quote = {
+    id_transaction: 7, expected_version: 1, quantite_en_attente_attendue: 5,
+    quantite_couverte: 65, quantite_annulee: 5, quantite_annulee_cumulee: 5,
+    date_effet: '2026-11-11', montant_initial: '105.00', montant_avoir: '7.50',
+    montant_avoirs_cumule: '7.50', montant_net: '97.50',
+    montant_paye: '105.00', montant_restant: '-7.50', credit_client: '7.50',
+  };
+  let closed = false;
+  const canceled = {
+    ...sale, quantite_en_attente: 0, quantite_annulee: 5,
+    montant_avoir: '7.50', montant_net: '97.50', montant_restant: '-7.50',
+    row_version: 2,
+    avoirs_livraison_differee: [
+      { id_avoir: 'abc', date_effet: '2026-11-11', quantite_annulee: 5,
+        montant_avoir: '7.50', avoir_cumule: '7.50' },
+    ],
+  };
+  get.mockImplementation(async path => {
+    if (path === '/transactions/deferred-sales') return closed ? [] : [summary];
+    if (path === '/transactions/7') return closed ? canceled : sale;
+    if (path === '/transactions/7/cancel-remainder/preview') return quote;
+    if (path === '/transactions/7/completion-history') return closed ? [{
+      id: 8, date: '2026-11-11', type: 'cancel_remainder',
+      quantite: 5, montant_avoir: '7.50', repartition_stock: [],
+    }] : [];
+    return [];
+  });
+  post.mockImplementation(async () => {
+    closed = true;
+    return {
+      ...quote, id_avoir: 'abc', quantite_en_attente: 0, rejoue: false,
+    };
+  });
+  show('/livraisons-a-suivre?vente=7');
+  const panel = await screen.findByRole('dialog', { name: 'Vente #7' });
+  fireEvent.click(await within(panel).findByRole('button', { name: 'Annuler les œufs restants' }));
+  const confirmation = await screen.findByRole('dialog', { name: 'Annuler les œufs restants ?' });
+  expect(await within(confirmation).findByText('Œufs à annuler')).toBeVisible();
+  expect(within(confirmation).getByText('5 œufs')).toBeVisible();
+  expect(within(confirmation).getAllByText(/7,50/).length).toBeGreaterThan(0);
+  expect(within(confirmation).getByText(/Aucun remboursement ni mouvement de caisse/)).toBeVisible();
+  expect(post).not.toHaveBeenCalled();
+  fireEvent.click(within(confirmation).getByRole('button', { name: "Confirmer l'annulation des œufs restants" }));
+  await waitFor(() => expect(post).toHaveBeenCalledOnce());
+  expect(post).toHaveBeenCalledWith('/transactions/7/cancel-remainder', {
+    operation_id: expect.stringMatching(/^[a-f0-9-]{36}$/i),
+    expected_version: 1, quantite_en_attente_attendue: 5,
+  });
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Annuler les œufs restants ?' })).not.toBeInTheDocument());
+  expect(within(panel).getByText(/Avoir de .*7,50/)).toBeVisible();
+  const payment = within(panel).getByRole('region', { name: 'Paiement de la vente' });
+  expect(within(payment).getByText('Crédit client')).toBeVisible();
+  expect(within(payment).getByText('Montant net')).toBeVisible();
+  expect(within(panel).queryByRole('button', { name: 'Annuler les œufs restants' })).not.toBeInTheDocument();
+  fireEvent.click(within(panel).getByRole('button', { name: 'Historique du stock et des avoirs' }));
+  expect(await within(panel).findByText('Annulation des œufs restants')).toBeVisible();
+  expect(within(panel).getByText(/Avoir commercial : .*7,50/)).toBeVisible();
+  expect(await screen.findByText('Aucune livraison en attente de production.')).toBeVisible();
+  expect(within(panel).getByText('Marché Central')).toBeVisible();
 });
