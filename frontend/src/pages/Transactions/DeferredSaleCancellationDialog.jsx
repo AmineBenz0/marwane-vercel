@@ -117,8 +117,8 @@ export default function DeferredSaleCancellationDialog({
       <Button onClick={close} disabled={submitting}>Retour</Button>
       {stale ? <Button variant="contained" onClick={() => { onStale?.(); close(); }}>Actualiser la vente</Button>
         : <Button variant="contained" color="error" disabled={!preview || loading || submitting}
-          onClick={confirm} aria-label={error ? 'Réessayer' : "Confirmer l'annulation des œufs restants"}>
-          {submitting ? 'Enregistrement…' : error ? 'Réessayer' : "Confirmer l'annulation"}
+          onClick={confirm} aria-label={error && preview ? 'Réessayer' : "Confirmer l'annulation des œufs restants"}>
+          {submitting ? 'Enregistrement…' : error && preview ? 'Réessayer' : "Confirmer l'annulation"}
         </Button>}
     </DialogActions>
   </Dialog>;
