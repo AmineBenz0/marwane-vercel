@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# Avoid queuing dozens of obsolete test runs for the same draft branch.
+# Push and PR events for one head branch share the same group. Protect main
+# from cancellation, but test only the latest non-production revision.
+concurrency:
+  group: enterprise-quality-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   backend:
     runs-on: ubuntu-latest
