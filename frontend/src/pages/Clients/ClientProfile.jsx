@@ -388,6 +388,10 @@ function ClientProfile() {
         return;
       }
 
+      const exportMoney = value => formatMontant(value, {
+        useCompactNotation: false, minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
       const customFormatters = {
         date_transaction: (value) => {
           if (!value) return '-';
@@ -410,22 +414,20 @@ function ClientProfile() {
         montant_total: (value, row) => {
           const amount = Math.abs(Number(value || 0));
           const sign = row.id_client !== null && row.id_client !== undefined ? '+' : '-';
-          return `${sign}${formatMontant(amount, { useCompactNotation: false })}`;
+          return `${sign}${exportMoney(amount)}`;
         },
-        montant_avoir: (value) => formatMontant(value || 0, { useCompactNotation: false }),
-        montant_net: (value, row) => formatMontant(
-          value ?? row.montant_total, { useCompactNotation: false },
-        ),
+        montant_avoir: (value) => exportMoney(value || 0),
+        montant_net: (value, row) => exportMoney(value ?? row.montant_total),
         avoirs_details: (value, row) => (row.avoirs_livraison_differee || [])
-          .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontant(avoir.montant_avoir, { useCompactNotation: false })}`)
+          .map(avoir => `${formatShortDate(avoir.date_effet)} : ${exportMoney(avoir.montant_avoir)}`)
           .join(' | '),
         montant_paye: (value) => {
           if (value === null || value === undefined) return '-';
-          return formatMontant(value, { useCompactNotation: false });
+          return exportMoney(value);
         },
         montant_restant: (value) => {
           if (value === null || value === undefined) return '-';
-          return formatMontant(value, { useCompactNotation: false });
+          return exportMoney(value);
         },
         reglement: (value, row) => getPaymentReglementSummary(row),
         statut_paiement: (value, row) => {
