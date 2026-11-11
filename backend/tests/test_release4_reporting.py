@@ -16,7 +16,7 @@ def _amount(report, field):
     return _d(report[field])
 
 
-def test_phase6_monthly_activity_applies_avoirs_in_issue_month_not_sale_month(client, scenario):
+def test_phase6_monthly_activity_applies_avoirs_in_issue_month_not_sale_month(client, db_session, scenario):
     october_response = client.get("/api/v1/reports/monthly", params={"month": "2026-10"})
     assert october_response.status_code == 200, october_response.text
     oct_report = october_response.json()
@@ -41,7 +41,7 @@ def test_phase6_monthly_activity_applies_avoirs_in_issue_month_not_sale_month(cl
     assert _d(nov_report["top_clients"][0]["total"]) == Decimal("-450.00")
     assert nov_report["top_clients"][0]["id"] == scenario["customer"]
     assert sum_period_adjustments(period_commercial_adjustments(
-        scenario["tx"]._sa_instance_state.session, date(2026, 10, 1), date(2026, 11, 30),
+        db_session, date(2026, 10, 1), date(2026, 11, 30),
     )) == Decimal("600.00")
 
 
@@ -106,3 +106,17 @@ def test_phase6_shared_monthly_client_sales_does_not_count_payments_as_sales(db_
         "montant": Decimal("-450.00"),
         "nb_transactions": 0,
     }
+
+
+def test_phase6_customer_insights_consume_net_sales_and_effective_refunds(client, scenario):
+    result = client.get(f"/api/v1/clients/{scenario['customer']}/insights-financiers")
+    assert result.status_code == 200, result.text
+    data = result.json()
+    # 1500 original - 600 commercial avoir = 900 net.
+    # 750 + 750 effective receipts - 600 cash refund = 900 paid.
+    # Rejected/pending instruments never count as receipts.
+    assert _d(data["montant_impaye"]) == Decimal("0.00")
+    assert data["taux_paiement"] == 100.0
+    assert data["nombre_transactions_en_retard"] == 0
+    assert _d(data["montant_en_retard"]) == Decimal("0.00")
+    assert data["tendance"] == "baisse"
