@@ -131,3 +131,76 @@ def test_readonly_quote_rejects_reserved_undelivered_eggs_and_regular_sale(
         f"/api/v1/transactions/{tx.id_transaction}/cancel-remainder/preview",
     ).status_code == 409
     assert client.get("/api/v1/transactions/999999/cancel-remainder/preview").status_code == 404
+
+
+
+def test_confirmation_refuses_changed_payments_without_mutating_sale(
+    client, db_session, deferred_sale, test_user, monkeypatch,
+):
+    _override(test_user)
+    monkeypatch.setattr(settings, "ENABLE_DEFERRED_CANCELLATION_WRITES", True)
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    payment = Paiement(
+        id_transaction=tx.id_transaction, date_paiement=tx.date_transaction,
+        montant=Decimal("100.00"), type_paiement="cash", statut="valide",
+    )
+    db_session.add(payment)
+    db_session.commit()
+    endpoint = f"/api/v1/transactions/{tx.id_transaction}/cancel-remainder"
+    preview = client.get(endpoint + "/preview")
+    assert preview.status_code == 200, preview.text
+    quote = preview.json()
+    assert Decimal(str(quote["montant_paye"])) == Decimal("100.00")
+
+    db_session.add(Paiement(
+        id_transaction=tx.id_transaction, date_paiement=tx.date_transaction,
+        montant=Decimal("50.00"), type_paiement="cash", statut="valide",
+    ))
+    db_session.commit()
+    body = {
+        "operation_id": str(uuid4()),
+        "expected_version": quote["expected_version"],
+        "quantite_en_attente_attendue": quote["quantite_en_attente_attendue"],
+        "montant_paye_attendu": quote["montant_paye"],
+        "date_effet_attendue": quote["date_effet"],
+    }
+    response = client.post(endpoint, json=body)
+    assert response.status_code == 409, response.text
+    assert "paiements" in response.json()["detail"].lower()
+    db_session.expire_all()
+    assert tx.quantite_annulee == 0
+    assert db_session.query(DeferredSaleAdjustment).count() == 0
+    assert db_session.query(CorrectionOperation).count() == 0
+
+
+def test_confirmation_refuses_effective_date_rollover(
+    client, db_session, deferred_sale, test_user, monkeypatch,
+):
+    from datetime import date, timedelta
+    _override(test_user)
+    monkeypatch.setattr(settings, "ENABLE_DEFERRED_CANCELLATION_WRITES", True)
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    endpoint = f"/api/v1/transactions/{tx.id_transaction}/cancel-remainder"
+    response = client.get(endpoint + "/preview")
+    assert response.status_code == 200, response.text
+    quote = response.json()
+    from app.services import deferred_cancellation
+    previous_business_date = date.fromisoformat(quote["date_effet"])
+    monkeypatch.setattr(
+        deferred_cancellation, "business_date",
+        lambda: previous_business_date + timedelta(days=1),
+    )
+    response = client.post(endpoint, json={
+        "operation_id": str(uuid4()),
+        "expected_version": quote["expected_version"],
+        "quantite_en_attente_attendue": quote["quantite_en_attente_attendue"],
+        "montant_paye_attendu": quote["montant_paye"],
+        "date_effet_attendue": quote["date_effet"],
+    })
+    assert response.status_code == 409, response.text
+    assert "date" in response.json()["detail"].lower()
+    db_session.expire_all()
+    assert tx.quantite_annulee == 0
+    assert db_session.query(DeferredSaleAdjustment).count() == 0
