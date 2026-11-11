@@ -319,7 +319,10 @@ jobs:
       - run: npm run test:unit:coverage
       - run: npm run build
       - name: Install Chromium for deterministic contact UI checks
-        run: npx playwright install --with-deps chromium
+        # ubuntu-24.04 hosted runners already provide browser runtime libs.
+        # --with-deps triggers apt installs of optional fonts and fails when
+        # the runner's Ubuntu mirror has transient DNS/network outages.
+        run: npx playwright install chromium
       - name: Verify contacts and flock lifecycle on desktop and mobile
         run: npx playwright test --config playwright.contacts.config.ts
       - name: Save contact UI screenshots and failure traces
