@@ -32,6 +32,7 @@ def completion_events(db, transaction_ids):
                 date=data['date'], quantite=data['quantite_annulee'],
                 quantite_couverte=data['quantite_couverte'],
                 quantite_totale=data['quantite_totale'], repartition_stock=[],
+                montant_avoir=data.get('montant_avoir'),
                 id_utilisateur=row.id_utilisateur,
             ))
         else:
