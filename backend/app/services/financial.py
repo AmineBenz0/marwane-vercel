@@ -20,6 +20,7 @@ from app.models.caisse import Caisse
 from app.models.charge import Charge
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.credit import Avance
+from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
 from app.services.credit_balances import advance_balances
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
@@ -81,9 +82,26 @@ def payment_total_as_of(transaction: Transaction, as_of: date) -> Decimal:
     )
 
 
+def commercial_credit_total_as_of(transaction: Transaction, as_of: date) -> Decimal:
+    """Only credit notes effective by the cutoff; no future credit leaks backward."""
+    return sum(
+        (
+            Decimal(str(avoir.montant_avoir))
+            for avoir in transaction.avoirs_livraison_differee
+            if avoir.date_effet <= as_of
+        ),
+        Decimal("0.00"),
+    )
+
+
+def net_sale_amount_as_of(transaction: Transaction, as_of: date) -> Decimal:
+    """Original negotiated charge minus dated commercial adjustments."""
+    return Decimal(str(transaction.montant_total)) - commercial_credit_total_as_of(transaction, as_of)
+
+
 def remaining_amount_as_of(transaction: Transaction, as_of: date) -> Decimal:
-    """Return the transaction balance at a historical accounting date."""
-    return Decimal(str(transaction.montant_total)) - payment_total_as_of(transaction, as_of)
+    """Return the transaction's dated net balance, including settled refunds."""
+    return net_sale_amount_as_of(transaction, as_of) - payment_total_as_of(transaction, as_of)
 
 
 def payment_effective_date(payment: Paiement) -> date:
@@ -118,15 +136,40 @@ def _payment_totals_subquery(db: Session, as_of: Optional[date] = None):
     return query.group_by(Paiement.id_transaction).subquery("effective_payment_totals")
 
 
+def _commercial_credit_totals_subquery(db: Session, as_of: Optional[date] = None):
+    """Aggregate each transaction's immutable avoirs before joining any payments.
+
+    A separately grouped subquery prevents N payments x M avoirs from inflating
+    commercial credits and keeps collection pagination set-based.
+    """
+    query = db.query(
+        DeferredSaleAdjustment.id_transaction.label("id_transaction"),
+        func.sum(DeferredSaleAdjustment.montant_avoir).label("montant_avoir"),
+    )
+    if as_of is not None:
+        query = query.filter(DeferredSaleAdjustment.date_effet <= as_of)
+    return query.group_by(DeferredSaleAdjustment.id_transaction).subquery("deferred_avoir_totals")
+
+
+def _net_sale_expression(credit_totals):
+    """Single SQL source of truth for current and historical net sale values."""
+    adjustment = func.coalesce(credit_totals.c.montant_avoir, literal(Decimal("0.00")))
+    return Transaction.montant_total - adjustment, adjustment
+
+
 def financial_position_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
-    """Net receivables and payables from transactions and effective settlements."""
+    """Net receivables/payables using only postings effective through the date."""
     payments = _payment_totals_subquery(db, as_of)
-    remaining = Transaction.montant_total - func.coalesce(payments.c.montant_paye, 0)
+    credits = _commercial_credit_totals_subquery(db, as_of)
+    net_sale, _ = _net_sale_expression(credits)
+    remaining = net_sale - func.coalesce(payments.c.montant_paye, literal(Decimal("0.00")))
     row = db.query(
         func.sum(case((Transaction.id_client.isnot(None), remaining), else_=0)).label("receivables"),
         func.sum(case((Transaction.id_fournisseur.isnot(None), remaining), else_=0)).label("payables"),
     ).outerjoin(
         payments, payments.c.id_transaction == Transaction.id_transaction,
+    ).outerjoin(
+        credits, credits.c.id_transaction == Transaction.id_transaction,
     ).filter(Transaction.est_actif.is_(True), Transaction.date_transaction <= as_of).one()
     return {"receivables": Decimal(str(row.receivables or 0)) - sum(advance_balances(db, direction="receivable", as_of=as_of).values(), Decimal("0")),
             "payables": Decimal(str(row.payables or 0)) - sum(advance_balances(db, direction="payable", as_of=as_of).values(), Decimal("0"))}
@@ -214,13 +257,16 @@ def contact_balances(db: Session, *, direction: str, contact_ids: list[int], as_
 
     contact_id = columns[direction]
     payment_totals = _payment_totals_subquery(db, as_of)
-    paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0")))
+    credit_totals = _commercial_credit_totals_subquery(db, as_of)
+    net_sale, _ = _net_sale_expression(credit_totals)
+    paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0.00")))
     query = (
         db.query(
             contact_id.label("contact_id"),
-            func.sum(Transaction.montant_total - paid).label("balance"),
+            func.sum(net_sale - paid).label("balance"),
         )
         .outerjoin(payment_totals, payment_totals.c.id_transaction == Transaction.id_transaction)
+        .outerjoin(credit_totals, credit_totals.c.id_transaction == Transaction.id_transaction)
         .filter(Transaction.est_actif.is_(True), contact_id.in_(contact_ids))
     )
     if as_of is not None:
@@ -233,13 +279,13 @@ def contact_balances(db: Session, *, direction: str, contact_ids: list[int], as_
     return balances
 
 
-def _payment_expressions(payment_totals, today: date):
-    """Build SQL expressions matching Transaction's payment properties."""
-    paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0")))
-    remaining = Transaction.montant_total - paid
+def _payment_expressions(payment_totals, net_sale, today: date):
+    """Build SQL statuses from the same corrected total as the Python model."""
+    paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0.00")))
+    remaining = net_sale - paid
     raw_status = case(
-        (paid > Transaction.montant_total + literal(Decimal("0.01")), literal("surpaye")),
-        (paid >= Transaction.montant_total - literal(Decimal("0.01")), literal("paye")),
+        (paid > net_sale + literal(Decimal("0.01")), literal("surpaye")),
+        (paid >= net_sale - literal(Decimal("0.01")), literal("paye")),
         (paid == literal(Decimal("0")), literal("impaye")),
         else_=literal("partiel"),
     )
@@ -344,13 +390,17 @@ def _collection_query_components(
 ):
     """Build the set-based query and expressions shared by page and summary."""
     effective_totals = _payment_totals_subquery(db)
+    credit_totals = _commercial_credit_totals_subquery(db)
+    net_sale, credit_amount = _net_sale_expression(credit_totals)
     paid, remaining, canonical_status = _payment_expressions(
-        effective_totals,
-        today or business_date(),
+        effective_totals, net_sale, today or business_date(),
     )
     query = db.query(Transaction).outerjoin(
         effective_totals,
         effective_totals.c.id_transaction == Transaction.id_transaction,
+    ).outerjoin(
+        credit_totals,
+        credit_totals.c.id_transaction == Transaction.id_transaction,
     ).filter(Transaction.est_actif.is_(True))
     query = _apply_collection_filters(
         query,
@@ -366,7 +416,7 @@ def _collection_query_components(
         query = query.filter(canonical_status == "en_retard")
     if statut:
         query = query.filter(canonical_status == statut.lower())
-    return query, paid, remaining, canonical_status
+    return query, paid, remaining, canonical_status, net_sale, credit_amount
 
 
 def query_financial_transactions(
@@ -389,7 +439,7 @@ def query_financial_transactions(
 ):
     """Return transactions using database-side filters, ordering, and paging."""
     _validate_collection_sort(sort_by, sort_order)
-    query, _, remaining, _ = _collection_query_components(
+    query, _, remaining, _, _, _ = _collection_query_components(
         db,
         direction=direction,
         statut=statut,
@@ -409,6 +459,7 @@ def query_financial_transactions(
         query = query.limit(limit)
     return query.options(
         selectinload(Transaction.paiements),
+        selectinload(Transaction.avoirs_livraison_differee),
         selectinload(Transaction.client),
         selectinload(Transaction.fournisseur),
         selectinload(Transaction.produit),
@@ -430,7 +481,7 @@ def summarize_financial_transactions(
     today: Optional[date] = None,
 ) -> dict:
     """Calculate collection totals in SQL without materializing all rows."""
-    query, paid, remaining, canonical_status = _collection_query_components(
+    query, paid, remaining, canonical_status, net_sale, credit_amount = _collection_query_components(
         db,
         direction=direction,
         statut=statut,
@@ -444,7 +495,9 @@ def summarize_financial_transactions(
         today=today,
     )
     summary = query.with_entities(
-        func.coalesce(func.sum(Transaction.montant_total), literal(Decimal("0"))).label("total"),
+        func.coalesce(func.sum(net_sale), literal(Decimal("0"))).label("total"),
+        func.coalesce(func.sum(Transaction.montant_total), literal(Decimal("0"))).label("total_brut"),
+        func.coalesce(func.sum(credit_amount), literal(Decimal("0"))).label("total_avoirs"),
         func.coalesce(func.sum(paid), literal(Decimal("0"))).label("paye"),
         func.coalesce(func.sum(remaining), literal(Decimal("0"))).label("reste"),
         func.count(Transaction.id_transaction).label("count"),
@@ -455,6 +508,8 @@ def summarize_financial_transactions(
     ).one()
     return {
         "total": Decimal(str(summary.total or 0)),
+        "total_brut": Decimal(str(summary.total_brut or 0)),
+        "total_avoirs": Decimal(str(summary.total_avoirs or 0)),
         "paye": Decimal(str(summary.paye or 0)),
         "reste": Decimal(str(summary.reste or 0)),
         "count": int(summary.count or 0),
@@ -474,6 +529,8 @@ def serialize_financial_transaction(transaction: Transaction, today: Optional[da
         "fournisseur_nom": transaction.fournisseur.nom_fournisseur if transaction.fournisseur else None,
         "produit_nom": transaction.produit.nom_produit if transaction.produit else None,
         "montant_total": transaction.montant_total,
+        "montant_avoir": transaction.montant_avoir,
+        "montant_net": transaction.montant_net,
         "montant_paye": transaction.montant_paye,
         "montant_restant": transaction.montant_restant,
         "statut_paiement": payment_status(transaction, today),
