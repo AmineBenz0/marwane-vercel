@@ -493,7 +493,7 @@ def test_phase4_native_stock_and_avoir_commit_then_idempotent_replay(conn):
             with pytest.raises(HTTPException) as e:
                 cancel_deferred_sale_remainder(
                     db, transaction_id=sale["tx"],
-                    payload=_phase4_payload(tx, uuid4()), actor=actor,
+                    payload=payload.model_copy(update={"operation_id": uuid4()}), actor=actor,
                 )
             assert e.value.status_code == 409
             db.rollback()
