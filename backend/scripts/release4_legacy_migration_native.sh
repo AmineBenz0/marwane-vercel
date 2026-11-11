@@ -45,7 +45,8 @@ test "$(psql "$DATABASE_URL" -At -c "
   SELECT has_table_privilege('app_runtime','public.legacy_deferred_cancellations','SELECT')")" = t
 
 # Frozen legacy rows cannot be edited, reactivated or given new credit notes.
-for statement in   "UPDATE public.transactions SET quantite=7 WHERE id_transaction=(SELECT id_transaction FROM public.legacy_deferred_cancellations LIMIT 1)"   "UPDATE public.transactions SET est_actif=true WHERE id_transaction=(SELECT id_transaction FROM public.legacy_deferred_cancellations LIMIT 1)"; do
+for statement in   "UPDATE public.transactions SET quantite=7 WHERE id_transaction=(SELECT id_transaction FROM public.legacy_deferred_cancellations LIMIT 1)"   "UPDATE public.transactions SET est_actif=true WHERE id_transaction=(SELECT id_transaction FROM public.legacy_deferred_cancellations LIMIT 1)" \
+  "DELETE FROM public.transactions WHERE id_transaction=(SELECT id_transaction FROM public.legacy_deferred_cancellations LIMIT 1)"; do
   if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1      -c "$statement" -c "SET CONSTRAINTS ALL IMMEDIATE" >/dev/null 2>&1; then
     echo "Frozen historical cancellation changed"; exit 1
   fi
