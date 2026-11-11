@@ -298,6 +298,32 @@ def test_phase2_locks_sale_pricing_after_ledger_posted(conn):
             ),
             "post atomically",
         )
+        # A one-cent change still rounds to the same avoir; the saved original
+        # negotiated total must remain an exact, immutable snapshot.
+        _reject(
+            cur,
+            lambda: cur.execute(
+                "UPDATE public.transactions SET montant_total=1200.01 "
+                "WHERE id_transaction=%s", (sale["tx"],),
+            ),
+            "post atomically",
+        )
+        _reject(
+            cur,
+            lambda: cur.execute(
+                "UPDATE public.transactions SET est_actif=false "
+                "WHERE id_transaction=%s", (sale["tx"],),
+            ),
+            "post atomically",
+        )
+        _reject(
+            cur,
+            lambda: cur.execute(
+                "UPDATE public.transactions SET date_transaction=%s "
+                "WHERE id_transaction=%s", (date.today() + timedelta(days=1), sale["tx"]),
+            ),
+            "post atomically",
+        )
 
 
 def test_phase2_rejects_schema_replay_prerequisites_and_public_write_grants(conn):
