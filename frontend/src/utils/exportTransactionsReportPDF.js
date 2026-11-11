@@ -80,7 +80,10 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const reportDate = new Date();
   const active = rows.filter(row => row.est_actif !== false);
-  const total = active.reduce((sum, row) => sum + asNumber(row.montant_total), 0);
+  const original = active.reduce((sum, row) => sum + asNumber(row.montant_total), 0);
+  const avoirs = active.reduce((sum, row) => sum + asNumber(row.montant_avoir), 0);
+  const total = active.reduce((sum, row) =>
+    sum + asNumber(row.montant_net ?? (asNumber(row.montant_total) - asNumber(row.montant_avoir))), 0);
   const paid = active.reduce((sum, row) => sum + asNumber(row.montant_paye), 0);
   const remaining = active.reduce((sum, row) => sum + asNumber(row.montant_restant), 0);
   const validDates = rows.map(row => row.date_transaction).filter(Boolean).sort();
@@ -100,7 +103,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     row.partner,
     row.product,
     pdfInteger(row.quantite),
-    pdfMoney(row.montant_total, false),
+    pdfMoney(row.montant_net ?? (asNumber(row.montant_total) - asNumber(row.montant_avoir)), false),
     pdfMoney(row.montant_paye, false),
     pdfMoney(row.montant_restant, false),
     row.status,
@@ -116,7 +119,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     },
     startY: 72,
     rowPageBreak: 'avoid',
-    head: [['DATE', 'PARTENAIRE', 'PRODUIT', 'QTÉ', 'MONTANT', 'PAYÉ', 'RESTE', 'ÉTAT']],
+    head: [['DATE', 'PARTENAIRE', 'PRODUIT', 'QTÉ', 'NET', 'PAYÉ', 'RESTE', 'ÉTAT']],
     body: transactionRows,
     foot: [[
       { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 4 },
@@ -169,11 +172,41 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
 
   addTransactionPaymentsSection(doc, sections, source);
 
+  const notes = source.flatMap(row => {
+    const issued = row.avoirs_livraison_differee || [];
+    if (!issued.length && asNumber(row.montant_avoir) > 0) {
+      // Compatibility with an older response lacking itemized entries:
+      // show the amount, but never infer or invent an effective date.
+      return [{
+        date: '-', partner: row.partner, product: row.product,
+        cancelled: row.quantite_annulee, amount: row.montant_avoir,
+        net: row.montant_net ?? (asNumber(row.montant_total) - asNumber(row.montant_avoir)),
+      }];
+    }
+    return issued.map(note => ({
+      date: pdfDate(note.date_effet), partner: row.partner, product: row.product,
+      cancelled: note.quantite_annulee,
+      amount: note.montant_avoir,
+      net: asNumber(row.montant_total) - asNumber(note.avoir_cumule),
+    }));
+  });
+  addSection(
+    doc, sections, 'Avoirs commerciaux',
+    String(notes.length) + ' avoir(s) daté(s) · aucune sortie d’argent automatique',
+    ['DATE AVOIR', 'PARTENAIRE', 'PRODUIT', 'QTÉ ANNULÉE', 'AVOIR', 'NET APRÈS'],
+    notes.map(note => [
+      note.date, note.partner, note.product, pdfInteger(note.cancelled),
+      pdfMoney(note.amount, false), pdfMoney(note.net, false),
+    ]),
+    [30, 68, 66, 34, 37, 39],
+    [3, 4, 5],
+  );
+
   const deferred = source.filter(row => row.est_promesse);
   addSection(
     doc, sections, 'Livraisons différées',
     String(deferred.length) + ' transactions concernées par une livraison différée',
-    ['PRODUIT / BATIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COUVERT', 'RÉSERVÉ', 'RESTE'],
+    ['PRODUIT / BATIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COUVERT', 'RÉSERVÉ', 'ANNULÉ', 'RESTE'],
     deferred.map(row => [
       row.product + '\n' + row.building,
       pdfClean(row.etat_stock || row.status) + (row.quantite_a_produire == null
@@ -181,10 +214,11 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       pdfDate(row.date_livraison_prevue),
       pdfInteger(row.quantite_couverte),
       pdfInteger(row.quantite_reservee),
+      pdfInteger(row.quantite_annulee ?? 0),
       pdfInteger(row.quantite_en_attente),
     ]),
-    [91, 76, 28, 24, 26, 29],
-    [3, 4, 5],
+    [80, 70, 28, 24, 24, 24, 24],
+    [3, 4, 5, 6],
   );
 
   const totalPages = doc.getNumberOfPages();
@@ -196,9 +230,19 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       pdfHeading(doc, 'Rapport des transactions', 'Opérations du ' + period,
         'Édité le ' + pdfDate(reportDate));
       drawKpi(doc, 'TRANSACTIONS', String(rows.length) + ' - ' + String(active.length) + ' actives', 0);
-      drawKpi(doc, 'MONTANT ACTIF', pdfMoney(total), 1, true);
+      drawKpi(doc, 'MONTANT NET ACTIF', pdfMoney(total), 1, true);
       drawKpi(doc, 'DÉJÀ PAYÉ', pdfMoney(paid), 2);
       drawKpi(doc, 'RESTE À RÉGLER', pdfMoney(remaining), 3);
+      if (avoirs > 0) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.8);
+        doc.setTextColor(...PDF_COLORS.muted);
+        doc.text(
+          pdfClean('Ventes initiales : ' + pdfMoney(original) +
+            '  |  Avoirs commerciaux : - ' + pdfMoney(avoirs)),
+          11.5, 69.5,
+        );
+      }
     } else if (section) {
       pdfHeading(doc, section.title + (number > section.start ? ' - suite' : ''),
         section.subtitle);
