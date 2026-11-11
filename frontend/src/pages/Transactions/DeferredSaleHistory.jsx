@@ -29,7 +29,7 @@ export default function DeferredSaleHistory({ transactionId, refreshKey, embedde
         </Stack>
         {event.type === 'cancel_remainder' && event.montant_avoir != null && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Avoir commercial : {formatMontant(event.montant_avoir, { useCompactNotation: false })} · Aucun remboursement automatique
+            Avoir commercial : {formatMontant(event.montant_avoir, { useCompactNotation: false, minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Aucun remboursement automatique
           </Typography>
         )}
         {event.repartition_stock?.length ? <Stack spacing={1.25} sx={{ mt: 1.75, p: 1.5, bgcolor: 'grey.50', borderRadius: 1.5 }}>
