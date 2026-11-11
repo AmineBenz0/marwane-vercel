@@ -680,21 +680,27 @@ def test_release4_remainder_rejects_stale_and_non_delivered_reservations(
     assert tx.quantite_annulee == 0
 
 
-def test_release4_stock_only_close_endpoint_is_unavailable(client, db_session, deferred_sale, test_user):
+def test_release4_cancellation_is_gated_until_final_acceptance(
+    client, db_session, deferred_sale, test_user,
+):
+    from uuid import uuid4
     from app.main import app
     from app.utils.dependencies import get_current_active_user
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+    from app.models.correction_operation import CorrectionOperation
     app.dependency_overrides[get_current_active_user] = lambda: test_user
     _, _, _, payload = deferred_sale
     tx = create_transaction(payload, db_session, test_user)
     before = (tx.quantite_en_attente, tx.quantite_annulee, tx.montant_total)
     response = client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder', json={
+        'operation_id': str(uuid4()),
         'expected_version': tx.row_version,
         'quantite_en_attente_attendue': 400,
     })
-    assert response.status_code in (404, 405)
+    assert response.status_code == 409
     db_session.refresh(tx)
     assert (tx.quantite_en_attente, tx.quantite_annulee, tx.montant_total) == before
-    assert db_session.query(TransactionAudit).filter_by(
-        id_transaction=tx.id_transaction,
-        champ_modifie='cloture_reliquat_livraison_differee',
+    assert db_session.query(DeferredSaleAdjustment).count() == 0
+    assert db_session.query(CorrectionOperation).filter(
+        CorrectionOperation.request_payload['kind'].as_string() == 'deferred_avoir'
     ).count() == 0
