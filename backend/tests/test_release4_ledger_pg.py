@@ -252,8 +252,32 @@ def test_phase2_rejects_unlinked_incorrect_or_duplicate_operations(conn):
         _reject(
             cur,
             lambda: _adjust(cur, sale, op),
-            "duplicate key",
+            "already recorded",
         )
+
+
+def test_phase2_prevents_backdating_adjustments_out_of_order(conn):
+    with conn.cursor() as cur:
+        sale = _sale(cur)
+        first = _operation(cur, sale, 100, 100, "150.00")
+        cur.execute(
+            "UPDATE public.transactions SET quantite_annulee=100 "
+            "WHERE id_transaction=%s", (sale["tx"],),
+        )
+        _adjust(cur, sale, first, quantity=100, amount="150.00",
+                cumulative=100, cumulative_amount="150.00")
+        cur.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        cur.execute("SET CONSTRAINTS ALL DEFERRED")
+
+        def backdated():
+            older_date = date.today() - timedelta(days=1)
+            op = _operation(cur, sale, 300, 400, "450.00", date_effect=older_date)
+            _adjust(
+                cur, sale, op, before=100, quantity=300, before_amount="150.00",
+                amount="450.00", cumulative=400, cumulative_amount="600.00",
+                date_effect=older_date,
+            )
+        _reject(cur, backdated, "before an earlier cancellation date")
 
 
 def test_phase2_locks_sale_pricing_after_ledger_posted(conn):
