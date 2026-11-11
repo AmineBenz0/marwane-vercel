@@ -305,6 +305,28 @@ class DeferredSaleRemainderClose(BaseModel):
     quantite_en_attente_attendue: int = Field(gt=0, strict=True)
 
 
+class DeferredSaleCancellationPreview(BaseModel):
+    """Read-only commercial quote, valid only for this sale revision and stock.
+
+    Amounts are server-computed Decimal values; the browser never calculates
+    an avoir from displayed unit prices. The subsequent POST is revalidated.
+    """
+    id_transaction: int
+    date_effet: date
+    expected_version: int
+    quantite_en_attente_attendue: int
+    quantite_couverte: int
+    quantite_annulee: int
+    quantite_annulee_cumulee: int
+    montant_initial: Decimal
+    montant_avoir: Decimal
+    montant_avoirs_cumule: Decimal
+    montant_net: Decimal
+    montant_paye: Decimal
+    montant_restant: Decimal
+    credit_client: Decimal
+
+
 class DeferredSaleCancellationRead(BaseModel):
     """Committed cancellation and independent commercial adjustment receipt."""
     model_config = ConfigDict(extra='ignore')
