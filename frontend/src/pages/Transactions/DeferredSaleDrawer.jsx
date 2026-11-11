@@ -14,7 +14,7 @@ import ExpandableDetails from '../../components/ExpandableDetails';
 import { deferredStockQuantities } from './deferredStockQuantities';
 
 const number = value => Number(value || 0).toLocaleString('fr-FR');
-const money = value => formatMontant(value, { useCompactNotation: false });
+const money = value => formatMontant(value, { useCompactNotation: false, minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const Row = ({ label, value }) => <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="body2" fontWeight={700} sx={{ textAlign: 'right' }}>{value}</Typography></Stack>;
 
 export default function DeferredSaleDrawer({ transactionId, summary, onClose, onUpdated }) {
