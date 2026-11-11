@@ -147,7 +147,18 @@ BEGIN
     OR max_amount IS DISTINCT FROM amount
     OR amount IS DISTINCT FROM
         round(sale.montant_total * qty / sale.quantite,2)
-    OR qty > sale.quantite THEN
+    OR qty > sale.quantite
+    OR (qty > 0 AND (NOT sale.est_actif OR NOT sale.est_promesse
+                    OR NOT sale.allocation_automatique))
+    OR EXISTS (
+       SELECT 1 FROM public.avoirs_livraison_differee a
+       WHERE a.id_transaction=tx_id AND (
+         a.quantite_initiale IS DISTINCT FROM sale.quantite
+         OR a.montant_initial IS DISTINCT FROM sale.montant_total
+         OR a.id_client IS DISTINCT FROM sale.id_client
+         OR a.date_effet < sale.date_transaction
+       )
+    ) THEN
     RAISE EXCEPTION 'Deferred stock cancellation and commercial avoir must post atomically';
   END IF;
   RETURN NULL;
@@ -170,7 +181,7 @@ CREATE CONSTRAINT TRIGGER trg_deferred_avoir_parity
   EXECUTE FUNCTION public.verify_deferred_avoir_parity();
 CREATE CONSTRAINT TRIGGER trg_deferred_transaction_parity
   AFTER INSERT OR UPDATE OF quantite_annulee, quantite, montant_total,
-    id_client, est_promesse, allocation_automatique
+    id_client, est_promesse, allocation_automatique, date_transaction, est_actif
   ON public.transactions
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
   EXECUTE FUNCTION public.verify_deferred_avoir_parity();
