@@ -12,9 +12,11 @@ const Line = ({ label, value, strong = false }) => <Stack direction="row" spacin
 /** The posted avoir is not a payment or an advance. Keep its dates visible. */
 export default function DeferredSaleFinancialSummary({ sale }) {
   if (!sale) return null;
-  const credited = Number(sale.montant_avoir || 0) > 0;
-  const remaining = Number(sale.montant_restant || 0);
   const notes = sale.avoirs_livraison_differee || [];
+  // Cent-level rounding may yield a valid zero-amount avoir: keep its
+  // quantity and historical entry visible rather than hiding it.
+  const credited = Number(sale.montant_avoir || 0) > 0 || notes.length > 0;
+  const remaining = Number(sale.montant_restant || 0);
 
   return <Stack spacing={1}>
     <Line label={credited ? 'Montant initial' : 'Total'} value={money(sale.montant_total)} />
