@@ -9,10 +9,13 @@ DECLARE
   building_id integer;
   sale_id integer;
 BEGIN
+  -- Docker-published localhost ports connect to the container's *bridge*
+  -- address (often 172.x), not to the server's 127.0.0.1 address. The
+  -- managed Supabase projects use database 'postgres'; the CI-only URL
+  -- and disposable database name are enforced together by the runner.
   IF current_database() <> 'comptabilite_db'
-     OR inet_server_addr() IS NULL
-     OR NOT inet_server_addr() << inet '127.0.0.0/8' THEN
-    RAISE EXCEPTION 'Phase 8 fixture MUST run on disposable localhost CI only';
+     OR current_user <> 'postgres' THEN
+    RAISE EXCEPTION 'Phase 8 fixture MUST run on disposable PostgreSQL CI only';
   END IF;
   INSERT INTO public.utilisateurs(
     nom_utilisateur,email,mot_de_passe_hash,role,est_actif
