@@ -161,6 +161,16 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
             and row.type_oeuf not in {"casse", "perdu"}
         ]
         for tx in items:
+            # The promises list was loaded before taking stock locks. Refresh
+            # fulfillment state after acquiring the locks so a concurrent
+            # remainder closure cannot be undone by stale pending quantities.
+            # Pending changes from this transaction were flushed above.
+            db.refresh(tx, attribute_names=[
+                'quantite', 'quantite_annulee', 'est_actif', 'est_promesse',
+            ])
+            db.expire(tx, ['allocations'])
+            if not tx.est_actif or not tx.est_promesse:
+                continue
             before = sum(a.quantite for a in tx.allocations)
             pending = max(0, tx.quantite - before - (tx.quantite_annulee or 0))
             allocated = 0
