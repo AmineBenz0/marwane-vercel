@@ -1037,7 +1037,7 @@ const deferredExportColumns = [
   { id: 'quantite_annulee', label: 'Quantité annulée' },
 ];
 
-const exportTransactionWorkbook = (rows) => {
+export const exportTransactionWorkbook = (rows) => {
   const hasDeferred = rows.some(row => row.est_promesse);
   const columns = hasDeferred ? [...transactionExportColumns, ...deferredExportColumns] : transactionExportColumns;
   const data = rows.map(row => {
