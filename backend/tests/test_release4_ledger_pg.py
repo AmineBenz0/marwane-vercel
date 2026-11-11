@@ -596,3 +596,85 @@ def test_phase4_native_rollback_removes_stock_and_avoir_together(conn):
             ).count() == 0
     finally:
         engine.dispose()
+
+
+
+def test_phase5_native_cancel_then_explicit_refund_no_second_cash(conn):
+    """Committed real cash payment -> atomic avoir -> one explicit refund.
+
+    This scenario exercises the actual migrated PostgreSQL constraints, not
+    SQLite's permissive in-memory model. The cancellation itself never makes
+    an outgoing cash/bank movement; the signed refund does exactly once.
+    """
+    from types import SimpleNamespace
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.models.transaction import Transaction
+    from app.models.paiement import Paiement
+    from app.models.caisse import Caisse
+    from app.models.credit import Avance
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+    from app.schemas.refund import RefundCommand, RefundApplyCommand
+    from app.services.refunds import preview_refund, apply_refund
+    from app.services.financial_ledger import sync_payment_cash_movement
+    from app.services.deferred_cancellation import cancel_deferred_sale_remainder
+
+    with conn.cursor() as cur:
+        sale = _sale(cur, sellable=True)
+    conn.commit()
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    actor = SimpleNamespace(id_utilisateur=sale["user"], est_actif=True)
+    try:
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            payment = Paiement(
+                id_transaction=tx.id_transaction, date_paiement=tx.date_transaction,
+                montant=Decimal("1500.00"), type_paiement="cash", nature="paiement",
+                statut="valide", id_utilisateur_creation=sale["user"],
+            )
+            db.add(payment)
+            db.flush()
+            sync_payment_cash_movement(db, payment, tx, current_user=actor)
+            db.commit()
+
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            receipt = cancel_deferred_sale_remainder(
+                db, transaction_id=sale["tx"], payload=_phase4_payload(tx), actor=actor,
+            )
+            db.commit()
+            assert receipt["montant_net"] == "0.00"
+            assert receipt["credit_client"] == "1500.00"
+            assert db.query(Caisse).filter(Caisse.statut == "active").count() == 1
+            assert db.query(Avance).count() == 0
+            assert db.query(DeferredSaleAdjustment).count() == 1
+
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            command = RefundCommand(
+                operation_id=uuid4(), id_transaction=tx.id_transaction,
+                date_paiement=date.today(), montant=Decimal("1500.00"),
+                type_paiement="cash", reason="Restitution explicite de la vente annulée",
+            )
+            preview = preview_refund(db, command)
+            assert preview["available_credit"] == "1500.00"
+            assert preview["montant_avoirs"] == "1500.00"
+            apply = RefundApplyCommand(
+                **command.model_dump(), dependency_fingerprint=preview["dependency_fingerprint"],
+            )
+            result = apply_refund(db, apply, actor)
+            assert result["replayed"] is False
+            db.expire_all()
+            tx = db.get(Transaction, sale["tx"])
+            assert tx.montant_paye == Decimal("0.00")
+            assert tx.montant_net == Decimal("0.00")
+            assert tx.montant_restant == Decimal("0.00")
+            assert db.query(Caisse).filter(Caisse.statut == "active").count() == 2
+            assert db.query(Avance).count() == 0
+            assert db.query(DeferredSaleAdjustment).count() == 1
+            replay = apply_refund(db, apply, actor)
+            assert replay["replayed"] is True
+            assert db.query(Caisse).filter(Caisse.statut == "active").count() == 2
+            assert db.query(Paiement).filter(Paiement.nature == "remboursement").count() == 1
+    finally:
+        engine.dispose()
