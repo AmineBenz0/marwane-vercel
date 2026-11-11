@@ -85,6 +85,8 @@ def test_exact_quote_before_commit_and_immutable_stock_cash_and_history(
         "operation_id": operation_id,
         "expected_version": quote["expected_version"],
         "quantite_en_attente_attendue": quote["quantite_en_attente_attendue"],
+        "montant_paye_attendu": quote["montant_paye"],
+        "date_effet_attendue": quote["date_effet"],
     }
     posted = client.post(endpoint, json=command)
     assert posted.status_code == 200, posted.text
