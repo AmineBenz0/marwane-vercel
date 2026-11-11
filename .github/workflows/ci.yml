@@ -327,6 +327,13 @@ jobs:
         run: node ../scripts/check_frontend_encoding.mjs
       - run: npm ci
       - run: npm run lint
+      - name: Fast Release 4 cancellation UI regression before full coverage
+        run: >-
+          npx vitest run
+          src/pages/Transactions/DeferredSaleCancellationDialog.test.jsx
+          src/pages/Transactions/DeferredSalesPage.test.jsx
+          src/pages/Transactions/TransactionDetailCompletion.test.jsx
+          src/pages/Transactions/DeferredSaleHistory.test.jsx
       - run: npm run test:unit:coverage
       - run: npm run build
       - name: Install Chromium for deterministic contact UI checks
