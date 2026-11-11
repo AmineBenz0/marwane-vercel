@@ -171,8 +171,14 @@ BEGIN
     ) THEN
    RAISE EXCEPTION 'Phase 5 refund credit guard or permissions missing';
  END IF;
- IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') AND
-    has_function_privilege('public','public.refund_monetary_capacity(integer,date)','EXECUTE') THEN
-   RAISE EXCEPTION 'Phase 5 must not expose refund capacity to the anonymous API';
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN
+   IF has_function_privilege('anon','public.refund_monetary_capacity(integer,date)','EXECUTE') THEN
+     RAISE EXCEPTION 'Phase 5 must not expose refund capacity to the anonymous API';
+   END IF;
+ END IF;
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN
+   IF has_function_privilege('authenticated','public.refund_monetary_capacity(integer,date)','EXECUTE') THEN
+     RAISE EXCEPTION 'Phase 5 must not expose refund capacity to browser roles';
+   END IF;
  END IF;
 END $postflight$;
