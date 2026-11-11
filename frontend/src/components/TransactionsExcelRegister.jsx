@@ -138,7 +138,9 @@ export const getPaymentReglementSummary = (transaction, formatAmount = formatPay
 };
 
 const getSignedAmount = (transaction, field = 'montant_total') => {
-  const amount = Math.abs(Number(transaction[field] || 0));
+  const value = field === 'montant_total'
+    ? (transaction.montant_net ?? transaction.montant_total) : transaction[field];
+  const amount = Math.abs(Number(value || 0));
   return isClientTransaction(transaction) ? amount : -amount;
 };
 
@@ -188,14 +190,14 @@ function TransactionsExcelRegister({
         followUpCount: 0,
       };
 
-      const total = Math.abs(Number(transaction.montant_total || 0));
+      const total = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
       if (isClientTransaction(transaction)) {
         group.entries += total;
       } else {
         group.exits += total;
       }
-      group.paid += Math.abs(Number(transaction.montant_paye || 0));
-      group.remaining += Math.abs(Number(transaction.montant_restant || 0));
+      group.paid += Number(transaction.montant_paye || 0);
+      group.remaining += Number(transaction.montant_restant || 0);
 
       const status = getPaymentStatus(transaction);
       if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
@@ -298,7 +300,7 @@ function TransactionsExcelRegister({
                 <TableCell>Produit</TableCell>
                 <TableCell>Bâtiment</TableCell>
                 <TableCell align="right">Quantité</TableCell>
-                <TableCell align="right">Total</TableCell>
+                <TableCell align="right">Montant net</TableCell>
                 <TableCell align="right">Payé</TableCell>
                 <TableCell align="right">Reste</TableCell>
                 <TableCell>Règlement</TableCell>
