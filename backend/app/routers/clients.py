@@ -254,7 +254,7 @@ def get_client_stats_mensuelles(
         )
     
     # Calculer la date de début (N mois avant aujourd'hui, premier jour du mois)
-    date_fin = date.today()
+    date_fin = business_date()
     # Calculer le premier jour du mois qui est N mois avant aujourd'hui
     date_debut = (date_fin.replace(day=1) - relativedelta(months=periode-1))
     
@@ -399,6 +399,10 @@ def get_client_produits_achetes(
         
         produits.append(produit_achete)
     
+    # Sort by the corrected amount, not the original negotiated gross
+    # amount (a full commercial credit can make a former top product last).
+    produits.sort(key=lambda product: (-product.montant_total, product.id_produit))
+
     # Construire la réponse
     return ClientProduitsAchetes(
         client_id=id,
@@ -738,7 +742,7 @@ def get_client_insights_financiers(
     )
 
     # 9. Calculer la tendance (comparer ce mois vs mois précédent)
-    today = date.today()
+    today = business_date()
     mois_actuel_debut = today.replace(day=1)
     mois_precedent_debut = (mois_actuel_debut - relativedelta(months=1))
     mois_precedent_fin = mois_actuel_debut
