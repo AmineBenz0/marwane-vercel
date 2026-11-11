@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, IconButton, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Divider, Drawer, IconButton, Stack, TextField, Typography } from '@mui/material';
 import { Close } from '@mui/icons-material';
-import { get, patch, post } from '../../services/api';
+import { get, patch } from '../../services/api';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant } from '../../utils/formatNumber';
 import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
@@ -22,7 +22,6 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose, on
   const [revision, setRevision] = useState(0);
   const [editingDate, setEditingDate] = useState(false);
   const [dateDraft, setDateDraft] = useState('');
-  const [confirmClose, setConfirmClose] = useState(false);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState('');
   const updateDate = async () => {
@@ -35,21 +34,6 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose, on
       setSale(updated); setEditingDate(false); onUpdated?.();
     } catch (err) {
       setActionError(err.message || 'Impossible de modifier la date prévue.');
-      setRevision(value => value + 1);
-    } finally { setActionPending(false); }
-  };
-  const closeRemainder = async () => {
-    if (!sale || actionPending) return;
-    setActionPending(true); setActionError('');
-    try {
-      await post(`/transactions/${transactionId}/cancel-remainder`, {
-        expected_version: Number(sale.row_version),
-        quantite_en_attente_attendue: Number(sale.quantite_en_attente),
-      });
-      setConfirmClose(false); onUpdated?.(); onClose();
-    } catch (err) {
-      setConfirmClose(false);
-      setActionError(err.message || 'Impossible de clôturer le reste.');
       setRevision(value => value + 1);
     } finally { setActionPending(false); }
   };
@@ -99,9 +83,6 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose, on
           <Row label="À produire" value={number(deferredStockQuantities(sale).toProduce)} />
           {Number(sale.quantite_annulee || 0) > 0 && <Row label="Reste clôturé" value={number(sale.quantite_annulee)} />}
         </Stack>
-        {sale.est_promesse && sale.est_actif !== false && Number(sale.quantite_en_attente) > 0 && <Box>
-          <Button variant="outlined" color="warning" size="small" onClick={() => { setConfirmClose(true); setActionError(''); }}>Clore le reste à produire</Button>
-        </Box>}
         {actionError && <Alert severity="error">{actionError}</Alert>}
         <Box component="section" aria-label="Paiement de la vente">
           <Typography component="h3" variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Paiement</Typography>
@@ -110,17 +91,7 @@ export default function DeferredSaleDrawer({ transactionId, summary, onClose, on
         </Box>
         <ExpandableDetails label="Historique des réservations"><DeferredSaleHistory transactionId={transactionId} refreshKey={revision} embedded /></ExpandableDetails>
       </Stack>}
-      <Dialog open={confirmClose} onClose={() => { if (!actionPending) setConfirmClose(false); }} aria-labelledby="close-remainder-title">
-        <DialogTitle id="close-remainder-title">Clore le reste à produire ?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">Cette vente ne recevra plus les {number(sale?.quantite_en_attente)} œufs restants.</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Le montant de la vente, les paiements et les crédits restent inchangés. Cette action ne rembourse pas le client.</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button disabled={actionPending} onClick={() => setConfirmClose(false)}>Retour</Button>
-          <Button variant="contained" color="warning" disabled={actionPending} onClick={closeRemainder}>Confirmer la clôture</Button>
-        </DialogActions>
-      </Dialog>
+
     </Box>
   </Drawer>;
 }
