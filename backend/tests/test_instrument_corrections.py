@@ -298,7 +298,17 @@ def test_lc_dependent_refund_blocks_amount_edit_and_cancellation(
     tx.montant_total = Decimal('1.00')
     db_session.commit()
     p = used_lc_supplier_payment(db_session, lc, tx, test_user, payment_date=date.today())
-    cmd = RefundCommand(operation_id=uuid4(), id_transaction=tx.id_transaction, date_paiement=date.today(), montant='2.00', type_paiement='cash', reason='Remboursement LC')
+    # Release 4 Phase 5: a noncash LC cannot independently fund a cash refund.
+    # Add an actual settled cash payment; the refund must be cash-backed while
+    # still retaining the LC-dependent refund correction restrictions.
+    cash = Paiement(id_transaction=tx.id_transaction, montant=Decimal('2.00'),
+        date_paiement=date.today(), type_paiement='cash', nature='paiement',
+        source_reglement='caisse', statut='valide',
+        id_utilisateur_creation=test_user.id_utilisateur)
+    db_session.add(cash); db_session.flush()
+    sync_payment_cash_movement(db_session, cash, tx, current_user=test_user)
+    db_session.commit()
+    cmd = RefundCommand(operation_id=uuid4(), id_transaction=tx.id_transaction, date_paiement=date.today(), montant='2.00', type_paiement='cash', reason='Remboursement du paiement espèces après réception LC')
     preview = preview_refund(db_session, cmd)
     apply_refund(db_session, RefundApplyCommand(**cmd.model_dump(), dependency_fingerprint=preview['dependency_fingerprint']), test_user)
     for command in [lc_cmd(lc, {'montant':'4.00'}), lc_cmd(lc, action='cancel_usage')]:
