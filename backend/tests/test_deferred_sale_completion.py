@@ -605,6 +605,7 @@ def test_release4_reschedule_updates_date_and_audits_without_stock_or_money(
     assert earlier.status_code == 400
 
 
+@pytest.mark.skip(reason='Stock-only cancellation disabled until the financial adjustment is atomic')
 def test_release4_closing_remainder_stops_future_stock_allocation_and_preserves_finances(
     client, db_session, deferred_sale, test_user,
 ):
@@ -658,6 +659,7 @@ def test_release4_closing_remainder_stops_future_stock_allocation_and_preserves_
     assert client.get('/api/v1/transactions/deferred-sales').json() == []
 
 
+@pytest.mark.skip(reason='Stock-only cancellation disabled until the financial adjustment is atomic')
 def test_release4_remainder_rejects_stale_and_non_delivered_reservations(
     client, db_session, deferred_sale, test_user,
 ):
@@ -676,3 +678,23 @@ def test_release4_remainder_rejects_stale_and_non_delivered_reservations(
         'expected_version': tx.row_version, 'quantite_en_attente_attendue': 400,
     }).status_code == 409
     assert tx.quantite_annulee == 0
+
+
+def test_release4_stock_only_close_endpoint_is_unavailable(client, db_session, deferred_sale, test_user):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    before = (tx.quantite_en_attente, tx.quantite_annulee, tx.montant_total)
+    response = client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder', json={
+        'expected_version': tx.row_version,
+        'quantite_en_attente_attendue': 400,
+    })
+    assert response.status_code in (404, 405)
+    db_session.refresh(tx)
+    assert (tx.quantite_en_attente, tx.quantite_annulee, tx.montant_total) == before
+    assert db_session.query(TransactionAudit).filter_by(
+        id_transaction=tx.id_transaction,
+        champ_modifie='cloture_reliquat_livraison_differee',
+    ).count() == 0
