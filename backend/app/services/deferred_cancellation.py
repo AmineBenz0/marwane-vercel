@@ -40,6 +40,65 @@ def _request_identity(transaction_id: int, payload) -> tuple[str, dict]:
     return digest, body
 
 
+def preview_deferred_sale_remainder(db: Session, *, transaction_id: int) -> dict:
+    """Read-only quote from current sale, stock and settled payments.
+
+    A live POST takes locks and rechecks both revision and pending quantity.
+    This preview intentionally creates no operation ID, audit or payment.
+    """
+    tx = db.get(Transaction, transaction_id)
+    if tx is None:
+        raise HTTPException(404, "Transaction introuvable.")
+    if (
+        not tx.est_actif or not tx.est_promesse or not tx.allocation_automatique
+        or tx.id_client is None or tx.id_fournisseur is not None
+        or tx.id_batiment is None or tx.id_produit is None
+        or tx.produit is None
+        or parse_sellable_egg_product_name(tx.produit.nom_produit) is None
+    ):
+        raise HTTPException(409, "Seule une livraison différée active d'œufs clients peut être clôturée.")
+
+    # Drop any ORM cached stock and financial relationships before quoting.
+    db.expire(tx, ["allocations", "paiements", "avoirs_livraison_differee"])
+    pending = tx.quantite_en_attente
+    if pending <= 0:
+        raise HTTPException(409, "Cette vente n'a plus d'œufs à fournir.")
+    today = business_date()
+    try:
+        quote = quote_unfulfilled_cancellation(
+            original_quantity=tx.quantite,
+            covered_quantity=tx.quantite_couverte,
+            delivered_quantity=tx.quantite_completee,
+            previously_canceled=tx.quantite_annulee or 0,
+            cancel_quantity=pending,
+            original_amount=Decimal(str(tx.montant_total)),
+            effective_payments=tx.montant_paye,
+            transaction_date=tx.date_transaction,
+            effective_date=today,
+            row_version=tx.row_version,
+            expected_version=tx.row_version,
+            expected_pending=pending,
+        )
+    except CancellationContractError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {
+        "id_transaction": tx.id_transaction,
+        "date_effet": today,
+        "expected_version": tx.row_version,
+        "quantite_en_attente_attendue": pending,
+        "quantite_couverte": tx.quantite_couverte,
+        "quantite_annulee": quote.canceled_now,
+        "quantite_annulee_cumulee": quote.canceled_total,
+        "montant_initial": quote.original_amount,
+        "montant_avoir": quote.adjustment_now,
+        "montant_avoirs_cumule": quote.adjustments_total,
+        "montant_net": quote.net_amount,
+        "montant_paye": quote.effective_payments,
+        "montant_restant": quote.remaining_balance,
+        "credit_client": quote.customer_credit,
+    }
+
+
 def cancel_deferred_sale_remainder(
     db: Session,
     *,
