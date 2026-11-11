@@ -44,16 +44,37 @@ BEGIN
     blockers := array_append(blockers, 'deferred sale version/canceled/delivered schema missing');
   END IF;
 
-  -- Production's automatic allocation consumes/fulfills at the same step.
-  -- Older staging retains reservations that are not yet delivered. Do not
-  -- silently reinterpret those rows or apply cancellation to them.
+  -- Do not blanket-block ordinary egg sales: their older reserved-but-
+  -- undelivered stock is outside the deferred-cancellation operation and
+  -- must remain intact. A *deferred promise* with such stock is unsafe.
   IF EXISTS (
     SELECT 1 FROM public.egg_sale_allocations a
     JOIN public.transactions t ON t.id_transaction=a.id_transaction
-    WHERE t.est_actif IS TRUE
+    WHERE t.est_actif IS TRUE AND t.est_promesse IS TRUE
+      AND t.allocation_automatique IS TRUE
       AND a.quantite>coalesce(a.quantite_livree,0)
   ) THEN
-    blockers := array_append(blockers, 'active reserved-but-undelivered eggs require model reconciliation');
+    blockers := array_append(blockers, 'active deferred-sale reserved-but-undelivered eggs require model reconciliation');
+  END IF;
+
+  -- A pre-Release-4, inactive, unpaid, manually audited closure is NOT an
+  -- issued commercial credit. Require an immutable baseline for it; never
+  -- invent an avoir or retroactive cash adjustment for older staging tests.
+  IF to_regclass('public.legacy_deferred_cancellations') IS NULL THEN
+    blockers := array_append(blockers, 'immutable historic cancellation baseline missing');
+  ELSE
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_class
+      WHERE oid='public.legacy_deferred_cancellations'::regclass AND relrowsecurity
+    ) OR EXISTS (
+      SELECT 1 FROM public.transactions t
+      LEFT JOIN public.legacy_deferred_cancellations b ON b.id_transaction=t.id_transaction
+      WHERE t.quantite_annulee > 0
+        AND (b.id_transaction IS NULL OR b.historical_canceled_qty <> t.quantite_annulee
+             OR b.original_row IS DISTINCT FROM to_jsonb(t))
+    ) THEN
+      blockers := array_append(blockers, 'historic canceled sales must have immutable identical baselines');
+    END IF;
   END IF;
 
   IF to_regclass('public.avoirs_livraison_differee') IS NOT NULL THEN
@@ -113,5 +134,5 @@ BEGIN
   IF array_length(blockers,1) IS NOT NULL THEN
     RAISE EXCEPTION 'R4 PRECHECK BLOCKED: %', array_to_string(blockers,'; ');
   END IF;
-  RAISE NOTICE 'R4 PRECHECK PASS: candidate schema, security, current active reservation model';
+  RAISE NOTICE 'R4 PRECHECK PASS: commercial ledger, legacy audit baseline and eligible deferred allocations';
 END $release4$;
