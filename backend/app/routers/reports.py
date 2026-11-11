@@ -14,6 +14,10 @@ from app.models.charge import Charge
 from app.models.compte_bancaire import CompteBancaire
 from app.models.inventory import MouvementStock
 from app.models.transaction import Transaction
+from app.models.paiement import Paiement
+from app.models.client import Client
+from app.models.produit import Produit
+from app.services.reporting_commercial import period_commercial_adjustments, sum_period_adjustments
 from app.models.user import Utilisateur
 from app.schemas.report import BankBalance, MonthlyReport, RankedTotal
 from app.services.financial import (
@@ -47,6 +51,19 @@ def monthly_report(
     transactions = db.query(Transaction).filter(Transaction.est_actif.is_(True), Transaction.date_transaction.between(date_debut, date_fin)).all()
     sales = [row for row in transactions if row.id_client is not None]
     purchases = [row for row in transactions if row.id_fournisseur is not None]
+    # An avoir belongs to its own accounting month, even if the original
+    # sale was in an earlier period. This query is independent from payment
+    # JOINs so neither 2 payments nor 2 credits can multiply each other.
+    adjustments = period_commercial_adjustments(db, date_debut, date_fin)
+    credit_total = sum_period_adjustments(adjustments)
+    gross_sales = sum((_money(row.montant_total) for row in sales), Decimal("0.00"))
+    refunds = db.query(func.sum(Paiement.montant)).join(
+        Transaction, Transaction.id_transaction == Paiement.id_transaction,
+    ).filter(
+        Transaction.est_actif.is_(True), Transaction.id_client.isnot(None),
+        Paiement.nature == "remboursement", Paiement.statut == "valide",
+        Paiement.date_paiement.between(date_debut, date_fin),
+    ).scalar()
     charge_total = db.query(func.sum(Charge.montant)).filter(Charge.statut == "active", Charge.date_charge.between(date_debut, date_fin)).scalar()
     previous_day = date_debut - timedelta(days=1)
     cash_end = cash_ledger_as_of(db, date_fin)
@@ -80,7 +97,7 @@ def monthly_report(
             solde=bank_end.get(account.id_compte, Decimal("0")),
         ))
 
-    def ranked(rows, relation, label):
+    def ranked(rows, relation, label, *, adjust=False):
         totals = {}
         labels = {}
         for row in rows:
@@ -88,9 +105,26 @@ def monthly_report(
             if not key:
                 continue
             key_id = getattr(row, f"id_{relation}")
-            totals[key_id] = totals.get(key_id, Decimal("0")) + _money(row.montant_total)
+            totals[key_id] = totals.get(key_id, Decimal("0.00")) + _money(row.montant_total)
             labels[key_id] = getattr(key, label)
-        return [RankedTotal(id=key, label=labels[key], total=value) for key, value in sorted(totals.items(), key=lambda item: item[1], reverse=True)[:10]]
+        if adjust:
+            index = 0 if relation == "client" else 1
+            for customer, product, amount in adjustments:
+                key_id = (customer, product)[index]
+                totals[key_id] = totals.get(key_id, Decimal("0.00")) - amount
+            # A credit may be issued for a sale from an earlier month.
+            # Resolve its original contact/product name instead of dropping it.
+            absent = set(totals) - set(labels)
+            if absent:
+                model = Client if relation == "client" else Produit
+                key = Client.id_client if relation == "client" else Produit.id_produit
+                for item in db.query(model).filter(key.in_(absent)).all():
+                    labels[getattr(item, key.key)] = getattr(item, label)
+        return [
+            RankedTotal(id=key, label=labels[key], total=value)
+            for key, value in sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:10]
+            if key in labels
+        ]
 
     return MonthlyReport(
         month=month,
@@ -100,7 +134,10 @@ def monthly_report(
         date_soldes_historiques=date_fin,
         creances_actuelles=current_position["receivables"],
         dettes_actuelles=current_position["payables"],
-        ventes=sum((_money(row.montant_total) for row in sales), Decimal("0")),
+        ventes=gross_sales,
+        avoirs_commerciaux=credit_total,
+        ventes_nettes=gross_sales - credit_total,
+        remboursements_clients=_money(refunds),
         achats=sum((_money(row.montant_total) for row in purchases), Decimal("0")),
         charges=_money(charge_total),
         caisse_entrees=cash_end["inflows"] - cash_start["inflows"],
@@ -113,9 +150,9 @@ def monthly_report(
         soldes_bancaires_historiques=historical_bank_balances,
         creances=historical_position["receivables"],
         dettes=historical_position["payables"],
-        top_clients=ranked(sales, "client", "nom_client"),
+        top_clients=ranked(sales, "client", "nom_client", adjust=True),
         top_fournisseurs=ranked(purchases, "fournisseur", "nom_fournisseur"),
-        top_produits=ranked(transactions, "produit", "nom_produit"),
+        top_produits=ranked(transactions, "produit", "nom_produit", adjust=True),
         inventory_movements=int(inventory_count or 0),
         inventory_quantity_delta=_money(inventory_quantity_delta),
     )
