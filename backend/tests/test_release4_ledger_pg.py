@@ -349,3 +349,65 @@ def test_phase2_rejects_schema_replay_prerequisites_and_public_write_grants(conn
                     (role,),
                 )
                 assert cur.fetchone() == (False,)
+
+
+def test_phase3_native_sql_and_python_projections_share_cutoff(conn):
+    """Projection test on actual migrated PostgreSQL, not permissive SQLite."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.models.transaction import Transaction
+    from app.services.financial import (
+        contact_balances, financial_position_as_of, net_sale_amount_as_of,
+        query_financial_transactions, remaining_amount_as_of,
+        summarize_financial_transactions,
+    )
+
+    with conn.cursor() as cur:
+        sale = _sale(cur)
+        op = _operation(cur, sale, 400, 400, "600.00", date_effect=date.today())
+        cur.execute(
+            "UPDATE public.transactions SET quantite_annulee=400 "
+            "WHERE id_transaction=%s", (sale["tx"],),
+        )
+        _adjust(cur, sale, op)
+        cur.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    # The database is a dedicated disposable CI instance; commit the fixture
+    # so SQLAlchemy can verify visibility from a different connection.
+    conn.commit()
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    try:
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            assert tx.montant_total == Decimal("1500.00")
+            assert tx.montant_avoir == Decimal("600.00")
+            assert tx.montant_net == Decimal("900.00")
+            assert tx.montant_restant == Decimal("900.00")
+            earlier = date.today() - timedelta(days=1)
+            assert net_sale_amount_as_of(tx, earlier) == Decimal("1500.00")
+            assert remaining_amount_as_of(tx, earlier) == Decimal("1500.00")
+            assert net_sale_amount_as_of(tx, date.today()) == Decimal("900.00")
+            assert contact_balances(
+                db, direction="receivable", contact_ids=[sale["client"]],
+                as_of=earlier,
+            )[sale["client"]] == Decimal("1500.00")
+            assert contact_balances(
+                db, direction="receivable", contact_ids=[sale["client"]],
+                as_of=date.today(),
+            )[sale["client"]] == Decimal("900.00")
+            assert financial_position_as_of(db, earlier)["receivables"] == Decimal("1500.00")
+            assert financial_position_as_of(db, date.today())["receivables"] == Decimal("900.00")
+            current = summarize_financial_transactions(
+                db, direction="receivable", id_tiers=sale["client"],
+            )
+            assert (current["total_brut"], current["total_avoirs"], current["total"],
+                    current["reste"], current["count"]) == (
+                Decimal("1500.00"), Decimal("600.00"), Decimal("900.00"),
+                Decimal("900.00"), 1,
+            )
+            result = query_financial_transactions(
+                db, direction="receivable", id_tiers=sale["client"],
+            )
+            assert len(result) == 1
+            assert result[0].montant_net == Decimal("900.00")
+    finally:
+        engine.dispose()
