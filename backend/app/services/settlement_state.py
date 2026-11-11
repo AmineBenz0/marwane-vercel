@@ -7,6 +7,7 @@ from sqlalchemy import or_
 from app.models.caisse import Caisse
 from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.paiement import Paiement
+from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
 from app.models.lettre_credit import LettreDeCredit
 from app.models.lettre_credit_utilisation import LettreCreditUtilisation
 from app.services.financial import payment_effective_date
