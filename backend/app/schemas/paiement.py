@@ -186,7 +186,9 @@ class StatutPaiementTransaction(BaseModel):
     Schéma pour obtenir le statut de paiement d'une transaction.
     """
     id_transaction: int = Field(..., description="ID de la transaction")
-    montant_total: Decimal = Field(..., description="Montant total de la transaction")
+    montant_total: Decimal = Field(..., description="Montant initial de la transaction")
+    montant_avoir: Decimal = Decimal("0.00")
+    montant_net: Decimal = Decimal("0.00")
     montant_paye: Decimal = Field(..., description="Montant déjà payé")
     montant_rembourse: Decimal = Decimal('0')
     montant_restant: Decimal = Field(..., description="Montant restant à payer")
