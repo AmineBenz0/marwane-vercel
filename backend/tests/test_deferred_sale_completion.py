@@ -700,9 +700,11 @@ def test_release4_cancellation_is_gated_until_final_acceptance(
     assert response.status_code == 409
     db_session.refresh(tx)
     assert (tx.quantite_en_attente, tx.quantite_annulee, tx.montant_total) == before
-    assert db_session.query(DeferredSaleAdjustment).count() == 0
-    assert db_session.query(CorrectionOperation).filter(
-        CorrectionOperation.request_payload['kind'].as_string() == 'deferred_avoir'
+    # Safe to run against Release 3 baseline: the Phase 2 ledger table is not
+    # installed there, and the gated-off API must not reference that table.
+    assert db_session.query(TransactionAudit).filter_by(
+        id_transaction=tx.id_transaction,
+        champ_modifie="annulation_reste_livraison_differee",
     ).count() == 0
 
 
