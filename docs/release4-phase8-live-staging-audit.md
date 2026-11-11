@@ -1,7 +1,9 @@
 # Release 4 — Phase 8 staging acceptance: live environment audit (2026-11-11)
 
-**Decision: BLOCKED for staging migration/feature enablement and production promotion.**
-This is an evidence-based go/no-go record, not a deployed release.
+**Decision (original audit): BLOCKED until legacy compatibility tests and migrations pass.**
+Subsequent read-only investigation isolated two different, nonfinancial
+historical cases described below. This remains a go/no-go record,
+not a deployed release.
 
 ## Scope and verified assets
 
@@ -13,6 +15,47 @@ This is an evidence-based go/no-go record, not a deployed release.
 - Both frontend `VITE_ENABLE_DEFERRED_CANCELLATION_WRITES` and backend
   `ENABLE_DEFERRED_CANCELLATION_WRITES` remain **disabled by default**.
 - No real customer data, refund, stock, schema or deployment was changed.
+
+
+## Updated compatibility findings (read-only verification, 2026-11-11)
+
+The previous global reserved-stock blocker was too broad:
+
+- The **one active reserved-but-not-delivered allocation** is for an
+  **ordinary sale**, `est_promesse=false`, with exactly 1 egg reserved,
+  0 delivered. Release 4 cancels only **automatically allocated deferred
+  customer sales**. There are **zero** such active deferred sales with
+  reserved-but-not-delivered allocations. This ordinary reservation
+  must not be deleted, delivered, or otherwise altered.
+- There is **one separate historical test sale**, inactive, with a
+  recorded cancellation of all 6 remaining eggs, 0 allocations and
+  **no payment**. Its `transactions_audit` history records both the
+  original cancellation and subsequent deactivation as a manually
+  tested staging sale. It predates the commercial-credit ledger.
+- **Do not invent an old 9.00 MAD credit note** for this inactive sale.
+  A new candidate migration now captures an immutable snapshot
+  `legacy_deferred_cancellations` ONLY when an older cancellation
+  is provably inactive, unpaid and audited. Anything with payments,
+  active status or missing cancellation audit still fails preflight.
+  Both the baseline and historical transaction are protected against
+  mutation, including reactivation, and cannot receive a new avoir.
+- The normal new cancellation ledger and dated refund guards remain
+  unchanged and apply **only** to newly posted, atomic commercial
+  adjustments. A new read-only readiness check protects the historic
+  snapshot and only blocks reserved-but-undelivered **eligible deferred
+  promises**. Ordinary-sale reservations remain intact.
+
+**Testing:** The CI migration-validation job now seeds a synthetic
+historical 6-egg cancellation on a disposable PostgreSQL database
+before installing the ledger, then verifies its immutable baseline,
+the absence of a fictitious avoir/payment, and rejection of edits.
+No actual staging rows or secrets are used in that test.
+
+**Migration policy:** Wait for green exact-head CI and an atomic migration
+preflight. The production/staging database schema and flags must not
+be changed until the migration succeeds with this compatibility case
+and live role/security checks have been reviewed. Shared staging
+remains unmodified at the time of this note.
 
 ## Hard blockers identified by live, read-only staging SQL
 
