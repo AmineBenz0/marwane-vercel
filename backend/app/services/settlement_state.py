@@ -102,9 +102,24 @@ def settlement_state(db, transactions, *, account_id=None, lock=False, lock_acco
                     or m.reference != (p.reference_virement or p.numero_cheque) or m.id_charge is not None)
                 or isinstance(m, Caisse) and (m.id_transaction != transaction.id_transaction or m.id_charge or m.id_cession)):
                 raise HTTPException(409, 'Un mouvement ne correspond pas au règlement. Réconciliez-le avant cette opération.')
+    # Phase 4 always changes quantite_annulee/row_version in the locked sale,
+    # so an older refund preview has a changed fingerprint. Include the posted
+    # commercial ledger for additional audit/replay transparency.
+    # On the Release 3 baseline every quantite_annulee is zero and the Phase 2
+    # table is not yet installed. Avoid querying it in those compatibility jobs.
+    commercial_credits = []
+    if any((t.quantite_annulee or 0) > 0 for t in transactions):
+        commercial_credits = db.query(DeferredSaleAdjustment).filter(
+            DeferredSaleAdjustment.id_transaction.in_(sorted(by_id)),
+        ).order_by(
+            DeferredSaleAdjustment.id_transaction,
+            DeferredSaleAdjustment.date_effet,
+            DeferredSaleAdjustment.id_avoir,
+        ).all()
     for transaction in transactions:
-        db.expire(transaction, ['paiements'])
+        db.expire(transaction, ['paiements', 'avoirs_livraison_differee'])
     return {'transactions': [row_snapshot(t) for t in sorted(transactions, key=lambda t: t.id_transaction)],
+            'commercial_credits': [row_snapshot(a) for a in commercial_credits],
             'letters_credit': [row_snapshot(lc) for lc in lcs],
             'lc_usage': [row_snapshot(u) for u in uses], 'payments': [row_snapshot(p) for p in payments], 'cash': [row_snapshot(m) for m in cash],
             'bank': [row_snapshot(m) for m in bank], 'accounts': [row_snapshot(a) for a in accounts]}
