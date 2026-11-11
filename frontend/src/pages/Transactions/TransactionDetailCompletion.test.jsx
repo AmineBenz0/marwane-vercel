@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TransactionDetail from './TransactionDetail';
-import { get } from '../../services/api';
+import { get, post } from '../../services/api';
 
 vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() }));
 vi.mock('react-router-dom', () => ({ useParams: () => ({ id: '7' }), useLocation: () => ({ search: '' }), useNavigate: () => vi.fn() }));
@@ -28,7 +28,7 @@ beforeEach(() => {
     return [];
   });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 it('shows reserved stock on a paid deferred sale without presenting it as delivered', async () => {
   render(<TransactionDetail />);
@@ -38,4 +38,58 @@ it('shows reserved stock on a paid deferred sale without presenting it as delive
   expect(screen.getByText('40 prêts à compléter')).toBeVisible();
   expect(screen.queryByRole('button', { name: /compléter/i })).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog', { name: /compléter/i })).not.toBeInTheDocument();
+});
+
+it('shows the gated cancellation on a full sale and recalculates net value and credit on commit', async () => {
+  vi.stubEnv('VITE_ENABLE_DEFERRED_CANCELLATION_WRITES', 'true');
+  let cancelled = false;
+  const initial = { ...sale, quantite_reservee: 0, row_version: 3 };
+  const updated = {
+    ...initial, quantite_en_attente: 0, quantite_annulee: 100,
+    row_version: 4, montant_avoir: '150.00', montant_net: '1350.00',
+    montant_restant: '-150.00', statut_paiement: 'surpaye',
+    avoirs_livraison_differee: [{
+      id_avoir: 'test-credit', date_effet: '2026-11-11',
+      quantite_annulee: 100, montant_avoir: '150.00', avoir_cumule: '150.00',
+    }],
+  };
+  get.mockImplementation(async path => {
+    if (path === '/transactions/7') return cancelled ? updated : initial;
+    if (path === '/paiements/transaction/7/statut') return cancelled ? updated : initial;
+    if (path === '/transactions/7/cancel-remainder/preview') return {
+      id_transaction: 7, expected_version: 3, quantite_en_attente_attendue: 100,
+      quantite_couverte: 900, quantite_annulee: 100, quantite_annulee_cumulee: 100,
+      date_effet: '2026-11-11', montant_initial: '1500.00',
+      montant_avoir: '150.00', montant_avoirs_cumule: '150.00',
+      montant_net: '1350.00', montant_paye: '1500.00',
+      montant_restant: '-150.00', credit_client: '150.00',
+    };
+    if (path === '/paiements') return [];
+    if (path === '/produits') return [{ id_produit: 1, nom_produit: 'Oeufs - Moyen' }];
+    if (path === '/clients') return [{ id_client: 1, nom_client: 'Client payé' }];
+    if (path === '/transactions/7/completion-history') return cancelled ? [{
+      id: 25, type: 'cancel_remainder', date: '2026-11-11',
+      quantite: 100, montant_avoir: '150.00',
+    }] : [];
+    return [];
+  });
+  post.mockImplementation(async path => {
+    if (path !== '/transactions/7/cancel-remainder') throw new Error('Unexpected mutation');
+    cancelled = true;
+    return {
+      quantite_annulee: 100, montant_avoir: '150.00', credit_client: '150.00',
+    };
+  });
+  render(<TransactionDetail />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Annuler les œufs restants' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Annuler les œufs restants ?' });
+  await within(dialog).findByText('Œufs à annuler');
+  expect(post).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole('button', { name: "Confirmer l'annulation des œufs restants" }));
+  await waitFor(() => expect(post).toHaveBeenCalledOnce());
+  await waitFor(() => expect(screen.getByText(/Avoir de .*150/)).toBeVisible());
+  expect(await screen.findByText('Avoirs commerciaux')).toBeVisible();
+  expect(screen.getByText('Montant net')).toBeVisible();
+  expect(screen.getByText('Crédit client')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Annuler les œufs restants' })).not.toBeInTheDocument();
 });
