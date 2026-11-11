@@ -289,9 +289,10 @@ function ClientProfile() {
   const clientCreanceSummary = useMemo(() => {
     return clientCreanceRows.reduce(
       (summary, transaction) => ({
-        total: summary.total + Math.abs(Number(transaction.montant_total || 0)),
-        encaisse: summary.encaisse + Math.abs(Number(transaction.montant_paye || 0)),
-        reste: summary.reste + Math.abs(Number(transaction.montant_restant || 0)),
+        total: summary.total + Number(transaction.montant_net ?? transaction.montant_total ?? 0),
+        encaisse: summary.encaisse + Number(transaction.montant_paye || 0),
+        // A customer's surplus is not an unpaid receivable.
+        reste: summary.reste + Math.max(0, Number(transaction.montant_restant || 0)),
       }),
       { total: 0, encaisse: 0, reste: 0 }
     );
@@ -354,8 +355,11 @@ function ClientProfile() {
     },
     {
       id: 'montant_total',
-      label: 'Total',
+      label: 'Montant initial',
     },
+    { id: 'montant_avoir', label: 'Avoirs' },
+    { id: 'montant_net', label: 'Montant net' },
+    { id: 'avoirs_details', label: 'Détail des avoirs', excelWidth: 48 },
     {
       id: 'montant_paye',
       label: 'Payé',
@@ -408,6 +412,13 @@ function ClientProfile() {
           const sign = row.id_client !== null && row.id_client !== undefined ? '+' : '-';
           return `${sign}${formatMontant(amount, { useCompactNotation: false })}`;
         },
+        montant_avoir: (value) => formatMontant(value || 0, { useCompactNotation: false }),
+        montant_net: (value, row) => formatMontant(
+          value ?? row.montant_total, { useCompactNotation: false },
+        ),
+        avoirs_details: (value, row) => (row.avoirs_livraison_differee || [])
+          .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontant(avoir.montant_avoir, { useCompactNotation: false })}`)
+          .join(' | '),
         montant_paye: (value) => {
           if (value === null || value === undefined) return '-';
           return formatMontant(value, { useCompactNotation: false });
@@ -788,7 +799,7 @@ function ClientProfile() {
                   <TableCell>Bâtiment</TableCell>
                   <TableCell align="right">Quantité</TableCell>
                   <TableCell align="right">Prix</TableCell>
-                  <TableCell align="right">Montant vendu</TableCell>
+                  <TableCell align="right">Montant net</TableCell>
                   <TableCell>Règlement</TableCell>
                   <TableCell>Échéance</TableCell>
                   <TableCell align="right">Encaissé</TableCell>
@@ -811,7 +822,7 @@ function ClientProfile() {
                       <TableCell align="right">{transaction.quantite}</TableCell>
                       <TableCell align="right">{formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 800 }}>
-                        {formatMontant(Math.abs(Number(transaction.montant_total || 0)), { useCompactNotation: false })}
+                        {formatMontant(Number(transaction.montant_net ?? transaction.montant_total ?? 0), { useCompactNotation: false })}
                       </TableCell>
                       <TableCell>{getPaymentLabel(transaction)}</TableCell>
                       <TableCell>{formatDate(transaction.date_echeance)}</TableCell>
