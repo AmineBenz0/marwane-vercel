@@ -5,11 +5,13 @@ Gère les endpoints CRUD pour les transactions.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from datetime import date, datetime, timezone
 from decimal import Decimal
 import json
 
 from app.database import get_db
+from app.config import settings
 from app.models.production import Production
 from app.models.egg_allocation import EggAllocation
 from app.models.transaction import Transaction
@@ -30,6 +32,7 @@ from app.schemas.transaction import (
     DeferredSaleSummary,
     DeferredSaleReschedule,
     DeferredSaleRemainderClose,
+    DeferredSaleCancellationRead,
     TransactionAuditRead
 )
 from app.schemas.paiement import PaiementCreate
@@ -43,6 +46,7 @@ from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
 from app.services.financial import validate_payment_date, validate_payment_idempotency
+from app.services.deferred_cancellation import cancel_deferred_sale_remainder
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.lc_lifecycle import payment_lc_role, record_lc_payment_event
@@ -731,61 +735,46 @@ def reschedule_deferred_sale(
         raise
 
 
-# Release 4 safety gate: stock-only cancellation must not be exposed until
-# a matching financial adjustment is written atomically (Phase 4).
-# This handler remains for Phase 4 work, but is deliberately not registered.
+@router.post("/{id}/cancel-remainder", response_model=DeferredSaleCancellationRead)
 def close_deferred_sale_remainder(
     id: int, payload: DeferredSaleRemainderClose, db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user),
 ):
-    """Close only eggs not yet allocated. Do not change invoice or payments.
+    """Atomically cancel unallocated eggs and post their financial avoir.
 
-    Production automatically fulfills allocations; staged reserved-but-undelivered
-    reversals do not apply here. Never touch allocations, cash or credit records.
+    The write gate stays OFF in production/previews through phases 4–7; the
+    frontend button is intentionally absent until Phase 7. Phase 8 is the
+    only authorized point to enable this on the validated staging database.
     """
+    if not settings.ENABLE_DEFERRED_CANCELLATION_WRITES:
+        raise HTTPException(409, "L'annulation du reliquat sera disponible après validation financière.")
     try:
-        snapshot = db.query(
-            Transaction.id_batiment, Transaction.id_produit,
-        ).filter(Transaction.id_transaction == id).one_or_none()
-        if snapshot is None:
-            raise HTTPException(404, "Transaction introuvable.")
-        if snapshot.id_batiment is None or snapshot.id_produit is None:
-            raise HTTPException(409, "Origine du stock introuvable. Rechargez la vente.")
-        db.query(Batiment).filter(Batiment.id_batiment == snapshot.id_batiment).with_for_update().one()
-        db.query(Produit).filter(Produit.id_produit == snapshot.id_produit).with_for_update().one()
-        tx = db.query(Transaction).filter(
-            Transaction.id_transaction == id,
-        ).populate_existing().with_for_update().one()
-        if tx.id_batiment != snapshot.id_batiment or tx.id_produit != snapshot.id_produit:
-            raise HTTPException(409, "La source de stock a changé. Rechargez la vente.")
-        if not tx.est_promesse or not tx.est_actif or tx.id_client is None:
-            raise HTTPException(409, "Seule une livraison différée active peut être clôturée.")
-        if tx.row_version != payload.expected_version:
-            raise HTTPException(409, "La vente a changé. Rechargez-la avant de continuer.")
-        pending = tx.quantite_en_attente
-        if pending <= 0:
-            raise HTTPException(409, "Cette livraison n’a plus d’œufs à produire.")
-        if pending != payload.quantite_en_attente_attendue:
-            raise HTTPException(409, "Le reste à produire a changé. Rechargez la vente.")
-        if any((a.quantite_livree or 0) != a.quantite for a in tx.allocations):
-            raise HTTPException(409, "Cette livraison contient des réservations non livrées. Traitement spécifique requis.")
-        prior_cancelled = tx.quantite_annulee or 0
-        tx.quantite_annulee = prior_cancelled + pending
-        tx.date_modification = datetime.now(timezone.utc)
-        tx.id_utilisateur_modification = current_user.id_utilisateur
-        db.add(TransactionAudit(
-            id_transaction=id, id_utilisateur=current_user.id_utilisateur,
-            champ_modifie='annulation_reste_livraison_differee',
-            ancienne_valeur=str(prior_cancelled),
-            nouvelle_valeur=json.dumps({
-                'date': business_date().isoformat(), 'quantite_annulee': pending,
-                'quantite_couverte': tx.quantite_couverte, 'quantite_totale': tx.quantite,
-                'finances_inchangees': True,
-            }),
-        ))
+        receipt = cancel_deferred_sale_remainder(
+            db, transaction_id=id, payload=payload, actor=current_user,
+        )
+        # PostgreSQL DEFERRABLE parity triggers execute at COMMIT. Do not
+        # return success before this transaction has been committed.
         db.commit()
-        db.refresh(tx)
-        return TransactionRead.model_validate(tx).model_copy(update={'quantite_reservee': 0})
+        return receipt
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            409, "Cette annulation a déjà été enregistrée ou la vente a changé. Rechargez-la.",
+        ) from exc
+    except DBAPIError as exc:
+        db.rollback()
+        diagnostic = str(exc.orig)
+        if any(word in diagnostic for word in (
+            "Deferred stock cancellation", "Avoir", "Correction operation",
+            "Financial correction", "Correction and transaction history",
+        )):
+            raise HTTPException(
+                409, "Le stock et l'avoir ne concordent pas. Annulation non enregistrée.",
+            ) from exc
+        raise
     except Exception:
         db.rollback()
         raise
