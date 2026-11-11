@@ -655,7 +655,7 @@ function TransactionDetail() {
             <Grid item xs={12} sm={6}>
               <Box>
                 <Typography variant="caption" color="text.secondary">
-                  {Number(transaction.montant_avoir || 0) > 0 ? 'Montant initial' : 'Montant total'}
+                  {Number(transaction.montant_avoir || 0) > 0 || (transaction.avoirs_livraison_differee || []).length ? 'Montant initial' : 'Montant total'}
                 </Typography>
                 <Typography variant="h6" color="primary" fontWeight="bold">
                   {formatMontant(transaction.montant_total)}
