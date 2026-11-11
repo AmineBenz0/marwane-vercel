@@ -51,10 +51,12 @@ def test_authenticated_quote_cancel_refund_and_audit_on_native_postgres(monkeypa
         with conn.cursor() as cur:
             sale = _sale(cur, sellable=True)
             password = "R4-CI-Test-Login-Only-0000!"
+            email = f"release4-native-{uuid4().hex[:16]}@example.com"
             digest = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
             cur.execute(
-                "UPDATE public.utilisateurs SET mot_de_passe_hash=%s WHERE id_utilisateur=%s",
-                (digest, sale["user"]),
+                "UPDATE public.utilisateurs SET mot_de_passe_hash=%s, email=%s "
+                "WHERE id_utilisateur=%s",
+                (digest, email, sale["user"]),
             )
 
     engine = create_engine(dburl, pool_pre_ping=True)
@@ -81,9 +83,6 @@ def test_authenticated_quote_cancel_refund_and_audit_on_native_postgres(monkeypa
             path = f"/api/v1/transactions/{sale['tx']}/cancel-remainder"
             assert client.get(path + "/preview").status_code == 401
             assert client.post(path, json={}).status_code in (401, 422)
-            # Use the actual unique email created in the disposable DB.
-            with Session(engine) as session:
-                email = session.get(Utilisateur, sale["user"]).email
             login = client.post("/api/v1/auth/login", json={
                 "email": email, "mot_de_passe": password,
             })
