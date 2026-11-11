@@ -98,8 +98,8 @@ const formatPaymentAmountForSummary = (value) => {
   if (value === null || value === undefined) return null;
   return (
     new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })
       .format(Number(value || 0))
       .replace(/\s/g, '\u00A0') + '\u00A0MAD'
@@ -109,7 +109,11 @@ const formatPaymentAmountForSummary = (value) => {
 const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountForSummary) => {
   if (!payment) return null;
 
-  const label = getPaymentTypeLabel(payment);
+  const label = payment.nature === 'remboursement'
+    ? 'Remboursement · ' + getPaymentTypeLabel(payment)
+    : payment.nature === 'credit_transfere'
+      ? 'Crédit transféré' : payment.nature === 'credit_recu'
+        ? 'Crédit utilisé' : getPaymentTypeLabel(payment);
   const reference = getPaymentReferenceValue(payment);
   const referenceText = reference
     ? ` ${reference}`
@@ -117,8 +121,10 @@ const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountFor
   const amount = payment.montant !== null && payment.montant !== undefined
     ? formatAmount(payment.montant)
     : null;
+  const signedAmount = payment.nature === 'remboursement' || payment.nature === 'credit_transfere'
+    ? '− ' + amount : amount;
 
-  return [amount ? `${label}${referenceText} · ${amount}` : `${label}${referenceText}`]
+  return [amount ? `${label}${referenceText} · ${signedAmount}` : `${label}${referenceText}`]
     .filter(Boolean)
     .join('');
 };
