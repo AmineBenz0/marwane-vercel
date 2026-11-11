@@ -71,3 +71,9 @@ obligations. Prefer a forward fix and preserve all audit/history records.
 ## Release status
 
 Candidate in draft PR #108. Not merged, no Release 4 production deployment.
+
+## Phase 0 safety gate (2026-11-11)
+
+The original stock-only remainder closure has been **disabled at both API routing and UI levels** pending the commercial credit-note and net-balance implementation. Existing historical data and stock calculations are retained, and rescheduling remains enabled. Regression checks assert that clients cannot submit the old stock-only operation.
+
+The two original positive closure tests are kept skipped intentionally as Phase 4 references; they must be redesigned to assert **atomic stock + financial cancellation** before re-enabling the route. This candidate must stay in draft and must not be promoted as a complete Release 4.
