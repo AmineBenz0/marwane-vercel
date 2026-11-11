@@ -12,6 +12,9 @@ from dateutil.relativedelta import relativedelta
 from app.database import get_db
 from app.models.client import Client
 from app.models.transaction import Transaction
+from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+from app.services.reporting_commercial import monthly_client_sales
+from app.utils.business_date import business_date
 from app.models.produit import Produit
 from app.models.user import Utilisateur
 from app.models.paiement import Paiement
@@ -141,8 +144,12 @@ def get_client_profile(
     
     # Extraire les statistiques (gérer les cas NULL)
     total_transactions = stats_result.total_transactions or 0
-    montant_total_ventes = stats_result.montant_total_ventes or Decimal('0')
-    montant_moyen = Decimal(str(stats_result.montant_moyen)) if stats_result.montant_moyen is not None else None
+    montant_brut = Decimal(str(stats_result.montant_total_ventes or '0'))
+    avoirs_total = Decimal(str(db.query(func.coalesce(func.sum(DeferredSaleAdjustment.montant_avoir), 0)).join(
+        Transaction, Transaction.id_transaction == DeferredSaleAdjustment.id_transaction,
+    ).filter(Transaction.id_client == id, Transaction.est_actif.is_(True)).scalar() or 0))
+    montant_total_ventes = montant_brut - avoirs_total
+    montant_moyen = montant_total_ventes / total_transactions if total_transactions else None
     date_premiere = stats_result.date_premiere
     date_derniere = stats_result.date_derniere
     
@@ -251,40 +258,18 @@ def get_client_stats_mensuelles(
     # Calculer le premier jour du mois qui est N mois avant aujourd'hui
     date_debut = (date_fin.replace(day=1) - relativedelta(months=periode-1))
     
-    # Requête pour obtenir les statistiques agrégées par mois
-    # Utiliser extract pour être compatible avec SQLite et PostgreSQL
-    # Extraire l'année et le mois, puis formater en Python
-    stats_query = db.query(
-        extract('year', Transaction.date_transaction).label('annee'),
-        extract('month', Transaction.date_transaction).label('mois'),
-        func.coalesce(func.sum(Transaction.montant_total), Decimal('0')).label('montant'),
-        func.count(Transaction.id_transaction).label('nb_transactions')
-    ).filter(
-        Transaction.id_client == id,
-        Transaction.est_actif == True,
-        Transaction.date_transaction >= date_debut,
-        Transaction.date_transaction <= date_fin
-    ).group_by(
-        extract('year', Transaction.date_transaction),
-        extract('month', Transaction.date_transaction)
-    ).order_by(
-        extract('year', Transaction.date_transaction),
-        extract('month', Transaction.date_transaction)
-    )
-    
-    # Récupérer les résultats
-    stats_results = stats_query.all()
-    
-    # Créer un dictionnaire avec les données réelles
+    # Net monthly activity uses the same accounting calendar as /reports/monthly.
+    # Sale origination and later commercial credit dates are separate events:
+    # a November avoir never rewrites October's original gross sales.
     stats_dict = {}
-    for result in stats_results:
-        # Formater le mois en YYYY-MM
-        mois_key = f"{int(result.annee)}-{int(result.mois):02d}"
-        stats_dict[mois_key] = {
-            'montant': result.montant or Decimal('0'),
-            'nb_transactions': result.nb_transactions or 0
-        }
-    
+    current_month = date_debut
+    while current_month <= date_fin:
+        month_end = current_month + relativedelta(months=1) - relativedelta(days=1)
+        stats_dict[current_month.strftime('%Y-%m')] = monthly_client_sales(
+            db, id, current_month, min(month_end, date_fin),
+        )
+        current_month += relativedelta(months=1)
+
     # Générer tous les mois de la période (même ceux sans transactions)
     data = []
     current_date = date_debut  # Premier jour du mois de début
@@ -299,6 +284,8 @@ def get_client_stats_mensuelles(
         data.append(ClientStatsMensuellesItem(
             mois=mois_key,
             montant=montant,
+            montant_brut=stats_dict.get(mois_key, {}).get('montant_brut', Decimal('0')),
+            montant_avoirs=stats_dict.get(mois_key, {}).get('montant_avoirs', Decimal('0')),
             nb_transactions=nb_transactions
         ))
         
@@ -373,7 +360,17 @@ def get_client_produits_achetes(
     
     # Récupérer les résultats
     produits_stats = produits_stats_query.all()
-    
+    # Independent aggregation: never JOIN payments/avoirs into the gross sale
+    # grouping because multiple installments would multiply the values.
+    avoirs_par_produit = dict(db.query(
+        Transaction.id_produit, func.sum(DeferredSaleAdjustment.montant_avoir),
+    ).join(
+        DeferredSaleAdjustment,
+        DeferredSaleAdjustment.id_transaction == Transaction.id_transaction,
+    ).filter(
+        Transaction.id_client == id, Transaction.est_actif.is_(True),
+    ).group_by(Transaction.id_produit).all())
+
     # Calculer les statistiques globales
     nombre_produits_differents = len(produits_stats)
     quantite_totale_tous_produits = 0
@@ -383,7 +380,10 @@ def get_client_produits_achetes(
     produits = []
     for stat in produits_stats:
         quantite_totale = int(stat.quantite_totale or 0)
-        montant_total = Decimal(str(stat.montant_total or '0'))
+        montant_total = (
+            Decimal(str(stat.montant_total or '0'))
+            - Decimal(str(avoirs_par_produit.get(stat.id_produit) or '0'))
+        )
         nombre_achats = int(stat.nombre_achats or 0)
         
         # Calculer le prix moyen (montant_total / quantite_totale)
