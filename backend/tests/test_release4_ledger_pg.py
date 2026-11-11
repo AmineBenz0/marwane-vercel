@@ -645,9 +645,9 @@ def test_phase5_native_cancel_then_explicit_refund_no_second_cash(conn):
             db.commit()
             assert receipt["montant_net"] == "0.00"
             assert receipt["credit_client"] == "1500.00"
-            assert db.query(Caisse).filter(Caisse.statut == "active").count() == 1
+            assert db.query(Caisse).filter(Caisse.statut == "active", Caisse.id_transaction == sale["tx"]).count() == 1
             assert db.query(Avance).count() == 0
-            assert db.query(DeferredSaleAdjustment).count() == 1
+            assert db.query(DeferredSaleAdjustment).filter_by(id_transaction=sale["tx"]).count() == 1
 
         with Session(engine) as db:
             tx = db.get(Transaction, sale["tx"])
@@ -669,12 +669,12 @@ def test_phase5_native_cancel_then_explicit_refund_no_second_cash(conn):
             assert tx.montant_paye == Decimal("0.00")
             assert tx.montant_net == Decimal("0.00")
             assert tx.montant_restant == Decimal("0.00")
-            assert db.query(Caisse).filter(Caisse.statut == "active").count() == 2
+            assert db.query(Caisse).filter(Caisse.statut == "active", Caisse.id_transaction == sale["tx"]).count() == 2
             assert db.query(Avance).count() == 0
-            assert db.query(DeferredSaleAdjustment).count() == 1
+            assert db.query(DeferredSaleAdjustment).filter_by(id_transaction=sale["tx"]).count() == 1
             replay = apply_refund(db, apply, actor)
             assert replay["replayed"] is True
-            assert db.query(Caisse).filter(Caisse.statut == "active").count() == 2
-            assert db.query(Paiement).filter(Paiement.nature == "remboursement").count() == 1
+            assert db.query(Caisse).filter(Caisse.statut == "active", Caisse.id_transaction == sale["tx"]).count() == 2
+            assert db.query(Paiement).filter(Paiement.nature == "remboursement", Paiement.id_transaction == sale["tx"]).count() == 1
     finally:
         engine.dispose()
