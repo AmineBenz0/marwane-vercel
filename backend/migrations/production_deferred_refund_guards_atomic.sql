@@ -166,11 +166,13 @@ BEGIN
       SELECT 1 FROM pg_trigger WHERE tgrelid='public.paiements'::regclass
         AND tgname='protect_refund_settlement' AND tgenabled IN ('O','A')
     )
-    OR has_function_privilege('anon','public.refund_monetary_capacity(integer,date)','EXECUTE')
-       AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon')
     OR NOT has_function_privilege(
       'app_runtime','public.refund_monetary_capacity(integer,date)','EXECUTE'
     ) THEN
    RAISE EXCEPTION 'Phase 5 refund credit guard or permissions missing';
+ END IF;
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') AND
+    has_function_privilege('public','public.refund_monetary_capacity(integer,date)','EXECUTE') THEN
+   RAISE EXCEPTION 'Phase 5 must not expose refund capacity to the anonymous API';
  END IF;
 END $postflight$;
