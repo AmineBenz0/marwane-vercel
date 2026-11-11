@@ -39,8 +39,11 @@ For effective date D:
   transaction: effective cash, bank transfer or encashed cheque receipts
   net of prior real refunds. Noncash LC holdings, compensation transfers
   and separate party advances are excluded from this monetary pool.
-  Mixed payment methods can refund up to the lesser of the transaction's
-  net credit and its settled monetary receipts, never the gross avoir alone.
+  **The existing Release 3 instrument guard stays stricter:** if the sale
+  has *any active linked cheque or LC*, cash refunds are rejected until
+  the dedicated instrument reconciliation is performed, even if other
+  settled monetary receipts exist. Monetary backing is necessary, not
+  sufficient. Never use a commercial avoir to bypass the instrument guard.
 
 This deliberately conservative monetary rule prevents creating cash from
 an unmatched letter of credit or a synthetic credit allocation. Exceptional
@@ -96,9 +99,10 @@ would count the same customer credit more than once.
   only the remaining balance; a second allocation/refund must fail.
 - Separate advance remains an advance even when the sale has an avoir.
 - Historical refund before an avoir's effective date must fail.
-- Reject LC-only/compensation-only credit as cash-backed; accept
-  mixed LC and real cash up to the monetary limit; unencashed
-  cheques do not count until actual settlement.
+- Reject LC-only/compensation-only credit as cash-backed, and reject
+  any refund while the transaction still has an active LC/cheque
+  dependency, **including mixed LC + real cash**. Clearing an instrument
+  is not permission to bypass the dedicated correction dependency flow.
 - Stale dependency fingerprints reject changed payment or ledger
   snapshots; failure at database commit rolls everything back.
 - Native PostgreSQL integration must verify actual migrated
