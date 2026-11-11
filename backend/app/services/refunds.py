@@ -56,6 +56,18 @@ def _preview(db, command, transaction, *, lock=False):
     validate_payment_date(transaction, command.date_paiement)
     if command.date_paiement > business_date():
         raise HTTPException(422, 'Enregistrez un remboursement à sa date réelle, au plus tard aujourd’hui.')
+    # Existing PostgreSQL guard requires a separate reconciliation workflow
+    # for any active LC/cheque dependency. A monetary receipt alone is not
+    # enough to make an instrument-linked refund safe to reverse or correct.
+    if any(
+        p.statut != 'annule' and (
+            p.type_paiement in {'cheque', 'lc'} or p.id_lc is not None
+        )
+        for p in transaction.paiements
+    ):
+        raise HTTPException(
+            409, "Une lettre de crédit ou un chèque lié requiert une réconciliation spécifique avant remboursement.",
+        )
     fingerprint = _state(db, transaction, command, lock=lock)
     # A commercial avoir reduces the sale's net amount on its own effective
     # date; it is not a payment and must never create an automatic cash/bank
