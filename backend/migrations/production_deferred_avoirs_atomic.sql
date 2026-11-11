@@ -57,7 +57,7 @@ END $preflight$;
 -- Keep an immutable full source snapshot, so neither sale terms nor canceled
 -- stock can be edited/reactivated to bypass the new financial contract.
 CREATE TABLE public.legacy_deferred_cancellations (
-  id_transaction integer PRIMARY KEY REFERENCES public.transactions(id_transaction) ON DELETE RESTRICT,
+  id_transaction integer PRIMARY KEY,
   historical_canceled_qty integer NOT NULL CHECK (historical_canceled_qty > 0),
   original_row jsonb NOT NULL,
   preserved_at timestamptz NOT NULL DEFAULT now()
@@ -222,6 +222,26 @@ BEGIN
   RETURN NULL;
 END $fn$;
 
+-- Do not attach a PostgreSQL FK from the historical snapshot to the
+-- transactions table: the independent-lot migration test drops/recreates
+-- application tables in an otherwise empty disposable database. Instead
+-- enforce the same referential protection at *runtime* with a transaction
+-- DELETE trigger and verify every legacy transaction UPDATE at commit.
+CREATE FUNCTION public.protect_legacy_deferred_delete() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $fn$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.legacy_deferred_cancellations b
+    WHERE b.id_transaction=OLD.id_transaction
+  ) THEN
+    RAISE EXCEPTION 'Archived legacy canceled sale cannot be deleted';
+  END IF;
+  RETURN OLD;
+END $fn$;
+CREATE TRIGGER trg_legacy_deferred_transaction_delete
+  BEFORE DELETE ON public.transactions
+  FOR EACH ROW EXECUTE FUNCTION public.protect_legacy_deferred_delete();
+
 -- Immutable historical exception markers are NOT payments or credits.
 -- They are readable by the backend only for audit and preflight.
 CREATE TRIGGER trg_legacy_deferred_cancel_immutable
@@ -252,6 +272,15 @@ CREATE CONSTRAINT TRIGGER trg_deferred_transaction_parity
   ON public.transactions
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
   EXECUTE FUNCTION public.verify_deferred_avoir_parity();
+-- Existing inactive legacy rows are frozen in full, not only the financial
+-- fields listed above. Check all UPDATEs, including metadata and row_version.
+CREATE CONSTRAINT TRIGGER trg_deferred_legacy_transaction_snapshot
+  AFTER UPDATE ON public.transactions
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+  WHEN (OLD.quantite_annulee > 0)
+  EXECUTE FUNCTION public.verify_deferred_avoir_parity();
+REVOKE ALL ON FUNCTION public.protect_legacy_deferred_delete() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.protect_legacy_deferred_delete() TO app_runtime;
 
 -- Closed historical sale snapshots must not be exposed to browsers.
 ALTER TABLE public.legacy_deferred_cancellations ENABLE ROW LEVEL SECURITY;
@@ -304,6 +333,14 @@ BEGIN
     OR has_table_privilege('app_runtime','public.legacy_deferred_cancellations','DELETE')
     OR NOT (SELECT relrowsecurity FROM pg_class
        WHERE oid='public.legacy_deferred_cancellations'::regclass)
+    OR NOT EXISTS (SELECT 1 FROM pg_trigger
+      WHERE tgrelid='public.transactions'::regclass
+        AND tgname='trg_deferred_legacy_transaction_snapshot'
+        AND tgenabled IN ('O','A'))
+    OR NOT EXISTS (SELECT 1 FROM pg_trigger
+      WHERE tgrelid='public.transactions'::regclass
+        AND tgname='trg_legacy_deferred_transaction_delete'
+        AND tgenabled IN ('O','A'))
     THEN
     RAISE EXCEPTION 'Release 4 ledger / historical baseline permissions failed verification';
   END IF;
