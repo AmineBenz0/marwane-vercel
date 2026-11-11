@@ -39,8 +39,8 @@ it('opens clear stock coverage and existing payment totals, then closes the pane
   expect(within(panel).getByText('À produire')).toBeVisible();
   expect(within(panel).queryByText('Production utilisée')).not.toBeInTheDocument();
   const payment = within(panel).getByRole('region', { name: 'Paiement de la vente' });
-  expect(within(payment).getByText('0 MAD')).toBeVisible();
-  expect(within(payment).getAllByText('105 MAD')).toHaveLength(2);
+  expect(within(payment).getByText('0,00 MAD')).toBeVisible();
+  expect(within(payment).getAllByText('105,00 MAD')).toHaveLength(2);
   fireEvent.click(within(panel).getByRole('button', { name: 'Fermer le détail' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
