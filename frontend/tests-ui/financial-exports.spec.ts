@@ -186,11 +186,15 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
   const headings = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, col) => headings.set(String(cell.value), col));
   const statusCol = headings.get('État');
-  const totalCol = headings.get('Montant total');
+  const totalCol = headings.get('Montant initial');
+  const netCol = headings.get('Montant net');
+  const labelCol = headings.get('Quantité');
   expect(headings.has('ID')).toBe(false);
   expect(headings.get('Date')).toBe(1);
   expect(statusCol).toBeTruthy();
   expect(totalCol).toBeTruthy();
+  expect(netCol).toBeTruthy();
+  expect(labelCol).toBeTruthy();
   const transactions: { date: string; state: string; money: number }[] = [];
   let total: number | undefined;
   for (let i = 2; i <= sheet.rowCount; i += 1) {
@@ -199,8 +203,9 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
     if (date) {
       transactions.push({ date: String(date), state: String(row.getCell(statusCol!).value), money: amount(row.getCell(totalCol!).value) });
     }
-    if (row.getCell(totalCol! - 1).value === 'Total :') {
-      total = amount(row.getCell(totalCol!).value);
+    if (row.getCell(labelCol!).value === 'Total :') {
+      total = amount(row.getCell(netCol!).value);
+      expect(amount(row.getCell(totalCol!).value)).toBe(125.5);
     }
   }
   expect(transactions).toHaveLength(3);
