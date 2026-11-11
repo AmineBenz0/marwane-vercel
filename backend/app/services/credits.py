@@ -18,7 +18,7 @@ from app.models.correction_operation import CorrectionOperation
 from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.services.correction_contract import replay_result
-from app.services.financial import payment_effective_date, payment_total_as_of, query_financial_transactions
+from app.services.financial import payment_effective_date, payment_total_as_of, net_sale_amount_as_of, query_financial_transactions
 from app.services.financial_ledger import create_cash_snapshot, record_bank_movement
 from app.services.ledger import void_cash_movement, void_bank_movement
 from app.services.settlement_state import json_value, row_snapshot, settlement_state
@@ -41,18 +41,70 @@ def _party(record):
 
 
 def settlement_capacity(transaction, effective_date, *, credit=True):
-    """Capacity at the requested date and every later dated balance."""
+    """Maximum transferable credit or payable debt, now and at EVERY later date.
+
+    The original negotiated total stays unchanged. An avoir enters the balance
+    only on its effective date; it cannot fund an earlier refund or allocation.
+    Apply future effective cash/credit settlements and credit notes in date
+    order, so backdated operations cannot spend money twice.
+    """
     sign = Decimal('1') if credit else Decimal('-1')
-    running = (payment_total_as_of(transaction, effective_date) - transaction.montant_total) * sign
-    capacity = min(running, -transaction.montant_restant * sign)
+    current_net = transaction.montant_net
+    net_at_date = net_sale_amount_as_of(transaction, effective_date)
+    running = (payment_total_as_of(transaction, effective_date) - net_at_date) * sign
+    capacity = min(running, (transaction.montant_paye - current_net) * sign)
     deltas = {}
     for payment in transaction.paiements:
         if payment.est_effectif and payment_effective_date(payment) > effective_date:
-            deltas[payment_effective_date(payment)] = deltas.get(payment_effective_date(payment), Decimal('0')) + payment.montant_net
+            day = payment_effective_date(payment)
+            deltas[day] = deltas.get(day, Decimal('0')) + payment.montant_net
+    for avoir in transaction.avoirs_livraison_differee:
+        if avoir.date_effet > effective_date:
+            day = avoir.date_effet
+            deltas[day] = deltas.get(day, Decimal('0')) + Decimal(str(avoir.montant_avoir))
     for day in sorted(deltas):
         running += deltas[day] * sign
         capacity = min(capacity, running)
     return max(Decimal('0'), capacity)
+
+
+def refundable_cash_capacity(transaction, effective_date):
+    """Cash/bank-backed credit only, never an LC or non-cash allocation.
+
+    A commercial avoir is not cash. Even when it creates a negative customer
+    balance, an explicit monetary refund must be supported by settled money
+    on this transaction. Funds represented only by an LC, compensation or an
+    unrelated advance require a separate reconciled settlement, not cash-out.
+    A refunded amount reduces this capacity immediately and on later dates.
+    """
+    allowed_methods = {'cash', 'virement', 'cheque'}
+    allowed_natures = {'paiement', 'remboursement'}
+    def is_money(payment):
+        return (
+            payment.est_effectif
+            and payment.type_paiement in allowed_methods
+            and payment.nature in allowed_natures
+        )
+
+    monetary = [
+        payment for payment in transaction.paiements if is_money(payment)
+    ]
+    at_date = sum(
+        (payment.montant_net for payment in monetary
+         if payment_effective_date(payment) <= effective_date),
+        Decimal('0.00'),
+    )
+    current = sum((payment.montant_net for payment in monetary), Decimal('0.00'))
+    capacity = min(at_date, current)
+    future = {}
+    for payment in monetary:
+        day = payment_effective_date(payment)
+        if day > effective_date:
+            future[day] = future.get(day, Decimal('0.00')) + payment.montant_net
+    for day in sorted(future):
+        at_date += future[day]
+        capacity = min(capacity, at_date)
+    return min(settlement_capacity(transaction, effective_date), max(Decimal('0.00'), capacity))
 
 
 def _advance_state(db, root, *, lock=False):
