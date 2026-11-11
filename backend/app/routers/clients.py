@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models.client import Client
 from app.models.transaction import Transaction
 from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
-from app.services.reporting_commercial import monthly_client_sales
+from app.services.reporting_commercial import monthly_client_activity, monthly_client_sales
 from app.utils.business_date import business_date
 from app.models.produit import Produit
 from app.models.user import Utilisateur
@@ -258,17 +258,9 @@ def get_client_stats_mensuelles(
     # Calculer le premier jour du mois qui est N mois avant aujourd'hui
     date_debut = (date_fin.replace(day=1) - relativedelta(months=periode-1))
     
-    # Net monthly activity uses the same accounting calendar as /reports/monthly.
-    # Sale origination and later commercial credit dates are separate events:
-    # a November avoir never rewrites October's original gross sales.
-    stats_dict = {}
-    current_month = date_debut
-    while current_month <= date_fin:
-        month_end = current_month + relativedelta(months=1) - relativedelta(days=1)
-        stats_dict[current_month.strftime('%Y-%m')] = monthly_client_sales(
-            db, id, current_month, min(month_end, date_fin),
-        )
-        current_month += relativedelta(months=1)
+    # Monthly original sales and dated credit notes are grouped separately.
+    # Just two queries for the whole 6-12 month chart, avoiding N+1 loading.
+    stats_dict = monthly_client_activity(db, id, date_debut, date_fin)
 
     # Générer tous les mois de la période (même ceux sans transactions)
     data = []
