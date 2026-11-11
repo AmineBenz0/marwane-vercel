@@ -33,6 +33,7 @@ from app.schemas.transaction import (
     DeferredSaleReschedule,
     DeferredSaleRemainderClose,
     DeferredSaleCancellationRead,
+    DeferredSaleCancellationPreview,
     TransactionAuditRead
 )
 from app.schemas.paiement import PaiementCreate
@@ -46,7 +47,7 @@ from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
 from app.services.financial import validate_payment_date, validate_payment_idempotency
-from app.services.deferred_cancellation import cancel_deferred_sale_remainder
+from app.services.deferred_cancellation import cancel_deferred_sale_remainder, preview_deferred_sale_remainder
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.lc_lifecycle import payment_lc_role, record_lc_payment_event
@@ -735,6 +736,21 @@ def reschedule_deferred_sale(
         raise
 
 
+@router.get("/{id}/cancel-remainder/preview", response_model=DeferredSaleCancellationPreview)
+def preview_cancellation_remainder(
+    id: int, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Quote exact commercial and stock effects; no writes, no money movement.
+
+    Keep the same disabled-by-default release gate as the POST. Phase 8
+    enables both only on an already migrated, isolated staging database.
+    """
+    if not settings.ENABLE_DEFERRED_CANCELLATION_WRITES:
+        raise HTTPException(409, "L'annulation du reliquat sera disponible après validation financière.")
+    return preview_deferred_sale_remainder(db, transaction_id=id)
+
+
 @router.post("/{id}/cancel-remainder", response_model=DeferredSaleCancellationRead)
 def close_deferred_sale_remainder(
     id: int, payload: DeferredSaleRemainderClose, db: Session = Depends(get_db),
@@ -743,8 +759,8 @@ def close_deferred_sale_remainder(
     """Atomically cancel unallocated eggs and post their financial avoir.
 
     The write gate stays OFF in production/previews through phases 4–7; the
-    frontend button is intentionally absent until Phase 7. Phase 8 is the
-    only authorized point to enable this on the validated staging database.
+    Phase 7 adds a frontend action behind a separately disabled build gate.
+    Phase 8 alone can enable the backend gate on validated staging.
     """
     if not settings.ENABLE_DEFERRED_CANCELLATION_WRITES:
         raise HTTPException(409, "L'annulation du reliquat sera disponible après validation financière.")
