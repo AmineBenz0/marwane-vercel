@@ -285,6 +285,20 @@ class DeferredSaleCompletion(BaseModel):
     empreinte_stock: str = Field(pattern=r'^[a-f0-9]{64}$')
 
 
+class DeferredSaleReschedule(BaseModel):
+    """Change only the informative delivery estimate, never financial dates."""
+    model_config = ConfigDict(extra='forbid')
+    date_livraison_prevue: date
+    expected_version: int = Field(gt=0, strict=True)
+
+
+class DeferredSaleRemainderClose(BaseModel):
+    """Confirm the unallocated stock commitment seen by the operator."""
+    model_config = ConfigDict(extra='forbid')
+    expected_version: int = Field(gt=0, strict=True)
+    quantite_en_attente_attendue: int = Field(gt=0, strict=True)
+
+
 class DeferredSalePreview(BaseModel):
     nom_client: Optional[str] = None
     nom_produit: Optional[str] = None

@@ -80,7 +80,7 @@ def _stock_state(db, *, exclude_transaction_id=None, through_date=None,
             if not category:
                 continue
             covered = sum(a.quantite for a in tx.allocations)
-            pending = max(0, tx.quantite - covered)
+            pending = max(0, tx.quantite - covered - (tx.quantite_annulee or 0))
             for p in by_category.get(category, []):
                 if p.id_batiment != tx.id_batiment:
                     continue
@@ -162,7 +162,7 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
         ]
         for tx in items:
             before = sum(a.quantite for a in tx.allocations)
-            pending = max(0, tx.quantite - before)
+            pending = max(0, tx.quantite - before - (tx.quantite_annulee or 0))
             allocated = 0
             used_sources = []
             existing = {allocation.id_production: allocation for allocation in tx.allocations}
@@ -486,6 +486,7 @@ def completion_preview(db, transaction):
                for p in rows if owned.get(p.id_production, 0) > 0]
     fingerprint = sha256(json.dumps([
         transaction.id_transaction, transaction.quantite, transaction.quantite_couverte,
+        transaction.quantite_annulee or 0,
         transaction.id_batiment, transaction.id_produit, sources,
     ], default=str, sort_keys=True).encode()).hexdigest()
     return dict(id_transaction=transaction.id_transaction,

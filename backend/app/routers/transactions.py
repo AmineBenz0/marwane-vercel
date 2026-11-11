@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload, selectinload
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import json
 
 from app.database import get_db
 from app.models.production import Production
@@ -27,6 +28,8 @@ from app.schemas.transaction import (
     DeferredSaleCompletion,
     DeferredSalePreview,
     DeferredSaleSummary,
+    DeferredSaleReschedule,
+    DeferredSaleRemainderClose,
     TransactionAuditRead
 )
 from app.schemas.paiement import PaiementCreate
@@ -692,6 +695,100 @@ def complete_transaction(
         raise
 
 
+@router.patch("/{id}/delivery-date", response_model=TransactionRead)
+def reschedule_deferred_sale(
+    id: int, payload: DeferredSaleReschedule, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Change the expected delivery date, preserving accounting and stock."""
+    try:
+        tx = db.query(Transaction).filter(Transaction.id_transaction == id).with_for_update().first()
+        if not tx:
+            raise HTTPException(404, "Transaction introuvable.")
+        if not tx.est_actif or not tx.est_promesse or tx.id_client is None:
+            raise HTTPException(409, "Seule une livraison différée active peut être replanifiée.")
+        if tx.row_version != payload.expected_version:
+            raise HTTPException(409, "La vente a changé. Rechargez-la avant de continuer.")
+        if payload.date_livraison_prevue < tx.date_transaction:
+            raise HTTPException(400, "La date prévue ne peut pas précéder la vente.")
+        before = tx.date_livraison_prevue
+        if before != payload.date_livraison_prevue:
+            tx.date_livraison_prevue = payload.date_livraison_prevue
+            tx.date_modification = datetime.now(timezone.utc)
+            tx.id_utilisateur_modification = current_user.id_utilisateur
+            db.add(TransactionAudit(
+                id_transaction=id, id_utilisateur=current_user.id_utilisateur,
+                champ_modifie='replanification_livraison_differee',
+                ancienne_valeur=json.dumps({'date': before.isoformat() if before else None}),
+                nouvelle_valeur=json.dumps({'date': payload.date_livraison_prevue.isoformat()}),
+            ))
+            db.commit()
+            db.refresh(tx)
+        reserved = deferred_sale_reservations(db).get(id, 0) if tx.quantite_en_attente > 0 else 0
+        return TransactionRead.model_validate(tx).model_copy(update={'quantite_reservee': reserved})
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post("/{id}/cancel-remainder", response_model=TransactionRead)
+def close_deferred_sale_remainder(
+    id: int, payload: DeferredSaleRemainderClose, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Close only eggs not yet allocated. Do not change invoice or payments.
+
+    Production automatically fulfills allocations; staged reserved-but-undelivered
+    reversals do not apply here. Never touch allocations, cash or credit records.
+    """
+    try:
+        snapshot = db.query(
+            Transaction.id_batiment, Transaction.id_produit,
+        ).filter(Transaction.id_transaction == id).one_or_none()
+        if snapshot is None:
+            raise HTTPException(404, "Transaction introuvable.")
+        if snapshot.id_batiment is None or snapshot.id_produit is None:
+            raise HTTPException(409, "Origine du stock introuvable. Rechargez la vente.")
+        db.query(Batiment).filter(Batiment.id_batiment == snapshot.id_batiment).with_for_update().one()
+        db.query(Produit).filter(Produit.id_produit == snapshot.id_produit).with_for_update().one()
+        tx = db.query(Transaction).filter(
+            Transaction.id_transaction == id,
+        ).populate_existing().with_for_update().one()
+        if tx.id_batiment != snapshot.id_batiment or tx.id_produit != snapshot.id_produit:
+            raise HTTPException(409, "La source de stock a changé. Rechargez la vente.")
+        if not tx.est_promesse or not tx.est_actif or tx.id_client is None:
+            raise HTTPException(409, "Seule une livraison différée active peut être clôturée.")
+        if tx.row_version != payload.expected_version:
+            raise HTTPException(409, "La vente a changé. Rechargez-la avant de continuer.")
+        pending = tx.quantite_en_attente
+        if pending <= 0:
+            raise HTTPException(409, "Cette livraison n’a plus d’œufs à produire.")
+        if pending != payload.quantite_en_attente_attendue:
+            raise HTTPException(409, "Le reste à produire a changé. Rechargez la vente.")
+        if any((a.quantite_livree or 0) != a.quantite for a in tx.allocations):
+            raise HTTPException(409, "Cette livraison contient des réservations non livrées. Traitement spécifique requis.")
+        prior_cancelled = tx.quantite_annulee or 0
+        tx.quantite_annulee = prior_cancelled + pending
+        tx.date_modification = datetime.now(timezone.utc)
+        tx.id_utilisateur_modification = current_user.id_utilisateur
+        db.add(TransactionAudit(
+            id_transaction=id, id_utilisateur=current_user.id_utilisateur,
+            champ_modifie='annulation_reste_livraison_differee',
+            ancienne_valeur=str(prior_cancelled),
+            nouvelle_valeur=json.dumps({
+                'date': business_date().isoformat(), 'quantite_annulee': pending,
+                'quantite_couverte': tx.quantite_couverte, 'quantite_totale': tx.quantite,
+                'finances_inchangees': True,
+            }),
+        ))
+        db.commit()
+        db.refresh(tx)
+        return TransactionRead.model_validate(tx).model_copy(update={'quantite_reservee': 0})
+    except Exception:
+        db.rollback()
+        raise
+
+
 @router.get("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def get_transaction(
     id: int,
@@ -811,6 +908,10 @@ def update_transaction(
                 "Annulez-la puis créez une nouvelle livraison corrigée."
             ),
         )
+    if (transaction.est_promesse and "date_livraison_prevue" in update_data
+            and update_data["date_livraison_prevue"] != transaction.date_livraison_prevue):
+        raise HTTPException(409, "Modifiez la date prévue depuis le suivi de livraison.")
+
     if (
         "est_promesse" in update_data and update_data["est_promesse"] != transaction.est_promesse
         or "allocation_automatique" in update_data
@@ -822,7 +923,7 @@ def update_transaction(
         )
     if (
         transaction.est_promesse and "quantite" in update_data
-        and update_data["quantite"] < transaction.quantite_couverte
+        and update_data["quantite"] < transaction.quantite_couverte + (transaction.quantite_annulee or 0)
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
