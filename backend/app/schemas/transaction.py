@@ -309,6 +309,15 @@ class DeferredSaleRemainderClose(BaseModel):
     montant_paye_attendu: Optional[Decimal] = Field(None, ge=0)
     date_effet_attendue: Optional[date] = None
 
+    @field_validator("montant_paye_attendu")
+    @classmethod
+    def validate_quoted_paid_cents(cls, amount: Optional[Decimal]):
+        if amount is not None and (
+            not amount.is_finite() or amount != amount.quantize(Decimal("0.01"))
+        ):
+            raise ValueError("Le montant payé attendu doit être exprimé au centime.")
+        return amount
+
 
 class DeferredSaleCancellationPreview(BaseModel):
     """Read-only commercial quote, valid only for this sale revision and stock.
