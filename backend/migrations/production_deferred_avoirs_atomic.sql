@@ -71,7 +71,11 @@ DECLARE
   op public.correction_operations%ROWTYPE;
   already_qty integer;
   already_amount numeric(15,2);
+  last_effective_date date;
 BEGIN
+  IF EXISTS(SELECT 1 FROM public.avoirs_livraison_differee WHERE id_avoir=NEW.id_avoir) THEN
+    RAISE EXCEPTION 'Avoir already recorded for this operation';
+  END IF;
   SELECT * INTO sale FROM public.transactions
     WHERE id_transaction=NEW.id_transaction FOR UPDATE;
   IF NOT FOUND OR NOT sale.est_promesse OR NOT sale.est_actif
@@ -103,6 +107,11 @@ BEGIN
   IF already_qty IS DISTINCT FROM NEW.quantite_annulee_avant
     OR already_amount IS DISTINCT FROM NEW.avoir_cumule_avant THEN
     RAISE EXCEPTION 'Avoir chain is stale or out of order';
+  END IF;
+  SELECT max(date_effet) INTO last_effective_date FROM public.avoirs_livraison_differee
+    WHERE id_transaction=NEW.id_transaction;
+  IF last_effective_date IS NOT NULL AND NEW.date_effet < last_effective_date THEN
+    RAISE EXCEPTION 'Avoir cannot be posted before an earlier cancellation date';
   END IF;
   -- PostgreSQL numeric round(,2) is half away from zero on positive amounts,
   -- matching the Phase 1 Decimal ROUND_HALF_UP contract.
