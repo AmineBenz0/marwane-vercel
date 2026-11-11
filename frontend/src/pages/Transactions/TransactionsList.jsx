@@ -971,8 +971,8 @@ const formatPaymentAmountForSummary = (value) => {
   if (value === null || value === undefined) return null;
   return (
     new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })
       .format(Number(value || 0))
       .replace(/\s/g, '\u00A0') + '\u00A0MAD'
@@ -982,7 +982,11 @@ const formatPaymentAmountForSummary = (value) => {
 const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountForSummary) => {
   if (!payment) return null;
 
-  const label = getPaymentTypeLabel(payment);
+  const label = payment.nature === 'remboursement'
+    ? 'Remboursement · ' + getPaymentTypeLabel(payment)
+    : payment.nature === 'credit_transfere'
+      ? 'Crédit transféré' : payment.nature === 'credit_recu'
+        ? 'Crédit utilisé' : getPaymentTypeLabel(payment);
   const reference = getPaymentReferenceValue(payment);
   const referenceText = reference
     ? ` ${reference}`
@@ -990,8 +994,10 @@ const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountFor
   const amount = payment.montant !== null && payment.montant !== undefined
     ? formatAmount(payment.montant)
     : null;
+  const signedAmount = payment.nature === 'remboursement' || payment.nature === 'credit_transfere'
+    ? '− ' + amount : amount;
 
-  return [amount ? `${label}${referenceText} · ${amount}` : `${label}${referenceText}`]
+  return [amount ? `${label}${referenceText} · ${signedAmount}` : `${label}${referenceText}`]
     .filter(Boolean)
     .join('');
 };
@@ -1010,7 +1016,10 @@ const transactionExportColumns = [
   { id: 'produit_label', label: 'Produit vendu / acheté', excelWidth: 40 },
   { id: 'batiment_label', label: 'Bâtiment', excelWidth: 26 },
   { id: 'quantite', label: 'Quantité' },
-  { id: 'montant_total', label: 'Montant total' },
+  { id: 'montant_total', label: 'Montant initial' },
+  { id: 'montant_avoir', label: 'Avoirs commerciaux' },
+  { id: 'montant_net', label: 'Montant net' },
+  { id: 'avoirs_details', label: 'Détail des avoirs', excelWidth: 47 },
   { id: 'montant_paye', label: 'Payé' },
   { id: 'montant_restant', label: 'Reste' },
   { id: 'reglement', label: 'Règlement', excelWidth: 62 },
@@ -1025,6 +1034,7 @@ const deferredExportColumns = [
   { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
   { id: 'quantite_en_attente', label: 'Reste à fournir' },
   { id: 'quantite_a_produire', label: 'À produire' },
+  { id: 'quantite_annulee', label: 'Quantité annulée' },
 ];
 
 const exportTransactionWorkbook = (rows) => {
@@ -1039,6 +1049,11 @@ const exportTransactionWorkbook = (rows) => {
         ? formatShortDate(row.date_livraison_prevue, row.date_livraison_prevue)
         : '',
       montant_total: formatMontantComplet(row.montant_total),
+      montant_avoir: formatMontantComplet(row.montant_avoir ?? 0),
+      montant_net: formatMontantComplet(row.montant_net ?? row.montant_total),
+      avoirs_details: (row.avoirs_livraison_differee || [])
+        .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontantComplet(avoir.montant_avoir)} MAD`)
+        .join(' | '),
       montant_paye: formatMontantComplet(row.montant_paye),
       montant_restant: formatMontantComplet(row.montant_restant),
       reglement: getPaymentReglementSummary(row, formatMontantComplet),
@@ -1050,9 +1065,21 @@ const exportTransactionWorkbook = (rows) => {
       quantite_en_attente: row.est_promesse ? row.quantite_en_attente : '',
     };
   });
-  const total = rows.reduce((sum, row) => sum + (row.est_actif === false ? 0 : Number(row.montant_total || 0)), 0);
+  const totals = rows.filter(row => row.est_actif !== false).reduce((sum, row) => ({
+    gross: sum.gross + Number(row.montant_total || 0),
+    avoirs: sum.avoirs + Number(row.montant_avoir || 0),
+    net: sum.net + Number(row.montant_net ?? row.montant_total ?? 0),
+    paid: sum.paid + Number(row.montant_paye || 0),
+    remaining: sum.remaining + Number(row.montant_restant || 0),
+  }), { gross: 0, avoirs: 0, net: 0, paid: 0, remaining: 0 });
   return exportToExcelAdvanced(
-    [...data, {}, { quantite: 'Total :', montant_total: formatMontantComplet(total) }],
+    [...data, {}, {
+      quantite: 'Total :', montant_total: formatMontantComplet(totals.gross),
+      montant_avoir: formatMontantComplet(totals.avoirs),
+      montant_net: formatMontantComplet(totals.net),
+      montant_paye: formatMontantComplet(totals.paid),
+      montant_restant: formatMontantComplet(totals.remaining),
+    }],
     columns,
     `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
     'Transactions',
