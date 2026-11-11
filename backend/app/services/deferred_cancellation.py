@@ -36,6 +36,10 @@ def _request_identity(transaction_id: int, payload) -> tuple[str, dict]:
         "action": "cancel_unallocated",
         "kind": "deferred_avoir",
     }
+    if payload.montant_paye_attendu is not None:
+        body["expected_paid"] = f"{payload.montant_paye_attendu:.2f}"
+    if payload.date_effet_attendue is not None:
+        body["expected_effective_date"] = payload.date_effet_attendue.isoformat()
     digest = sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return digest, body
 
@@ -159,6 +163,10 @@ def cancel_deferred_sale_remainder(
     if pending <= 0:
         raise HTTPException(409, "Cette livraison n'a plus d'œufs à produire.")
     effective_date = business_date()
+    if payload.date_effet_attendue is not None and payload.date_effet_attendue != effective_date:
+        raise HTTPException(409, "La date de l'avoir a changé. Actualisez la proposition.")
+    if payload.montant_paye_attendu is not None and payload.montant_paye_attendu != tx.montant_paye:
+        raise HTTPException(409, "Les paiements de cette vente ont changé. Actualisez la proposition.")
     try:
         quote = quote_unfulfilled_cancellation(
             original_quantity=tx.quantite,
