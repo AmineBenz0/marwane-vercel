@@ -81,18 +81,12 @@ def test_authenticated_quote_cancel_refund_and_audit_on_native_postgres(monkeypa
             path = f"/api/v1/transactions/{sale['tx']}/cancel-remainder"
             assert client.get(path + "/preview").status_code == 401
             assert client.post(path, json={}).status_code in (401, 422)
+            # Use the actual unique email created in the disposable DB.
+            with Session(engine) as session:
+                email = session.get(Utilisateur, sale["user"]).email
             login = client.post("/api/v1/auth/login", json={
-                "email": f"ledger-{str(sale['tx'])}@example.invalid",
-                "mot_de_passe": password,
+                "email": email, "mot_de_passe": password,
             })
-            # _sale uses a unique email for each fixture. Query by ID to
-            # fetch its actual generated identifier; no hardcoded test login.
-            if login.status_code != 200:
-                with Session(engine) as session:
-                    email = session.get(Utilisateur, sale["user"]).email
-                login = client.post("/api/v1/auth/login", json={
-                    "email": email, "mot_de_passe": password,
-                })
             assert login.status_code == 200, login.text
             token = login.json()["access_token"]
             headers = {"Authorization": f"Bearer {token}"}
