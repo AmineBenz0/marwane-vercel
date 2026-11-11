@@ -90,6 +90,6 @@ it('shows the gated cancellation on a full sale and recalculates net value and c
   await waitFor(() => expect(screen.getByText(/Avoir de .*150/)).toBeVisible());
   expect(await screen.findByText('Avoirs commerciaux')).toBeVisible();
   expect(screen.getByText('Montant net')).toBeVisible();
-  expect(screen.getByText('Crédit client')).toBeVisible();
+  expect(screen.getAllByText('Crédit client').some(element => element.isConnected)).toBe(true);
   expect(screen.queryByRole('button', { name: 'Annuler les œufs restants' })).not.toBeInTheDocument();
 });
