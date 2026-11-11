@@ -35,7 +35,7 @@ def conn():
         db.close()
 
 
-def _sale(cur, *, amount="1500.00"):
+def _sale(cur, *, amount="1500.00", sellable=False):
     unique = uuid4().hex[:14]
     cur.execute(
         "INSERT INTO public.utilisateurs(nom_utilisateur,email,mot_de_passe_hash,role,est_actif) "
@@ -48,11 +48,21 @@ def _sale(cur, *, amount="1500.00"):
         (f"Ledger client {unique}",),
     )
     client = cur.fetchone()[0]
-    cur.execute(
-        "INSERT INTO public.produits(nom_produit,type_produit,est_actif,pour_clients,pour_fournisseurs) "
-        "VALUES (%s,'produit_fini',true,true,true) RETURNING id_produit",
-        (f"Ledger eggs {unique}",),
-    )
+    if sellable:
+        # The Phase 4 writer rejects non-egg products. Reuse the real
+        # production catalog category, which is unique by product name.
+        cur.execute(
+            "INSERT INTO public.produits(nom_produit,type_produit,est_actif,pour_clients,pour_fournisseurs) "
+            "VALUES ('Oeufs - Moyen','produit_fini',true,true,false) "
+            "ON CONFLICT (nom_produit) DO UPDATE SET pour_clients=true,est_actif=true "
+            "RETURNING id_produit"
+        )
+    else:
+        cur.execute(
+            "INSERT INTO public.produits(nom_produit,type_produit,est_actif,pour_clients,pour_fournisseurs) "
+            "VALUES (%s,'produit_fini',true,true,true) RETURNING id_produit",
+            (f"Ledger eggs {unique}",),
+        )
     product = cur.fetchone()[0]
     cur.execute(
         "INSERT INTO public.batiments(nom) VALUES (%s) RETURNING id_batiment",
@@ -409,5 +419,180 @@ def test_phase3_native_sql_and_python_projections_share_cutoff(conn):
             )
             assert len(result) == 1
             assert result[0].montant_net == Decimal("900.00")
+    finally:
+        engine.dispose()
+
+
+
+def _phase4_payload(tx, operation_id=None):
+    from app.schemas.transaction import DeferredSaleRemainderClose
+    return DeferredSaleRemainderClose(
+        operation_id=operation_id or uuid4(),
+        expected_version=tx.row_version,
+        quantite_en_attente_attendue=tx.quantite_en_attente,
+    )
+
+
+def test_phase4_native_stock_and_avoir_commit_then_idempotent_replay(conn):
+    """Verify actual PostgreSQL deferred parity, revision audit and replay."""
+    from types import SimpleNamespace
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+    from app.models.transaction import Transaction
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+    from app.models.correction_operation import CorrectionOperation, EntityRevision
+    from app.services.deferred_cancellation import cancel_deferred_sale_remainder
+    from app.services.financial import contact_balances
+
+    with conn.cursor() as cur:
+        sale = _sale(cur, amount="1200.00", sellable=True)
+    conn.commit()
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    actor = SimpleNamespace(id_utilisateur=sale["user"], est_actif=True)
+    try:
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            payload = _phase4_payload(tx)
+            original_version = tx.row_version
+            result = cancel_deferred_sale_remainder(
+                db, transaction_id=sale["tx"], payload=payload, actor=actor,
+            )
+            assert result["montant_avoir"] == "1200.00"
+            assert result["montant_net"] == "0.00"
+            assert result["quantite_en_attente"] == 0
+            assert result["credit_client"] == "0.00"
+            db.commit()
+
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            assert tx.row_version == original_version + 1
+            assert tx.quantite_annulee == 1000
+            assert tx.quantite_en_attente == 0
+            assert tx.montant_total == Decimal("1200.00")
+            assert tx.montant_net == Decimal("0.00")
+            assert db.query(DeferredSaleAdjustment).filter_by(id_transaction=tx.id_transaction).count() == 1
+            op = db.get(CorrectionOperation, payload.operation_id)
+            assert op.result_payload["montant_avoir"] == "1200.00"
+            assert op.result_payload["cumulative_canceled"] == 1000
+            assert db.query(EntityRevision).filter_by(
+                entity_type="transaction", entity_id=tx.id_transaction,
+                operation_id=payload.operation_id,
+            ).count() >= 1
+            assert contact_balances(
+                db, direction="receivable", contact_ids=[sale["client"]],
+            )[sale["client"]] == Decimal("0.00")
+            replay = cancel_deferred_sale_remainder(
+                db, transaction_id=sale["tx"], payload=payload, actor=actor,
+            )
+            assert replay["rejoue"] is True
+            assert replay["id_avoir"] == str(payload.operation_id)
+            db.commit()
+            assert db.query(DeferredSaleAdjustment).filter_by(id_transaction=tx.id_transaction).count() == 1
+
+            from fastapi import HTTPException
+            with pytest.raises(HTTPException) as e:
+                cancel_deferred_sale_remainder(
+                    db, transaction_id=sale["tx"],
+                    payload=_phase4_payload(tx, uuid4()), actor=actor,
+                )
+            assert e.value.status_code == 409
+            db.rollback()
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("same_id", [True, False])
+def test_phase4_native_concurrent_double_submit_is_serialized(conn, same_id):
+    """Two PostgreSQL connections race: identical requests replay, different IDs conflict."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from types import SimpleNamespace
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from fastapi import HTTPException
+    from app.models.transaction import Transaction
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+    from app.services.deferred_cancellation import cancel_deferred_sale_remainder
+
+    with conn.cursor() as cur:
+        sale = _sale(cur, sellable=True)
+    conn.commit()
+    engine = create_engine(os.environ["TEST_DATABASE_URL"], pool_size=2, max_overflow=2)
+    actor = SimpleNamespace(id_utilisateur=sale["user"], est_actif=True)
+    with Session(engine) as db:
+        snapshot = db.get(Transaction, sale["tx"])
+        version = snapshot.row_version
+        pending = snapshot.quantite_en_attente
+    one_id = uuid4()
+    barrier = Barrier(2)
+
+    def submit(op_id):
+        from app.schemas.transaction import DeferredSaleRemainderClose
+        payload = DeferredSaleRemainderClose(
+            operation_id=op_id, expected_version=version,
+            quantite_en_attente_attendue=pending,
+        )
+        with Session(engine) as db:
+            barrier.wait(timeout=15)
+            try:
+                result = cancel_deferred_sale_remainder(
+                    db, transaction_id=sale["tx"], payload=payload, actor=actor,
+                )
+                db.commit()
+                return result
+            except HTTPException as exc:
+                db.rollback()
+                return exc.status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first = executor.submit(submit, one_id)
+            second = executor.submit(submit, one_id if same_id else uuid4())
+            outcomes = [first.result(timeout=30), second.result(timeout=30)]
+        if same_id:
+            assert all(isinstance(outcome, dict) for outcome in outcomes)
+            assert sorted(outcome["rejoue"] for outcome in outcomes) == [False, True]
+        else:
+            assert sum(isinstance(outcome, dict) for outcome in outcomes) == 1
+            assert outcomes.count(409) == 1
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            assert tx.quantite_annulee == 1000
+            assert tx.montant_net == Decimal("0.00")
+            assert db.query(DeferredSaleAdjustment).filter_by(id_transaction=tx.id_transaction).count() == 1
+    finally:
+        engine.dispose()
+
+
+def test_phase4_native_rollback_removes_stock_and_avoir_together(conn):
+    from types import SimpleNamespace
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.models.transaction import Transaction
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+    from app.models.correction_operation import CorrectionOperation
+    from app.services.deferred_cancellation import cancel_deferred_sale_remainder
+
+    with conn.cursor() as cur:
+        sale = _sale(cur, sellable=True)
+    conn.commit()
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    actor = SimpleNamespace(id_utilisateur=sale["user"], est_actif=True)
+    try:
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            receipt = cancel_deferred_sale_remainder(
+                db, transaction_id=sale["tx"], payload=_phase4_payload(tx), actor=actor,
+            )
+            assert receipt["montant_avoir"] == "1500.00"
+            db.rollback()  # Simulate failure before the database commits.
+        with Session(engine) as db:
+            tx = db.get(Transaction, sale["tx"])
+            assert tx.quantite_annulee == 0
+            assert tx.montant_net == Decimal("1500.00")
+            assert db.query(DeferredSaleAdjustment).filter_by(id_transaction=tx.id_transaction).count() == 0
+            assert db.query(CorrectionOperation).filter(
+                CorrectionOperation.request_payload["transaction_id"].as_integer() == tx.id_transaction,
+            ).count() == 0
     finally:
         engine.dispose()
