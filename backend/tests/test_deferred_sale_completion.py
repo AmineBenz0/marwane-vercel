@@ -765,7 +765,8 @@ def test_release4_atomic_cancellation_receipt_replay_and_financial_integrity(
     assert tx.statut_paiement == "surpaye"
     assert [(p.id_paiement, p.montant, p.nature, p.statut) for p in tx.paiements] == before_paid
     assert db_session.query(DeferredSaleAdjustment).count() == 1
-    assert db_session.get(CorrectionOperation, operation_id) is not None
+    from uuid import UUID
+    assert db_session.get(CorrectionOperation, UUID(operation_id)) is not None
     assert client.get(f"/api/v1/transactions/{tx.id_transaction}/completion-history").json()[-1]["type"] == "cancel_remainder"
 
     duplicate = client.post(endpoint, json=request)
