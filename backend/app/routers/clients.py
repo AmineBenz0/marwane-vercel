@@ -341,7 +341,7 @@ def get_client_produits_achetes(
     produits_stats_query = db.query(
         Transaction.id_produit,
         Produit.nom_produit,
-        func.sum(Transaction.quantite).label('quantite_totale'),
+        func.sum(Transaction.quantite - Transaction.quantite_annulee).label('quantite_totale'),
         func.sum(Transaction.montant_total).label('montant_total'),
         func.count(Transaction.id_transaction).label('nombre_achats'),
         func.min(Transaction.date_transaction).label('premiere_date_achat'),
