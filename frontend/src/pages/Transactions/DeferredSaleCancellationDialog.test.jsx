@@ -16,7 +16,10 @@ const props = () => ({
   onClose: vi.fn(), onCompleted: vi.fn(), onStale: vi.fn(),
 });
 beforeEach(() => {
-  vi.clearAllMocks();
+  // clearAllMocks retains queued mockResolvedValueOnce responses across
+  // tests. In particular a failed retry must never leak a success into the
+  // subsequent stale-409 scenario.
+  vi.resetAllMocks();
   get.mockResolvedValue(quote);
 });
 afterEach(cleanup);
