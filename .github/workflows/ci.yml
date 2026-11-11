@@ -323,6 +323,8 @@ jobs:
         # --with-deps triggers apt installs of optional fonts and fails when
         # the runner's Ubuntu mirror has transient DNS/network outages.
         run: npx playwright install chromium
+      - name: Verify Release 4 isolated cancellation UX on desktop and mobile
+        run: npx playwright test --config playwright.release4.config.ts
       - name: Verify contacts and flock lifecycle on desktop and mobile
         run: npx playwright test --config playwright.contacts.config.ts
       - name: Save contact UI screenshots and failure traces
