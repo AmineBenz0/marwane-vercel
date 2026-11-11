@@ -538,3 +538,15 @@ jobs:
         run: >-
           python -m pytest --override-ini addopts=''
           tests/test_release4_ledger_pg.py --tb=short -q
+      - name: Phase 8 authenticated cancellation-to-refund acceptance on disposable PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          ENABLE_AUTH: "true"
+          ENABLE_RATE_LIMITING: "false"
+          ENABLE_DEFERRED_CANCELLATION_WRITES: "true"
+          ENABLE_CREDIT_REFUND_WRITES: "true"
+          SECRET_KEY: release4-local-ledger-check-only-00000000000
+        run: >-
+          python -m pytest --override-ini addopts=''
+          tests/test_release4_authenticated_pg.py --tb=short -q
