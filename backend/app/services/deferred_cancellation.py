@@ -10,7 +10,7 @@ from hashlib import sha256
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import func, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.audit import TransactionAudit
@@ -99,6 +99,7 @@ def cancel_deferred_sale_remainder(
     pending = tx.quantite_en_attente
     if pending <= 0:
         raise HTTPException(409, "Cette livraison n'a plus d'œufs à produire.")
+    effective_date = business_date()
     try:
         quote = quote_unfulfilled_cancellation(
             original_quantity=tx.quantite,
@@ -109,7 +110,7 @@ def cancel_deferred_sale_remainder(
             original_amount=Decimal(str(tx.montant_total)),
             effective_payments=tx.montant_paye,
             transaction_date=tx.date_transaction,
-            effective_date=business_date(),
+            effective_date=effective_date,
             row_version=tx.row_version,
             expected_version=payload.expected_version,
             expected_pending=payload.quantite_en_attente_attendue,
@@ -120,11 +121,7 @@ def cancel_deferred_sale_remainder(
     # A duplicate operation ID on another transaction is finally protected by
     # correction_operations' unique primary key. The route converts that
     # integrity exception into 409 and rolls back the *whole* transaction.
-    effective_date = business_date()
-    # Avoid a business-day rollover between quote and audit on long-running
-    # requests: the quote's date must match the actual ledger posting date.
-    if effective_date < tx.date_transaction:
-        raise HTTPException(409, "La date de l'avoir ne peut pas précéder la vente.")
+    # A single business date is used for quoting, posting and the audit.
     amount = f"{quote.adjustment_now:.2f}"
     result = {
         "id_avoir": str(payload.operation_id),
