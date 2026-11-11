@@ -303,6 +303,11 @@ class DeferredSaleRemainderClose(BaseModel):
     operation_id: UUID
     expected_version: int = Field(gt=0, strict=True)
     quantite_en_attente_attendue: int = Field(gt=0, strict=True)
+    # Optional for compatibility with earlier Phase 4 internal calls. Phase 7
+    # browser confirmation always submits both so the quote cannot silently
+    # change after an installment, refund or business-date rollover.
+    montant_paye_attendu: Optional[Decimal] = Field(None, ge=0)
+    date_effet_attendue: Optional[date] = None
 
 
 class DeferredSaleCancellationPreview(BaseModel):
