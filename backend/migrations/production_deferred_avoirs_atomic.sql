@@ -279,7 +279,7 @@ CREATE CONSTRAINT TRIGGER trg_deferred_legacy_transaction_snapshot
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
   WHEN (OLD.quantite_annulee > 0)
   EXECUTE FUNCTION public.verify_deferred_avoir_parity();
-REVOKE ALL ON FUNCTION public.protect_legacy_deferred_delete() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.protect_legacy_deferred_delete() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.protect_legacy_deferred_delete() TO app_runtime;
 
 -- Closed historical sale snapshots must not be exposed to browsers.
@@ -314,8 +314,8 @@ CREATE POLICY deferred_avoir_runtime_read ON public.avoirs_livraison_differee
 CREATE POLICY deferred_avoir_runtime_insert ON public.avoirs_livraison_differee
   FOR INSERT TO app_runtime WITH CHECK (true);
 
-REVOKE ALL ON FUNCTION public.verify_deferred_avoir_insert() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.verify_deferred_avoir_parity() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.verify_deferred_avoir_insert() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.verify_deferred_avoir_parity() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.verify_deferred_avoir_insert() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.verify_deferred_avoir_parity() TO app_runtime;
 
