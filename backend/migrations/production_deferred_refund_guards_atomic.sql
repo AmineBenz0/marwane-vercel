@@ -152,9 +152,9 @@ BEGIN
  RETURN NEW;
 END $fn$;
 
-REVOKE ALL ON FUNCTION public.credit_transaction_capacity(integer,date,boolean) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.refund_monetary_capacity(integer,date) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.protect_refund_settlement() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.credit_transaction_capacity(integer,date,boolean) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.refund_monetary_capacity(integer,date) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.protect_refund_settlement() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.credit_transaction_capacity(integer,date,boolean) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.refund_monetary_capacity(integer,date) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.protect_refund_settlement() TO app_runtime;
