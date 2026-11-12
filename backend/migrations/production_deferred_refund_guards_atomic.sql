@@ -152,9 +152,21 @@ BEGIN
  RETURN NEW;
 END $fn$;
 
-REVOKE ALL ON FUNCTION public.credit_transaction_capacity(integer,date,boolean) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.refund_monetary_capacity(integer,date) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.protect_refund_settlement() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.credit_transaction_capacity(integer,date,boolean) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.refund_monetary_capacity(integer,date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.protect_refund_settlement() FROM PUBLIC;
+-- Supabase grants API roles direct EXECUTE privileges on new functions.
+-- Bare PostgreSQL test databases need not contain those roles.
+DO $revoke_browser_function_exec$
+DECLARE exposed_role text;
+BEGIN
+  FOR exposed_role IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION public.credit_transaction_capacity(integer,date,boolean) FROM %I', exposed_role);
+    EXECUTE format('REVOKE ALL ON FUNCTION public.refund_monetary_capacity(integer,date) FROM %I', exposed_role);
+    EXECUTE format('REVOKE ALL ON FUNCTION public.protect_refund_settlement() FROM %I', exposed_role);
+  END LOOP;
+END $revoke_browser_function_exec$;
+
 GRANT EXECUTE ON FUNCTION public.credit_transaction_capacity(integer,date,boolean) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.refund_monetary_capacity(integer,date) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.protect_refund_settlement() TO app_runtime;
