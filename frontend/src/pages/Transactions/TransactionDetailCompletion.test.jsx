@@ -40,6 +40,36 @@ it('shows reserved stock on a paid deferred sale without presenting it as delive
   expect(screen.queryByRole('dialog', { name: /compléter/i })).not.toBeInTheDocument();
 });
 
+it('refreshes the adjusted sale totals after recording a payment', async () => {
+  let paid = false;
+  const unpaid = {
+    ...sale, quantite_reservee: 0, quantite_en_attente: 0,
+    quantite_annulee: 5, montant_total: 24.65, montant_avoir: 0.05,
+    montant_net: 24.60, montant_paye: 0, montant_restant: 24.60,
+    statut_paiement: 'impaye',
+    avoirs_livraison_differee: [{ id_avoir: 'a', date_effet: '2026-11-13', quantite_annulee: 5, montant_avoir: 0.05 }],
+  };
+  get.mockImplementation(async path => {
+    const current = paid ? { ...unpaid, montant_paye: 1.23, montant_restant: 23.37, statut_paiement: 'partiel' } : unpaid;
+    if (path === '/transactions/7' || path === '/paiements/transaction/7/statut') return current;
+    if (path === '/paiements') return paid ? [{ id_paiement: 1, montant: 1.23, type_paiement: 'cash', statut: 'valide' }] : [];
+    if (path === '/produits') return [{ id_produit: 1, nom_produit: 'Oeufs - Moyen' }];
+    if (path === '/clients') return [{ id_client: 1, nom_client: 'Client payé' }];
+    return [];
+  });
+  post.mockImplementation(async () => { paid = true; return {}; });
+
+  render(<TransactionDetail />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Ajouter un paiement' }));
+  const dialog = await screen.findByRole('dialog', { name: /Ajouter un paiement/ });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+
+  await waitFor(() => expect(post).toHaveBeenCalled());
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: /Ajouter un paiement/ })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/1,23\s*MAD/)).toBeVisible());
+  expect(screen.getByText(/23,37\s*MAD/)).toBeVisible();
+});
+
 it('shows the gated cancellation on a full sale and recalculates net value and credit on commit', async () => {
   vi.stubEnv('VITE_ENABLE_DEFERRED_CANCELLATION_WRITES', 'true');
   let cancelled = false;

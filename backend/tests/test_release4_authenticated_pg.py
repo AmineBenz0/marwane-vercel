@@ -6,6 +6,7 @@ test user. It must never connect to Supabase staging or production.
 import os
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -116,6 +117,11 @@ def test_authenticated_quote_cancel_refund_and_audit_on_native_postgres(monkeypa
             assert res.status_code == 200, res.text
             assert res.json()["credit_client"] == q["credit_client"]
             assert res.json()["montant_net"] == q["montant_net"]
+            # Readiness must accept a new cancellation backed by the ledger.
+            readiness = Path(__file__).resolve().parents[1] / "scripts/release4_staging_readiness.sql"
+            with psycopg2.connect(dburl) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(readiness.read_text())
             repeat = client.post(path, headers=headers, json=command)
             assert repeat.status_code == 200 and repeat.json()["rejoue"] is True
             assert client.get(path + "/preview", headers=headers).status_code == 409

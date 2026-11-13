@@ -67,13 +67,36 @@ BEGIN
       SELECT 1 FROM pg_class
       WHERE oid='public.legacy_deferred_cancellations'::regclass AND relrowsecurity
     ) OR EXISTS (
-      SELECT 1 FROM public.transactions t
-      LEFT JOIN public.legacy_deferred_cancellations b ON b.id_transaction=t.id_transaction
-      WHERE t.quantite_annulee > 0
-        AND (b.id_transaction IS NULL OR b.historical_canceled_qty <> t.quantite_annulee
-             OR b.original_row IS DISTINCT FROM to_jsonb(t))
+      SELECT 1 FROM public.legacy_deferred_cancellations b
+      LEFT JOIN public.transactions t ON t.id_transaction=b.id_transaction
+      WHERE t.id_transaction IS NULL
+        OR b.historical_canceled_qty <> t.quantite_annulee
+        OR b.original_row IS DISTINCT FROM to_jsonb(t)
     ) THEN
       blockers := array_append(blockers, 'historic canceled sales must have immutable identical baselines');
+    END IF;
+
+    IF to_regclass('public.avoirs_livraison_differee') IS NOT NULL THEN
+      IF EXISTS (
+      SELECT 1 FROM public.transactions t
+      LEFT JOIN public.legacy_deferred_cancellations b ON b.id_transaction=t.id_transaction
+      LEFT JOIN LATERAL (
+        SELECT count(*) AS count, sum(a.quantite_annulee) AS quantity,
+               max(a.quantite_annulee_cumulee) AS cumulative_quantity
+        FROM public.avoirs_livraison_differee a
+        WHERE a.id_transaction=t.id_transaction
+      ) ledger ON true
+      WHERE (b.id_transaction IS NOT NULL AND ledger.count > 0)
+         OR (b.id_transaction IS NULL AND (
+              (coalesce(t.quantite_annulee, 0) > 0 AND ledger.count = 0)
+              OR (ledger.count > 0 AND (
+                    ledger.quantity IS DISTINCT FROM t.quantite_annulee
+                    OR ledger.cumulative_quantity IS DISTINCT FROM t.quantite_annulee
+                  ))
+            ))
+      ) THEN
+        blockers := array_append(blockers, 'commercial ledger and canceled quantities do not match');
+      END IF;
     END IF;
   END IF;
 
