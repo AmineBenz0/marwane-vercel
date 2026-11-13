@@ -27,6 +27,15 @@ describe('transaction list filtered result model', () => {
     expect(summarizeTransactions(displayedRows)).toMatchObject({ total: 3, ventes: 3, totalVentes: 180 });
   });
 
+  it('uses the current net value, including a zero net sale, in filtered sales totals', () => {
+    const adjusted = [
+      { ...rows[0], montant_net: '60.00' },
+      { ...rows[3], montant_net: '0.00' },
+      rows[1],
+    ];
+    expect(summarizeTransactions(adjusted).totalVentes).toBe(60);
+  });
+
   it('filters deferred sales by pending or reserved stock without changing other transaction types', () => {
     expect(filterTransactions(rows, 'deferred', 'pending').map(row => row.id_transaction)).toEqual([4]);
     expect(filterTransactions(rows, 'deferred', 'reserved').map(row => row.id_transaction)).toEqual([4]);

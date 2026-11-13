@@ -30,6 +30,25 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
+it('refreshes transaction totals after a payment is saved', async () => {
+  let paid = false;
+  const unpaid = { ...sale, montant_avoir: 150, montant_net: 1350, montant_paye: 0, montant_restant: 1350, statut_paiement: 'impaye' };
+  const settled = { ...unpaid, montant_paye: 1350, montant_restant: 0, statut_paiement: 'paye' };
+  get.mockImplementation(async path => {
+    if (path === '/transactions/7' || path === '/paiements/transaction/7/statut') return paid ? settled : unpaid;
+    if (path === '/produits') return [{ id_produit: 1, nom_produit: 'Oeufs' }];
+    if (path === '/clients') return [{ id_client: 1, nom_client: 'Client' }];
+    return [];
+  });
+  post.mockImplementation(async () => { paid = true; return {}; });
+  render(<TransactionDetail />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Ajouter un paiement' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+  await waitFor(() => expect(post).toHaveBeenCalled());
+  await waitFor(() => expect(screen.getByText('Payé', { selector: 'p' }).nextElementSibling.textContent.replace(/\s/g, '')).toContain('1350'));
+});
+
 it('shows reserved stock on a paid deferred sale without presenting it as delivered', async () => {
   render(<TransactionDetail />);
   expect(await screen.findByText('Stock partiellement réservé')).toBeVisible();

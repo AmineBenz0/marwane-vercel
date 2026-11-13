@@ -69,11 +69,36 @@ BEGIN
     ) OR EXISTS (
       SELECT 1 FROM public.transactions t
       LEFT JOIN public.legacy_deferred_cancellations b ON b.id_transaction=t.id_transaction
-      WHERE t.quantite_annulee > 0
-        AND (b.id_transaction IS NULL OR b.historical_canceled_qty <> t.quantite_annulee
+      WHERE b.id_transaction IS NOT NULL
+        AND (b.historical_canceled_qty <> t.quantite_annulee
              OR b.original_row IS DISTINCT FROM to_jsonb(t))
     ) THEN
       blockers := array_append(blockers, 'historic canceled sales must have immutable identical baselines');
+    END IF;
+  END IF;
+
+  -- New cancellations are backed by the immutable commercial ledger, not a
+  -- historical snapshot. Check both kinds without accepting missing or
+  -- incomplete ledger records as a valid baseline.
+  IF to_regclass('public.avoirs_livraison_differee') IS NOT NULL
+     AND to_regclass('public.legacy_deferred_cancellations') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.transactions t
+      LEFT JOIN public.legacy_deferred_cancellations b ON b.id_transaction=t.id_transaction
+      LEFT JOIN LATERAL (
+        SELECT count(*) AS n, coalesce(sum(a.quantite_annulee),0) AS qty,
+               coalesce(max(a.quantite_annulee_cumulee),0) AS max_qty,
+               coalesce(sum(a.montant_avoir),0) AS amount,
+               coalesce(max(a.avoir_cumule),0) AS max_amount
+        FROM public.avoirs_livraison_differee a WHERE a.id_transaction=t.id_transaction
+      ) a ON true
+      WHERE (b.id_transaction IS NOT NULL AND a.n > 0)
+         OR (b.id_transaction IS NULL AND (t.quantite_annulee > 0 OR a.n > 0) AND
+             (a.n = 0 OR a.qty <> t.quantite_annulee OR a.max_qty <> a.qty
+              OR a.max_amount <> a.amount OR t.quantite <= 0
+              OR a.amount <> round(t.montant_total * a.qty / nullif(t.quantite,0),2)))
+    ) THEN
+      blockers := array_append(blockers, 'canceled sales must match their historical baseline or commercial ledger');
     END IF;
   END IF;
 

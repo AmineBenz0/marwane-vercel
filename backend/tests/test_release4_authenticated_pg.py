@@ -6,6 +6,7 @@ test user. It must never connect to Supabase staging or production.
 import os
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -116,6 +117,20 @@ def test_authenticated_quote_cancel_refund_and_audit_on_native_postgres(monkeypa
             assert res.status_code == 200, res.text
             assert res.json()["credit_client"] == q["credit_client"]
             assert res.json()["montant_net"] == q["montant_net"]
+            # A new, ledger-backed cancellation must not be mistaken for a
+            # pre-ledger cancellation requiring a frozen legacy snapshot.
+            readiness = Path(__file__).resolve().parents[1] / "scripts" / "release4_staging_readiness.sql"
+            with psycopg2.connect(dburl) as connection, connection.cursor() as cursor:
+                cursor.execute(readiness.read_text(encoding="utf-8"))
+            with psycopg2.connect(dburl) as connection:
+                with connection.cursor() as cursor:
+                    # Simulate corruption only inside this disposable transaction.
+                    cursor.execute("ALTER TABLE public.avoirs_livraison_differee DISABLE TRIGGER USER")
+                    cursor.execute("DELETE FROM public.avoirs_livraison_differee WHERE id_transaction=%s", (sale["tx"],))
+                    cursor.execute("ALTER TABLE public.avoirs_livraison_differee ENABLE TRIGGER USER")
+                    with pytest.raises(psycopg2.errors.RaiseException, match="historical baseline or commercial ledger"):
+                        cursor.execute(readiness.read_text(encoding="utf-8"))
+                connection.rollback()
             repeat = client.post(path, headers=headers, json=command)
             assert repeat.status_code == 200 and repeat.json()["rejoue"] is True
             assert client.get(path + "/preview", headers=headers).status_code == 409

@@ -34,7 +34,7 @@ const monthlyReport = {
   inventory_movements: 3, inventory_quantity_delta: '7.125',
 };
 
-async function mockFinancialApi(page: Page, transactions = txData, partnerName = 'Client Test') {
+async function mockFinancialApi(page: Page, transactions = txData, partnerName = 'Client Test', report: typeof monthlyReport & { ventes_nettes?: string; avoirs_commerciaux?: string } = monthlyReport) {
   await mockAuthenticatedSession(page);
   const attemptedWrites: string[] = [];
   await page.route('**/api/v1/**', async route => {
@@ -60,7 +60,7 @@ async function mockFinancialApi(page: Page, transactions = txData, partnerName =
     else if (p === '/fournisseurs') result = [{ id_fournisseur: 2, nom_fournisseur: 'Fournisseur Test', est_actif: true }];
     else if (p === '/produits') result = [{ id_produit: 1, nom_produit: 'Service Test', est_actif: true }];
     else if (p === '/batiments') result = [];
-    else if (p === '/reports/monthly') result = monthlyReport;
+    else if (p === '/reports/monthly') result = report;
     else if (p === '/alerts/summary') result = { unread_count: 0 };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(result) });
   });
@@ -94,6 +94,24 @@ async function readPdf(page: Page, buttonName = 'Export PDF') {
 const amount = (value: unknown) =>
   Number(String(value ?? '0').replace(/[^\d,.-]/g, '').replace(',', '.'));
 
+test('dashboard uses issue-month sales and register displays current net sale values', async ({ page }) => {
+  const adjusted = [{ ...txData[0], montant_avoir: '40.00', montant_net: '60.00' }];
+  const writes = await mockFinancialApi(page, adjusted, 'Client Test', {
+    ...monthlyReport, ventes_nettes: '45.00', avoirs_commerciaux: '55.00',
+  });
+  await page.goto('/dashboard');
+  const salesCard = page.getByText('Ventes nettes du mois, avoirs à leur date d’émission').locator('..');
+  await expect(salesCard).toContainText('45');
+  await page.goto('/transactions');
+  const sales = page.getByRole('group', { name: 'Ventes', exact: true }).locator('p');
+  await expect(sales).toContainText('60');
+  await expect(page.getByRole('columnheader', { name: 'Total net' })).toBeVisible();
+  const row = page.getByRole('row').filter({ hasText: 'Client Test' }).first();
+  await expect(row).toContainText('60');
+  await expect(page.getByText(/Entrées 60\sMAD \| Sorties 0\sMAD/)).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
 test('monthly downloads agree on dated balances, projection labels and fractional stock', async ({ page }) => {
   const writes = await mockFinancialApi(page);
   await page.goto('/rapports/mensuel');
@@ -110,6 +128,15 @@ test('monthly downloads agree on dated balances, projection labels and fractiona
   expect(amount(items.get('Solde Banque Test (projection au 30/11/26)'))).toBe(510);
   expect(amount(items.get('Solde Banque Test actuel au 08/11/26'))).toBe(460);
   expect(amount(items.get('Variation nette stock'))).toBe(7.125);
+  const valueCell = (label: string) => {
+    let cell: ExcelJS.Cell | undefined;
+    sheet.eachRow(row => { if (row.getCell(1).value === label) cell = row.getCell(2); });
+    if (!cell) throw new Error(`Missing report row: ${label}`);
+    return cell;
+  };
+  expect(valueCell('Solde caisse actuel au 08/11/26').value).toBe(175);
+  expect(valueCell('Solde caisse actuel au 08/11/26').numFmt).toContain('MAD');
+  expect(valueCell('Variation nette stock').value).toBe(7.125);
   const source = await readPdf(page, 'PDF');
   for (const label of ['Rapport mensuel', 'PROJECTION AU 30/11/26', 'ACTUEL AU 08/11/26', '195,00 MAD',
     '175,00 MAD', '510,00 MAD', '460,00 MAD', '7,125']) expect(source).toContain(label);

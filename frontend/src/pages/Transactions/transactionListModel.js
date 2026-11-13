@@ -46,7 +46,7 @@ export function summarizeTransactions(transactions) {
     ventes: ventes.length,
     achats: achats.length,
     nonPayees: active.filter(isUnpaid).length,
-    totalVentes: activeVentes.reduce((sum, transaction) => sum + parseFloat(transaction.montant_total || 0), 0),
+    totalVentes: activeVentes.reduce((sum, transaction) => sum + Number(transaction.montant_net ?? transaction.montant_total ?? 0), 0),
     totalAchats: activeAchats.reduce((sum, transaction) => sum + parseFloat(transaction.montant_total || 0), 0),
   };
 }

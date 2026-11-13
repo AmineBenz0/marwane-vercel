@@ -207,6 +207,7 @@ function TransactionDetail() {
    */
   const refreshPaiements = async () => {
     await Promise.all([
+      fetchTransaction(),
       fetchPaiements(),
       fetchStatutPaiement(),
     ]);
@@ -804,7 +805,7 @@ function TransactionDetail() {
           transactionId={transaction.id_transaction}
           onClose={() => setCancelRemainderOpen(false)}
           onCompleted={async receipt => {
-            await Promise.all([fetchTransaction(), refreshPaiements()]);
+            await refreshPaiements();
             setCancellationReceipt(receipt);
           }}
           onStale={fetchTransaction}
@@ -815,7 +816,7 @@ function TransactionDetail() {
           onClose={() => setRefundOpen(false)}
           onSaved={async () => {
             setRefundOpen(false);
-            await Promise.all([fetchTransaction(), refreshPaiements(), fetchStatutPaiement()]);
+            await refreshPaiements();
             notification.success('Remboursement enregistré');
           }} />
       )}
@@ -825,7 +826,7 @@ function TransactionDetail() {
           transaction={transaction}
           onClose={() => setEditingPaiement(null)}
           onSaved={async () => {
-            await Promise.all([fetchTransaction(), refreshPaiements()]);
+            await refreshPaiements();
             setEditingPaiement(null);
             notification.success('Correction enregistrée');
           }}

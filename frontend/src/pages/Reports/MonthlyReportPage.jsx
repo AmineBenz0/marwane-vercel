@@ -79,18 +79,23 @@ function MonthlyReportPage() {
     : '';
   const exportRows = useMemo(() => groups ? [
     { indicateur: 'Période', valeur: periodLabel },
-    ...[...groups.activity, ...groups.breakdown, ...groups.cash, ...groups.bank, ...groups.stock].map(row => ({ indicateur: row.indicateur, valeur: displayReportValue(row) })),
+    ...[...groups.activity, ...groups.breakdown, ...groups.cash, ...groups.bank, ...groups.stock].map(row => ({ ...row })),
     ...groups.historical.map(row => ({ indicateur: projectedPeriod
       ? `${row.indicateur} (projection au ${historicalDate})`
-      : `${row.indicateur} au ${historicalDate}`, valeur: displayReportValue(row) })),
-    ...groups.current.map(row => ({ indicateur: `${row.indicateur} actuel au ${currentDate}`, valeur: displayReportValue(row) })),
+      : `${row.indicateur} au ${historicalDate}`, valeur: row.valeur, type: row.type })),
+    ...groups.current.map(row => ({ indicateur: `${row.indicateur} actuel au ${currentDate}`, valeur: row.valeur, type: row.type })),
   ] : [], [groups, historicalDate, currentDate, periodLabel, projectedPeriod]);
   const displayMonth = report ? formatMonthYear(report.month, report.month) : '';
   const exportReport = async outputFormat => {
     if (!report || loading) return;
-    const columns = [{ id: 'indicateur', label: 'Indicateur', excelWidth: 66 }, { id: 'valeur', label: 'Valeur', excelWidth: 24 }];
+    const columns = [{ id: 'indicateur', label: 'Indicateur', excelWidth: 66 }, {
+      id: 'valeur', label: 'Valeur', excelWidth: 24,
+      excelNumberFormat: row => row.type === 'money' ? '#,##0.00 "MAD"' : row.type === 'quantity' ? '#,##0.###' : row.type === 'count' ? '0' : undefined,
+    }];
     if (outputFormat === 'pdf') exportMonthlyReportPDF(report, `rapport_mensuel_${report.month}`);
-    else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse');
+    else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse', {
+      valeur: (value, row) => row.type && value != null && Number.isFinite(Number(value)) ? Number(value) : value ?? '—',
+    });
   };
   const hasBankActivity = !!report && ((report.soldes_bancaires || []).length > 0 || Number(report.banques_entrees) !== 0 || Number(report.banques_sorties) !== 0);
 

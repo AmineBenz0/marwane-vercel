@@ -38,6 +38,7 @@ import {
 } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subDays } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
+import { getBusinessDateInput } from '../utils/businessDate';
 import { get } from '../services/api';
 import DeferredSalesCard from './Transactions/DeferredSalesCard';
 import { formatMontant, formatSimpleNumber } from '../utils/formatNumber';
@@ -91,11 +92,11 @@ const groupTransactionsByDay = (transactions) => {
       grouped[dateKey] = { date: dateKey, count: 0, total: 0 };
     }
     grouped[dateKey].count += 1;
-    grouped[dateKey].total += parseFloat(transaction.montant_total || 0);
+    grouped[dateKey].total += parseFloat(transaction.montant_net ?? transaction.montant_total ?? 0);
   });
 
   const last30Days = [];
-  const today = new Date();
+  const today = parseISO(getBusinessDateInput());
 
   for (let i = 29; i >= 0; i--) {
     const date = subDays(today, i);
@@ -131,7 +132,7 @@ function Dashboard() {
         setLoading(true);
         setError(null);
 
-        const now = new Date();
+        const now = parseISO(getBusinessDateInput());
         const debutMois = startOfMonth(now);
         const finMois = endOfMonth(now);
         const dateDebut30Jours = subDays(now, 30);
@@ -141,6 +142,7 @@ function Dashboard() {
           transactionsMoisResponse,
           transactions30JoursResponse,
           productionResponse,
+          monthlyReport,
         ] = await Promise.all([
           get('/caisse/solde/complet'),
           get('/transactions', {
@@ -165,18 +167,17 @@ function Dashboard() {
               date_fin: format(now, 'yyyy-MM-dd'),
             },
           }),
+          get('/reports/monthly', { params: { month: format(now, 'yyyy-MM') } }),
         ]);
 
         const transactionsMois = transactionsMoisResponse || [];
         const transactions30Jours = transactions30JoursResponse || [];
         const productionsToday = productionResponse || [];
-        const ventes = transactionsMois.filter((t) => t.id_client !== null);
-        const achats = transactionsMois.filter((t) => t.id_fournisseur !== null);
 
         setSoldeCaisse(parseFloat(soldeResponse.solde_reel ?? soldeResponse.solde_theorique ?? 0));
         setNbTransactionsMois(transactionsMois.length);
-        setTotalVentes(ventes.reduce((sum, t) => sum + parseFloat(t.montant_total || 0), 0));
-        setTotalAchats(achats.reduce((sum, t) => sum + parseFloat(t.montant_total || 0), 0));
+        setTotalVentes(Number(monthlyReport.ventes_nettes ?? monthlyReport.ventes ?? 0));
+        setTotalAchats(Number(monthlyReport.achats ?? 0));
         setChartData(groupTransactionsByDay(transactions30Jours));
         setTransactionsRecentes(
           [...transactions30Jours]
@@ -436,7 +437,7 @@ function Dashboard() {
           <MetricCard
             label="Ventes"
             value={formatMontant(totalVentes, { useCompactNotation: false })}
-            helper="Total client ce mois"
+            helper="Ventes nettes du mois, avoirs à leur date d’émission"
             icon={<TrendingUpIcon />}
             color="#1D6F50"
           />
@@ -549,7 +550,7 @@ function Dashboard() {
                     Activit&eacute; des 30 derniers jours
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Volume et montant des transactions r&eacute;centes.
+                    Volume et montant net actuel des transactions, regroup&eacute;s par date de vente ou d’achat.
                   </Typography>
                 </Box>
                 <Button variant="outlined" onClick={() => navigate('/transactions')}>
@@ -654,7 +655,7 @@ function Dashboard() {
                           }}
                         >
                           {isSale ? '+' : '-'}
-                          {formatMontant(transaction.montant_total, { useCompactNotation: false })}
+                          {formatMontant(transaction.montant_net ?? transaction.montant_total, { useCompactNotation: false })}
                         </Typography>
                       </Box>
                     );

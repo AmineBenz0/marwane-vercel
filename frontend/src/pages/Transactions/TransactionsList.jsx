@@ -726,7 +726,7 @@ function TransactionsList() {
           <TransactionMetric
             label="Ventes"
             value={formatMontant(transactionSummary.totalVentes)}
-            helper={`${transactionSummary.ventes} transaction(s) client`}
+            helper={`${transactionSummary.ventes} transaction(s) client · montant net actuel`}
             icon={<TrendingUpIcon />}
             color="#1D6F50"
           />
@@ -1086,8 +1086,8 @@ export const exportTransactionWorkbook = (rows) => {
   );
 };
 
-const getSignedAmount = (transaction, field = 'montant_total') => {
-  const amount = Math.abs(Number(transaction[field] || 0));
+const getSignedAmount = (transaction) => {
+  const amount = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
   return transaction.id_client !== null ? amount : -amount;
 };
 
@@ -1133,7 +1133,7 @@ function TransactionsExcelRegister({
       };
 
       if (transaction.est_actif !== false) {
-        const total = Math.abs(Number(transaction.montant_total || 0));
+        const total = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
         if (transaction.id_client !== null) {
           group.entries += total;
         } else {
@@ -1221,7 +1221,7 @@ function TransactionsExcelRegister({
                 <TableCell>Produit</TableCell>
                 <TableCell>Bâtiment</TableCell>
                 <TableCell align="right">Quantité</TableCell>
-                <TableCell align="right">Total</TableCell>
+                <TableCell align="right">Total net</TableCell>
                 <TableCell align="right">Payé</TableCell>
                 <TableCell align="right">Reste</TableCell>
                 <TableCell>Règlement</TableCell>

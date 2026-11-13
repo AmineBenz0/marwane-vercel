@@ -53,7 +53,7 @@ describe('MonthlyReportPage', () => {
       expect.arrayContaining([
         expect.objectContaining({ indicateur: 'Entrées banques' }),
         expect.objectContaining({ indicateur: 'Solde Banque Test actuel au 25/10/26' }),
-        expect.objectContaining({ indicateur: 'Mouvements stock', valeur: '3' }),
+        expect.objectContaining({ indicateur: 'Mouvements stock', valeur: 3, type: 'count' }),
         expect.objectContaining({ indicateur: 'Variation nette stock' }),
       ]),
       expect.arrayContaining([
@@ -62,6 +62,7 @@ describe('MonthlyReportPage', () => {
       ]),
       'rapport_mensuel_2026-09',
       'Synthèse',
+      expect.objectContaining({ valeur: expect.any(Function) }),
     ));
   });
 
@@ -72,12 +73,11 @@ describe('MonthlyReportPage', () => {
     expect(await screen.findByText(/300,00/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
     fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
-    const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(value);
     const expected = [
-      { indicateur: 'Solde caisse au 30/09/26', valeur: money(100) },
-      { indicateur: 'Solde Banque Test au 30/09/26', valeur: money(300) },
-      { indicateur: 'Solde caisse actuel au 25/10/26', valeur: money(250) },
-      { indicateur: 'Solde Banque Test actuel au 25/10/26', valeur: money(500) },
+      { indicateur: 'Solde caisse au 30/09/26', valeur: '100.00', type: 'money' },
+      { indicateur: 'Solde Banque Test au 30/09/26', valeur: '300.00', type: 'money' },
+      { indicateur: 'Solde caisse actuel au 25/10/26', valeur: '250.00', type: 'money' },
+      { indicateur: 'Solde Banque Test actuel au 25/10/26', valeur: '500.00', type: 'money' },
     ];
     expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining(expected));
     expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
@@ -145,11 +145,10 @@ it('keeps original sales, dated avoirs, and refunds distinct across PDF and Exce
   await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalled());
   const rows = exportToExcelAdvanced.mock.calls.at(-1)[0];
   const byLabel = Object.fromEntries(rows.map(row => [row.indicateur, row.valeur]));
-  const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(value);
-  expect(byLabel['Ventes nettes']).toBe(money(900));
-  expect(byLabel['Ventes initiales']).toBe(money(1500));
-  expect(byLabel['Avoirs commerciaux émis']).toBe(money(600));
-  expect(byLabel['Remboursements clients (inclus dans les sorties)']).toBe(money(600));
+  expect(byLabel['Ventes nettes']).toBe('900.00');
+  expect(byLabel['Ventes initiales']).toBe('1500.00');
+  expect(byLabel['Avoirs commerciaux émis']).toBe('600.00');
+  expect(byLabel['Remboursements clients (inclus dans les sorties)']).toBe('600.00');
   fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
   expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
     expect.objectContaining({
