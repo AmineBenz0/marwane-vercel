@@ -419,7 +419,7 @@ function Dashboard() {
           <MetricCard
             label="Argent disponible"
             value={formatMontant(soldeCaisse, { useCompactNotation: false })}
-            helper={soldeCaisse < 0 ? 'Solde réel de caisse — à régulariser' : 'Solde réel de caisse'}
+            helper={soldeCaisse < 0 ? 'Caisse et lettres de crédit disponibles — à régulariser' : 'Caisse et lettres de crédit disponibles'}
             icon={<WalletIcon />}
             color={soldeCaisse < 0 ? '#A84435' : '#1D6F50'}
           />

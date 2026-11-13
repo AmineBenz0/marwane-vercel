@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 import pytest
@@ -17,6 +17,27 @@ from app.services.financial import contact_balances, financial_position_as_of, c
 from app.services.financial_ledger import sync_payment_cash_movement
 from app.utils.business_date import business_date
 from tests.test_correction_contract import correction_sale, correction_transaction
+
+
+def test_cash_summary_counts_payment_linked_movements_and_keeps_available_lc_separate(
+    db_session, correction_sale, test_user, monkeypatch,
+):
+    from app.routers import caisse as caisse_router
+
+    sale, payment = correction_sale
+    sale.date_transaction = business_date()
+    payment.date_paiement = business_date()
+    db_session.add(Caisse(id_paiement=payment.id_paiement, id_transaction=None,
+                          montant=payment.montant, type_mouvement='ENTREE', statut='active',
+                          date_mouvement=datetime.combine(business_date(), time(12), tzinfo=timezone.utc)))
+    db_session.commit()
+    monkeypatch.setattr(caisse_router, '_get_lc_disponibles_total', lambda db: Decimal('3.50'))
+    cash = cash_ledger_as_of(db_session, business_date())
+    summary = caisse_router.get_solde_complet(db=db_session, current_user=test_user)
+    assert cash['balance'] == Decimal('5.00')
+    assert summary.solde_reel == cash['balance'] + Decimal('3.50')
+    assert summary.entrees_reelles == Decimal('8.50')
+    assert summary.sorties_reelles == Decimal('0.00')
 
 
 @pytest.fixture

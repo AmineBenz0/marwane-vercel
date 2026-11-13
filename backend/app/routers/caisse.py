@@ -23,6 +23,7 @@ from app.schemas.caisse import (
 from app.utils.dependencies import get_current_active_user
 from app.utils.business_date import business_date
 from app.models.user import Utilisateur
+from app.services.financial import cash_ledger_as_of
 
 router = APIRouter(prefix="/caisse", tags=["Caisse"])
 
@@ -207,28 +208,14 @@ def get_solde_complet(
     # ==================== SOLDE RÉEL ====================
     # Basé sur les mouvements de caisse enregistrés (Paiements effectifs)
     
-    entrees_reelles_mouvements = db.query(func.coalesce(func.sum(Caisse.montant), 0)).join(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
-        Caisse.type_mouvement == 'ENTREE',
-        Caisse.statut == 'active',
-        Transaction.est_actif
-    ).scalar() or Decimal('0.00')
-    
-    sorties_reelles = db.query(func.coalesce(func.sum(Caisse.montant), 0)).outerjoin(
-        Transaction, Caisse.id_transaction == Transaction.id_transaction
-    ).filter(
-        Caisse.type_mouvement == 'SORTIE',
-        Caisse.statut == 'active',
-        Caisse.id_cession.is_(None),
-        or_(
-            Transaction.est_actif,
-            Caisse.id_transaction.is_(None)
-        )
-    ).scalar() or Decimal('0.00')
-    
-    entrees_reelles = Decimal(str(entrees_reelles_mouvements)) + lc_disponibles
-    solde_reel = entrees_reelles - Decimal(str(sorties_reelles))
+    # Use the same dated, effective cash ledger as the monthly report.  Some
+    # valid movements point to the sale through their payment rather than
+    # directly, and standalone advances must also be counted.  Available LC
+    # remains a separate non-cash component of the Caisse available total.
+    cash = cash_ledger_as_of(db, business_date())
+    entrees_reelles = cash['inflows'] + lc_disponibles
+    sorties_reelles = cash['outflows']
+    solde_reel = cash['balance'] + lc_disponibles
     
     # Date du dernier paiement/mouvement
     derniere_maj_paiement = db.query(func.max(Caisse.date_mouvement)).scalar()

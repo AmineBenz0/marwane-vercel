@@ -1140,7 +1140,7 @@ function TransactionsExcelRegister({
           group.exits += total;
         }
         group.paid += Math.abs(Number(transaction.montant_paye || 0));
-        group.remaining += Math.abs(Number(transaction.montant_restant || 0));
+        group.remaining += Number(transaction.montant_restant || 0);
 
         const status = getPaymentStatus(transaction);
         if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
