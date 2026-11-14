@@ -13,28 +13,48 @@ def completion_events(db, transaction_ids):
         TransactionAudit.id_transaction.in_(transaction_ids),
         TransactionAudit.champ_modifie.in_([
             'completion_livraison_differee', 'reservation_automatique_stock',
+            'replanification_livraison_differee', 'annulation_reste_livraison_differee',
         ]),
     ).order_by(TransactionAudit.date_changement, TransactionAudit.id_audit).all()
     for row in rows:
         data = json.loads(row.nouvelle_valeur)
-        automatic = row.champ_modifie == 'reservation_automatique_stock'
-        grouped[row.id_transaction].append(dict(
-            id=row.id_audit, type='reservation' if automatic else 'completion',
-            date=data['date'], quantite=data['quantite_attribuee'] if automatic else data['quantite_completee'],
-            quantite_couverte=data['quantite_couverte'], avant=int(row.ancienne_valeur),
-            repartition_stock=data.get('repartition_stock', []),
-            quantite_totale=data.get('quantite_totale'),
-            id_utilisateur=row.id_utilisateur,
-        ))
+        if row.champ_modifie == 'replanification_livraison_differee':
+            before = json.loads(row.ancienne_valeur)
+            grouped[row.id_transaction].append(dict(
+                id=row.id_audit, type='reschedule',
+                date=row.date_changement.date().isoformat(),
+                date_avant=before.get('date'), date_apres=data['date'],
+                quantite=0, repartition_stock=[], id_utilisateur=row.id_utilisateur,
+            ))
+        elif row.champ_modifie == 'annulation_reste_livraison_differee':
+            grouped[row.id_transaction].append(dict(
+                id=row.id_audit, type='cancel_remainder',
+                date=data['date'], quantite=data['quantite_annulee'],
+                quantite_couverte=data['quantite_couverte'],
+                quantite_totale=data['quantite_totale'], repartition_stock=[],
+                montant_avoir=data.get('montant_avoir'),
+                id_utilisateur=row.id_utilisateur,
+            ))
+        else:
+            automatic = row.champ_modifie == 'reservation_automatique_stock'
+            grouped[row.id_transaction].append(dict(
+                id=row.id_audit, type='reservation' if automatic else 'completion',
+                date=data['date'], quantite=data['quantite_attribuee'] if automatic else data['quantite_completee'],
+                quantite_couverte=data['quantite_couverte'], avant=int(row.ancienne_valeur),
+                repartition_stock=data.get('repartition_stock', []),
+                quantite_totale=data.get('quantite_totale'),
+                id_utilisateur=row.id_utilisateur,
+            ))
     return grouped
 
 
 def covered_quantity(transaction, events, target, cumulative):
     if not transaction.est_promesse:
         return transaction.quantite
-    initial = events[0]['avant'] if events else transaction.quantite_couverte
+    stock_events = [event for event in events if event['type'] in ('reservation', 'completion')]
+    initial = stock_events[0]['avant'] if stock_events else transaction.quantite_couverte
     quantity = initial if (transaction.date_transaction <= target if cumulative else transaction.date_transaction == target) else 0
-    quantity += sum(event['quantite'] for event in events
+    quantity += sum(event['quantite'] for event in stock_events
                     if (date.fromisoformat(event['date']) <= target if cumulative
                         else date.fromisoformat(event['date']) == target))
     return quantity
@@ -42,10 +62,11 @@ def covered_quantity(transaction, events, target, cumulative):
 
 def initial_stock_event(transaction, events):
     """Show the audited baseline; only reconstruct sources when every delta is known."""
-    initial = events[0]['avant'] if events else transaction.quantite_couverte
+    stock_events = [event for event in events if event['type'] in ('reservation', 'completion')]
+    initial = stock_events[0]['avant'] if stock_events else transaction.quantite_couverte
     remaining = {a.id_production: a.quantite for a in transaction.allocations}
-    traceable = all(sum(s['quantite'] for s in e['repartition_stock']) == e['quantite'] for e in events)
-    for event in events:
+    traceable = all(sum(s['quantite'] for s in e['repartition_stock']) == e['quantite'] for e in stock_events)
+    for event in stock_events:
         for source in event['repartition_stock']:
             source_id = source['id_production']
             remaining[source_id] = remaining.get(source_id, 0) - source['quantite']

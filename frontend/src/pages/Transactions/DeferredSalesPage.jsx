@@ -61,6 +61,6 @@ export default function DeferredSalesPage() {
         })}
       </Grid>}
     </>}
-    <DeferredSaleDrawer key={selectedId || 'closed'} transactionId={selectedId} summary={selected} onClose={closeSale} />
+    <DeferredSaleDrawer key={selectedId || 'closed'} transactionId={selectedId} summary={selected} onClose={closeSale} onUpdated={reload} />
   </Box>;
 }

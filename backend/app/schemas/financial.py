@@ -17,7 +17,9 @@ class FinancialTransactionRead(BaseModel):
     client_nom: Optional[str] = None
     fournisseur_nom: Optional[str] = None
     produit_nom: Optional[str] = None
-    montant_total: Decimal
+    montant_total: Decimal  # Original agreed amount, never rewritten by an avoir
+    montant_avoir: Decimal = Decimal('0.00')
+    montant_net: Decimal = Decimal('0.00')
     montant_paye: Decimal
     montant_restant: Decimal
     statut_paiement: str
@@ -29,7 +31,9 @@ class FinancialTransactionRead(BaseModel):
 
 
 class FinancialSummary(BaseModel):
-    total: Decimal
+    total: Decimal  # Net total after commercial adjustments
+    total_brut: Decimal = Decimal('0.00')
+    total_avoirs: Decimal = Decimal('0.00')
     paye: Decimal
     reste: Decimal
     count: int

@@ -26,7 +26,7 @@ const buildRows = (data, columns, customFormatters = {}) => data.map((row) => co
   return normaliseCellValue(formattedValue);
 }));
 
-const downloadWorkbook = async (rows, columns, filename, sheetName) => {
+const downloadWorkbook = async (rows, columns, filename, sheetName, sourceRows) => {
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(String(sheetName || 'Données').slice(0, 31));
@@ -37,6 +37,14 @@ const downloadWorkbook = async (rows, columns, filename, sheetName) => {
   worksheet.columns = columns.map((column) => ({
     width: column.excelWidth ?? Math.max(String(column.label || column.id).length + 2, 15),
   }));
+  columns.forEach((column, columnIndex) => {
+    if (typeof column.excelNumberFormat !== 'function') return;
+    sourceRows.forEach((sourceRow, rowIndex) => {
+      const cell = worksheet.getRow(rowIndex + 2).getCell(columnIndex + 1);
+      const format = column.excelNumberFormat(sourceRow);
+      if (format && typeof cell.value === 'number') cell.numFmt = format;
+    });
+  });
 
   const headerRow = worksheet.getRow(1);
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -86,7 +94,8 @@ const exportWorkbook = async (data, columns, filename, sheetName, customFormatte
       buildRows(data, columns, customFormatters),
       columns,
       filename,
-      sheetName
+      sheetName,
+      data
     );
   } catch (error) {
     console.error("Erreur lors de l'export Excel:", error);

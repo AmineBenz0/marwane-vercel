@@ -24,3 +24,21 @@ it('shows initial and automatic stock reservations with origins on demand', asyn
   expect(screen.queryByText(/Opérateur #4/)).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/transactions/7/completion-history', { params: { include_initial: true } });
 });
+
+it('displays an audited commercial avoir on cancellation without pretending it is stock reserved', async () => {
+  get.mockResolvedValue([
+    { id: 'initial', type: 'initial', date: '2026-10-01', quantite: 600, repartition_stock: [] },
+    { id: 22, type: 'cancel_remainder', date: '2026-11-11',
+      quantite: 400, montant_avoir: '600.00', repartition_stock: [],
+    },
+  ]);
+  render(<DeferredSaleHistory transactionId={7} refreshKey="600:400" />);
+  expect(await screen.findByText('Annulation des œufs restants')).toBeVisible();
+  expect(screen.getByText('−400 œufs')).toBeVisible();
+  expect(screen.getByText(/Avoir commercial : .*600/)).toBeVisible();
+  expect(screen.getByText(/Aucun remboursement automatique/)).toBeVisible();
+  expect(screen.queryByText('Répartition détaillée non enregistrée pour cet ancien ajout.')).not.toBeInTheDocument();
+  expect(get).toHaveBeenCalledWith('/transactions/7/completion-history', {
+    params: { include_initial: true },
+  });
+});

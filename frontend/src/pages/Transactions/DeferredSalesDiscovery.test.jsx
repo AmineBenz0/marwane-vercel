@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DeferredSalesCard from './DeferredSalesCard';
 import DeferredSalesPage from './DeferredSalesPage';
@@ -45,6 +45,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('deferred sale stock reservations', () => {
+  it('subtracts a customer credit from the signed daily remaining balance', async () => {
+    sales = [
+      { ...paid, montant_total: 24.65, montant_net: 24.60, montant_paye: 4.73, montant_restant: 19.87 },
+      { ...waiting, montant_total: 15, montant_net: 0, montant_paye: 7, montant_restant: -7 },
+    ];
+    render(<MemoryRouter initialEntries={['/transactions']}><TransactionsList /></MemoryRouter>);
+    const row = (await screen.findByText('Total jour')).closest('tr');
+    expect(within(row).getByText(/12,87\sMAD/)).toBeVisible();
+  });
+
   it('keeps canceled sales in the register without adding them to financial totals or follow-up', async () => {
     sales.push({ ...paid, id_transaction: 99, est_actif: false, montant_total: 999, montant_restant: 999, montant_paye: 0, statut_paiement: 'impaye' });
     render(<MemoryRouter initialEntries={['/transactions']}><TransactionsList /></MemoryRouter>);

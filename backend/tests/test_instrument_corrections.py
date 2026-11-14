@@ -249,25 +249,35 @@ def test_cession_replacement_preserves_original_and_restores_owner(db_session, l
     assert db_session.query(Caisse).filter(Caisse.statut == 'active').count() == 0
 
 
-def test_cleared_cheque_credit_uses_clearing_date_and_blocks_dependent_correction(db_session, cheque, test_user):
-    from app.schemas.refund import RefundCommand, RefundApplyCommand
-    from app.services.refunds import preview_refund, apply_refund
-    from app.services.financial_ledger import void_payment
+def test_cleared_cheque_credit_requires_instrument_reconciliation_before_refund(
+    db_session, cheque, test_user,
+):
+    from app.schemas.refund import RefundCommand
+    from app.services.refunds import preview_refund
     tx, p = cheque
     tx.montant_total = Decimal('1.00')
     p.date_encaissement_effective = date.today()
     sync_payment_cash_movement(db_session, p, tx, current_user=test_user)
     db_session.commit()
-    base = dict(operation_id=uuid4(), id_transaction=tx.id_transaction, montant='2.00', type_paiement='cash', reason='Remboursement du crédit')
-    with pytest.raises(HTTPException):
-        preview_refund(db_session, RefundCommand(**base, date_paiement=date.today()-timedelta(days=1)))
-    cmd = RefundCommand(**base, date_paiement=date.today())
-    preview = preview_refund(db_session, cmd)
-    apply_refund(db_session, RefundApplyCommand(**cmd.model_dump(), dependency_fingerprint=preview['dependency_fingerprint']), test_user)
-    with pytest.raises(HTTPException):
-        preview_correction(db_session, cheque_cmd(p, {'statut_cheque': 'rejete'}))
-    with pytest.raises(HTTPException):
-        void_payment(db_session, p, current_user=test_user, reason='Ne doit pas annuler un crédit remboursé')
+
+    # The effective cheque date determines when its payment is counted,
+    # but Release 3's financial dependency guard still forbids a cash refund
+    # while any active cheque is linked to the transaction. The instrument
+    # must first be reconciled through its dedicated correction workflow.
+    assert tx.montant_paye == Decimal('5.00')
+    assert tx.montant_restant == Decimal('-4.00')
+    original_cash = db_session.query(Caisse).filter(Caisse.statut == 'active').count()
+    base = dict(
+        operation_id=uuid4(), id_transaction=tx.id_transaction, montant='2.00',
+        type_paiement='cash', reason='Restitution différée en attente de réconciliation',
+    )
+    for payment_day in [date.today() - timedelta(days=1), date.today()]:
+        with pytest.raises(HTTPException) as exc:
+            preview_refund(db_session, RefundCommand(**base, date_paiement=payment_day))
+        assert exc.value.status_code == 409
+    assert db_session.query(Paiement).filter(Paiement.nature == 'remboursement').count() == 0
+    assert db_session.query(Caisse).filter(Caisse.statut == 'active').count() == original_cash
+    assert p.statut_cheque == 'encaisse'
 
 
 def test_supplier_bank_cheque_status_reversal_restores_account(db_session, correction_transaction, test_user):
@@ -288,24 +298,43 @@ def test_supplier_bank_cheque_status_reversal_restores_account(db_session, corre
     assert account.solde_actuel == 0
 
 
-def test_lc_dependent_refund_blocks_amount_edit_and_cancellation(
+def test_lc_dependent_cash_refund_requires_instrument_reconciliation(
     db_session, letter, test_user, correction_transaction
 ):
-    from app.schemas.refund import RefundCommand, RefundApplyCommand
-    from app.services.refunds import preview_refund, apply_refund
+    from app.schemas.refund import RefundCommand
+    from app.services.refunds import preview_refund
     lc, _ = letter
     tx = correction_transaction
     tx.montant_total = Decimal('1.00')
     db_session.commit()
     p = used_lc_supplier_payment(db_session, lc, tx, test_user, payment_date=date.today())
-    cmd = RefundCommand(operation_id=uuid4(), id_transaction=tx.id_transaction, date_paiement=date.today(), montant='2.00', type_paiement='cash', reason='Remboursement LC')
-    preview = preview_refund(db_session, cmd)
-    apply_refund(db_session, RefundApplyCommand(**cmd.model_dump(), dependency_fingerprint=preview['dependency_fingerprint']), test_user)
-    for command in [lc_cmd(lc, {'montant':'4.00'}), lc_cmd(lc, action='cancel_usage')]:
-        with pytest.raises(HTTPException):
-            preview_lc_correction(db_session, command)
+    # Even a cash-backed refund is not permitted while the sale has an
+    # active LC dependency. The dedicated LC reconciliation must happen first.
+    cash = Paiement(
+        id_transaction=tx.id_transaction, montant=Decimal('2.00'),
+        date_paiement=date.today(), type_paiement='cash', nature='paiement',
+        source_reglement='caisse', statut='valide',
+        id_utilisateur_creation=test_user.id_utilisateur,
+    )
+    db_session.add(cash)
+    db_session.flush()
+    sync_payment_cash_movement(db_session, cash, tx, current_user=test_user)
+    db_session.commit()
     before = (p.montant, p.date_paiement, p.row_version, db_session.query(Caisse).count())
-    apply_lc(db_session, lc_cmd(lc, {'numero_reference': 'LC-REF-CORRECTED', 'banque_emettrice': 'Banque corrigée'}), test_user)
+    command = RefundCommand(
+        operation_id=uuid4(), id_transaction=tx.id_transaction,
+        date_paiement=date.today(), montant='2.00', type_paiement='cash',
+        reason='Restitution bloquée avant réconciliation LC',
+    )
+    with pytest.raises(HTTPException) as exc:
+        preview_refund(db_session, command)
+    assert exc.value.status_code == 409
+    assert db_session.query(Paiement).filter_by(nature='remboursement').count() == 0
+    # Metadata correction on the LC must still remain possible.
+    apply_lc(db_session, lc_cmd(lc, {
+        'numero_reference': 'LC-REF-CORRECTED',
+        'banque_emettrice': 'Banque corrigée',
+    }), test_user)
     assert before == (p.montant, p.date_paiement, p.row_version, db_session.query(Caisse).count())
 
 

@@ -13,7 +13,7 @@ def lock_transaction(db: Session, transaction_id: int) -> Transaction:
     if transaction is None:
         raise HTTPException(404, f"Transaction {transaction_id} introuvable")
     # Refresh collections too if a caller loaded them before waiting for a lock.
-    db.expire(transaction, ["paiements", "allocations"])
+    db.expire(transaction, ["paiements", "allocations", "avoirs_livraison_differee"])
     return transaction
 
 

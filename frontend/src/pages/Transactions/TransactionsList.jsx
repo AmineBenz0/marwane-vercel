@@ -726,7 +726,7 @@ function TransactionsList() {
           <TransactionMetric
             label="Ventes"
             value={formatMontant(transactionSummary.totalVentes)}
-            helper={`${transactionSummary.ventes} transaction(s) client`}
+            helper={`${transactionSummary.ventes} transaction(s) client · montant net actuel`}
             icon={<TrendingUpIcon />}
             color="#1D6F50"
           />
@@ -971,8 +971,8 @@ const formatPaymentAmountForSummary = (value) => {
   if (value === null || value === undefined) return null;
   return (
     new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })
       .format(Number(value || 0))
       .replace(/\s/g, '\u00A0') + '\u00A0MAD'
@@ -982,7 +982,11 @@ const formatPaymentAmountForSummary = (value) => {
 const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountForSummary) => {
   if (!payment) return null;
 
-  const label = getPaymentTypeLabel(payment);
+  const label = payment.nature === 'remboursement'
+    ? 'Remboursement · ' + getPaymentTypeLabel(payment)
+    : payment.nature === 'credit_transfere'
+      ? 'Crédit transféré' : payment.nature === 'credit_recu'
+        ? 'Crédit utilisé' : getPaymentTypeLabel(payment);
   const reference = getPaymentReferenceValue(payment);
   const referenceText = reference
     ? ` ${reference}`
@@ -990,8 +994,10 @@ const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountFor
   const amount = payment.montant !== null && payment.montant !== undefined
     ? formatAmount(payment.montant)
     : null;
+  const signedAmount = payment.nature === 'remboursement' || payment.nature === 'credit_transfere'
+    ? '− ' + amount : amount;
 
-  return [amount ? `${label}${referenceText} · ${amount}` : `${label}${referenceText}`]
+  return [amount ? `${label}${referenceText} · ${signedAmount}` : `${label}${referenceText}`]
     .filter(Boolean)
     .join('');
 };
@@ -1010,9 +1016,12 @@ const transactionExportColumns = [
   { id: 'produit_label', label: 'Produit vendu / acheté', excelWidth: 40 },
   { id: 'batiment_label', label: 'Bâtiment', excelWidth: 26 },
   { id: 'quantite', label: 'Quantité' },
-  { id: 'montant_total', label: 'Montant total' },
-  { id: 'montant_paye', label: 'Payé' },
-  { id: 'montant_restant', label: 'Reste' },
+  { id: 'montant_total', label: 'Montant initial', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'montant_avoir', label: 'Avoirs commerciaux', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'montant_net', label: 'Montant net', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'avoirs_details', label: 'Détail des avoirs', excelWidth: 47 },
+  { id: 'montant_paye', label: 'Payé', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'montant_restant', label: 'Reste', excelNumberFormat: () => '#,##0.00 "MAD"' },
   { id: 'reglement', label: 'Règlement', excelWidth: 62 },
   { id: 'statut_paiement', label: 'Paiement' },
   { id: 'etat_stock', label: 'Stock' },
@@ -1025,9 +1034,10 @@ const deferredExportColumns = [
   { id: 'quantite_reservee', label: 'Stock prêt à compléter' },
   { id: 'quantite_en_attente', label: 'Reste à fournir' },
   { id: 'quantite_a_produire', label: 'À produire' },
+  { id: 'quantite_annulee', label: 'Quantité annulée' },
 ];
 
-const exportTransactionWorkbook = (rows) => {
+export const exportTransactionWorkbook = (rows) => {
   const hasDeferred = rows.some(row => row.est_promesse);
   const columns = hasDeferred ? [...transactionExportColumns, ...deferredExportColumns] : transactionExportColumns;
   const data = rows.map(row => {
@@ -1038,9 +1048,14 @@ const exportTransactionWorkbook = (rows) => {
       date_livraison_prevue: row.date_livraison_prevue
         ? formatShortDate(row.date_livraison_prevue, row.date_livraison_prevue)
         : '',
-      montant_total: formatMontantComplet(row.montant_total),
-      montant_paye: formatMontantComplet(row.montant_paye),
-      montant_restant: formatMontantComplet(row.montant_restant),
+      montant_total: Number(row.montant_total ?? 0),
+      montant_avoir: Number(row.montant_avoir ?? 0),
+      montant_net: Number(row.montant_net ?? row.montant_total ?? 0),
+      avoirs_details: (row.avoirs_livraison_differee || [])
+        .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontantComplet(avoir.montant_avoir)}`)
+        .join(' | '),
+      montant_paye: Number(row.montant_paye ?? 0),
+      montant_restant: Number(row.montant_restant ?? 0),
       reglement: getPaymentReglementSummary(row, formatMontantComplet),
       statut_paiement: {
         impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
@@ -1050,17 +1065,29 @@ const exportTransactionWorkbook = (rows) => {
       quantite_en_attente: row.est_promesse ? row.quantite_en_attente : '',
     };
   });
-  const total = rows.reduce((sum, row) => sum + (row.est_actif === false ? 0 : Number(row.montant_total || 0)), 0);
+  const totals = rows.filter(row => row.est_actif !== false).reduce((sum, row) => ({
+    gross: sum.gross + Number(row.montant_total || 0),
+    avoirs: sum.avoirs + Number(row.montant_avoir || 0),
+    net: sum.net + Number(row.montant_net ?? row.montant_total ?? 0),
+    paid: sum.paid + Number(row.montant_paye || 0),
+    remaining: sum.remaining + Number(row.montant_restant || 0),
+  }), { gross: 0, avoirs: 0, net: 0, paid: 0, remaining: 0 });
   return exportToExcelAdvanced(
-    [...data, {}, { quantite: 'Total :', montant_total: formatMontantComplet(total) }],
+    [...data, {}, {
+      quantite: 'Total :', montant_total: totals.gross,
+      montant_avoir: totals.avoirs,
+      montant_net: totals.net,
+      montant_paye: totals.paid,
+      montant_restant: totals.remaining,
+    }],
     columns,
     `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
     'Transactions',
   );
 };
 
-const getSignedAmount = (transaction, field = 'montant_total') => {
-  const amount = Math.abs(Number(transaction[field] || 0));
+const getSignedAmount = (transaction) => {
+  const amount = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
   return transaction.id_client !== null ? amount : -amount;
 };
 
@@ -1106,14 +1133,14 @@ function TransactionsExcelRegister({
       };
 
       if (transaction.est_actif !== false) {
-        const total = Math.abs(Number(transaction.montant_total || 0));
+        const total = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
         if (transaction.id_client !== null) {
           group.entries += total;
         } else {
           group.exits += total;
         }
         group.paid += Math.abs(Number(transaction.montant_paye || 0));
-        group.remaining += Math.abs(Number(transaction.montant_restant || 0));
+        group.remaining += Number(transaction.montant_restant || 0);
 
         const status = getPaymentStatus(transaction);
         if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
@@ -1194,7 +1221,7 @@ function TransactionsExcelRegister({
                 <TableCell>Produit</TableCell>
                 <TableCell>Bâtiment</TableCell>
                 <TableCell align="right">Quantité</TableCell>
-                <TableCell align="right">Total</TableCell>
+                <TableCell align="right">Total net</TableCell>
                 <TableCell align="right">Payé</TableCell>
                 <TableCell align="right">Reste</TableCell>
                 <TableCell>Règlement</TableCell>

@@ -36,9 +36,14 @@ function MonthlyReportPage() {
 
   const groups = useMemo(() => report ? {
     activity: [
-      { indicateur: 'Ventes', valeur: report.ventes, type: 'money' },
+      { indicateur: 'Ventes nettes', valeur: report.ventes_nettes ?? report.ventes, type: 'money' },
       { indicateur: 'Achats', valeur: report.achats, type: 'money' },
       { indicateur: 'Charges', valeur: report.charges, type: 'money' },
+    ],
+    breakdown: [
+      { indicateur: 'Ventes initiales', valeur: report.ventes, type: 'money' },
+      { indicateur: 'Avoirs commerciaux émis', valeur: report.avoirs_commerciaux ?? 0, type: 'money' },
+      { indicateur: 'Remboursements clients (inclus dans les sorties)', valeur: report.remboursements_clients ?? 0, type: 'money' },
     ],
     cash: [
       { indicateur: 'Entrées caisse', valeur: report.caisse_entrees, type: 'money' },
@@ -74,18 +79,23 @@ function MonthlyReportPage() {
     : '';
   const exportRows = useMemo(() => groups ? [
     { indicateur: 'Période', valeur: periodLabel },
-    ...[...groups.activity, ...groups.cash, ...groups.bank, ...groups.stock].map(row => ({ indicateur: row.indicateur, valeur: displayReportValue(row) })),
+    ...[...groups.activity, ...groups.breakdown, ...groups.cash, ...groups.bank, ...groups.stock].map(row => ({ ...row })),
     ...groups.historical.map(row => ({ indicateur: projectedPeriod
       ? `${row.indicateur} (projection au ${historicalDate})`
-      : `${row.indicateur} au ${historicalDate}`, valeur: displayReportValue(row) })),
-    ...groups.current.map(row => ({ indicateur: `${row.indicateur} actuel au ${currentDate}`, valeur: displayReportValue(row) })),
+      : `${row.indicateur} au ${historicalDate}`, valeur: row.valeur, type: row.type })),
+    ...groups.current.map(row => ({ indicateur: `${row.indicateur} actuel au ${currentDate}`, valeur: row.valeur, type: row.type })),
   ] : [], [groups, historicalDate, currentDate, periodLabel, projectedPeriod]);
   const displayMonth = report ? formatMonthYear(report.month, report.month) : '';
   const exportReport = async outputFormat => {
     if (!report || loading) return;
-    const columns = [{ id: 'indicateur', label: 'Indicateur', excelWidth: 66 }, { id: 'valeur', label: 'Valeur', excelWidth: 24 }];
+    const columns = [{ id: 'indicateur', label: 'Indicateur', excelWidth: 66 }, {
+      id: 'valeur', label: 'Valeur', excelWidth: 24,
+      excelNumberFormat: row => row.type === 'money' ? '#,##0.00 "MAD"' : row.type === 'quantity' ? '#,##0.###' : row.type === 'count' ? '0' : undefined,
+    }];
     if (outputFormat === 'pdf') exportMonthlyReportPDF(report, `rapport_mensuel_${report.month}`);
-    else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse');
+    else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse', {
+      valeur: (value, row) => row.type && value != null && Number.isFinite(Number(value)) ? Number(value) : value ?? '—',
+    });
   };
   const hasBankActivity = !!report && ((report.soldes_bancaires || []).length > 0 || Number(report.banques_entrees) !== 0 || Number(report.banques_sorties) !== 0);
 
@@ -108,9 +118,14 @@ function MonthlyReportPage() {
       <Collapse in={showInfo}><Box id={infoId} sx={{ bgcolor: 'action.hover', p: 2, borderRadius: 1, my: 1 }}>
         <Typography variant="body2">Le stock disponible est réservé automatiquement au fil des productions. Ces réservations ne créent pas de nouvelle vente et ne modifient ni le montant ni les paiements.</Typography>
       </Box></Collapse>
-      <Grid container spacing={2} sx={{ mt: 0, mb: 3 }}>{groups.activity.map(row => <Grid item xs={12} sm={6} md={4} key={row.indicateur}>
+      <Grid container spacing={2} sx={{ mt: 0, mb: 2 }}>{groups.activity.map(row => <Grid item xs={12} sm={6} md={4} key={row.indicateur}>
         <Card variant="outlined"><CardContent><Typography variant="body2" color="text.secondary">{row.indicateur}</Typography><Typography fontWeight={800} sx={{ mt: 0.5, fontVariantNumeric: 'tabular-nums', fontSize: { xs: '1.4rem', md: '1.6rem' } }}>{money(row.valeur)}</Typography></CardContent></Card>
       </Grid>)}</Grid>
+      {Number(report.avoirs_commerciaux ?? 0) > 0 && <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          Ventes initiales : {money(report.ventes)} · Avoirs émis : − {money(report.avoirs_commerciaux)}
+        </Typography>
+      </Paper>}
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements de caisse du mois</Typography><ReportRows rows={groups.cash} /></Paper>
       {hasBankActivity && <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements bancaires du mois</Typography><ReportRows rows={groups.bank} /></Paper>}
       <Paper component="section" aria-label="Situation actuelle" variant="outlined" sx={{ p: 2, mb: 2 }}><Stack direction="row" justifyContent="space-between" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700}>Situation actuelle</Typography><Typography variant="body2" color="text.secondary">Au {currentDate}</Typography></Stack><ReportRows rows={groups.current} /></Paper>
