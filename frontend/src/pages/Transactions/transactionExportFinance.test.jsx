@@ -52,22 +52,17 @@ describe('Release 4 Phase 6 transaction Excel', () => {
       avoirs_details: 'Détail des avoirs',
       quantite_annulee: 'Quantité annulée',
     });
-    expect(rows[0].montant_total).toContain('1 500,00');
-    expect(rows[0].montant_avoir).toContain('600,00');
-    expect(rows[0].montant_net).toContain('900,00');
-    expect(rows[0].montant_paye).toContain('900,00');
-    expect(rows[0].montant_restant).toContain('0,00');
+    expect(rows[0]).toMatchObject({ montant_total: 1500, montant_avoir: 600, montant_net: 900, montant_paye: 900, montant_restant: 0 });
+    for (const id of ['montant_total', 'montant_avoir', 'montant_net', 'montant_paye', 'montant_restant']) {
+      expect(columns.find(column => column.id === id).excelNumberFormat()).toContain('MAD');
+    }
     expect(rows[0].avoirs_details).toContain('10/11/26');
     expect(rows[0].avoirs_details).toContain('600,00');
     expect(rows[0].reglement).toContain('Remboursement');
     expect(rows[0].reglement).toContain('600,00');
     expect(rows[0].reglement).toContain('−');
     const totals = rows.at(-1);
-    expect(totals.montant_total).toContain('1 500,00');
-    expect(totals.montant_avoir).toContain('600,00');
-    expect(totals.montant_net).toContain('900,00');
-    expect(totals.montant_paye).toContain('900,00');
-    expect(totals.montant_restant).toContain('0,00');
+    expect(totals).toMatchObject({ montant_total: 1500, montant_avoir: 600, montant_net: 900, montant_paye: 900, montant_restant: 0 });
   });
 
   it('excludes inactive transactions from all five reconciled totals', async () => {
@@ -83,10 +78,6 @@ describe('Release 4 Phase 6 transaction Excel', () => {
         montant_restant: '-100.00' },
     ]);
     const totals = exportToExcelAdvanced.mock.calls[0][0].at(-1);
-    expect(totals.montant_total).toContain('100,00');
-    expect(totals.montant_avoir).toContain('0,00');
-    expect(totals.montant_net).toContain('100,00');
-    expect(totals.montant_paye).toContain('70,00');
-    expect(totals.montant_restant).toContain('30,00');
+    expect(totals).toMatchObject({ montant_total: 100, montant_avoir: 0, montant_net: 100, montant_paye: 70, montant_restant: 30 });
   });
 });

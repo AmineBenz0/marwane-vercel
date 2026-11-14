@@ -23,7 +23,7 @@ from app.schemas.caisse import (
 from app.utils.dependencies import get_current_active_user
 from app.utils.business_date import business_date
 from app.models.user import Utilisateur
-from app.services.financial import cash_ledger_as_of
+from app.services.financial import cash_ledger_as_of, financial_position_as_of
 
 router = APIRouter(prefix="/caisse", tags=["Caisse"])
 
@@ -225,11 +225,11 @@ def get_solde_complet(
     
     ecart = solde_theorique - solde_reel
     
-    # Créances clients = Transactions clients - Paiements clients
-    creances_clients = entrees_theoriques - entrees_reelles
-
-    # Dettes fournisseurs = Transactions fournisseurs - Paiements fournisseurs
-    dettes_fournisseurs = sorties_theoriques - Decimal(str(sorties_reelles))
+    # Outstanding amounts include commercial credits, non-cash payments and
+    # advances; cash movements alone cannot determine customer/supplier debt.
+    position = financial_position_as_of(db, business_date())
+    creances_clients = position['receivables']
+    dettes_fournisseurs = position['payables']
     
     return SoldeCaisseCompletRead(
         # Solde théorique

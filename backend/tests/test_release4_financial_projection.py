@@ -177,6 +177,17 @@ def test_phase3_current_model_and_sql_collection_are_identical(db_session, scena
     assert summary["count"] == 2
 
 
+def test_caisse_outstanding_balances_match_dated_financial_position(db_session, scenario, test_user, monkeypatch):
+    from app.routers import caisse
+
+    cutoff = date(2026, 11, 11)
+    monkeypatch.setattr(caisse, "business_date", lambda: cutoff)
+    summary = caisse.get_solde_complet(db=db_session, current_user=test_user)
+    position = financial_position_as_of(db_session, cutoff)
+    assert summary.creances_clients == position["receivables"] == Decimal("-500.00")
+    assert summary.dettes_fournisseurs == position["payables"] == Decimal("0.00")
+
+
 def test_phase3_filtered_sql_page_and_summary_use_same_net_values(db_session, scenario):
     tx = scenario["tx"]
     ids = [r.id_transaction for r in query_financial_transactions(

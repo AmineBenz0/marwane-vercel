@@ -1016,12 +1016,12 @@ const transactionExportColumns = [
   { id: 'produit_label', label: 'Produit vendu / acheté', excelWidth: 40 },
   { id: 'batiment_label', label: 'Bâtiment', excelWidth: 26 },
   { id: 'quantite', label: 'Quantité' },
-  { id: 'montant_total', label: 'Montant initial' },
-  { id: 'montant_avoir', label: 'Avoirs commerciaux' },
-  { id: 'montant_net', label: 'Montant net' },
+  { id: 'montant_total', label: 'Montant initial', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'montant_avoir', label: 'Avoirs commerciaux', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'montant_net', label: 'Montant net', excelNumberFormat: () => '#,##0.00 "MAD"' },
   { id: 'avoirs_details', label: 'Détail des avoirs', excelWidth: 47 },
-  { id: 'montant_paye', label: 'Payé' },
-  { id: 'montant_restant', label: 'Reste' },
+  { id: 'montant_paye', label: 'Payé', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'montant_restant', label: 'Reste', excelNumberFormat: () => '#,##0.00 "MAD"' },
   { id: 'reglement', label: 'Règlement', excelWidth: 62 },
   { id: 'statut_paiement', label: 'Paiement' },
   { id: 'etat_stock', label: 'Stock' },
@@ -1048,14 +1048,14 @@ export const exportTransactionWorkbook = (rows) => {
       date_livraison_prevue: row.date_livraison_prevue
         ? formatShortDate(row.date_livraison_prevue, row.date_livraison_prevue)
         : '',
-      montant_total: formatMontantComplet(row.montant_total),
-      montant_avoir: formatMontantComplet(row.montant_avoir ?? 0),
-      montant_net: formatMontantComplet(row.montant_net ?? row.montant_total),
+      montant_total: Number(row.montant_total ?? 0),
+      montant_avoir: Number(row.montant_avoir ?? 0),
+      montant_net: Number(row.montant_net ?? row.montant_total ?? 0),
       avoirs_details: (row.avoirs_livraison_differee || [])
-        .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontantComplet(avoir.montant_avoir)} MAD`)
+        .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontantComplet(avoir.montant_avoir)}`)
         .join(' | '),
-      montant_paye: formatMontantComplet(row.montant_paye),
-      montant_restant: formatMontantComplet(row.montant_restant),
+      montant_paye: Number(row.montant_paye ?? 0),
+      montant_restant: Number(row.montant_restant ?? 0),
       reglement: getPaymentReglementSummary(row, formatMontantComplet),
       statut_paiement: {
         impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
@@ -1074,11 +1074,11 @@ export const exportTransactionWorkbook = (rows) => {
   }), { gross: 0, avoirs: 0, net: 0, paid: 0, remaining: 0 });
   return exportToExcelAdvanced(
     [...data, {}, {
-      quantite: 'Total :', montant_total: formatMontantComplet(totals.gross),
-      montant_avoir: formatMontantComplet(totals.avoirs),
-      montant_net: formatMontantComplet(totals.net),
-      montant_paye: formatMontantComplet(totals.paid),
-      montant_restant: formatMontantComplet(totals.remaining),
+      quantite: 'Total :', montant_total: totals.gross,
+      montant_avoir: totals.avoirs,
+      montant_net: totals.net,
+      montant_paye: totals.paid,
+      montant_restant: totals.remaining,
     }],
     columns,
     `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
