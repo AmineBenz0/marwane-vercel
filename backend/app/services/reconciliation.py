@@ -84,7 +84,7 @@ def run_integrity_check(db: Session) -> list[dict]:
                     movement.id_mouvement,
                     "Le mouvement de caisse ne référence pas la transaction du paiement.",
                 ))
-        if movement.id_transaction is None and movement.id_charge is None and movement.id_paiement is None and movement.id_avance is None:
+        if movement.id_transaction is None and movement.id_charge is None and movement.id_paiement is None and movement.id_avance is None and movement.id_cession is None:
             issues.append(IntegrityIssue("ORPHAN_CASH_MOVEMENT", "high", "caisse", movement.id_mouvement, "Mouvement de caisse sans source."))
 
     for movement in active_bank_movements:
@@ -247,7 +247,7 @@ def run_integrity_check(db: Session) -> list[dict]:
             ),
             0,
         )
-    ).filter(Caisse.statut == "active").scalar()
+    ).filter(Caisse.statut == "active", Caisse.id_cession.is_(None)).scalar()
     latest_cash_snapshot = db.query(CaisseSoldeHistorique).order_by(
         CaisseSoldeHistorique.date_snapshot.desc(),
         CaisseSoldeHistorique.id_historique.desc(),
@@ -328,4 +328,5 @@ def run_integrity_check(db: Session) -> list[dict]:
             issues.append(IntegrityIssue("NEGATIVE_STOCK", "high", "produit", product.id_produit, f"Le stock calculé est négatif ({quantity})."))
 
     return [asdict(issue) for issue in issues]
+
 

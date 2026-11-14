@@ -15,6 +15,33 @@ from app.models.produit import Produit
 from app.models.transaction import Transaction
 
 
+def test_legacy_lc_cession_does_not_create_cash_integrity_errors(db_session):
+    from app.models.caisse_solde_historique import CaisseSoldeHistorique
+    from app.services.reconciliation import run_integrity_check
+
+    holder = Client(nom_client="Legacy LC holder")
+    db_session.add(holder)
+    db_session.flush()
+    lc = LettreDeCredit(
+        numero_reference="LC-LEGACY-RECONCILIATION", montant=100,
+        date_emission=date.today(), date_disponibilite=date.today(),
+        type_detenteur="client", id_client=holder.id_client,
+    )
+    db_session.add(lc)
+    db_session.flush()
+    cession = CessionLC(id_lc=lc.id_lc, type_cedant="client", type_cessionnaire="fournisseur", date_cession=date.today())
+    db_session.add(cession)
+    db_session.flush()
+    movement = Caisse(id_cession=cession.id_cession, montant=100, type_mouvement="SORTIE")
+    db_session.add(movement)
+    db_session.flush()
+    db_session.add(CaisseSoldeHistorique(solde=0, id_mouvement=movement.id_mouvement))
+    db_session.flush()
+
+    issues = run_integrity_check(db_session)
+    assert not any(issue["code"] in {"ORPHAN_CASH_MOVEMENT", "CASH_BALANCE_SNAPSHOT_MISMATCH"} for issue in issues)
+
+
 def test_supplier_use_can_be_undone_reused_and_undone_again(
     client, db_session, auth_headers, test_user
 ):
@@ -399,3 +426,4 @@ def test_supplier_lc_transfer_cannot_be_backdated_before_receipt(
     db_session.refresh(lc)
     assert lc.statut == "active" and lc.version_utilisation == 0
     assert db_session.query(CessionLC).filter_by(id_lc=lc.id_lc).count() == 0
+
