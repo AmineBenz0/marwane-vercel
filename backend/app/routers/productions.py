@@ -968,7 +968,8 @@ def get_cycle_performance(
 
     refresh_cycle_status(db, cycle)
     schedule = cycle_schedule(cycle)
-    performance_end = min(schedule.date_fin_reelle or date.today(), date.today())
+    today = business_date()
+    performance_end = min(schedule.date_fin_reelle or today, today)
     productions = db.query(Production).filter(
         Production.id_cycle == id_cycle,
         Production.est_actif.is_(True),
@@ -977,6 +978,7 @@ def get_cycle_performance(
     ).order_by(Production.date_production.asc(), Production.id_production.asc()).all()
 
     daily = {}
+    egg_fields = {"normal": "normal", "double_jaune": "double", "blanc": "white", "casse": "broken", "perdu": "lost"}
     for prod in productions:
         day = daily.setdefault(prod.date_production, {
             "date": prod.date_production,
@@ -984,22 +986,26 @@ def get_cycle_performance(
             "oeufs": 0,
             "aliment_kg": Decimal("0"),
             "grammage_total": Decimal("0"),
-            "grammage_count": 0,
+            "weighed_eggs": 0,
+            **dict.fromkeys(egg_fields.values(), 0),
             "formules": set(),
             "calibres": set(),
         })
 
         day["mort"] += int(prod.mortalite or 0)
         day["aliment_kg"] += Decimal(str(prod.consommation_aliment_kg or 0))
-        if prod.grammage is not None and prod.type_oeuf not in {"casse", "perdu"}:
-            day["grammage_total"] += Decimal(str(prod.grammage or 0))
-            day["grammage_count"] += 1
+        eggs = int(prod.nombre_oeufs or 0)
+        if prod.type_oeuf in egg_fields:
+            day[egg_fields[prod.type_oeuf]] += eggs
         if prod.formule:
             day["formules"].add(prod.formule)
         if prod.calibre:
             day["calibres"].add(prod.calibre)
         if prod.type_oeuf not in {"casse", "perdu"}:
-            day["oeufs"] += int(prod.nombre_oeufs or 0)
+            day["oeufs"] += eggs
+            if prod.grammage and prod.grammage > 0:
+                day["grammage_total"] += prod.grammage * eggs
+                day["weighed_eggs"] += eggs
 
     rows = []
     effectif_running = schedule.effectif_initial
@@ -1070,6 +1076,10 @@ def get_cycle_performance(
             "id": f"day-{day_date.isoformat()}",
             "rowType": "day",
             "date": day_date.strftime(DISPLAY_DATE_FORMAT),
+            "date_production": day_date,
+            **{key: day[key] for key in egg_fields.values()},
+            "poids_oeuf": day["grammage_total"] / day["oeufs"]
+            if day["oeufs"] and day["weighed_eggs"] == day["oeufs"] else None,
             "mort": day["mort"],
             "mort_pct": _ratio_percent(day["mort"], effectif_debut) if effectif_debut else "-",
             "oeufs": day["oeufs"],

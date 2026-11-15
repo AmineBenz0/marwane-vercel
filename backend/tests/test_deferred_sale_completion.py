@@ -107,6 +107,10 @@ def test_complete_300_then_100_preserves_sale_payments_and_origins(client, db_se
     assert (response.json()['quantite_couverte'], response.json()['quantite_en_attente']) == (1000, 0)
     assert {item['id_production']: item['quantite'] for item in response.json()['repartition_stock']} == {
         original_source.id_production: 600, late_source.id_production: 300, last.id_production: 100}
+    register = client.get('/api/v1/transactions', params={'est_promesse': True})
+    assert register.status_code == 200, register.text
+    assert register.json()[0]['quantites_livrees_par_source'] == {
+        str(original_source.id_production): 600, str(late_source.id_production): 300, str(last.id_production): 100}
     assert proposal(client, tx.id_transaction)['quantite_proposee'] == 0
     db_session.expire_all()
     assert original == (tx.id_transaction, tx.date_transaction, tx.quantite, tx.prix_unitaire, tx.montant_total)

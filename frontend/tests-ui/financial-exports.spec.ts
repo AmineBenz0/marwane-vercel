@@ -94,6 +94,61 @@ async function readPdf(page: Page, buttonName = 'Export PDF') {
 const amount = (value: unknown) =>
   Number(String(value ?? '0').replace(/[^\d,.-]/g, '').replace(',', '.'));
 
+test('Suivi global filters a lot and exports completed egg sales after credits', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+  const cycles = [1, 2].map(id => ({ id_cycle: id, id_lot: 7, id_batiment: id,
+    nom_batiment: `Poulailler ${id}`, nom_cycle: 'Lot test', date_debut: '2026-10-19',
+    date_fin_reelle: '2026-10-25', effectif_initial: 100, statut: 'termine' }));
+  const sale = { id_transaction: 42, id_client: 1, id_produit: 1, est_actif: true, est_promesse: true,
+    date_transaction: '2026-10-22', quantite: 4, quantite_annulee: 1, montant_total: '10.00', montant_net: '7.50',
+    repartition_stock: [{ id_production: 5, id_cycle: 2, quantite: 3 }], quantites_livrees_par_source: { 5: 2 } };
+  await page.route('**/api/v1/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/auth/refresh')) return route.fallback();
+    expect(route.request().method()).toBe('GET');
+    const results: Record<string, unknown> = {
+      '/api/v1/cycles-production': cycles,
+      '/api/v1/productions/performance': { rows: [{ rowType: 'day', date_production: '2026-10-22',
+        oeufs: 75, mort: 0, effectif_debut: 100, effectif_fin: 100, aliment_kg: '0' }] },
+      '/api/v1/produits': [{ id_produit: 1, nom_produit: 'Œufs normaux' }],
+      '/api/v1/transactions': url.searchParams.get('id_cycle') === '1' ? [] : [sale],
+    };
+    await route.fulfill({ json: results[url.pathname] ?? [] });
+  });
+
+  await page.setViewportSize({ width: 393, height: 850 });
+  await page.goto('/production/suivi-global');
+  await expect(page.getByRole('heading', { name: 'Suivi global' })).toBeVisible();
+  const sales = page.getByText('Ventes d’œufs attribuées', { exact: true }).first().locator('..');
+  await expect(sales).toContainText('5 DH');
+  await page.getByRole('button', { name: 'Filtres', exact: true }).click();
+  const building = page.getByRole('combobox', { name: 'Choisir un bâtiment' });
+  await building.click();
+  await page.getByRole('option', { name: 'Poulailler 1' }).click();
+  await expect(sales).toContainText('0 DH');
+  await building.click();
+  await page.getByRole('option', { name: 'Poulailler 2' }).click();
+  await expect(sales).toContainText('5 DH');
+
+  const sheet = await exportSheet(page, async () => {
+    await page.getByRole('button', { name: 'Exporter', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Excel (.xlsx)' }).click();
+  });
+  expect(String(sheet.getCell('A2').value)).toContain('Poulailler 2');
+  const salesColumn = (sheet.getRow(3).values as unknown[]).findIndex(value => String(value).includes('Ventes d’œufs attribuées'));
+  expect(salesColumn).toBeGreaterThan(0);
+  expect(sheet.getRow(sheet.rowCount).getCell(salesColumn).value).toBe(5);
+
+  await page.getByRole('button', { name: 'Exporter', exact: true }).click();
+  const [pdf] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('menuitem', { name: 'PDF (.pdf)' }).click(),
+  ]);
+  const bytes = await readFile((await pdf.path())!);
+  expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+  expect(bytes.toString('latin1')).toMatch(/Page 1 \/ \d/);
+});
+
 test('dashboard uses issue-month sales and register displays current net sale values', async ({ page }) => {
   const adjusted = [{ ...txData[0], montant_avoir: '40.00', montant_net: '60.00' }];
   const writes = await mockFinancialApi(page, adjusted, 'Client Test', {

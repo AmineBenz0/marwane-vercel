@@ -81,6 +81,10 @@ def test_explicit_cycle_assignment_and_performance_updates(client, db_session, a
     assert performance_response.status_code == status.HTTP_200_OK
     rows = performance_response.json()["rows"]
     day_row = next(row for row in rows if row["rowType"] == "day")
+    assert day_row["date_production"] == str(date.today())
+    assert day_row["normal"] == 900
+    assert day_row["lost"] == 0
+    assert float(day_row["poids_oeuf"]) == 61
     assert day_row["effectif_debut"] == 1000
     assert day_row["effectif_fin"] == 998
     assert day_row["mort"] == 2

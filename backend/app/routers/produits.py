@@ -68,7 +68,7 @@ def get_produits(
             )
     
     # Pagination
-    produits = query.offset(skip).limit(limit).all()
+    produits = query.order_by(Produit.id_produit).offset(skip).limit(limit).all()
     
     return produits
 
