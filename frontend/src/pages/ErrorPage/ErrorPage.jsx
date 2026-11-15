@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react';
+import { isChunkLoadError } from '../../utils/chunkRecovery';
 import {
   Box,
   Container,
@@ -37,6 +38,7 @@ import {
 function ErrorPage({ error, errorInfo, onReset }) {
   const [showDetails, setShowDetails] = useState(false);
   const [reportSent, setReportSent] = useState(false);
+  const isStaleChunk = isChunkLoadError(error);
 
   /**
    * Recharge la page complètement.
@@ -139,9 +141,13 @@ function ErrorPage({ error, errorInfo, onReset }) {
 
         {/* Message principal */}
         <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          Désolé, une erreur inattendue s'est produite dans l'application.
+          {isStaleChunk
+            ? "Une nouvelle version de l'application est disponible ou un fichier n'a pas pu être chargé."
+            : "Désolé, une erreur inattendue s'est produite dans l'application."}
           <br />
-          Veuillez essayer de recharger la page ou retourner à l'accueil.
+          {isStaleChunk
+            ? "Rechargez la page pour utiliser la dernière version. Si le problème persiste, réessayez après avoir vérifié votre connexion."
+            : "Veuillez essayer de recharger la page ou retourner à l'accueil."}
         </Typography>
 
         {/* Message d'erreur si disponible (en mode développement) */}
@@ -183,7 +189,7 @@ function ErrorPage({ error, errorInfo, onReset }) {
             Retour à l'accueil
           </Button>
 
-          {onReset && (
+          {onReset && !isStaleChunk && (
             <Button
               variant="outlined"
               color="secondary"
