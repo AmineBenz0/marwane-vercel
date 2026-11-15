@@ -21,6 +21,7 @@ describe('stale lazy-module recovery after deployment change', () => {
     expect(isChunkLoadError(new TypeError('Failed to fetch dynamically imported module: /assets/MonthlyReportPage-OLD.js'))).toBe(true);
     expect(isChunkLoadError(new Error('Importing a module script failed.'))).toBe(true);
     expect(isChunkLoadError(new Error('error loading dynamically imported module'))).toBe(true);
+    expect(isChunkLoadError(new Error('Loading chunk transactions-123 failed.'))).toBe(true);
     expect(isChunkLoadError(new Error('Failed to fetch /api/transactions'))).toBe(false);
     expect(isChunkLoadError(new TypeError('Cannot read properties of undefined'))).toBe(false);
   });
@@ -43,6 +44,15 @@ describe('stale lazy-module recovery after deployment change', () => {
     expect(recoverFailedChunk(new Error('DB unreachable'), env)).toBe(false);
     env.storage.getItem = () => { throw new Error('blocked'); };
     expect(recoverFailedChunk(new Error('Loading chunk X failed'), env)).toBe(false);
+    expect(env.locationRef.reload).not.toHaveBeenCalled();
+  });
+
+  it('leaves the error visible when accessing session storage itself throws', () => {
+    const env = environment();
+    Object.defineProperty(env, 'storage', {
+      get() { throw new Error('blocked'); },
+    });
+    expect(recoverFailedChunk(new Error('Loading chunk transactions-123 failed'), env)).toBe(false);
     expect(env.locationRef.reload).not.toHaveBeenCalled();
   });
 

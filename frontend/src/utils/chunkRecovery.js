@@ -15,7 +15,6 @@ export function recoverFailedChunk(error, options = {}) {
   if (!isChunkLoadError(error)) return false;
 
   const documentRef = options.documentRef ?? document;
-  const storage = options.storage ?? window.sessionStorage;
   const locationRef = options.locationRef ?? window.location;
 
   // Build names are content-hashed by Vite. After a reload, a changed entry
@@ -26,7 +25,9 @@ export function recoverFailedChunk(error, options = {}) {
 
   // Storage is required for the safety guard. If access is blocked, prefer
   // showing the error page instead of risking an infinite reload loop.
+  let storage;
   try {
+    storage = options.storage ?? window.sessionStorage;
     if (storage.getItem(marker) === '1') return false;
     storage.setItem(marker, '1');
   } catch {
