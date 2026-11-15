@@ -34,7 +34,9 @@ from app.schemas.transaction import (
     DeferredSaleRemainderClose,
     DeferredSaleCancellationRead,
     DeferredSaleCancellationPreview,
-    TransactionAuditRead
+    TransactionAuditRead,
+    ReactivationApply,
+    ReactivationPreview,
 )
 from app.schemas.paiement import PaiementCreate
 from app.schemas.transaction_payment import (
@@ -46,13 +48,16 @@ from app.utils.production_cycles import cycle_schedule
 from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
+from app.services.financial_locking import lock_transaction
 from app.services.financial import validate_payment_date, validate_payment_idempotency
 from app.services.deferred_cancellation import cancel_deferred_sale_remainder, preview_deferred_sale_remainder
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.lc_lifecycle import payment_lc_role, record_lc_payment_event
 from app.services.ledger import record_correction
-from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations, assign_pending_promises, source_balances
+from app.services.stock_corrections import lock_stock_scope
+from app.services.transaction_restoration import build_reactivation_preview, restore_inventory_movement
+from app.services.egg_sales import resolve_sale_source, sale_sources, completion_preview, complete_deferred_sale, deferred_sales_overview, deferred_sale_reservations, assign_pending_promises
 from app.utils.business_date import business_date
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
@@ -1217,72 +1222,35 @@ def delete_transaction(
     return None
 
 
-@router.patch("/{id}/reactivate", response_model=TransactionRead, status_code=status.HTTP_200_OK)
-def reactivate_transaction(
+@router.get("/{id}/reactivate/preview", response_model=ReactivationPreview)
+def preview_transaction_reactivation(
     id: int,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_active_user)
 ):
-    """
-    Réactive une transaction inactive.
-    
-    Effectue l'inverse du soft delete en remettant est_actif à True.
-    Enregistre automatiquement l'ID de l'utilisateur qui a réactivé la transaction.
-    
-    Args:
-        id: ID de la transaction à réactiver
-        db: Session de base de données
-        current_user: Utilisateur actuel authentifié (via dépendance)
-        
-    Returns:
-        Transaction réactivée (TransactionRead)
-        
-    Raises:
-        HTTPException 404: Si la transaction n'existe pas
-        HTTPException 400: Si la transaction est déjà active
-    """
-    transaction = db.query(Transaction).filter(Transaction.id_transaction == id).first()
-    
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction avec l'ID {id} introuvable"
-        )
-    
-    # Vérifier si la transaction est déjà active
-    if transaction.est_actif:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La transaction avec l'ID {id} est déjà active"
-        )
-    
-    # Réactiver : mettre est_actif à True
-    if transaction.est_promesse:
-        db.query(Batiment).filter(
-            Batiment.id_batiment == transaction.id_batiment,
-        ).with_for_update().one()
-        db.query(Produit).filter(
-            Produit.id_produit == transaction.id_produit,
-        ).with_for_update().one()
-        _, balances = source_balances(
-            db, through_date=business_date(), reserve_open_promises=False,
-        )
-        if any(
-            balances.get(allocation.id_production, 0) < allocation.quantite
-            for allocation in transaction.allocations
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Le stock de cette livraison différée a été réservé à d'autres ventes. "
-                    "Créez une nouvelle livraison pour reprendre la place dans la file FIFO."
-                ),
-            )
+    """Show the stock effects and retained payment history without writing."""
+    review, _ = build_reactivation_preview(db, db.get(Transaction, id))
+    return review
+
+
+@router.patch("/{id}/reactivate", response_model=TransactionRead, status_code=status.HTTP_200_OK)
+def reactivate_transaction(
+    id: int,
+    confirmation: ReactivationApply,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user)
+):
+    """Confirm the reviewed restoration in one transaction."""
+    lock_stock_scope(db)
+    transaction = lock_transaction(db, id)
+    if transaction.row_version != confirmation.expected_version:
+        raise HTTPException(409, "La transaction a changé. Actualisez l’aperçu.")
+    review, original_movement = build_reactivation_preview(db, transaction, lock_contact=True)
+    if review["dependency_fingerprint"] != confirmation.dependency_fingerprint:
+        raise HTTPException(409, "Le stock ou les règlements ont changé. Actualisez l’aperçu.")
+
     transaction.est_actif = True
-    record_transaction_movement(db, transaction, current_user)
-    if transaction.id_client is not None:
-        assign_pending_promises(db, building_id=transaction.id_batiment, current_user=current_user)
-    # Enregistrer l'utilisateur qui a réactivé (si authentification activée)
+    movement = restore_inventory_movement(db, original_movement, current_user) if original_movement else None
     if current_user:
         transaction.id_utilisateur_modification = current_user.id_utilisateur
 
@@ -1293,6 +1261,13 @@ def reactivate_transaction(
         action="reactivation",
         raison="Réactivation de la transaction",
         current_user=current_user,
+        details={
+            "stock_restaure": review["stock_effect"],
+            "quantite_stock": review["stock_quantity"],
+            "quantite_en_attente": review["pending_quantity"],
+            "mouvement_stock": movement.id_mouvement_stock if movement else None,
+            "paiements_annules_conserves": review["cancelled_payments_count"],
+        },
     )
     
     db.commit()

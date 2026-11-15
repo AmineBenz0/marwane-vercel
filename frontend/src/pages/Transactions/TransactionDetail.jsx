@@ -57,6 +57,7 @@ import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
 import DeferredSaleCancellationDialog from './DeferredSaleCancellationDialog';
 import DeferredSaleFinancialSummary from './DeferredSaleFinancialSummary';
+import ReactivationReviewDialog from './ReactivationReviewDialog';
 import { deferredCancellationEnabled } from './deferredCancellationAccess';
 import TransactionAuditHistory from './TransactionAuditHistory';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
@@ -94,6 +95,7 @@ function TransactionDetail() {
   const [loadingPaiements, setLoadingPaiements] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [cancelRemainderOpen, setCancelRemainderOpen] = useState(false);
+  const [reactivationOpen, setReactivationOpen] = useState(false);
   const [cancellationReceipt, setCancellationReceipt] = useState(null);
 
   // États pour les données de référence
@@ -547,6 +549,9 @@ function TransactionDetail() {
         >
           Transaction #{transaction.id_transaction}
         </Typography>
+        {transaction.est_actif === false && <Button variant="outlined" onClick={() => setReactivationOpen(true)}>
+          {transaction.id_client ? 'Réactiver la vente' : 'Réactiver l’achat'}
+        </Button>}
       </Box>
 
       {/* Informations principales */}
@@ -799,6 +804,15 @@ function TransactionDetail() {
           <CorrectionHistory transactionId={transaction.id_transaction} readOnly revision={transaction.row_version} />
         )}
       </Box>
+      {reactivationOpen && <ReactivationReviewDialog
+        transaction={transaction}
+        onClose={() => setReactivationOpen(false)}
+        onSaved={() => {
+          setReactivationOpen(false);
+          refreshPaiements();
+          notification.success('Transaction réactivée avec succès');
+        }}
+      />}
       {deferredCancellationEnabled() && transaction.est_promesse && (
         <DeferredSaleCancellationDialog
           open={cancelRemainderOpen}

@@ -4,9 +4,11 @@ Runs ONLY on disposable localhost /comptabilite_db in CI, with a generated
 test user. It must never connect to Supabase staging or production.
 """
 import os
-from datetime import date
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from pathlib import Path
+from threading import Barrier
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -31,13 +33,19 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models.caisse import Caisse
+from app.models.client import Client
 from app.models.credit import Avance
 from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
 from app.models.paiement import Paiement
+from app.models.produit import Produit
 from app.models.transaction import Transaction
 from app.models.user import Utilisateur
 from app.services.financial_ledger import sync_payment_cash_movement
+from app.services.inventory import get_stock_quantity, record_movement
+from app.utils.business_date import business_date
+from app.utils.security import create_access_token
 from tests.test_release4_ledger_pg import _sale
+from tests.test_transaction_restoration import confirmation, create_sale
 
 
 def test_authenticated_quote_cancel_refund_and_audit_on_native_postgres(monkeypatch):
@@ -194,6 +202,63 @@ def test_authenticated_quote_cancel_refund_and_audit_on_native_postgres(monkeypa
                     id_transaction=tx.id_transaction, statut="active",
                 ).count() == 2
                 assert db.query(Avance).count() == 0
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        engine.dispose()
+
+
+def test_concurrent_restorations_cannot_reuse_the_same_stock(monkeypatch):
+    """Two signed-in restores share a stock pool on the migrated schema."""
+    monkeypatch.setattr(settings, "ENABLE_AUTH", True)
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+
+    def test_db():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = test_db
+    try:
+        with Session(engine) as db:
+            label = uuid4().hex[:12]
+            actor = Utilisateur(nom_utilisateur="Restauration QA", email=f"restore-{label}@example.invalid",
+                                mot_de_passe_hash="local-test-only", role="admin", est_actif=True)
+            contact = Client(nom_client=f"Client restauration {label}", est_actif=True)
+            product = Produit(nom_produit=f"Stock restauration {label}", type_produit="produit_fini",
+                              pour_clients=True, pour_fournisseurs=False)
+            db.add_all([actor, contact, product])
+            db.flush()
+            product_id = product.id_produit
+            actor_id = actor.id_utilisateur
+            contact_id = contact.id_client
+            record_movement(db, id_produit=product_id, quantite_delta=Decimal("10"),
+                            type_mouvement="ajustement", source_type="manual",
+                            date_mouvement=datetime.combine(business_date(), time.min, tzinfo=timezone.utc))
+            first = create_sale(db, contact, product, actor).id_transaction
+
+        headers = {"Authorization": f"Bearer {create_access_token({'sub': str(actor_id)})}"}
+        with TestClient(app) as client:
+            prefix = "/api/v1/transactions"
+            assert client.delete(f"{prefix}/{first}", headers=headers).status_code == 204
+            with Session(engine) as db:
+                second = create_sale(db, db.get(Client, contact_id), db.get(Produit, product_id),
+                                     db.get(Utilisateur, actor_id)).id_transaction
+            assert client.delete(f"{prefix}/{second}", headers=headers).status_code == 204
+            paths = [f"{prefix}/{transaction_id}/reactivate" for transaction_id in (first, second)]
+            reviews = [client.get(f"{path}/preview", headers=headers) for path in paths]
+            assert all(result.status_code == 200 for result in reviews), [result.text for result in reviews]
+            barrier = Barrier(2, timeout=10)
+
+            def apply(path, review):
+                barrier.wait()
+                return client.patch(path, headers=headers, json=confirmation(review.json()))
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                pending = [pool.submit(apply, path, review) for path, review in zip(paths, reviews)]
+                results = [task.result(timeout=20) for task in pending]
+            assert sorted(result.status_code for result in results) == [200, 409], [r.text for r in results]
+        with Session(engine) as db:
+            assert get_stock_quantity(db, product_id) == Decimal("4")
+            assert sum(db.get(Transaction, tx).est_actif for tx in (first, second)) == 1
     finally:
         app.dependency_overrides.pop(get_db, None)
         engine.dispose()
