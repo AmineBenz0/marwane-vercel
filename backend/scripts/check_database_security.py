@@ -25,6 +25,25 @@ def _rows(db, query: str) -> list[dict]:
     return [dict(row) for row in db.execute(text(query)).mappings().all()]
 
 
+def _policy_gaps(tables, policies, roles, metadata_access, grants):
+    """Only exempt the documented metadata table when it is truly private."""
+    policy_tables = {row["tablename"] for row in policies}
+    role_names = {row["rolname"] for row in roles}
+    public_tables = {row["table_name"] for row in grants if row["grantee"] == "PUBLIC"}
+    accessible = {row["tablename"] for row in metadata_access}
+    required = {"anon", "authenticated", "service_role", "app_runtime", "app_migrator"}
+    gaps, private_metadata = [], []
+    for row in tables:
+        name = row["tablename"]
+        if name in policy_tables:
+            continue
+        private = (name == "independent_lot_migration_map" and row["rowsecurity"]
+                   and required.issubset(role_names) and name not in accessible
+                   and name not in public_tables)
+        (private_metadata if private else gaps).append(name)
+    return gaps, private_metadata
+
+
 def main() -> int:
     db = SessionLocal()
     try:
@@ -80,6 +99,33 @@ def main() -> int:
             WHERE rolname IN ('anon', 'authenticated', 'service_role', 'app_runtime', 'app_migrator')
             ORDER BY rolname
         """)
+        # Include inherited privileges and privileged service roles, as well as
+        # every ordinary login. A policy-less metadata table is safe only when
+        # none of these roles can access it; platform admin roles are excluded.
+        metadata_access = _rows(db, """
+            SELECT c.relname AS tablename, r.rolname
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            CROSS JOIN pg_catalog.pg_roles r
+            WHERE n.nspname = 'public' AND c.relname = 'independent_lot_migration_map'
+              AND ((r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls)
+                   OR r.rolname IN ('anon', 'authenticated', 'service_role', 'app_runtime', 'app_migrator'))
+              AND (has_table_privilege(r.oid, c.oid,
+                    'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                   OR pg_has_role(r.oid, c.relowner, 'MEMBER')
+                   OR pg_has_role(r.oid, 'pg_read_all_data', 'MEMBER')
+                   OR pg_has_role(r.oid, 'pg_write_all_data', 'MEMBER'))
+            UNION ALL
+            SELECT c.relname AS tablename,
+                   CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                        ELSE pg_get_userbyid(acl.grantee) END AS rolname
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) acl
+            WHERE n.nspname = 'public' AND c.relname = 'independent_lot_migration_map'
+              AND acl.grantee <> c.relowner
+            ORDER BY tablename, rolname
+        """)
         connections = _rows(db, """
             SELECT usename, application_name, state, count(*) AS connection_count
             FROM pg_catalog.pg_stat_activity
@@ -100,8 +146,7 @@ def main() -> int:
         db.close()
 
     rls_gaps = [row["tablename"] for row in tables if not row["rowsecurity"]]
-    policy_tables = {row["tablename"] for row in policies}
-    policy_gaps = [row["tablename"] for row in tables if row["tablename"] not in policy_tables]
+    policy_gaps, private_metadata = _policy_gaps(tables, policies, roles, metadata_access, grants)
     missing_roles = [role for role in ("app_runtime", "app_migrator") if role not in {row["rolname"] for row in roles}]
     unsafe_runtime_roles = [
         row["rolname"]
@@ -136,6 +181,8 @@ def main() -> int:
         "tables": tables,
         "rls_disabled_tables": rls_gaps,
         "policyless_tables": policy_gaps,
+        "private_policyless_metadata": private_metadata,
+        "metadata_role_access": metadata_access,
         "grants": grants,
         "public_or_anon_grants": unsafe_grants,
         "direct_supabase_auth_grants": direct_supabase_auth_grants,

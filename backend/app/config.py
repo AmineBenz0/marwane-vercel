@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     ENABLE_CORRECTION_WRITES: bool = False
     # Separate release gate. Disabled by default on production and previews.
     ENABLE_CREDIT_REFUND_WRITES: bool = DEFAULT_ENVIRONMENT.lower() not in {"production", "preview"}
+    # Release 4 cancellation is gated until credit/refund integration + staging sign-off.
+    # Only isolated CI tests may enable it before Phase 8 staging sign-off.
+    ENABLE_DEFERRED_CANCELLATION_WRITES: bool = False
 
     # Secret utilisé exclusivement par les routes de tâches planifiées.
     CRON_SECRET: str = ""

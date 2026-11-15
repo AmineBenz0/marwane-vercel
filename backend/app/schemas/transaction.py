@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator, ConfigD
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 from app.schemas.paiement import PaiementRead
 
 
@@ -285,6 +286,80 @@ class DeferredSaleCompletion(BaseModel):
     empreinte_stock: str = Field(pattern=r'^[a-f0-9]{64}$')
 
 
+class DeferredSaleReschedule(BaseModel):
+    """Change only the informative delivery estimate, never financial dates."""
+    model_config = ConfigDict(extra='forbid')
+    date_livraison_prevue: date
+    expected_version: int = Field(gt=0, strict=True)
+
+
+class DeferredSaleRemainderClose(BaseModel):
+    """One idempotent request to close all currently unallocated eggs.
+
+    The client creates a UUID once and reuses it unchanged on retry. There
+    is no optional reason or refund request in this stock operation.
+    """
+    model_config = ConfigDict(extra='forbid')
+    operation_id: UUID
+    expected_version: int = Field(gt=0, strict=True)
+    quantite_en_attente_attendue: int = Field(gt=0, strict=True)
+    # Optional for compatibility with earlier Phase 4 internal calls. Phase 7
+    # browser confirmation always submits both so the quote cannot silently
+    # change after an installment, refund or business-date rollover.
+    montant_paye_attendu: Optional[Decimal] = Field(None, ge=0)
+    date_effet_attendue: Optional[date] = None
+
+    @field_validator("montant_paye_attendu")
+    @classmethod
+    def validate_quoted_paid_cents(cls, amount: Optional[Decimal]):
+        if amount is not None and (
+            not amount.is_finite() or amount != amount.quantize(Decimal("0.01"))
+        ):
+            raise ValueError("Le montant payé attendu doit être exprimé au centime.")
+        return amount
+
+
+class DeferredSaleCancellationPreview(BaseModel):
+    """Read-only commercial quote, valid only for this sale revision and stock.
+
+    Amounts are server-computed Decimal values; the browser never calculates
+    an avoir from displayed unit prices. The subsequent POST is revalidated.
+    """
+    id_transaction: int
+    date_effet: date
+    expected_version: int
+    quantite_en_attente_attendue: int
+    quantite_couverte: int
+    quantite_annulee: int
+    quantite_annulee_cumulee: int
+    montant_initial: Decimal
+    montant_avoir: Decimal
+    montant_avoirs_cumule: Decimal
+    montant_net: Decimal
+    montant_paye: Decimal
+    montant_restant: Decimal
+    credit_client: Decimal
+
+
+class DeferredSaleCancellationRead(BaseModel):
+    """Committed cancellation and independent commercial adjustment receipt."""
+    model_config = ConfigDict(extra='ignore')
+    id_avoir: UUID
+    id_transaction: int
+    date_effet: date
+    quantite_annulee: int
+    quantite_annulee_cumulee: int
+    quantite_en_attente: int
+    montant_initial: Decimal
+    montant_avoir: Decimal
+    montant_avoirs_cumule: Decimal
+    montant_net: Decimal
+    montant_paye: Decimal
+    montant_restant: Decimal
+    credit_client: Decimal
+    rejoue: bool = False
+
+
 class DeferredSalePreview(BaseModel):
     nom_client: Optional[str] = None
     nom_produit: Optional[str] = None
@@ -308,6 +383,17 @@ class DeferredSaleSummary(BaseModel):
     quantite_en_attente: int
     quantite_annulee: int = 0
     quantite_reservee: int
+
+
+class CommercialAvoirRead(BaseModel):
+    """Posted immutable commercial adjustment, distinct from a cash refund."""
+    id_avoir: UUID
+    date_effet: date
+    quantite_annulee: int
+    montant_avoir: Decimal
+    avoir_cumule: Decimal
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TransactionRead(TransactionBase):
@@ -337,12 +423,19 @@ class TransactionRead(TransactionBase):
     date_echeance: Optional[date] = Field(None, description="Date d'échéance du paiement")
     
     # Champs calculés (via les propriétés @property du modèle Transaction)
+    montant_avoir: Decimal = Field(default=Decimal('0'), description="Total des avoirs commerciaux (calculé)")
+    montant_net: Decimal = Field(default=Decimal('0'), description="Vente nette après avoirs (calculé)")
     montant_paye: Decimal = Field(default=Decimal('0'), description="Montant total payé (calculé)")
     montant_restant: Decimal = Field(default=Decimal('0'), description="Montant restant à payer (calculé)")
     statut_paiement: str = Field(default='impaye', description="Statut du paiement (calculé)")
     est_en_retard: bool = Field(default=False, description="Indique si le paiement est en retard (calculé)")
     pourcentage_paye: float = Field(default=0.0, description="Pourcentage du montant payé (calculé)")
     
+    # Separate ledgers: these entries are issued on their own effective
+    # dates, not payments or automatic advances.
+    avoirs_livraison_differee: List[CommercialAvoirRead] = Field(
+        default_factory=list, description="Avoirs commerciaux datés et immuables"
+    )
     # Liste des paiements associés
     paiements: List[PaiementRead] = Field(default_factory=list, description="Liste des paiements associés")
 

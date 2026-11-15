@@ -568,3 +568,233 @@ def test_stock_after_orders_keeps_missing_categories_and_other_stock_separate(
     assert all(category['to_produce_eggs'] is None for category in historical['categories'])
     daily = client.get('/api/v1/productions/stock/daily').json()['totals']
     assert daily['to_produce_eggs'] is None
+
+
+def test_release4_reschedule_updates_date_and_audits_without_stock_or_money(
+    client, db_session, deferred_sale, test_user,
+):
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    building, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    before = (tx.quantite_couverte, tx.quantite_en_attente, tx.montant_total)
+    result = client.patch(f'/api/v1/transactions/{tx.id_transaction}/delivery-date', json={
+        'expected_version': tx.row_version,
+        'date_livraison_prevue': (payload.date_livraison_prevue + timedelta(days=7)).isoformat(),
+    })
+    assert result.status_code == 200, result.text
+    assert result.json()['date_livraison_prevue'] == (payload.date_livraison_prevue + timedelta(days=7)).isoformat()
+    db_session.refresh(tx)
+    assert (tx.quantite_couverte, tx.quantite_en_attente, tx.montant_total) == before
+    assert db_session.query(Paiement).count() == 0
+    assert db_session.query(Caisse).count() == 0
+    history = client.get(f'/api/v1/transactions/{tx.id_transaction}/completion-history', params={'include_initial': True}).json()
+    assert history[-1]['type'] == 'reschedule'
+    assert history[-1]['date_avant'] == payload.date_livraison_prevue.isoformat()
+    assert history[-1]['date_apres'] == (payload.date_livraison_prevue + timedelta(days=7)).isoformat()
+    bad = client.patch(f'/api/v1/transactions/{tx.id_transaction}/delivery-date', json={
+        'expected_version': tx.row_version + 999,
+        'date_livraison_prevue': (payload.date_livraison_prevue + timedelta(days=8)).isoformat(),
+    })
+    assert bad.status_code == 409
+    earlier = client.patch(f'/api/v1/transactions/{tx.id_transaction}/delivery-date', json={
+        'expected_version': tx.row_version,
+        'date_livraison_prevue': (tx.date_transaction - timedelta(days=1)).isoformat(),
+    })
+    assert earlier.status_code == 400
+
+
+def test_release4_cancellation_is_gated_until_final_acceptance(
+    client, db_session, deferred_sale, test_user,
+):
+    from uuid import uuid4
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+    from app.models.correction_operation import CorrectionOperation
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    before = (tx.quantite_en_attente, tx.quantite_annulee, tx.montant_total)
+    response = client.post(f'/api/v1/transactions/{tx.id_transaction}/cancel-remainder', json={
+        'operation_id': str(uuid4()),
+        'expected_version': tx.row_version,
+        'quantite_en_attente_attendue': 400,
+    })
+    assert response.status_code == 409
+    db_session.refresh(tx)
+    assert (tx.quantite_en_attente, tx.quantite_annulee, tx.montant_total) == before
+    # Safe to run against Release 3 baseline: the Phase 2 ledger table is not
+    # installed there, and the gated-off API must not reference that table.
+    assert db_session.query(TransactionAudit).filter_by(
+        id_transaction=tx.id_transaction,
+        champ_modifie="annulation_reste_livraison_differee",
+    ).count() == 0
+
+
+
+def test_release4_atomic_cancellation_receipt_replay_and_financial_integrity(
+    client, db_session, deferred_sale, test_user, monkeypatch,
+):
+    from uuid import uuid4
+    from app.config import settings
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    from app.models.correction_operation import CorrectionOperation
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+
+    monkeypatch.setattr(settings, "ENABLE_DEFERRED_CANCELLATION_WRITES", True)
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    db_session.add(Paiement(
+        id_transaction=tx.id_transaction,
+        montant=Decimal("1500.00"),
+        date_paiement=tx.date_transaction,
+        type_paiement="cash", statut="valide",
+    ))
+    db_session.commit()
+    db_session.refresh(tx)
+    before_paid = [(p.id_paiement, p.montant, p.nature, p.statut) for p in tx.paiements]
+    operation_id = str(uuid4())
+    request = {
+        "operation_id": operation_id,
+        "expected_version": tx.row_version,
+        "quantite_en_attente_attendue": tx.quantite_en_attente,
+    }
+    endpoint = f"/api/v1/transactions/{tx.id_transaction}/cancel-remainder"
+    result = client.post(endpoint, json=request)
+    assert result.status_code == 200, result.text
+    receipt = result.json()
+    assert receipt["id_avoir"] == operation_id
+    assert receipt["quantite_annulee"] == 400
+    assert receipt["quantite_annulee_cumulee"] == 400
+    assert receipt["quantite_en_attente"] == 0
+    assert (Decimal(str(receipt["montant_initial"])),
+            Decimal(str(receipt["montant_avoir"])),
+            Decimal(str(receipt["montant_net"])),
+            Decimal(str(receipt["montant_paye"])),
+            Decimal(str(receipt["montant_restant"])),
+            Decimal(str(receipt["credit_client"]))) == (
+                Decimal("1500.00"), Decimal("600.00"),
+                Decimal("900.00"), Decimal("1500.00"),
+                Decimal("-600.00"), Decimal("600.00"),
+            )
+    assert receipt["rejoue"] is False
+    db_session.expire_all()
+    tx = db_session.get(Transaction, tx.id_transaction)
+    assert tx.quantite_couverte == 600
+    assert tx.quantite_annulee == 400
+    assert tx.quantite_en_attente == 0
+    assert tx.montant_total == Decimal("1500.00")
+    assert tx.montant_net == Decimal("900.00")
+    assert tx.statut_paiement == "surpaye"
+    assert [(p.id_paiement, p.montant, p.nature, p.statut) for p in tx.paiements] == before_paid
+    assert db_session.query(DeferredSaleAdjustment).count() == 1
+    from uuid import UUID
+    assert db_session.get(CorrectionOperation, UUID(operation_id)) is not None
+    assert client.get(f"/api/v1/transactions/{tx.id_transaction}/completion-history").json()[-1]["type"] == "cancel_remainder"
+
+    duplicate = client.post(endpoint, json=request)
+    assert duplicate.status_code == 200, duplicate.text
+    assert duplicate.json()["rejoue"] is True
+    assert duplicate.json()["id_avoir"] == operation_id
+    assert db_session.query(DeferredSaleAdjustment).count() == 1
+    different_payload = client.post(endpoint, json={**request, "quantite_en_attente_attendue": 399})
+    assert different_payload.status_code == 409
+    new_operation = client.post(endpoint, json={**request, "operation_id": str(uuid4())})
+    assert new_operation.status_code == 409
+    assert db_session.query(DeferredSaleAdjustment).count() == 1
+
+
+def test_release4_rejects_stale_and_not_delivered_stock_without_writes(
+    client, db_session, deferred_sale, test_user, monkeypatch,
+):
+    from uuid import uuid4
+    from app.config import settings
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    from app.models.correction_operation import CorrectionOperation
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+
+    monkeypatch.setattr(settings, "ENABLE_DEFERRED_CANCELLATION_WRITES", True)
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    endpoint = f"/api/v1/transactions/{tx.id_transaction}/cancel-remainder"
+    original_version = tx.row_version
+
+    for invalid in (
+        {"expected_version": original_version + 1, "quantite_en_attente_attendue": 400},
+        {"expected_version": original_version, "quantite_en_attente_attendue": 399},
+    ):
+        response = client.post(endpoint, json={"operation_id": str(uuid4()), **invalid})
+        assert response.status_code == 409
+
+    tx.allocations[0].quantite_livree = 0
+    db_session.commit()
+    invalid = client.post(endpoint, json={
+        "operation_id": str(uuid4()),
+        "expected_version": tx.row_version,
+        "quantite_en_attente_attendue": 400,
+    })
+    assert invalid.status_code == 409
+    db_session.expire_all()
+    assert db_session.get(Transaction, tx.id_transaction).quantite_annulee == 0
+    assert db_session.query(DeferredSaleAdjustment).count() == 0
+    assert db_session.query(CorrectionOperation).count() == 0
+
+
+def test_release4_commit_failure_rolls_back_stock_credit_and_audit(
+    client, db_session, deferred_sale, test_user, monkeypatch,
+):
+    from uuid import uuid4
+    from app.config import settings
+    from app.main import app
+    from app.utils.dependencies import get_current_active_user
+    from app.models.correction_operation import CorrectionOperation
+    from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+
+    monkeypatch.setattr(settings, "ENABLE_DEFERRED_CANCELLATION_WRITES", True)
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, test_user)
+    initial_count = db_session.query(TransactionAudit).count()
+    version = tx.row_version
+    real_commit = db_session.commit
+
+    def fail_commit():
+        raise RuntimeError("Simulated PostgreSQL deferred constraint/commit failure")
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="Simulated PostgreSQL"):
+        client.post(f"/api/v1/transactions/{tx.id_transaction}/cancel-remainder", json={
+            "operation_id": str(uuid4()),
+            "expected_version": version,
+            "quantite_en_attente_attendue": 400,
+        })
+    monkeypatch.setattr(db_session, "commit", real_commit)
+    db_session.expire_all()
+    assert db_session.get(Transaction, tx.id_transaction).quantite_annulee == 0
+    assert db_session.query(DeferredSaleAdjustment).count() == 0
+    assert db_session.query(CorrectionOperation).count() == 0
+    assert db_session.query(TransactionAudit).count() == initial_count
+
+
+def test_release4_cancellation_requires_active_authenticated_actor(
+    client, db_session, deferred_sale, monkeypatch,
+):
+    from uuid import uuid4
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ENABLE_DEFERRED_CANCELLATION_WRITES", True)
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, None)
+    response = client.post(f"/api/v1/transactions/{tx.id_transaction}/cancel-remainder", json={
+        "operation_id": str(uuid4()),
+        "expected_version": tx.row_version,
+        "quantite_en_attente_attendue": 400,
+    })
+    assert response.status_code == 403
+    assert tx.quantite_annulee == 0

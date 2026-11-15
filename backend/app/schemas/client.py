@@ -100,7 +100,7 @@ class ClientProfileStats(BaseModel):
     )
     montant_total_ventes: Decimal = Field(
         Decimal('0'),
-        description="Somme totale des montants des transactions"
+        description="Ventes cumulées nettes des avoirs commerciaux"
     )
     montant_moyen_transaction: Optional[Decimal] = Field(
         None,
@@ -152,7 +152,9 @@ class ClientStatsMensuellesItem(BaseModel):
     Schéma pour un élément de statistiques mensuelles d'un client.
     """
     mois: str = Field(..., description="Mois au format YYYY-MM (ex: 2024-01)")
-    montant: Decimal = Field(..., description="Montant total des transactions du mois")
+    montant: Decimal = Field(..., description="Ventes nettes du mois après avoirs datés")
+    montant_brut: Decimal = Field(Decimal('0'), description="Ventes initiales enregistrées ce mois")
+    montant_avoirs: Decimal = Field(Decimal('0'), description="Avoirs commerciaux émis ce mois")
     nb_transactions: int = Field(..., description="Nombre de transactions du mois")
 
 

@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# Avoid queuing dozens of obsolete test runs for the same draft branch.
+# Push and PR events for one head branch share the same group. Protect main
+# from cancellation, but test only the latest non-production revision.
+concurrency:
+  group: enterprise-quality-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -83,7 +90,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install -r requirements.txt
       - name: Create runtime role required by database migrations
-        run: psql postgresql://postgres:postgres@localhost:5432/comptabilite_db -v ON_ERROR_STOP=1 -c "CREATE ROLE app_runtime NOLOGIN"
+        run: psql postgresql://postgres:postgres@localhost:5432/comptabilite_db -v ON_ERROR_STOP=1 -c "CREATE ROLE app_runtime NOLOGIN; CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN"
       - run: python -m alembic upgrade heads
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
@@ -152,6 +159,39 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Prove Release 4 commercial-ledger migration rolls back atomically
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+            -f migrations/production_deferred_avoirs_atomic.sql \
+            -c 'SELECT 1 / 0' > /dev/null 2>&1; then
+            echo "Release 4 rollback probe unexpectedly succeeded"; exit 1
+          fi
+          test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('public.avoirs_livraison_differee') IS NULL")" = t
+          test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('public.legacy_deferred_cancellations') IS NULL")" = t
+      - name: Apply Release 4 commercial-ledger migration to disposable PostgreSQL
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avoirs_atomic.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+      - name: Prove Release 4 Phase 5 refund guard migration rolls back atomically
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+            -f migrations/production_deferred_refund_guards_atomic.sql \
+            -c 'SELECT 1 / 0' > /dev/null 2>&1; then
+            echo "Release 4 Phase 5 rollback probe unexpectedly succeeded"; exit 1
+          fi
+          test "$(psql "$DATABASE_URL" -At -c "SELECT to_regprocedure('public.refund_monetary_capacity(integer,date)') IS NULL")" = t
+      - name: Apply Release 4 dated-refund financial guards to disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_refund_guards_atomic.sql
+      - name: Phase 8 fail-closed Release 4 readiness on disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/release4_staging_readiness.sql
       - name: Check model compatibility after migrations
         run: python scripts/check_database_schema.py
         env:
@@ -288,10 +328,22 @@ jobs:
         run: node ../scripts/check_frontend_encoding.mjs
       - run: npm ci
       - run: npm run lint
+      - name: Fast Release 4 cancellation UI regression before full coverage
+        run: >-
+          npx vitest run
+          src/pages/Transactions/DeferredSaleCancellationDialog.test.jsx
+          src/pages/Transactions/DeferredSalesPage.test.jsx
+          src/pages/Transactions/TransactionDetailCompletion.test.jsx
+          src/pages/Transactions/DeferredSaleHistory.test.jsx
       - run: npm run test:unit:coverage
       - run: npm run build
       - name: Install Chromium for deterministic contact UI checks
-        run: npx playwright install --with-deps chromium
+        # ubuntu-24.04 hosted runners already provide browser runtime libs.
+        # --with-deps triggers apt installs of optional fonts and fails when
+        # the runner's Ubuntu mirror has transient DNS/network outages.
+        run: npx playwright install chromium
+      - name: Verify Release 4 isolated cancellation UX on desktop and mobile
+        run: npx playwright test --config playwright.release4.config.ts
       - name: Verify contacts and flock lifecycle on desktop and mobile
         run: npx playwright test --config playwright.contacts.config.ts
       - name: Save contact UI screenshots and failure traces
@@ -424,3 +476,121 @@ jobs:
         run: >-
           python -m pytest --override-ini addopts=''
           tests/test_release3_authenticated_pg.py --tb=short -q
+      - name: Validate Release 4 date edit and disabled cancellation on Release 3 baseline
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          ENABLE_AUTH: "false"
+          ENABLE_RATE_LIMITING: "false"
+          SECRET_KEY: release4-native-test-secret-only-0000000000000000
+        run: >-
+          python -m pytest --override-ini addopts=''
+          tests/test_deferred_sale_completion.py
+          -k "release4_reschedule or release4_cancellation_is_gated"
+          --tb=short -q
+
+  release4-legacy-compat-native:
+    # Extra disposable PostgreSQL instance: legacy fixtures deliberately stay
+    # OUT of migration-validation because its ORM tests drop/create tables.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: comptabilite_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d comptabilite_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Rehearse legacy canceled-sale migration and audit in isolated PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: development
+          SECRET_KEY: release4-legacy-fixture-disposable-only
+        run: bash scripts/release4_legacy_migration_native.sh
+
+  release4-ledger-native:
+    # Phase 2: test append-only avoir constraints against disposable PostgreSQL,
+    # never against the separate staging or production database.
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: comptabilite_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d comptabilite_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Install Release 1-4 schema and Phase 5 dated-refund guards on disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: development
+          SECRET_KEY: release4-local-ledger-check-only-00000000000
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE app_runtime NOLOGIN"
+          python -m alembic upgrade heads
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_correction_history_foundation.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_integrated_corrections_atomic.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_party_credits_refunds_atomic.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_cheque_lc_lifecycle_atomic.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avoirs_atomic.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_refund_guards_atomic.sql
+      - name: Validate Release 4 database readiness and ledger privileges
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/release4_staging_readiness.sql
+      - name: Verify ledger immutability, atomic parity, refund settlement and role permissions
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          ENABLE_AUTH: "false"
+          ENABLE_RATE_LIMITING: "false"
+          SECRET_KEY: release4-local-ledger-check-only-00000000000
+        run: >-
+          python -m pytest --override-ini addopts=''
+          tests/test_release4_ledger_pg.py --tb=short -q
+      - name: Phase 8 authenticated cancellation-to-refund acceptance on disposable PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comptabilite_db
+          ENVIRONMENT: testing
+          ENABLE_AUTH: "true"
+          ENABLE_RATE_LIMITING: "false"
+          ENABLE_DEFERRED_CANCELLATION_WRITES: "true"
+          ENABLE_CREDIT_REFUND_WRITES: "true"
+          SECRET_KEY: release4-local-ledger-check-only-00000000000
+        run: >-
+          python -m pytest --override-ini addopts=''
+          tests/test_release4_authenticated_pg.py --tb=short -q

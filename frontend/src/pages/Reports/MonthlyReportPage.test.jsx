@@ -43,7 +43,7 @@ describe('MonthlyReportPage', () => {
     render(<MonthlyReportPage />);
 
     expect(await screen.findByRole('heading', { name: 'Rapport mensuel' })).toBeVisible();
-    expect(screen.getAllByText('Ventes', { exact: true })).toHaveLength(1);
+    expect(screen.getAllByText('Ventes nettes', { exact: true })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Stock du mois' }));
     expect(await screen.findByText('3', { exact: true })).toBeVisible();
     expect(screen.getByText(/Variation nette stock/)).toBeVisible();
@@ -53,7 +53,7 @@ describe('MonthlyReportPage', () => {
       expect.arrayContaining([
         expect.objectContaining({ indicateur: 'Entrées banques' }),
         expect.objectContaining({ indicateur: 'Solde Banque Test actuel au 25/10/26' }),
-        expect.objectContaining({ indicateur: 'Mouvements stock', valeur: '3' }),
+        expect.objectContaining({ indicateur: 'Mouvements stock', valeur: 3, type: 'count' }),
         expect.objectContaining({ indicateur: 'Variation nette stock' }),
       ]),
       expect.arrayContaining([
@@ -62,6 +62,7 @@ describe('MonthlyReportPage', () => {
       ]),
       'rapport_mensuel_2026-09',
       'Synthèse',
+      expect.objectContaining({ valeur: expect.any(Function) }),
     ));
   });
 
@@ -72,12 +73,11 @@ describe('MonthlyReportPage', () => {
     expect(await screen.findByText(/300,00/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
     fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
-    const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(value);
     const expected = [
-      { indicateur: 'Solde caisse au 30/09/26', valeur: money(100) },
-      { indicateur: 'Solde Banque Test au 30/09/26', valeur: money(300) },
-      { indicateur: 'Solde caisse actuel au 25/10/26', valeur: money(250) },
-      { indicateur: 'Solde Banque Test actuel au 25/10/26', valeur: money(500) },
+      { indicateur: 'Solde caisse au 30/09/26', valeur: '100.00', type: 'money' },
+      { indicateur: 'Solde Banque Test au 30/09/26', valeur: '300.00', type: 'money' },
+      { indicateur: 'Solde caisse actuel au 25/10/26', valeur: '250.00', type: 'money' },
+      { indicateur: 'Solde Banque Test actuel au 25/10/26', valeur: '500.00', type: 'money' },
     ];
     expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining(expected));
     expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
@@ -98,7 +98,7 @@ it('keeps current balances separate from month-end amounts and explains accounti
   expect(await screen.findByText(deferredSaleExplanation)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois' }));
   expect(await screen.findByText(/25,00/)).toBeVisible();
-  expect(screen.getAllByText('Ventes', { exact: true })).toHaveLength(1);
+  expect(screen.getAllByText('Ventes nettes', { exact: true })).toHaveLength(1);
 });
 
 
@@ -123,4 +123,38 @@ it('identifies future month-end balances as projections without changing the rec
   expect(exportToExcelAdvanced.mock.calls[0][0]).toEqual(expect.arrayContaining([
     expect.objectContaining({ indicateur: 'À encaisser (projection au 30/11/26)' }),
   ]));
+});
+
+it('keeps original sales, dated avoirs, and refunds distinct across PDF and Excel', async () => {
+  get.mockResolvedValue({
+    month: '2026-11', date_debut: '2026-11-01', date_fin: '2026-11-30',
+    date_soldes_historiques: '2026-11-30', date_soldes_actuels: '2026-11-11',
+    ventes: '1500.00', avoirs_commerciaux: '600.00', ventes_nettes: '900.00',
+    remboursements_clients: '600.00',
+    achats: '0', charges: '0', caisse_entrees: '1500', caisse_sorties: '600',
+    banques_entrees: '0', banques_sorties: '0', creances: '0', dettes: '0',
+    creances_actuelles: '0', dettes_actuelles: '0',
+    solde_caisse_historique: '900', solde_caisse: '900',
+    soldes_bancaires: [], soldes_bancaires_historiques: [],
+    inventory_movements: 0, inventory_quantity_delta: '0',
+  });
+  render(<MonthlyReportPage />);
+  expect(await screen.findByText('Ventes nettes')).toBeVisible();
+  expect(screen.getByText(/Ventes initiales.*Avoirs émis/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+  await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalled());
+  const rows = exportToExcelAdvanced.mock.calls.at(-1)[0];
+  const byLabel = Object.fromEntries(rows.map(row => [row.indicateur, row.valeur]));
+  expect(byLabel['Ventes nettes']).toBe('900.00');
+  expect(byLabel['Ventes initiales']).toBe('1500.00');
+  expect(byLabel['Avoirs commerciaux émis']).toBe('600.00');
+  expect(byLabel['Remboursements clients (inclus dans les sorties)']).toBe('600.00');
+  fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+  expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
+    expect.objectContaining({
+      ventes: '1500.00', avoirs_commerciaux: '600.00',
+      ventes_nettes: '900.00', remboursements_clients: '600.00',
+    }),
+    'rapport_mensuel_2026-11',
+  );
 });

@@ -126,6 +126,11 @@ class Transaction(Base):
     mouvements_caisse = relationship("Caisse", back_populates="transaction")
     audits = relationship("TransactionAudit", back_populates="transaction")
     paiements = relationship("Paiement", back_populates="transaction", cascade="all, delete-orphan")
+    # Commercial credit notes are immutable, independent accounting entries.
+    # No ORM delete cascade: removing a sale must never delete its avoir history.
+    avoirs_livraison_differee = relationship(
+        "DeferredSaleAdjustment", viewonly=True, lazy="selectin",
+    )
     
     # Propriétés calculées pour la gestion des paiements
     @property
@@ -155,15 +160,22 @@ class Transaction(Base):
                     if p.nature == "remboursement" and p.est_effectif), Decimal("0"))
 
     @property
+    def montant_avoir(self) -> Decimal:
+        """Sum posted commercial credit notes, not refunded money or advances."""
+        return sum(
+            (Decimal(str(avoir.montant_avoir)) for avoir in self.avoirs_livraison_differee),
+            Decimal("0.00"),
+        )
+
+    @property
+    def montant_net(self) -> Decimal:
+        """Commercial sale after avoirs, preserving the original montant_total."""
+        return Decimal(str(self.montant_total)) - self.montant_avoir
+
+    @property
     def montant_restant(self) -> Decimal:
-        """
-        Calcule le montant restant à payer pour cette transaction.
-        Peut être négatif en cas de surpaiement (avance).
-        
-        Returns:
-            Decimal: Montant restant (montant_total - montant_paye)
-        """
-        return Decimal(str(self.montant_total)) - self.montant_paye
+        """Net customer balance, negative when paid above the corrected sale."""
+        return self.montant_net - self.montant_paye
     
     @property
     def statut_paiement(self) -> str:
@@ -180,7 +192,7 @@ class Transaction(Base):
             str: Statut du paiement
         """
         montant_paye = self.montant_paye
-        montant_total = Decimal(str(self.montant_total))
+        montant_total = self.montant_net
         
         # Surpayé
         if montant_paye > montant_total + Decimal('0.01'):
@@ -212,7 +224,7 @@ class Transaction(Base):
             return False
         
         # Si entièrement payé, pas de retard
-        if self.statut_paiement == 'paye':
+        if self.statut_paiement in {'paye', 'surpaye'}:
             return False
         
         # Vérifier si la date d'échéance est dépassée
@@ -226,7 +238,7 @@ class Transaction(Base):
         Returns:
             float: Pourcentage payé (0-100)
         """
-        if self.montant_total == 0:
-            return 0.0
-        
-        return float((self.montant_paye / Decimal(str(self.montant_total))) * 100)
+        if self.montant_net <= 0:
+            return 100.0 if self.montant_paye >= 0 else 0.0
+
+        return float((self.montant_paye / self.montant_net) * 100)

@@ -79,7 +79,9 @@ def test_transaction_list_query_count_does_not_grow_with_rows(client, db_session
     finally:
         event.remove(engine, "before_cursor_execute", record)
     assert counts[0] == counts[1]
-    assert counts[1] <= 3
+    # Phase 3 adds one batched SELECT for commercial credit-note history.
+    # The query count must remain O(1) as the list grows, never N+1.
+    assert counts[1] <= 4
 
 
 def test_timings_are_isolated_across_concurrent_requests(monkeypatch, caplog):

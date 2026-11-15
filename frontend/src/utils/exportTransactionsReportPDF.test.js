@@ -183,4 +183,40 @@ describe('transaction PDF pagination', () => {
     }
     expect((annex.match(/\(12,34\) Tj/g) || [])).toHaveLength(2);
   });
+  it('shows immutable commercial avoirs separately from refunds with reconciled net totals', () => {
+    exportTransactionsReportPDF([transaction(0, {
+      montant_total: '1500.00',
+      montant_avoir: '600.00',
+      montant_net: '900.00',
+      montant_paye: '900.00',
+      montant_restant: '0.00',
+      est_promesse: true,
+      quantite: 1000,
+      quantite_couverte: 600,
+      quantite_annulee: 400,
+      quantite_en_attente: 0,
+      avoirs_livraison_differee: [
+        { date_effet: '2026-11-10', quantite_annulee: 400,
+          montant_avoir: '600.00', avoir_cumule: '600.00' },
+      ],
+      paiements: [
+        { date_paiement: '2026-10-22', type_paiement: 'cash', nature: 'paiement',
+          montant: '1500.00', statut: 'valide' },
+        { date_paiement: '2026-11-11', type_paiement: 'cash', nature: 'remboursement',
+          montant: '600.00', statut: 'valide' },
+      ],
+    })]);
+    const all = pages().join('\n');
+    expect(all).toContain('MONTANT NET ACTIF');
+    expect(all).toContain('Avoirs commerciaux');
+    expect(all).toContain('Remboursement');
+    expect(all).toContain('10/11/26');
+    expect(all).toContain('(600,00) Tj');
+    expect(all).toContain('(900,00) Tj');
+    expect(all).toContain('ANNULÉ');
+    expect(all).not.toContain('(ID) Tj');
+    // The refund is in the payment history, while the credit is its own annex.
+    expect((all.match(/\(Remboursement\) Tj/g) || []).length).toBe(1);
+  });
+
 });

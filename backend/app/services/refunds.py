@@ -18,7 +18,8 @@ from app.models.paiement import Paiement
 from app.models.transaction import Transaction
 from app.schemas.paiement import PaiementRead
 from app.services.correction_contract import replay_result
-from app.services.financial import payment_effective_date, payment_total_as_of, validate_payment_date
+from app.services.financial import validate_payment_date
+from app.services.credits import refundable_cash_capacity
 from app.services.financial_ledger import sync_payment_cash_movement
 from app.services.financial_locking import lock_transaction
 from app.services.settlement_state import settlement_state
@@ -55,26 +56,38 @@ def _preview(db, command, transaction, *, lock=False):
     validate_payment_date(transaction, command.date_paiement)
     if command.date_paiement > business_date():
         raise HTTPException(422, 'Enregistrez un remboursement à sa date réelle, au plus tard aujourd’hui.')
+    # Existing PostgreSQL guard requires a separate reconciliation workflow
+    # for any active LC/cheque dependency. A monetary receipt alone is not
+    # enough to make an instrument-linked refund safe to reverse or correct.
+    if any(
+        p.statut != 'annule' and (
+            p.type_paiement in {'cheque', 'lc'} or p.id_lc is not None
+        )
+        for p in transaction.paiements
+    ):
+        raise HTTPException(
+            409, "Une lettre de crédit ou un chèque lié requiert une réconciliation spécifique avant remboursement.",
+        )
     fingerprint = _state(db, transaction, command, lock=lock)
+    # A commercial avoir reduces the sale's net amount on its own effective
+    # date; it is not a payment and must never create an automatic cash/bank
+    # movement or another "avance". Refunds need two independent safeguards:
+    # positive corrected customer credit AND real settled monetary provenance.
     credit_now = -transaction.montant_restant
-    credit_at_date = payment_total_as_of(transaction, command.date_paiement) - transaction.montant_total
-    available = max(Decimal('0'), min(credit_now, credit_at_date))
-    # A backdated refund must not consume credit already returned on a later
-    # date, even when a subsequent payment replenished today's credit.
-    deltas = {}
-    for payment in transaction.paiements:
-        if payment.est_effectif and payment_effective_date(payment) > command.date_paiement:
-            deltas[payment_effective_date(payment)] = deltas.get(payment_effective_date(payment), Decimal('0')) + payment.montant_net
-    running_credit = credit_at_date
-    for effective_date in sorted(deltas):
-        running_credit += deltas[effective_date]
-        available = min(available, max(Decimal('0'), running_credit))
+    available = refundable_cash_capacity(transaction, command.date_paiement)
     if command.montant > available:
-        raise HTTPException(409, 'Le montant dépasse le crédit disponible à cette date. Actualisez le solde.')
-    return {'dependency_fingerprint': fingerprint, 'available_credit': format(available, 'f'),
-            'credit_after': format(credit_now - command.montant, 'f'),
+        raise HTTPException(
+            409,
+            "Le montant dépasse le crédit monétaire remboursable à cette date. "
+            "Réconciliez les règlements et les avoirs avant de continuer.",
+        )
+    return {'dependency_fingerprint': fingerprint, 'available_credit': format(available, '.2f'),
+            'credit_after': format(credit_now - command.montant, '.2f'),
+            'montant_initial': format(transaction.montant_total, '.2f'),
+            'montant_avoirs': format(transaction.montant_avoir, '.2f'),
+            'montant_net': format(transaction.montant_net, '.2f'),
             'direction': 'SORTIE' if transaction.id_client is not None else 'ENTREE',
-            'montant': format(command.montant, 'f'), 'date_paiement': command.date_paiement.isoformat(),
+            'montant': format(command.montant, '.2f'), 'date_paiement': command.date_paiement.isoformat(),
             'type_paiement': command.type_paiement, 'id_compte': command.id_compte}
 
 

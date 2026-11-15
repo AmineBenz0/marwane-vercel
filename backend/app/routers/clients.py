@@ -12,6 +12,9 @@ from dateutil.relativedelta import relativedelta
 from app.database import get_db
 from app.models.client import Client
 from app.models.transaction import Transaction
+from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
+from app.services.reporting_commercial import monthly_client_activity, monthly_client_sales
+from app.utils.business_date import business_date
 from app.models.produit import Produit
 from app.models.user import Utilisateur
 from app.models.paiement import Paiement
@@ -141,8 +144,12 @@ def get_client_profile(
     
     # Extraire les statistiques (gérer les cas NULL)
     total_transactions = stats_result.total_transactions or 0
-    montant_total_ventes = stats_result.montant_total_ventes or Decimal('0')
-    montant_moyen = Decimal(str(stats_result.montant_moyen)) if stats_result.montant_moyen is not None else None
+    montant_brut = Decimal(str(stats_result.montant_total_ventes or '0'))
+    avoirs_total = Decimal(str(db.query(func.coalesce(func.sum(DeferredSaleAdjustment.montant_avoir), 0)).join(
+        Transaction, Transaction.id_transaction == DeferredSaleAdjustment.id_transaction,
+    ).filter(Transaction.id_client == id, Transaction.est_actif.is_(True)).scalar() or 0))
+    montant_total_ventes = montant_brut - avoirs_total
+    montant_moyen = montant_total_ventes / total_transactions if total_transactions else None
     date_premiere = stats_result.date_premiere
     date_derniere = stats_result.date_derniere
     
@@ -247,44 +254,14 @@ def get_client_stats_mensuelles(
         )
     
     # Calculer la date de début (N mois avant aujourd'hui, premier jour du mois)
-    date_fin = date.today()
+    date_fin = business_date()
     # Calculer le premier jour du mois qui est N mois avant aujourd'hui
     date_debut = (date_fin.replace(day=1) - relativedelta(months=periode-1))
     
-    # Requête pour obtenir les statistiques agrégées par mois
-    # Utiliser extract pour être compatible avec SQLite et PostgreSQL
-    # Extraire l'année et le mois, puis formater en Python
-    stats_query = db.query(
-        extract('year', Transaction.date_transaction).label('annee'),
-        extract('month', Transaction.date_transaction).label('mois'),
-        func.coalesce(func.sum(Transaction.montant_total), Decimal('0')).label('montant'),
-        func.count(Transaction.id_transaction).label('nb_transactions')
-    ).filter(
-        Transaction.id_client == id,
-        Transaction.est_actif == True,
-        Transaction.date_transaction >= date_debut,
-        Transaction.date_transaction <= date_fin
-    ).group_by(
-        extract('year', Transaction.date_transaction),
-        extract('month', Transaction.date_transaction)
-    ).order_by(
-        extract('year', Transaction.date_transaction),
-        extract('month', Transaction.date_transaction)
-    )
-    
-    # Récupérer les résultats
-    stats_results = stats_query.all()
-    
-    # Créer un dictionnaire avec les données réelles
-    stats_dict = {}
-    for result in stats_results:
-        # Formater le mois en YYYY-MM
-        mois_key = f"{int(result.annee)}-{int(result.mois):02d}"
-        stats_dict[mois_key] = {
-            'montant': result.montant or Decimal('0'),
-            'nb_transactions': result.nb_transactions or 0
-        }
-    
+    # Monthly original sales and dated credit notes are grouped separately.
+    # Just two queries for the whole 6-12 month chart, avoiding N+1 loading.
+    stats_dict = monthly_client_activity(db, id, date_debut, date_fin)
+
     # Générer tous les mois de la période (même ceux sans transactions)
     data = []
     current_date = date_debut  # Premier jour du mois de début
@@ -299,6 +276,8 @@ def get_client_stats_mensuelles(
         data.append(ClientStatsMensuellesItem(
             mois=mois_key,
             montant=montant,
+            montant_brut=stats_dict.get(mois_key, {}).get('montant_brut', Decimal('0')),
+            montant_avoirs=stats_dict.get(mois_key, {}).get('montant_avoirs', Decimal('0')),
             nb_transactions=nb_transactions
         ))
         
@@ -354,7 +333,7 @@ def get_client_produits_achetes(
     produits_stats_query = db.query(
         Transaction.id_produit,
         Produit.nom_produit,
-        func.sum(Transaction.quantite).label('quantite_totale'),
+        func.sum(Transaction.quantite - Transaction.quantite_annulee).label('quantite_totale'),
         func.sum(Transaction.montant_total).label('montant_total'),
         func.count(Transaction.id_transaction).label('nombre_achats'),
         func.min(Transaction.date_transaction).label('premiere_date_achat'),
@@ -373,7 +352,17 @@ def get_client_produits_achetes(
     
     # Récupérer les résultats
     produits_stats = produits_stats_query.all()
-    
+    # Independent aggregation: never JOIN payments/avoirs into the gross sale
+    # grouping because multiple installments would multiply the values.
+    avoirs_par_produit = dict(db.query(
+        Transaction.id_produit, func.sum(DeferredSaleAdjustment.montant_avoir),
+    ).join(
+        DeferredSaleAdjustment,
+        DeferredSaleAdjustment.id_transaction == Transaction.id_transaction,
+    ).filter(
+        Transaction.id_client == id, Transaction.est_actif.is_(True),
+    ).group_by(Transaction.id_produit).all())
+
     # Calculer les statistiques globales
     nombre_produits_differents = len(produits_stats)
     quantite_totale_tous_produits = 0
@@ -383,7 +372,10 @@ def get_client_produits_achetes(
     produits = []
     for stat in produits_stats:
         quantite_totale = int(stat.quantite_totale or 0)
-        montant_total = Decimal(str(stat.montant_total or '0'))
+        montant_total = (
+            Decimal(str(stat.montant_total or '0'))
+            - Decimal(str(avoirs_par_produit.get(stat.id_produit) or '0'))
+        )
         nombre_achats = int(stat.nombre_achats or 0)
         
         # Calculer le prix moyen (montant_total / quantite_totale)
@@ -407,6 +399,10 @@ def get_client_produits_achetes(
         
         produits.append(produit_achete)
     
+    # Sort by the corrected amount, not the original negotiated gross
+    # amount (a full commercial credit can make a former top product last).
+    produits.sort(key=lambda product: (-product.montant_total, product.id_produit))
+
     # Construire la réponse
     return ClientProduitsAchetes(
         client_id=id,
@@ -668,35 +664,21 @@ def get_client_insights_financiers(
             detail=f"Client avec l'ID {id} introuvable"
         )
     
-    # 1. Calculer le montant total des transactions actives
-    montant_total_query = db.query(
-        func.coalesce(func.sum(Transaction.montant_total), Decimal('0'))
-    ).filter(
-        Transaction.id_client == id,
-        Transaction.est_actif == True
-    ).scalar()
-    
-    montant_total = Decimal(str(montant_total_query or '0'))
-    
-    # 2. Calculer le montant total payé
-    montant_paye_query = db.query(
-        func.coalesce(func.sum(Paiement.montant), Decimal('0'))
-    ).join(
-        Transaction, Paiement.id_transaction == Transaction.id_transaction
-    ).filter(
-        Transaction.id_client == id,
-        Transaction.est_actif == True,
-        Paiement.statut == 'valide'
-    ).scalar()
-    
-    montant_paye = Decimal(str(montant_paye_query or '0'))
-    
-    # 3. Calculer le taux de paiement
-    taux_paiement = float((montant_paye / montant_total * 100) if montant_total > 0 else 0)
-    
-    # 4. Calculer le montant impayé
-    montant_impaye = montant_total - montant_paye
-    
+    # One canonical projection: net sale - effective signed payments.
+    # Never sum raw Paiement.montant because refunds and transfers are
+    # negative, pending cheques are not effective and avoirs reduce sales.
+    active_sales = db.query(Transaction).filter(
+        Transaction.id_client == id, Transaction.est_actif.is_(True),
+    ).all()
+    montant_total = sum((tx.montant_net for tx in active_sales), Decimal("0.00"))
+    montant_paye = sum((tx.montant_paye for tx in active_sales), Decimal("0.00"))
+    taux_paiement = float(
+        montant_paye / montant_total * 100 if montant_total > 0 else 0
+    )
+    montant_impaye = sum((
+        max(Decimal("0.00"), tx.montant_restant) for tx in active_sales
+    ), Decimal("0.00"))
+
     # 5. Calculer le délai moyen de paiement (jours entre date_transaction et date_paiement)
     # En PostgreSQL, la soustraction de deux DATE renvoie le nombre de jours directement
     delais_query = db.query(
@@ -747,60 +729,33 @@ def get_client_insights_financiers(
     if derniere_transaction:
         jours_depuis_derniere_transaction = (datetime.now().date() - derniere_transaction).days
     
-    # 8. Calculer les transactions en retard
-    today = date.today()
-    
-    # Transactions avec date_echeance dépassée et non entièrement payées
-    transactions_en_retard_query = db.query(
-        Transaction.id_transaction,
-        Transaction.montant_total,
-        func.coalesce(func.sum(Paiement.montant), Decimal('0')).label('montant_paye')
-    ).outerjoin(
-        Paiement, (Paiement.id_transaction == Transaction.id_transaction) & (Paiement.statut == 'valide')
-    ).filter(
-        Transaction.id_client == id,
-        Transaction.est_actif == True,
-        Transaction.date_echeance.isnot(None),
-        Transaction.date_echeance < today
-    ).group_by(
-        Transaction.id_transaction,
-        Transaction.montant_total
-    ).all()
-    
-    nombre_transactions_en_retard = 0
-    montant_en_retard = Decimal('0')
-    
-    for trans in transactions_en_retard_query:
-        montant_restant = Decimal(str(trans.montant_total)) - Decimal(str(trans.montant_paye or '0'))
-        if montant_restant > 0:
-            nombre_transactions_en_retard += 1
-            montant_en_retard += montant_restant
-    
+    # 8. Only positive net receivables past their due date are overdue.
+    today = business_date()
+    late = [
+        tx for tx in active_sales
+        if tx.date_echeance and tx.date_echeance < today
+        and tx.montant_restant > Decimal("0.00")
+    ]
+    nombre_transactions_en_retard = len(late)
+    montant_en_retard = sum(
+        (tx.montant_restant for tx in late), Decimal("0.00"),
+    )
+
     # 9. Calculer la tendance (comparer ce mois vs mois précédent)
-    today = date.today()
+    today = business_date()
     mois_actuel_debut = today.replace(day=1)
     mois_precedent_debut = (mois_actuel_debut - relativedelta(months=1))
     mois_precedent_fin = mois_actuel_debut
     
-    # Montant ce mois
-    montant_mois_actuel = db.query(
-        func.coalesce(func.sum(Transaction.montant_total), Decimal('0'))
-    ).filter(
-        Transaction.id_client == id,
-        Transaction.est_actif == True,
-        Transaction.date_transaction >= mois_actuel_debut
-    ).scalar() or Decimal('0')
-    
-    # Montant mois précédent
-    montant_mois_precedent = db.query(
-        func.coalesce(func.sum(Transaction.montant_total), Decimal('0'))
-    ).filter(
-        Transaction.id_client == id,
-        Transaction.est_actif == True,
-        Transaction.date_transaction >= mois_precedent_debut,
-        Transaction.date_transaction < mois_precedent_fin
-    ).scalar() or Decimal('0')
-    
+    # Avoirs are effective in their own issue month even if the original
+    # sale is older; align trends with /reports/monthly and the client chart.
+    montant_mois_actuel = monthly_client_sales(
+        db, id, mois_actuel_debut, today,
+    )["montant"]
+    montant_mois_precedent = monthly_client_sales(
+        db, id, mois_precedent_debut, mois_actuel_debut - relativedelta(days=1),
+    )["montant"]
+
     tendance = None
     if montant_mois_precedent > 0:
         if montant_mois_actuel > montant_mois_precedent * Decimal('1.1'):  # +10%

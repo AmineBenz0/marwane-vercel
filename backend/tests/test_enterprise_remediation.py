@@ -393,6 +393,8 @@ def test_receivables_page_is_database_paginated_but_summary_covers_all_matches(
     assert data["limit"] == 1
     assert data["summary"] == {
         "total": "60.00",
+        "total_brut": "60.00",
+        "total_avoirs": "0.00",
         "paye": "5.00",
         "reste": "55.00",
         "count": 3,

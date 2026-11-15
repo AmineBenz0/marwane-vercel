@@ -5,10 +5,13 @@ Gère les endpoints CRUD pour les transactions.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import json
 
 from app.database import get_db
+from app.config import settings
 from app.models.production import Production
 from app.models.egg_allocation import EggAllocation
 from app.models.transaction import Transaction
@@ -27,6 +30,10 @@ from app.schemas.transaction import (
     DeferredSaleCompletion,
     DeferredSalePreview,
     DeferredSaleSummary,
+    DeferredSaleReschedule,
+    DeferredSaleRemainderClose,
+    DeferredSaleCancellationRead,
+    DeferredSaleCancellationPreview,
     TransactionAuditRead
 )
 from app.schemas.paiement import PaiementCreate
@@ -40,6 +47,7 @@ from app.utils.egg_product_sync import parse_sellable_egg_product_name
 from app.services.inventory import record_transaction_movement, reverse_source_movements
 from app.services.financial_ledger import void_payment, sync_payment_cash_movement
 from app.services.financial import validate_payment_date, validate_payment_idempotency
+from app.services.deferred_cancellation import cancel_deferred_sale_remainder, preview_deferred_sale_remainder
 from app.services.payment_validation import validate_lc_payment
 from app.services.payment_validation import resolve_payment_funding
 from app.services.lc_lifecycle import payment_lc_role, record_lc_payment_event
@@ -692,6 +700,102 @@ def complete_transaction(
         raise
 
 
+@router.patch("/{id}/delivery-date", response_model=TransactionRead)
+def reschedule_deferred_sale(
+    id: int, payload: DeferredSaleReschedule, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Change the expected delivery date, preserving accounting and stock."""
+    try:
+        tx = db.query(Transaction).filter(Transaction.id_transaction == id).with_for_update().first()
+        if not tx:
+            raise HTTPException(404, "Transaction introuvable.")
+        if not tx.est_actif or not tx.est_promesse or tx.id_client is None:
+            raise HTTPException(409, "Seule une livraison différée active peut être replanifiée.")
+        if tx.row_version != payload.expected_version:
+            raise HTTPException(409, "La vente a changé. Rechargez-la avant de continuer.")
+        if payload.date_livraison_prevue < tx.date_transaction:
+            raise HTTPException(400, "La date prévue ne peut pas précéder la vente.")
+        before = tx.date_livraison_prevue
+        if before != payload.date_livraison_prevue:
+            tx.date_livraison_prevue = payload.date_livraison_prevue
+            tx.date_modification = datetime.now(timezone.utc)
+            tx.id_utilisateur_modification = current_user.id_utilisateur
+            db.add(TransactionAudit(
+                id_transaction=id, id_utilisateur=current_user.id_utilisateur,
+                champ_modifie='replanification_livraison_differee',
+                ancienne_valeur=json.dumps({'date': before.isoformat() if before else None}),
+                nouvelle_valeur=json.dumps({'date': payload.date_livraison_prevue.isoformat()}),
+            ))
+            db.commit()
+            db.refresh(tx)
+        reserved = deferred_sale_reservations(db).get(id, 0) if tx.quantite_en_attente > 0 else 0
+        return TransactionRead.model_validate(tx).model_copy(update={'quantite_reservee': reserved})
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.get("/{id}/cancel-remainder/preview", response_model=DeferredSaleCancellationPreview)
+def preview_cancellation_remainder(
+    id: int, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Quote exact commercial and stock effects; no writes, no money movement.
+
+    Keep the same disabled-by-default release gate as the POST. Phase 8
+    enables both only on an already migrated, isolated staging database.
+    """
+    if not settings.ENABLE_DEFERRED_CANCELLATION_WRITES:
+        raise HTTPException(409, "L'annulation du reliquat sera disponible après validation financière.")
+    return preview_deferred_sale_remainder(db, transaction_id=id)
+
+
+@router.post("/{id}/cancel-remainder", response_model=DeferredSaleCancellationRead)
+def close_deferred_sale_remainder(
+    id: int, payload: DeferredSaleRemainderClose, db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_active_user),
+):
+    """Atomically cancel unallocated eggs and post their financial avoir.
+
+    The write gate stays OFF in production/previews through phases 4–7; the
+    Phase 7 adds a frontend action behind a separately disabled build gate.
+    Phase 8 alone can enable the backend gate on validated staging.
+    """
+    if not settings.ENABLE_DEFERRED_CANCELLATION_WRITES:
+        raise HTTPException(409, "L'annulation du reliquat sera disponible après validation financière.")
+    try:
+        receipt = cancel_deferred_sale_remainder(
+            db, transaction_id=id, payload=payload, actor=current_user,
+        )
+        # PostgreSQL DEFERRABLE parity triggers execute at COMMIT. Do not
+        # return success before this transaction has been committed.
+        db.commit()
+        return receipt
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            409, "Cette annulation a déjà été enregistrée ou la vente a changé. Rechargez-la.",
+        ) from exc
+    except DBAPIError as exc:
+        db.rollback()
+        diagnostic = str(exc.orig)
+        if any(word in diagnostic for word in (
+            "Deferred stock cancellation", "Avoir", "Correction operation",
+            "Financial correction", "Correction and transaction history",
+        )):
+            raise HTTPException(
+                409, "Le stock et l'avoir ne concordent pas. Annulation non enregistrée.",
+            ) from exc
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+
 @router.get("/{id}", response_model=TransactionRead, status_code=status.HTTP_200_OK)
 def get_transaction(
     id: int,
@@ -811,6 +915,10 @@ def update_transaction(
                 "Annulez-la puis créez une nouvelle livraison corrigée."
             ),
         )
+    if (transaction.est_promesse and "date_livraison_prevue" in update_data
+            and update_data["date_livraison_prevue"] != transaction.date_livraison_prevue):
+        raise HTTPException(409, "Modifiez la date prévue depuis le suivi de livraison.")
+
     if (
         "est_promesse" in update_data and update_data["est_promesse"] != transaction.est_promesse
         or "allocation_automatique" in update_data
@@ -822,7 +930,7 @@ def update_transaction(
         )
     if (
         transaction.est_promesse and "quantite" in update_data
-        and update_data["quantite"] < transaction.quantite_couverte
+        and update_data["quantite"] < transaction.quantite_couverte + (transaction.quantite_annulee or 0)
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

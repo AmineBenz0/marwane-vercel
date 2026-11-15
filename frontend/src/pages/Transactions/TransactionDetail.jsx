@@ -55,6 +55,9 @@ import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
 import MultiPaiementForm from '../../components/PaiementForm/MultiPaiementForm';
 import DeferredSaleHistory from './DeferredSaleHistory';
+import DeferredSaleCancellationDialog from './DeferredSaleCancellationDialog';
+import DeferredSaleFinancialSummary from './DeferredSaleFinancialSummary';
+import { deferredCancellationEnabled } from './deferredCancellationAccess';
 import TransactionAuditHistory from './TransactionAuditHistory';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
 import RefundDialog from '../../components/Corrections/RefundDialog';
@@ -90,6 +93,8 @@ function TransactionDetail() {
   const [statutPaiement, setStatutPaiement] = useState(null);
   const [loadingPaiements, setLoadingPaiements] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [cancelRemainderOpen, setCancelRemainderOpen] = useState(false);
+  const [cancellationReceipt, setCancellationReceipt] = useState(null);
 
   // États pour les données de référence
   const [produits, setProduits] = useState([]);
@@ -202,6 +207,7 @@ function TransactionDetail() {
    */
   const refreshPaiements = async () => {
     await Promise.all([
+      fetchTransaction(),
       fetchPaiements(),
       fetchStatutPaiement(),
     ]);
@@ -595,6 +601,19 @@ function TransactionDetail() {
                   {[transaction.nom_batiment_source, transaction.date_livraison_prevue ? `Prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : null].filter(Boolean).join(' · ')}
                 </Typography>
                 <DeferredSaleStockSummary sale={transaction} />
+                {deferredCancellationEnabled() && transaction.est_actif &&
+                  Number(transaction.quantite_en_attente) > 0 && <Button
+                    variant="outlined" color="error" size="small" sx={{ mt: 2 }}
+                    onClick={() => setCancelRemainderOpen(true)}>
+                    Annuler les œufs restants
+                  </Button>}
+                {cancellationReceipt && <Alert severity="success" sx={{ mt: 2 }}>
+                  {Number(cancellationReceipt.quantite_annulee).toLocaleString('fr-FR')} œufs annulés.
+                  Avoir de {formatMontant(cancellationReceipt.montant_avoir)} enregistré.
+                  {Number(cancellationReceipt.credit_client) > 0
+                    ? ` Crédit client : ${formatMontant(cancellationReceipt.credit_client)}.`
+                    : ' Aucun remboursement automatique.'}
+                </Alert>}
               </Box>
             </Grid> : transaction.id_production ? <Grid item xs={12}>
               <Typography variant="body2">Origine : {transaction.nom_batiment_source}</Typography>
@@ -637,7 +656,7 @@ function TransactionDetail() {
             <Grid item xs={12} sm={6}>
               <Box>
                 <Typography variant="caption" color="text.secondary">
-                  Montant total
+                  {Number(transaction.montant_avoir || 0) > 0 || (transaction.avoirs_livraison_differee || []).length ? 'Montant initial' : 'Montant total'}
                 </Typography>
                 <Typography variant="h6" color="primary" fontWeight="bold">
                   {formatMontant(transaction.montant_total)}
@@ -649,17 +668,19 @@ function TransactionDetail() {
       </Card>
 
       {transaction.est_promesse && <Card sx={{ mb: 3 }}><CardContent>
-        <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={transaction.quantite_couverte} />
+        <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={`${transaction.quantite_couverte}:${transaction.quantite_annulee || 0}:${transaction.row_version}`} />
       </CardContent></Card>}
       {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
           <Typography component="h2" variant="h6" fontWeight={700}>Paiement</Typography>
           <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />
         </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="space-between">
-          <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
-          {Number(statutPaiement.montant_restant) > 0 && <Box><Typography variant="body2" color="text.secondary">{transaction.id_client ? 'Reste à encaisser' : 'Reste à payer'}</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_restant)}</Typography></Box>}
-        </Stack>
+        {transaction.est_promesse && (Number(transaction.montant_avoir || 0) > 0 || (transaction.avoirs_livraison_differee || []).length > 0)
+          ? <DeferredSaleFinancialSummary sale={transaction} />
+          : <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="space-between">
+            <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
+            {Number(statutPaiement.montant_restant) > 0 && <Box><Typography variant="body2" color="text.secondary">{transaction.id_client ? 'Reste à encaisser' : 'Reste à payer'}</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_restant)}</Typography></Box>}
+          </Stack>}
         {CREDIT_REFUNDS_ENABLED && transaction.est_actif && Number(statutPaiement.montant_restant) < -0.009 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -778,12 +799,24 @@ function TransactionDetail() {
           <CorrectionHistory transactionId={transaction.id_transaction} readOnly revision={transaction.row_version} />
         )}
       </Box>
+      {deferredCancellationEnabled() && transaction.est_promesse && (
+        <DeferredSaleCancellationDialog
+          open={cancelRemainderOpen}
+          transactionId={transaction.id_transaction}
+          onClose={() => setCancelRemainderOpen(false)}
+          onCompleted={async receipt => {
+            await refreshPaiements();
+            setCancellationReceipt(receipt);
+          }}
+          onStale={fetchTransaction}
+        />
+      )}
       {CREDIT_REFUNDS_ENABLED && refundOpen && statutPaiement && (
         <RefundDialog transaction={transaction} credit={-Number(statutPaiement.montant_restant)}
           onClose={() => setRefundOpen(false)}
           onSaved={async () => {
             setRefundOpen(false);
-            await Promise.all([fetchTransaction(), refreshPaiements(), fetchStatutPaiement()]);
+            await refreshPaiements();
             notification.success('Remboursement enregistré');
           }} />
       )}
@@ -793,7 +826,7 @@ function TransactionDetail() {
           transaction={transaction}
           onClose={() => setEditingPaiement(null)}
           onSaved={async () => {
-            await Promise.all([fetchTransaction(), refreshPaiements()]);
+            await refreshPaiements();
             setEditingPaiement(null);
             notification.success('Correction enregistrée');
           }}

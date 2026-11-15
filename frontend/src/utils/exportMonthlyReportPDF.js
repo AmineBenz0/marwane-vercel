@@ -101,17 +101,34 @@ export function exportMonthlyReportPDF(report, filename) {
   const projected = Boolean(report.date_soldes_actuels &&
     report.date_fin > report.date_soldes_actuels);
 
-  metric(doc, margin, 56, (interior - 8) / 3, 'VENTES', report.ventes, PDF_COLORS.teal);
+  metric(doc, margin, 56, (interior - 8) / 3, 'VENTES NETTES',
+    report.ventes_nettes ?? report.ventes, PDF_COLORS.teal);
   metric(doc, margin + (interior - 8) / 3 + 4, 56, (interior - 8) / 3,
     'ACHATS', report.achats, PDF_COLORS.navy);
   metric(doc, margin + 2 * ((interior - 8) / 3 + 4), 56, (interior - 8) / 3,
     'CHARGES', report.charges, PDF_COLORS.gold);
 
+  if (Number(report.avoirs_commerciaux ?? 0) > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...PDF_COLORS.muted);
+    doc.text(pdfClean(
+      'Ventes initiales : ' + pdfMoney(report.ventes) +
+      '  |  Avoirs émis : - ' + pdfMoney(report.avoirs_commerciaux)
+    ), margin, 86);
+  }
   sectionTitle(doc, 'Flux financiers du mois', 92);
   flowCard(doc, margin, 98, 'Caisse', report.caisse_entrees, report.caisse_sorties);
   flowCard(doc, margin + (interior - 4) / 2 + 4, 98, 'Banques',
     report.banques_entrees, report.banques_sorties);
 
+  if (Number(report.remboursements_clients ?? 0) > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.8);
+    doc.setTextColor(...PDF_COLORS.muted);
+    doc.text(pdfClean('Remboursements clients inclus dans les sorties : ' +
+      pdfMoney(report.remboursements_clients)), margin, 139);
+  }
   sectionTitle(doc, 'Situation financière', 146);
   const monthEnd = pdfDate(report.date_soldes_historiques || report.date_fin);
   const currentDate = pdfDate(report.date_soldes_actuels);

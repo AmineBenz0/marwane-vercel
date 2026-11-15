@@ -26,6 +26,11 @@ class MonthlyReport(BaseModel):
     creances_actuelles: Optional[Decimal] = None
     dettes_actuelles: Optional[Decimal] = None
     ventes: Decimal
+    # Legacy "ventes" keeps gross booked sales; the new net value subtracts
+    # only credit notes actually issued during this reporting month.
+    avoirs_commerciaux: Decimal = Decimal("0.00")
+    ventes_nettes: Decimal = Decimal("0.00")
+    remboursements_clients: Decimal = Decimal("0.00")
     achats: Decimal
     charges: Decimal
     caisse_entrees: Decimal
