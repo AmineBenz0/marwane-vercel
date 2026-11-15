@@ -34,7 +34,7 @@ const monthlyReport = {
   inventory_movements: 3, inventory_quantity_delta: '7.125',
 };
 
-async function mockFinancialApi(page: Page, transactions = txData, partnerName = 'Client Test', report: typeof monthlyReport & { ventes_nettes?: string; avoirs_commerciaux?: string } = monthlyReport) {
+async function mockFinancialApi(page: Page, transactions = txData, partnerName = 'Client Test', report: typeof monthlyReport & { ventes_nettes?: string; avoirs_commerciaux?: string; remboursements_clients?: string } = monthlyReport) {
   await mockAuthenticatedSession(page);
   const attemptedWrites: string[] = [];
   await page.route('**/api/v1/**', async route => {
@@ -113,7 +113,14 @@ test('dashboard uses issue-month sales and register displays current net sale va
 });
 
 test('monthly downloads agree on dated balances, projection labels and fractional stock', async ({ page }) => {
-  const writes = await mockFinancialApi(page);
+  const extraBanks = Array.from({ length: 24 }, (_, index) => ({
+    id_compte: index + 2, nom_banque: `Agence ${index + 1}`, solde: '84.21',
+  }));
+  const writes = await mockFinancialApi(page, txData, 'Client Test', {
+    ...monthlyReport, ventes_nettes: '99.98', avoirs_commerciaux: '0.02',
+    remboursements_clients: '0.01', caisse_sorties: '0.01',
+    soldes_bancaires: [...monthlyReport.soldes_bancaires, ...extraBanks],
+  });
   await page.goto('/rapports/mensuel');
   await page.getByLabel('Mois du rapport').fill('2026-11');
   const excel = page.getByRole('button', { name: 'Excel', exact: true });
@@ -137,9 +144,53 @@ test('monthly downloads agree on dated balances, projection labels and fractiona
   expect(valueCell('Solde caisse actuel au 08/11/26').value).toBe(175);
   expect(valueCell('Solde caisse actuel au 08/11/26').numFmt).toContain('MAD');
   expect(valueCell('Variation nette stock').value).toBe(7.125);
+  expect(valueCell('Ventes nettes').value).toBe(99.98);
+  expect(valueCell('Avoirs commerciaux émis').value).toBe(0.02);
+  expect(valueCell('Remboursements clients (inclus dans les sorties)').value).toBe(0.01);
+  expect(valueCell('Sorties caisse').value).toBe(0.01);
+  await expect(page.getByText('Remboursements clients (inclus dans les sorties)')).toBeVisible();
   const source = await readPdf(page, 'PDF');
+  const pageCount = (source.match(/\/Type \/Page\b/g) || []).length;
+  expect(pageCount).toBeGreaterThan(1);
   for (const label of ['Rapport mensuel', 'PROJECTION AU 30/11/26', 'ACTUEL AU 08/11/26', '195,00 MAD',
-    '175,00 MAD', '510,00 MAD', '460,00 MAD', '7,125']) expect(source).toContain(label);
+    '175,00 MAD', '510,00 MAD', '460,00 MAD', '7,125', '99,98 MAD', '0,02 MAD', '0,01 MAD',
+    'Remboursements clients inclus dans les sorties', 'Solde Agence 24', `${pageCount} / ${pageCount}`]) {
+    expect(source).toContain(label);
+  }
+  expect(writes).toEqual([]);
+});
+
+test('unpaid exports include the second API page and reconcile cent-level credit adjustments', async ({ page }) => {
+  const unpaid = { ...txData[0], est_promesse: false, statut_paiement: 'impaye',
+    montant_total: '0.10', montant_paye: '0.00', montant_restant: '0.10', paiements: [] };
+  const settled = Array.from({ length: 499 }, (_, index) => ({
+    ...txData[2], id_transaction: 1000 + index, statut_paiement: 'paye',
+    montant_paye: '25.50', montant_restant: '0.00',
+  }));
+  const partial = { ...txData[0], id_transaction: 1501, statut_paiement: 'partiel',
+    montant_total: '0.22', montant_avoir: '0.02', montant_paye: '0.01', montant_restant: '0.19',
+    paiements: [{ date_paiement: '2026-10-23', type_paiement: 'cash', statut: 'valide', montant: '0.01' }],
+  };
+  const writes = await mockFinancialApi(page, [unpaid, ...settled, partial]);
+  await page.goto('/transactions?view=non_payees');
+  await expect(page.getByRole('button', { name: 'Non payées (2)', exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Ventes', exact: true }).locator('p')).toHaveText(/0,30?\sMAD/);
+  const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
+  const sheet = await exportSheet(page, () => excel.click());
+  const columns = new Map<string, number>();
+  sheet.getRow(1).eachCell((cell, index) => columns.set(String(cell.value), index));
+  const net = columns.get('Montant net')!;
+  expect(sheet.getRow(2).getCell(net).value).toBe(0.1);
+  expect(sheet.getRow(3).getCell(net).value).toBe(0.2);
+  expect(sheet.getRow(3).getCell(columns.get('Paiement')!).value).toBe('Partiel');
+  const total = sheet.getRow(sheet.rowCount);
+  expect(total.getCell(net).value).toBe(0.3);
+  expect(total.getCell(columns.get('Reste')!).value).toBe(0.29);
+  const pdf = await readPdf(page);
+  expect(pdf).toContain('(0,30) Tj');
+  expect(pdf).toContain('(0,29) Tj');
+  expect(pdf).toContain('Avoirs commerciaux');
+  expect(pdf).not.toContain('Fournisseur Test');
   expect(writes).toEqual([]);
 });
 

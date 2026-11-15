@@ -7,6 +7,7 @@ import { exportMonthlyReportPDF } from '../../utils/exportMonthlyReportPDF';
 import { getBusinessMonthInput } from '../../utils/businessDate';
 import { formatMonthYear, formatShortDate } from '../../utils/dateFormatting';
 import ExpandableDetails from '../../components/ExpandableDetails';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 
 const number = (value, maximumFractionDigits = 2) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits }).format(Number(value || 0));
 const money = value => value == null ? '—' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(Number(value));
@@ -23,16 +24,20 @@ function MonthlyReportPage() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [exportError, setExportError] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
   const infoId = useId();
+  useCorrectionRefresh(() => setCorrectionRevision(value => value + 1));
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError(null);
+    setExportError(null);
     get('/reports/monthly', { params: { month } }).then(data => { if (!cancelled) setReport(data); })
       .catch(err => { if (!cancelled) { setReport(null); setError(err?.response?.data?.detail || err?.message || 'Le rapport n’a pas pu être chargé.'); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [month]);
+  }, [month, correctionRevision]);
 
   const groups = useMemo(() => report ? {
     activity: [
@@ -43,6 +48,8 @@ function MonthlyReportPage() {
     breakdown: [
       { indicateur: 'Ventes initiales', valeur: report.ventes, type: 'money' },
       { indicateur: 'Avoirs commerciaux émis', valeur: report.avoirs_commerciaux ?? 0, type: 'money' },
+    ],
+    refunds: [
       { indicateur: 'Remboursements clients (inclus dans les sorties)', valeur: report.remboursements_clients ?? 0, type: 'money' },
     ],
     cash: [
@@ -79,7 +86,7 @@ function MonthlyReportPage() {
     : '';
   const exportRows = useMemo(() => groups ? [
     { indicateur: 'Période', valeur: periodLabel },
-    ...[...groups.activity, ...groups.breakdown, ...groups.cash, ...groups.bank, ...groups.stock].map(row => ({ ...row })),
+    ...groups.activity, ...groups.breakdown, ...groups.cash, ...groups.bank, ...groups.refunds, ...groups.stock,
     ...groups.historical.map(row => ({ indicateur: projectedPeriod
       ? `${row.indicateur} (projection au ${historicalDate})`
       : `${row.indicateur} au ${historicalDate}`, valeur: row.valeur, type: row.type })),
@@ -92,10 +99,15 @@ function MonthlyReportPage() {
       id: 'valeur', label: 'Valeur', excelWidth: 24,
       excelNumberFormat: row => row.type === 'money' ? '#,##0.00 "MAD"' : row.type === 'quantity' ? '#,##0.###' : row.type === 'count' ? '0' : undefined,
     }];
-    if (outputFormat === 'pdf') exportMonthlyReportPDF(report, `rapport_mensuel_${report.month}`);
-    else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse', {
-      valeur: (value, row) => row.type && value != null && Number.isFinite(Number(value)) ? Number(value) : value ?? '—',
-    });
+    setExportError(null);
+    try {
+      if (outputFormat === 'pdf') exportMonthlyReportPDF(report, `rapport_mensuel_${report.month}`);
+      else await exportToExcelAdvanced(exportRows, columns, `rapport_mensuel_${report.month}`, 'Synthèse', {
+        valeur: (value, row) => row.type && value != null && Number.isFinite(Number(value)) ? Number(value) : value ?? '—',
+      });
+    } catch {
+      setExportError('Le rapport n’a pas pu être exporté. Réessayez.');
+    }
   };
   const hasBankActivity = !!report && ((report.soldes_bancaires || []).length > 0 || Number(report.banques_entrees) !== 0 || Number(report.banques_sorties) !== 0);
 
@@ -109,6 +121,7 @@ function MonthlyReportPage() {
       </Stack>
     </Stack>
     {error && <Alert severity="error">{error}</Alert>}
+    {exportError && <Alert severity="error">{exportError}</Alert>}
     {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress aria-label="Chargement du rapport" /></Box> : report && <>
       <Typography color="text.secondary" sx={{ mb: 2 }}>{displayMonth} · Du {formatShortDate(report.date_debut)} au {formatShortDate(report.date_fin)}{projectedPeriod ? (futurePeriod ? ' · Période à venir' : ' · Période en cours') : ''}</Typography>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -128,6 +141,7 @@ function MonthlyReportPage() {
       </Paper>}
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements de caisse du mois</Typography><ReportRows rows={groups.cash} /></Paper>
       {hasBankActivity && <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 2 }}>Mouvements bancaires du mois</Typography><ReportRows rows={groups.bank} /></Paper>}
+      {Number(report.remboursements_clients) > 0 && <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><ReportRows rows={groups.refunds} /></Paper>}
       <Paper component="section" aria-label="Situation actuelle" variant="outlined" sx={{ p: 2, mb: 2 }}><Stack direction="row" justifyContent="space-between" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}><Typography component="h2" variant="h6" fontWeight={700}>Situation actuelle</Typography><Typography variant="body2" color="text.secondary">Au {currentDate}</Typography></Stack><ReportRows rows={groups.current} /></Paper>
       <ExpandableDetails label={projectedPeriod ? 'Projection à la fin du mois' : 'Situation à la fin du mois'} description={projectedPeriod ? `Au ${historicalDate}, selon les opérations enregistrées` : `Au ${historicalDate}`} icon={<CalendarTodayOutlined />} ><ReportRows rows={groups.historical} /></ExpandableDetails>
       <ExpandableDetails label="Stock du mois" description={periodLabel} icon={<LayersOutlined />} ><ReportRows rows={groups.stock} /></ExpandableDetails>

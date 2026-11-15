@@ -4,6 +4,7 @@ import MonthlyReportPage from './MonthlyReportPage';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportMonthlyReportPDF } from '../../utils/exportMonthlyReportPDF';
+import { CORRECTION_EVENT } from '../../components/Corrections/useCorrectionFlow';
 
 vi.mock('../../services/api', () => ({ get: vi.fn() }));
 vi.mock('../../utils/exportToExcel', () => ({ exportToExcelAdvanced: vi.fn() }));
@@ -85,6 +86,22 @@ describe('MonthlyReportPage', () => {
       'rapport_mensuel_2026-09',
     );
   });
+
+  it('refreshes the report and downloads after a financial correction', async () => {
+    render(<MonthlyReportPage />);
+    await screen.findByText('Ventes nettes');
+    const originalReport = await get.mock.results[0].value;
+    get.mockResolvedValueOnce({ ...originalReport, ventes_nettes: '99.99', avoirs_commerciaux: '0.01' });
+
+    fireEvent(window, new Event(CORRECTION_EVENT));
+
+    expect(await screen.findByText(/99,99/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
+      expect.objectContaining({ ventes_nettes: '99.99', avoirs_commerciaux: '0.01' }),
+      'rapport_mensuel_2026-09',
+    );
+  });
 });
 
 it('keeps current balances separate from month-end amounts and explains accounting only on demand', async () => {
@@ -141,6 +158,7 @@ it('keeps original sales, dated avoirs, and refunds distinct across PDF and Exce
   render(<MonthlyReportPage />);
   expect(await screen.findByText('Ventes nettes')).toBeVisible();
   expect(screen.getByText(/Ventes initiales.*Avoirs émis/)).toBeVisible();
+  expect(screen.getByText('Remboursements clients (inclus dans les sorties)')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
   await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalled());
   const rows = exportToExcelAdvanced.mock.calls.at(-1)[0];

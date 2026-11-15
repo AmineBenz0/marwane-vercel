@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addTransactionPaymentsSection } from './transactionPaymentsPdf';
+import { sumActiveTransactionAmounts, transactionNetAmount } from './transactionAmounts';
 import {
   PDF_COLORS, pdfBrand, pdfBox, pdfClean, pdfDate, pdfExportName,
   pdfFit, pdfFooters, pdfHeading, pdfInteger, pdfMoney,
@@ -80,12 +81,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const reportDate = new Date();
   const active = rows.filter(row => row.est_actif !== false);
-  const original = active.reduce((sum, row) => sum + asNumber(row.montant_total), 0);
-  const avoirs = active.reduce((sum, row) => sum + asNumber(row.montant_avoir), 0);
-  const total = active.reduce((sum, row) =>
-    sum + asNumber(row.montant_net ?? (asNumber(row.montant_total) - asNumber(row.montant_avoir))), 0);
-  const paid = active.reduce((sum, row) => sum + asNumber(row.montant_paye), 0);
-  const remaining = active.reduce((sum, row) => sum + asNumber(row.montant_restant), 0);
+  const { gross: original, credits: avoirs, net: total, paid, remaining } = sumActiveTransactionAmounts(rows);
   const validDates = rows.map(row => row.date_transaction).filter(Boolean).sort();
   const period = validDates.length
     ? pdfDate(validDates[0]) + ' au ' + pdfDate(validDates[validDates.length - 1])
@@ -103,7 +99,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     row.partner,
     row.product,
     pdfInteger(row.quantite),
-    pdfMoney(row.montant_net ?? (asNumber(row.montant_total) - asNumber(row.montant_avoir)), false),
+    pdfMoney(transactionNetAmount(row), false),
     pdfMoney(row.montant_paye, false),
     pdfMoney(row.montant_restant, false),
     row.status,
@@ -180,7 +176,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       return [{
         date: '-', partner: row.partner, product: row.product,
         cancelled: row.quantite_annulee, amount: row.montant_avoir,
-        net: row.montant_net ?? (asNumber(row.montant_total) - asNumber(row.montant_avoir)),
+        net: transactionNetAmount(row),
       }];
     }
     return issued.map(note => ({
@@ -192,7 +188,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   });
   addSection(
     doc, sections, 'Avoirs commerciaux',
-    String(notes.length) + ' avoir(s) daté(s) · aucune sortie d’argent automatique',
+    String(notes.length) + ' avoir(s) · remboursements dans les règlements',
     ['DATE AVOIR', 'PARTENAIRE', 'PRODUIT', 'QTÉ ANNULÉE', 'AVOIR', 'NET APRÈS'],
     notes.map(note => [
       note.date, note.partner, note.product, pdfInteger(note.cancelled),
@@ -238,7 +234,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
         doc.setFontSize(7.8);
         doc.setTextColor(...PDF_COLORS.muted);
         doc.text(
-          pdfClean('Ventes initiales : ' + pdfMoney(original) +
+          pdfClean('Montant initial actif : ' + pdfMoney(original) +
             '  |  Avoirs commerciaux : - ' + pdfMoney(avoirs)),
           11.5, 69.5,
         );

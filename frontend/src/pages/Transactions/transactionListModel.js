@@ -1,4 +1,5 @@
 import { deferredSaleStatus } from './deferredSaleStatus';
+import { sumActiveTransactionAmounts } from '../../utils/transactionAmounts';
 
 const isSale = transaction => transaction.id_client !== null;
 const isPurchase = transaction => transaction.id_fournisseur !== null;
@@ -46,7 +47,7 @@ export function summarizeTransactions(transactions) {
     ventes: ventes.length,
     achats: achats.length,
     nonPayees: active.filter(isUnpaid).length,
-    totalVentes: activeVentes.reduce((sum, transaction) => sum + Number(transaction.montant_net ?? transaction.montant_total ?? 0), 0),
-    totalAchats: activeAchats.reduce((sum, transaction) => sum + parseFloat(transaction.montant_total || 0), 0),
+    totalVentes: sumActiveTransactionAmounts(activeVentes).net,
+    totalAchats: sumActiveTransactionAmounts(activeAchats).net,
   };
 }

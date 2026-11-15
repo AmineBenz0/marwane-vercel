@@ -65,6 +65,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportTransactionsReportPDF } from '../../utils/exportTransactionsReportPDF';
+import { sumActiveTransactionAmounts, transactionNetAmount } from '../../utils/transactionAmounts';
 import { resolveTransactionExportRows } from './resolveTransactionExportReferences';
 import { loadTransactionPages } from './transactionPages';
 import { countTransactionQuickFilters, filterTransactions, summarizeTransactions } from './transactionListModel';
@@ -1050,7 +1051,7 @@ export const exportTransactionWorkbook = (rows) => {
         : '',
       montant_total: Number(row.montant_total ?? 0),
       montant_avoir: Number(row.montant_avoir ?? 0),
-      montant_net: Number(row.montant_net ?? row.montant_total ?? 0),
+      montant_net: transactionNetAmount(row),
       avoirs_details: (row.avoirs_livraison_differee || [])
         .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontantComplet(avoir.montant_avoir)}`)
         .join(' | '),
@@ -1065,17 +1066,11 @@ export const exportTransactionWorkbook = (rows) => {
       quantite_en_attente: row.est_promesse ? row.quantite_en_attente : '',
     };
   });
-  const totals = rows.filter(row => row.est_actif !== false).reduce((sum, row) => ({
-    gross: sum.gross + Number(row.montant_total || 0),
-    avoirs: sum.avoirs + Number(row.montant_avoir || 0),
-    net: sum.net + Number(row.montant_net ?? row.montant_total ?? 0),
-    paid: sum.paid + Number(row.montant_paye || 0),
-    remaining: sum.remaining + Number(row.montant_restant || 0),
-  }), { gross: 0, avoirs: 0, net: 0, paid: 0, remaining: 0 });
+  const totals = sumActiveTransactionAmounts(rows);
   return exportToExcelAdvanced(
     [...data, {}, {
       quantite: 'Total :', montant_total: totals.gross,
-      montant_avoir: totals.avoirs,
+      montant_avoir: totals.credits,
       montant_net: totals.net,
       montant_paye: totals.paid,
       montant_restant: totals.remaining,
@@ -1087,7 +1082,7 @@ export const exportTransactionWorkbook = (rows) => {
 };
 
 const getSignedAmount = (transaction) => {
-  const amount = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
+  const amount = Math.abs(transactionNetAmount(transaction));
   return transaction.id_client !== null ? amount : -amount;
 };
 
@@ -1133,7 +1128,7 @@ function TransactionsExcelRegister({
       };
 
       if (transaction.est_actif !== false) {
-        const total = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
+        const total = Math.abs(transactionNetAmount(transaction));
         if (transaction.id_client !== null) {
           group.entries += total;
         } else {

@@ -24,6 +24,7 @@ const STATUSES = {
 
 function paymentCells(payment) {
   const credit = ['credit_recu', 'credit_transfere'].includes(payment.nature);
+  const outgoing = ['remboursement', 'credit_transfere'].includes(payment.nature);
   // Cancellation/rejection takes precedence over a cheque's historical state.
   const status = ['annule', 'rejete'].includes(payment.statut) ? payment.statut
     : payment.type_paiement === 'cheque' && payment.statut_cheque
@@ -41,7 +42,7 @@ function paymentCells(payment) {
       OPERATIONS[payment.nature || 'paiement'] || payment.nature,
       credit ? '-' : TYPES[payment.type_paiement] || payment.type_paiement || '-',
       reference,
-      payment.montant == null ? '-' : pdfMoney(payment.montant, false),
+      payment.montant == null ? '-' : pdfMoney(outgoing ? -Math.abs(Number(payment.montant)) : payment.montant, false),
       STATUSES[status] || status || '-',
     ].map(pdfClean),
   };

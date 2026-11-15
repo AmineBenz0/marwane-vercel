@@ -9,6 +9,8 @@ import {
 const pageWidth = 210;
 const margin = 12;
 const interior = pageWidth - 2 * margin;
+const continuationTop = 54;
+const balanceMoney = value => value == null ? '-' : pdfMoney(value);
 
 function sectionTitle(doc, label, y) {
   doc.setFont('helvetica', 'bold');
@@ -71,15 +73,15 @@ function balances(report) {
     const currentBank = currentMap.get(key);
     return [
       'Solde ' + pdfClean((currentBank || oldBank)?.nom_banque || ('Banque #' + key)),
-      pdfMoney(oldBank?.solde || 0),
-      pdfMoney(currentBank?.solde || 0),
+      balanceMoney(oldBank?.solde),
+      balanceMoney(currentBank?.solde),
     ];
   });
 
   return [
-    ['À encaisser', pdfMoney(report.creances), pdfMoney(report.creances_actuelles)],
-    ['À payer aux fournisseurs', pdfMoney(report.dettes), pdfMoney(report.dettes_actuelles)],
-    ['Solde caisse', pdfMoney(report.solde_caisse_historique), pdfMoney(report.solde_caisse)],
+    ['À encaisser', balanceMoney(report.creances), balanceMoney(report.creances_actuelles)],
+    ['À payer aux fournisseurs', balanceMoney(report.dettes), balanceMoney(report.dettes_actuelles)],
+    ['Solde caisse', balanceMoney(report.solde_caisse_historique), balanceMoney(report.solde_caisse)],
     ...banks,
   ];
 }
@@ -134,13 +136,13 @@ export function exportMonthlyReportPDF(report, filename) {
   const currentDate = pdfDate(report.date_soldes_actuels);
   autoTable(doc, {
     startY: 152,
-    margin: { top: 44, left: margin, right: margin, bottom: 24 },
+    margin: { top: continuationTop, left: margin, right: margin, bottom: 24 },
     tableWidth: interior,
     theme: 'striped',
     showHead: 'everyPage',
     head: [[
       'INDICATEUR',
-      projected ? 'PROJECTION AU ' + monthEnd : 'FIN DE MOIS',
+      (projected ? 'PROJECTION AU ' : 'FIN DE MOIS AU ') + monthEnd,
       'ACTUEL AU ' + currentDate,
     ]],
     body: balances(report),
@@ -169,7 +171,7 @@ export function exportMonthlyReportPDF(report, filename) {
   let stockY = (doc.lastAutoTable?.finalY || 205) + 11;
   if (stockY + 36 > doc.internal.pageSize.getHeight() - 20) {
     doc.addPage();
-    stockY = 45;
+    stockY = continuationTop;
   }
   sectionTitle(doc, 'Stock et production', stockY);
   stockCard(doc, margin, stockY + 5.5, 'MOUVEMENTS DE STOCK', pdfInteger(report.inventory_movements));
