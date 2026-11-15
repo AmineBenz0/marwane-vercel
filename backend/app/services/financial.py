@@ -284,8 +284,8 @@ def _payment_expressions(payment_totals, net_sale, today: date):
     paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0.00")))
     remaining = net_sale - paid
     raw_status = case(
-        (paid > net_sale + literal(Decimal("0.01")), literal("surpaye")),
-        (paid >= net_sale - literal(Decimal("0.01")), literal("paye")),
+        (paid > net_sale, literal("surpaye")),
+        (paid >= net_sale, literal("paye")),
         (paid == literal(Decimal("0")), literal("impaye")),
         else_=literal("partiel"),
     )

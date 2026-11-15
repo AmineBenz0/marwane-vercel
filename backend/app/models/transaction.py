@@ -195,11 +195,11 @@ class Transaction(Base):
         montant_total = self.montant_net
         
         # Surpayé
-        if montant_paye > montant_total + Decimal('0.01'):
+        if montant_paye > montant_total:
             return 'surpaye'
         
-        # Totalement payé (avec une tolérance de 0.01 pour les arrondis)
-        if montant_paye >= montant_total - Decimal('0.01'):
+        # Totalement payé
+        if montant_paye >= montant_total:
             return 'paye'
         
         # Aucun paiement

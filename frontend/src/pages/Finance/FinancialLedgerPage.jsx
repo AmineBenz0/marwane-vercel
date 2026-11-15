@@ -116,7 +116,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Annuler</Button>
-        <Button onClick={submit} variant="contained" disabled={saving}>{saving ? 'Enregistrement…' : Number(amount) >= Number(item?.montant_restant || 0) - 0.01 ? 'Marquer comme payé' : 'Enregistrer le paiement'}</Button>
+        <Button onClick={submit} variant="contained" disabled={saving}>{saving ? 'Enregistrement…' : Math.round(Number(amount) * 100) >= Math.round(Number(item?.montant_restant || 0) * 100) ? 'Marquer comme payé' : 'Enregistrer le paiement'}</Button>
       </DialogActions>
     </Dialog>
   );
