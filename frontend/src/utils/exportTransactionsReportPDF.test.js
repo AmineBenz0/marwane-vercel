@@ -130,7 +130,7 @@ describe('transaction PDF pagination', () => {
       ],
     })]);
     const annex = pages().filter(page => page.includes('ANNEXE')).join('\n');
-    for (const amount of ['0,01', '10,02', '15,03', '20,04', '30,05', '40,06', '5,07', '6,08', '7,09', '8,10']) {
+    for (const amount of ['0,01', '10,02', '15,03', '20,04', '30,05', '-40,06', '-5,07', '6,08', '7,09', '8,10']) {
       expect(annex).toContain(`(${amount}) Tj`);
     }
     for (const label of ['Crédit utilisé', 'Crédit transféré', 'Remboursement', 'Annulé', 'Rejeté', 'À encaisser', 'LC-READABLE', 'TRANSFER-REF']) {
@@ -208,10 +208,12 @@ describe('transaction PDF pagination', () => {
     })]);
     const all = pages().join('\n');
     expect(all).toContain('MONTANT NET ACTIF');
+    expect(all).toContain('Montant initial actif');
     expect(all).toContain('Avoirs commerciaux');
     expect(all).toContain('Remboursement');
     expect(all).toContain('10/11/26');
     expect(all).toContain('(600,00) Tj');
+    expect(all).toContain('(-600,00) Tj');
     expect(all).toContain('(900,00) Tj');
     expect(all).toContain('ANNULÉ');
     expect(all).not.toContain('(ID) Tj');
