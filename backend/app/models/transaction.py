@@ -87,10 +87,16 @@ class Transaction(Base):
     @property
     def repartition_stock(self):
         # Keep the production API's public stock-origin response unchanged.
-        # Correction audit previews expose delivered quantities separately.
+        # Delivered quantities are exposed separately from stock origins.
         return [dict(id_production=a.id_production, quantite=a.quantite,
                      date_production=a.production.date_production, id_cycle=a.production.id_cycle)
                 for a in self.allocations]
+
+    @property
+    def quantites_livrees_par_source(self):
+        if not self.est_promesse:
+            return {}
+        return {allocation.id_production: allocation.quantite_livree or 0 for allocation in self.allocations}
 
     @property
     def quantite_couverte(self):

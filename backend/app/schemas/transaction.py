@@ -402,6 +402,7 @@ class TransactionRead(TransactionBase):
     Inclut les champs générés automatiquement (id, dates, utilisateurs) et les informations de paiement calculées.
     """
     repartition_stock: List[EggAllocationRead] = Field(default_factory=list)
+    quantites_livrees_par_source: dict[int, int] = Field(default_factory=dict)
     quantite_reservee: int = 0
     quantite_couverte: int = 0
     quantite_completee: int = 0

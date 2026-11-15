@@ -46,7 +46,7 @@ def get_charges(
     if date_fin:
         query = query.filter(Charge.date_charge <= date_fin)
 
-    return query.order_by(Charge.date_charge.desc()).offset(skip).limit(limit).all()
+    return query.order_by(Charge.date_charge.desc(), Charge.id_charge.desc()).offset(skip).limit(limit).all()
 
 
 @router.get("/summary", response_model=List[ChargeSummary])
