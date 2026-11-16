@@ -110,13 +110,20 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
     are distributed, so repeated production saves are safe and canceled sales
     naturally release their allocations to the next promise.
     """
+    scoped_buildings = {building for building in (building_ids or ()) if building is not None}
+    if building_id is not None:
+        scoped_buildings.add(building_id)
+    # Serialize allocation before reading promises and their stock. An
+    # unscoped rebalance must acquire all building locks in the same order.
+    building_scope = db.query(Batiment.id_batiment)
+    if scoped_buildings:
+        building_scope = building_scope.filter(Batiment.id_batiment.in_(scoped_buildings))
+    building_scope.order_by(Batiment.id_batiment).with_for_update().all()
+
     query = db.query(Transaction).join(Produit).filter(
         Transaction.est_actif.is_(True), Transaction.est_promesse.is_(True),
         Transaction.id_client.isnot(None), Transaction.id_batiment.isnot(None),
     ).options(selectinload(Transaction.allocations), joinedload(Transaction.produit))
-    scoped_buildings = {building for building in (building_ids or ()) if building is not None}
-    if building_id is not None:
-        scoped_buildings.add(building_id)
     if scoped_buildings:
         query = query.filter(Transaction.id_batiment.in_(sorted(scoped_buildings)))
     promises = query.order_by(Transaction.date_creation, Transaction.id_transaction).all()
@@ -129,10 +136,6 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
         return []
 
     # Match the established stock-write lock order: buildings, then products.
-    building_ids = sorted({building for building, _ in grouped})
-    db.query(Batiment).filter(Batiment.id_batiment.in_(building_ids)).order_by(
-        Batiment.id_batiment
-    ).with_for_update().all()
     product_ids = sorted({tx.id_produit for items in grouped.values() for tx in items})
     db.query(Produit).filter(Produit.id_produit.in_(product_ids)).order_by(
         Produit.id_produit
@@ -146,6 +149,12 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
             tx.id_cycle = None
             tx.cycle = None
     db.flush()
+
+    # A caller may have loaded these collections before taking the locks.
+    # Reload them before computing source balances, after flushing local edits.
+    for items in grouped.values():
+        for tx in items:
+            db.expire(tx, ['allocations'])
 
     rows, balances = source_balances(
         db, through_date=business_date(), reserve_open_promises=False,
@@ -161,14 +170,11 @@ def assign_pending_promises(db, *, building_id=None, building_ids=None,
             and row.type_oeuf not in {"casse", "perdu"}
         ]
         for tx in items:
-            # The promises list was loaded before taking stock locks. Refresh
-            # fulfillment state after acquiring the locks so a concurrent
-            # remainder closure cannot be undone by stale pending quantities.
-            # Pending changes from this transaction were flushed above.
+            # Refresh fulfillment fields that the caller may have loaded
+            # before locking. Pending changes were flushed above.
             db.refresh(tx, attribute_names=[
                 'quantite', 'quantite_annulee', 'est_actif', 'est_promesse',
             ])
-            db.expire(tx, ['allocations'])
             if not tx.est_actif or not tx.est_promesse:
                 continue
             before = sum(a.quantite for a in tx.allocations)
