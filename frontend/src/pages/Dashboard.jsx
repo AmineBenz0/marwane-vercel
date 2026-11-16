@@ -41,6 +41,7 @@ import { formatShortDate } from '../utils/dateFormatting';
 import { getBusinessDateInput } from '../utils/businessDate';
 import { get } from '../services/api';
 import DeferredSalesCard from './Transactions/DeferredSalesCard';
+import { loadTransactionPages } from './Transactions/transactionPages';
 import { formatMontant, formatSimpleNumber } from '../utils/formatNumber';
 import { formatNumberForAxis, formatMontantForTooltip } from '../utils/formatNumberForChart';
 
@@ -145,22 +146,16 @@ function Dashboard() {
           monthlyReport,
         ] = await Promise.all([
           get('/caisse/solde/complet'),
-          get('/transactions', {
-            params: {
-              date_debut: format(debutMois, 'yyyy-MM-dd'),
-              date_fin: format(finMois, 'yyyy-MM-dd'),
-              est_actif: true,
-              limit: 1000,
-            },
-          }),
-          get('/transactions', {
-            params: {
-              date_debut: format(dateDebut30Jours, 'yyyy-MM-dd'),
-              date_fin: format(now, 'yyyy-MM-dd'),
-              est_actif: true,
-              limit: 1000,
-            },
-          }),
+          loadTransactionPages(get, {
+            date_debut: format(debutMois, 'yyyy-MM-dd'),
+            date_fin: format(finMois, 'yyyy-MM-dd'),
+            est_actif: true,
+          }, 1000),
+          loadTransactionPages(get, {
+            date_debut: format(dateDebut30Jours, 'yyyy-MM-dd'),
+            date_fin: format(now, 'yyyy-MM-dd'),
+            est_actif: true,
+          }, 1000),
           get('/productions', {
             params: {
               date_debut: format(now, 'yyyy-MM-dd'),
