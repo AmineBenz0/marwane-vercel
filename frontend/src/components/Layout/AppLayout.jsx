@@ -585,7 +585,7 @@ function AppLayout({ children }) {
       >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: { xs: 2, md: 3 }, pt: { xs: 1, md: 2 }, minHeight: 56, color: 'text.secondary' }}>
           <UnifiedSearch />
-          <AlertCenter />
+          <AlertCenter key={user?.id} userId={user?.id} />
         </Box>
         <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, pt: { xs: 8, md: 3 }, maxWidth: '100%' }}>
           {isRecovering && (
