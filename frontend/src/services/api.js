@@ -376,6 +376,8 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
+
     // Récupérer l'instance du store de notifications
     const notificationStore = useNotificationStore.getState();
     
@@ -427,7 +429,7 @@ api.interceptors.response.use(
           }
           return Promise.reject(refreshError);
         }
-      } else if (shouldShowNotification(status) && !config?.silent) {
+      } else if (shouldShowNotification(status) && !originalRequest.silent) {
         // Interactive inputs such as global search render their own error state.
         notificationStore.error(errorMessage);
       }
@@ -450,7 +452,7 @@ api.interceptors.response.use(
       };
       
       // Afficher une notification pour les erreurs réseau
-      notificationStore.error(networkErrorMessage);
+      if (!error.config?.silent) notificationStore.error(networkErrorMessage);
       
       // Logger l'erreur en mode développement
       logError(formattedError, error.config?.url);
@@ -468,7 +470,7 @@ api.interceptors.response.use(
     };
     
     // Afficher une notification pour les erreurs inattendues
-    notificationStore.error(unexpectedErrorMessage);
+    if (!error.config?.silent) notificationStore.error(unexpectedErrorMessage);
     
     // Logger l'erreur en mode développement
     logError(formattedError);

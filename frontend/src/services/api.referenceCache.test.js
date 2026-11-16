@@ -1,5 +1,7 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { CanceledError } from 'axios';
 import api, { get, post, clearReferenceCache } from './api';
+import useNotificationStore from '../store/notificationStore';
 
 describe('reference cache API integration', () => {
   const originalAdapter = api.defaults.adapter;
@@ -59,5 +61,30 @@ describe('reference cache API integration', () => {
       await get('/batiments', { referenceData: true, headers: { Authorization: 'custom' } });
     }
     expect(adapter).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('background API requests', () => {
+  it('suppresses cancelled reads and silent connection failures', async () => {
+    const originalAdapter = api.defaults.adapter;
+    const notify = vi.spyOn(useNotificationStore.getState(), 'error');
+    api.defaults.adapter = async (config) => {
+      if (config.signal) throw new CanceledError('Cancelled', config, {});
+      throw Object.assign(new Error('Connection lost'), { config, request: {} });
+    };
+    try {
+      await expect(get('/transactions/deferred-sales', { signal: new AbortController().signal }))
+        .rejects.toMatchObject({ code: 'ERR_CANCELED' });
+      await expect(get('/transactions/deferred-sales', { silent: true }))
+        .rejects.toMatchObject({ status: null });
+      expect(notify).not.toHaveBeenCalled();
+
+      await expect(get('/transactions/deferred-sales')).rejects.toMatchObject({ status: null });
+      expect(notify).toHaveBeenCalledTimes(1);
+    } finally {
+      api.defaults.adapter = originalAdapter;
+      notify.mockRestore();
+      useNotificationStore.setState({ notifications: [] });
+    }
   });
 });
