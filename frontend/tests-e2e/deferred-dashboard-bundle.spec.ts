@@ -62,10 +62,10 @@ test('compiled dashboard opens delivery cards, details and return navigation', a
     await page.setViewportSize({ width, height: 900 });
     await page.getByRole('button', { name: /Voir le détail de la vente #1/ }).click();
     const detail = page.getByRole('dialog', { name: 'Vente #1', exact: true });
-    await expect(detail.getByRole('heading', { name: 'Production utilisée' })).toBeVisible();
+    await expect(detail.getByText('Prêts à compléter', { exact: true })).toBeVisible();
     await expect(detail).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect(detail.getByRole('heading', { name: 'Vente #1', exact: true })).toHaveCSS('color', 'rgb(15, 23, 42)');
-    await expect(detail.getByText('65 œufs', { exact: true })).toBeVisible();
+    await expect(detail.getByText('65', { exact: true }).first()).toBeVisible();
     const drawerBounds = await detail.boundingBox();
     expect(drawerBounds && drawerBounds.x >= 0 && drawerBounds.x + drawerBounds.width <= width + 1).toBeTruthy();
     if (width === 390) await expect(detail).toHaveCSS('width', '390px');
@@ -73,12 +73,28 @@ test('compiled dashboard opens delivery cards, details and return navigation', a
     await expect(detail).toHaveCount(0);
   }
   await page.getByRole('button', { name: /Voir le détail de la vente #1/ }).click();
-  await page.getByRole('button', { name: 'Ouvrir la vente et ses paiements' }).click();
+  await page.getByRole('button', { name: 'Voir la vente', exact: true }).click();
   await expect(page).toHaveURL(/\/transactions\/1\?from=deliveries$/);
   await page.getByRole('button', { name: 'Retour aux livraisons' }).click();
   await expect(page.getByRole('dialog', { name: 'Vente #1', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Fermer le détail' }).click();
   await page.getByRole('button', { name: 'Retour à l’accueil' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+
+  const alerts = page.getByRole('button', { name: 'Ouvrir les alertes' });
+  await alerts.click();
+  const readyReminder = page.getByRole('listitem').filter({ hasText: 'Vente #1' });
+  const dueReminder = page.getByRole('listitem').filter({ hasText: 'Vente #2' });
+  await expect(readyReminder).toContainText('5 prêts');
+  await expect(dueReminder).toContainText('50 à produire');
+  await readyReminder.getByRole('button', { name: 'Lu', exact: true }).click();
+  await expect(readyReminder).toHaveCount(0);
+  await page.reload();
+  await alerts.click();
+  await expect(dueReminder).toBeVisible();
+  await expect(readyReminder).toHaveCount(0);
+  await dueReminder.getByRole('link', { name: 'Livraison à traiter' }).click();
+  await expect(page).toHaveURL(/\/transactions\/2\?from=deliveries$/);
+  await expect(page.getByRole('button', { name: 'Retour aux livraisons' })).toBeVisible();
   expect(errors).toEqual([]);
 });
