@@ -902,6 +902,9 @@ def update_transaction(
             detail=f"Transaction avec l'ID {id} introuvable"
         )
     
+    if not transaction.est_actif:
+        raise HTTPException(409, "Cette transaction annulée est en lecture seule. Réactivez-la avant de la modifier.")
+
     update_data = transaction_data.model_dump(exclude_unset=True)
     original_building_id = transaction.id_batiment
 
