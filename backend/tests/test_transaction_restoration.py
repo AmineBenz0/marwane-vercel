@@ -1,12 +1,15 @@
 """Reviewed restoration keeps stock and settlement history consistent."""
 from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 
+from app.config import settings
 from app.main import app
 from app.models.caisse import Caisse
 from app.models.client import Client
+from app.models.correction_operation import CorrectionOperation
 from app.models.financial_correction import CorrectionFinanciere
 from app.models.inventory import MouvementStock
 from app.models.paiement import Paiement
@@ -14,6 +17,7 @@ from app.models.transaction import Transaction
 from app.services.inventory import get_stock_quantity, record_movement, record_transaction_movement
 from app.utils.business_date import business_date
 from app.utils.dependencies import get_current_active_user
+from tests.test_correction_contract import revision_trigger
 
 
 @pytest.fixture
@@ -44,6 +48,65 @@ def confirmation(review):
         "restore_stock": True,
         "restore_cancelled_payments": False,
     }
+
+
+def test_cancelled_transaction_can_only_be_edited_after_restoration(
+    client, db_session, test_user, test_client, test_produit, auth_headers, monkeypatch,
+):
+    monkeypatch.setattr(settings, "ENABLE_CORRECTION_WRITES", True)
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    if db_session.get_bind().dialect.name == "sqlite":
+        revision_trigger(db_session, "transactions", "est_actif,date_echeance")
+    test_produit.type_produit = "service"
+    test_produit.pour_fournisseurs = False
+    tx = create_sale(db_session, test_client, test_produit, test_user)
+    path = f"/api/v1/transactions/{tx.id_transaction}"
+    due_date = (business_date() + timedelta(days=10)).isoformat()
+    changes = {"date_echeance": due_date}
+    command = {
+        "operation_id": str(uuid4()),
+        "target": {"entity_type": "transaction", "entity_id": tx.id_transaction, "expected_version": tx.row_version},
+        "reason": "Correction de l’échéance",
+        "changes": changes,
+    }
+    preview = client.post("/api/v1/corrections/preview", json=command, headers=auth_headers)
+    assert preview.status_code == 200, preview.text
+
+    assert client.delete(path, headers=auth_headers).status_code == 204
+    assert client.get(path, headers=auth_headers).status_code == 200
+    db_session.refresh(tx)
+    command["target"]["expected_version"] = tx.row_version
+    apply = {**command, "dependency_fingerprint": preview.json()["dependency_fingerprint"]}
+    blocked_writes = (
+        client.put(path, json=changes, headers=auth_headers),
+        client.post("/api/v1/corrections/preview", json=command, headers=auth_headers),
+        client.post("/api/v1/corrections/apply", json=apply, headers=auth_headers),
+    )
+    for response in blocked_writes:
+        assert response.status_code == 409, response.text
+        assert "lecture seule" in response.json()["detail"]
+    db_session.refresh(tx)
+    assert tx.date_echeance is None
+    assert db_session.query(CorrectionOperation).count() == 0
+
+    review = client.get(f"{path}/reactivate/preview", headers=auth_headers)
+    assert review.status_code == 200, review.text
+    restored = client.patch(f"{path}/reactivate", json=confirmation(review.json()), headers=auth_headers)
+    assert restored.status_code == 200, restored.text
+    edited = client.put(path, json=changes, headers=auth_headers)
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["date_echeance"] == due_date
+
+    next_due_date = (business_date() + timedelta(days=15)).isoformat()
+    command["changes"] = {"date_echeance": next_due_date}
+    command["target"]["expected_version"] = edited.json()["row_version"]
+    fresh_preview = client.post("/api/v1/corrections/preview", json=command, headers=auth_headers)
+    assert fresh_preview.status_code == 200, fresh_preview.text
+    corrected = client.post("/api/v1/corrections/apply", headers=auth_headers, json={
+        **command, "dependency_fingerprint": fresh_preview.json()["dependency_fingerprint"],
+    })
+    assert corrected.status_code == 200, corrected.text
+    assert corrected.json()["record"]["date_echeance"] == next_due_date
 
 
 def test_restoration_requires_review_and_preserves_voided_cash(

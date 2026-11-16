@@ -164,6 +164,9 @@ def _dependencies(db, entity_type, record, transaction=None, *, lock=False, chan
 
 def _normalize_and_validate(command: CorrectionCommand, record, *, db: Session, transaction=None) -> dict:
     entity_type = command.target.entity_type
+    if entity_type == "transaction" and not record.est_actif:
+        raise HTTPException(409, "Cette transaction annulée est en lecture seule. Réactivez-la avant de la modifier.")
+
     requested = command.changes.model_dump(exclude_unset=True)
     if entity_type == "paiement" and record.nature not in {None, "paiement"}:
         raise HTTPException(409, "Un remboursement ou une affectation de crédit conserve ses valeurs. Annulez l’opération liée erronée puis recréez-la.")
