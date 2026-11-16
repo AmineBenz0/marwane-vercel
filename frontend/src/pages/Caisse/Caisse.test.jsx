@@ -20,12 +20,13 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it.each([false, true])('shows exact fractional cash movements and refund origin (mobile=%s)', async mobile => {
+it.each([false, true])('shows fractional cash balances and movements (mobile=%s)', async mobile => {
   viewport.mobile = mobile;
   render(<Caisse />);
-  expect(await screen.findByText('Remboursement client')).toBeVisible();
+  expect(await screen.findByText('Paiement fournisseur')).toBeVisible();
+  expect(screen.getAllByText(/1,3/).length).toBeGreaterThan(0);
   expect(screen.getAllByText('-0,2 MAD').length).toBeGreaterThan(0);
   expect(screen.getAllByText('+1,5 MAD').length).toBeGreaterThan(0);
-  expect(screen.getByText(/Remboursement #27/)).toBeVisible();
+  expect(screen.getByText(/Paiement #27/)).toBeVisible();
   expect(screen.queryByText('-0 MAD')).not.toBeInTheDocument();
 });
