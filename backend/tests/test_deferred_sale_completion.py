@@ -64,6 +64,44 @@ def confirmation(data, quantity=None):
                 quantite_couverte_attendue=data['quantite_couverte'], empreinte_stock=data['empreinte_stock'])
 
 
+def test_restoration_preserves_deferred_sources_and_pending_quantity(
+    client, db_session, deferred_sale,
+):
+    _, _, source, payload = deferred_sale
+    tx = create_transaction(payload, db_session, None)
+    parent = f"/api/v1/transactions/{tx.id_transaction}"
+    assert client.delete(parent).status_code == 204
+    path = f"{parent}/reactivate"
+    response = client.get(f"{path}/preview")
+    assert response.status_code == 200, response.text
+    review = response.json()
+    assert (review["stock_effect"], review["stock_quantity"], review["pending_quantity"]) == (
+        "reservation", 600, 400,
+    )
+    result = client.patch(path, json={
+        "expected_version": review["expected_version"],
+        "dependency_fingerprint": review["dependency_fingerprint"],
+        "restore_stock": True,
+    })
+    assert result.status_code == 200, result.text
+    db_session.refresh(tx)
+    assert tx.est_actif
+    assert [(row.id_production, row.quantite, row.quantite_livree) for row in tx.allocations] == [
+        (source.id_production, 600, 600),
+    ]
+
+
+def test_restoration_blocks_deferred_sale_with_cancelled_quantity(client, db_session, deferred_sale):
+    _, _, _, payload = deferred_sale
+    tx = create_transaction(payload, db_session, None)
+    tx.est_actif = False
+    tx.quantite_annulee = 20
+    db_session.commit()
+    response = client.get(f"/api/v1/transactions/{tx.id_transaction}/reactivate/preview")
+    assert response.status_code == 409
+    assert "annulation de quantité" in response.json()["detail"]
+
+
 @pytest.mark.parametrize('paid', [False, True])
 def test_complete_300_then_100_preserves_sale_payments_and_origins(client, db_session, deferred_sale, paid):
     building, _, original_source, payload = deferred_sale

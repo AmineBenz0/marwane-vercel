@@ -3,11 +3,30 @@ Schémas Pydantic pour la validation des données transactions.
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 from app.schemas.paiement import PaiementRead
+
+
+class ReactivationApply(BaseModel):
+    expected_version: int = Field(gt=0)
+    dependency_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    restore_stock: Literal[True]
+    restore_cancelled_payments: Literal[False] = False
+
+
+class ReactivationPreview(BaseModel):
+    id_transaction: int
+    expected_version: int
+    dependency_fingerprint: str
+    product_name: str
+    stock_kind: Literal["oeufs", "general", "aucun"]
+    stock_effect: Literal["entree", "sortie", "reservation", "aucun"]
+    stock_quantity: int
+    pending_quantity: int = 0
+    cancelled_payments_count: int
 
 
 class TransactionBase(BaseModel):

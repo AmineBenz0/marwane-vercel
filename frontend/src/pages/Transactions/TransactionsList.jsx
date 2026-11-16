@@ -54,13 +54,14 @@ import {
 } from '@mui/icons-material';
 import TransactionForm from './TransactionForm';
 import TransactionEditForm from './TransactionEditForm';
+import ReactivationReviewDialog from './ReactivationReviewDialog';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 
 import { deferredSaleStatus } from './deferredSaleStatus';
 import DeferredSaleStatusBadge from './DeferredSaleStatusBadge';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
-import { get, post, put, patch, del } from '../../services/api';
+import { get, post, put, del } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -106,6 +107,7 @@ function TransactionsList() {
 
   // ðtat pour la confirmation de suppression
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [transactionToRestore, setTransactionToRestore] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -553,27 +555,6 @@ function TransactionsList() {
   };
 
   /**
-   * Gère la réactivation d'une transaction.
-   */
-  const handleReactivate = async (transaction) => {
-    try {
-      // Appeler l'API pour réactiver (PATCH)
-      await patch(`/transactions/${transaction.id_transaction}/reactivate`, {});
-      
-      // Rafraîchir la liste
-      await fetchTransactions();
-      
-      // Notification de succès
-      notification.success('Transaction réactivée avec succès');
-    } catch (err) {
-      console.error('Erreur lors de la réactivation:', err);
-      setError(
-        err?.message || 'Une erreur est survenue lors de la réactivation'
-      );
-    }
-  };
-
-  /**
    * Formate le montant pour l'affichage (wrapper de l'utilitaire).
    */
   const formatMontant = (montant, options = {}) => {
@@ -810,8 +791,17 @@ function TransactionsList() {
         onView={handleViewDetails}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
-        onReactivate={handleReactivate}
+        onReactivate={setTransactionToRestore}
       />
+
+      {transactionToRestore && <ReactivationReviewDialog
+        transaction={transactionToRestore}
+        onClose={() => setTransactionToRestore(null)}
+        onSaved={() => {
+          setTransactionToRestore(null);
+          notification.success('Transaction réactivée avec succès');
+        }}
+      />}
 
       {CORRECTION_WRITES_ENABLED && editingTransaction && modalOpen ? (
         <TransactionEditForm
@@ -848,7 +838,7 @@ function TransactionsList() {
             Retirer cette transaction du registre actif ?
             <br />
             <br />
-            Elle restera dans l'historique et pourra être réactivée plus tard.
+            Elle restera dans l'historique.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
