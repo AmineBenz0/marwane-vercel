@@ -351,6 +351,7 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
   const payment = headings.get('Règlement')!;
   const deferredRow = sheet.getRow(2);
   expect(deferredRow.getCell(payment).value).toMatch(/0,01.*0,10.*1,60/);
+  expect(String(deferredRow.getCell(payment).value).match(/23\/10\/26/g)).toHaveLength(3);
   expect(deferredRow.getCell(headings.get('Quantité couverte')!).value).toBe(10);
   expect(deferredRow.getCell(headings.get('Stock prêt à compléter')!).value).toBe(5);
   expect(deferredRow.getCell(headings.get('Reste à fournir')!).value).toBe(10);

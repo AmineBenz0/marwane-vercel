@@ -58,9 +58,9 @@ describe('Release 4 Phase 6 transaction Excel', () => {
     }
     expect(rows[0].avoirs_details).toContain('10/11/26');
     expect(rows[0].avoirs_details).toContain('600,00');
-    expect(rows[0].reglement).toContain('Remboursement');
-    expect(rows[0].reglement).toContain('600,00');
-    expect(rows[0].reglement).toContain('−');
+    const [payment, refund] = rows[0].reglement.split(' | ');
+    expect(payment).toMatch(/^22\/10\/26 · .*1\s500,00/);
+    expect(refund).toMatch(/^11\/11\/26 · Remboursement.*− 600,00/);
     const totals = rows.at(-1);
     expect(totals).toMatchObject({ montant_total: 1500, montant_avoir: 600, montant_net: 900, montant_paye: 900, montant_restant: 0 });
   });

@@ -988,9 +988,9 @@ const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountFor
   const signedAmount = payment.nature === 'remboursement' || payment.nature === 'credit_transfere'
     ? '− ' + amount : amount;
 
-  return [amount ? `${label}${referenceText} · ${signedAmount}` : `${label}${referenceText}`]
+  return [formatShortDate(payment.date_paiement, ''), `${label}${referenceText}`, amount && signedAmount]
     .filter(Boolean)
-    .join('');
+    .join(' · ');
 };
 
 const getPaymentReglementSummary = (transaction, formatAmount = formatPaymentAmountForSummary) => {
