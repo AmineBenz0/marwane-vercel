@@ -12,6 +12,8 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import PageHeader from '../../components/Layout/PageHeader';
+import StatCard from '../../components/StatCard';
 import {
   Box,
   Button,
@@ -837,37 +839,10 @@ function TransactionsList() {
 
   return (
     <Box sx={{ maxWidth: 1480, mx: 'auto', overflowX: 'hidden' }}>
-      <Box
-        sx={{
-          p: { xs: 2, md: 3 },
-          mb: 3,
-          borderRadius: 4,
-          border: '1px solid',
-          borderColor: 'divider',
-          background:
-            'linear-gradient(135deg, rgba(240,253,250,0.92), rgba(255,251,235,0.82)), #fff',
-        }}
-      >
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          justifyContent="space-between"
-          alignItems={{ xs: 'stretch', md: 'flex-start' }}
-          spacing={2}
-        >
-          <Box>
-            <Typography
-              component="h1"
-              sx={{
-                fontSize: { xs: '1.8rem', md: '2.45rem' },
-                fontWeight: 900,
-                letterSpacing: 0,
-                color: '#17211D',
-              }}
-            >
-              Ventes & achats
-            </Typography>
-          </Box>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+      <PageHeader
+        title="Ventes & achats"
+        actions={
+          <>
             <Button
               variant="outlined"
               startIcon={<FileDownloadIcon />}
@@ -888,9 +863,9 @@ function TransactionsList() {
             <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
               Nouvelle transaction
             </Button>
-          </Stack>
-        </Stack>
-      </Box>
+          </>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -900,42 +875,46 @@ function TransactionsList() {
 
       <Grid container spacing={2} sx={{ mb: 2.5 }}>
         <Grid item xs={12} sm={6} lg={3}>
-          <TransactionMetric
-            label="Opérations"
+          <StatCard
+            title="Opérations"
             value={transactionSummary.total}
+            valueFormat="text"
             loading={loading}
             icon={<ReceiptLongIcon />}
-            color="#315F85"
+            color="info"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
-          <TransactionMetric
-            label="Ventes"
+          <StatCard
+            title="Ventes"
             value={formatMontant(transactionSummary.totalVentes)}
-            helper={`${transactionSummary.ventes} transaction(s) client`}
+            valueFormat="text"
+            subtitle={`${transactionSummary.ventes} transaction(s) client`}
             loading={loading}
             icon={<TrendingUpIcon />}
-            color="#1D6F50"
+            color="success"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
-          <TransactionMetric
-            label="Achats"
+          <StatCard
+            title="Achats"
             value={formatMontant(transactionSummary.totalAchats)}
-            helper={`${transactionSummary.achats} transaction(s) fournisseur`}
+            valueFormat="text"
+            subtitle={`${transactionSummary.achats} transaction(s) fournisseur`}
             loading={loading}
             icon={<TrendingDownIcon />}
-            color="#A84435"
+            color="error"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
-          <TransactionMetric
-            label="À suivre"
+          <StatCard
+            title="À suivre"
             value={transactionSummary.nonPayees}
-            helper="Impayées, partielles ou en retard"
+            valueFormat="text"
+            subtitle="Impayées, partielles ou en retard"
             loading={loading}
             icon={<PaymentsIcon />}
-            color="#A96522"
+            color="warning"
           />
         </Grid>
       </Grid>
@@ -1010,47 +989,6 @@ function TransactionsList() {
     </Box>
   );
 
-}
-
-function TransactionMetric({ label, value, helper, icon, color, loading = false }) {
-  return (
-    <Card sx={{ height: '100%', borderRadius: 2 }}>
-      <CardContent sx={{ p: 2.25 }}>
-        <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
-          <Box>
-            <Typography
-              variant="overline"
-              sx={{ color: 'text.secondary', fontWeight: 800, letterSpacing: '0.08em' }}
-            >
-              {label}
-            </Typography>
-            <Typography sx={{ mt: 0.5, fontWeight: 900, fontSize: '1.5rem', letterSpacing: 0 }}>
-              {loading ? 'Chargement…' : value}
-            </Typography>
-            {!loading && helper && <Typography variant="caption" color="text.secondary">
-              {helper}
-            </Typography>}
-          </Box>
-          <Box
-            sx={{
-              width: 42,
-              height: 42,
-              borderRadius: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color,
-              backgroundColor: `${color}1F`,
-              flexShrink: 0,
-              '& .MuiSvgIcon-root': { fontSize: 22 },
-            }}
-          >
-            {icon}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
 }
 
 export default TransactionsList;

@@ -35,6 +35,7 @@ import { get, post } from '../../services/api';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { getBusinessDateInput } from '../../utils/businessDate';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const money = (value) => new Intl.NumberFormat('fr-FR', {
   style: 'currency', currency: 'MAD', maximumFractionDigits: 2,
@@ -325,12 +326,14 @@ function FinancialLedgerPage({ direction }) {
 
   return (
     <Box>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} sx={{ mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>{title}</Typography>
-        </Box>
-        <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualiser</Button>
-      </Stack>
+      <PageHeader
+        title={title}
+        actions={
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading}>
+            Actualiser
+          </Button>
+        }
+      />
 
       <SummaryCards summary={data.summary} isReceivable={isReceivable} />
       <SmartFilterPanel

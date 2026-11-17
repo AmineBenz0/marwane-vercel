@@ -62,6 +62,31 @@ test('the product filter stays visible and works at tablet widths', async ({ pag
   await expect(page.getByText('Produit acheté', { exact: true })).toBeVisible();
 });
 
+test('the transaction header keeps all actions inside the page and opens the form on mobile', async ({ page }) => {
+  await page.goto('/transactions');
+  const title = page.getByRole('heading', { level: 1, name: 'Ventes & achats' });
+  const header = page.locator('header').filter({ has: title });
+  const create = header.getByRole('button', { name: 'Nouvelle transaction' });
+  const actions = header.getByRole('button');
+
+  await expect(actions).toHaveCount(3);
+  for (const width of [320, 390, 600, 900, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const bounds = (await header.boundingBox())!;
+    for (const action of await actions.all()) {
+      await expect(action).toBeVisible();
+      const button = (await action.boundingBox())!;
+      expect(button.x).toBeGreaterThanOrEqual(bounds.x);
+      expect(button.x + button.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+      if (width < 600) expect(button.height).toBeGreaterThanOrEqual(44);
+    }
+  }
+
+  await page.setViewportSize({ width: 320, height: 900 });
+  await create.click();
+  await expect(page.getByRole('dialog').getByText('Nouvelle transaction', { exact: true })).toBeVisible();
+});
+
 test('mobile navigation, search results and alerts open and close independently', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 680 });
   await page.route('**/api/v1/search?*', route => route.fulfill({ json: {

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Collapse, Grid, IconButton, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, CircularProgress, Collapse, Grid, IconButton, Paper, Stack, TextField, Typography } from '@mui/material';
 import { FileDownload as DownloadIcon, InfoOutlined, PictureAsPdf as PdfIcon, CalendarTodayOutlined, LayersOutlined } from '@mui/icons-material';
 import { get } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -8,6 +8,7 @@ import { getBusinessMonthInput } from '../../utils/businessDate';
 import { formatMonthYear, formatShortDate } from '../../utils/dateFormatting';
 import ExpandableDetails from '../../components/ExpandableDetails';
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const number = (value, maximumFractionDigits = 2) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits }).format(Number(value || 0));
 const money = value => value == null ? '—' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(Number(value));
@@ -93,14 +94,21 @@ function MonthlyReportPage() {
   const hasBankActivity = !!report && ((report.soldes_bancaires || []).length > 0 || Number(report.banques_entrees) !== 0 || Number(report.banques_sorties) !== 0);
 
   return <Box>
-    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={2} sx={{ mb: 3 }}>
-      <Typography component="h1" variant="h4" fontWeight={700}>Rapport mensuel</Typography>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-        <input aria-label="Mois du rapport" type="month" value={month} onChange={event => setMonth(event.target.value)} />
-        <Button startIcon={<DownloadIcon />} onClick={() => exportReport('excel')} disabled={!report || loading}>Excel</Button>
-        <Button startIcon={<PdfIcon />} onClick={() => exportReport('pdf')} disabled={!report || loading}>PDF</Button>
-      </Stack>
-    </Stack>
+    <PageHeader
+      title="Rapport mensuel"
+      actions={
+        <>
+          <TextField
+            type="month"
+            value={month}
+            onChange={event => setMonth(event.target.value)}
+            inputProps={{ 'aria-label': 'Mois du rapport' }}
+          />
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => exportReport('excel')} disabled={!report || loading}>Excel</Button>
+          <Button variant="outlined" startIcon={<PdfIcon />} onClick={() => exportReport('pdf')} disabled={!report || loading}>PDF</Button>
+        </>
+      }
+    />
     {error && <Alert severity="error">{error}</Alert>}
     {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress aria-label="Chargement du rapport" /></Box> : report && <>
       <Typography color="text.secondary" sx={{ mb: 2 }}>{displayMonth} · Du {formatShortDate(report.date_debut)} au {formatShortDate(report.date_fin)}{projectedPeriod ? (futurePeriod ? ' · Période à venir' : ' · Période en cours') : ''}</Typography>

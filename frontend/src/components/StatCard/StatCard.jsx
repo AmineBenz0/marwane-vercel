@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   Box,
+  Skeleton,
   Typography,
   Tooltip,
   alpha,
@@ -35,12 +36,14 @@ const COLOR_MAP = {
   error:     { bg: '#FFF5F5', icon: '#DC2626', text: '#7F1D1D', accent: '#EF4444' },
   info:      { bg: '#EBF8FF', icon: '#2563EB', text: '#1E3A5F', accent: '#3B82F6' },
   warning:   { bg: '#FFFBEB', icon: '#D97706', text: '#78350F', accent: '#F59E0B' },
+  neutral:   { bg: '#F1F5F9', icon: '#475569', text: '#334155', accent: '#94A3B8' },
 };
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 const formatValue = (value, format, currency = 'MAD', useCompact = true) => {
   if (value === null || value === undefined) return '—';
   switch (format) {
+    case 'text':       return value;
     case 'currency':   return formatMontant(value, { currency, useCompactNotation: useCompact });
     case 'percentage': return formatPercentage(value);
     default:           return formatSimpleNumber(value, { useCompactNotation: useCompact });
@@ -67,12 +70,14 @@ function StatCard({
   currency = 'MAD',
   useCompactNotation = true,
   subtitle = null,
+  loading = false,
 }) {
   const colors = COLOR_MAP[color] || COLOR_MAP.primary;
 
+  const isText = valueFormat === 'text';
   const formattedValue = formatValue(value, valueFormat, currency, useCompactNotation);
-  const fullValue      = getFullValue(value, valueFormat, currency);
-  const showTooltip    = needsCompactNotation(value) && useCompactNotation;
+  const showTooltip = !loading && !isText && useCompactNotation && needsCompactNotation(value);
+  const fullValue = showTooltip ? getFullValue(value, valueFormat, currency) : '';
 
   const variationColors = {
     increase: { text: '#16A34A', bg: '#F0FFF4', border: '#C6F6D5' },
@@ -89,6 +94,7 @@ function StatCard({
 
   return (
     <Card
+      aria-busy={loading || undefined}
       sx={{
         height: '100%',
         position: 'relative',
@@ -152,7 +158,7 @@ function StatCard({
 
         {/* Main value */}
         <Tooltip
-          title={showTooltip ? fullValue : ''}
+          title={fullValue}
           arrow
           placement="top"
         >
@@ -167,18 +173,19 @@ function StatCard({
               cursor: showTooltip ? 'help' : 'default',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              whiteSpace: isText ? 'normal' : 'nowrap',
+              overflowWrap: isText ? 'anywhere' : undefined,
               mb: subtitle ? 0.25 : 0,
             }}
           >
-            {formattedValue}
+            {loading ? <Skeleton width={90} sx={{ maxWidth: '100%' }} /> : formattedValue}
           </Typography>
         </Tooltip>
 
         {/* Subtitle */}
         {subtitle && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            {subtitle}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, overflowWrap: 'anywhere' }}>
+            {loading ? <Skeleton width="75%" /> : subtitle}
           </Typography>
         )}
 
