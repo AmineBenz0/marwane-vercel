@@ -41,6 +41,8 @@ import lettreCreditService from '../../services/lettreCreditService';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
 import LCFormModal from './LCFormModal';
+import PageHeader from '../../components/Layout/PageHeader';
+import StatCard from '../../components/StatCard';
 
 const FILTERS = [
   { value: 'disponibles', label: 'Non utilisées' },
@@ -248,63 +250,57 @@ function LettresCreditList() {
 
   return (
     <Box>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
-        sx={{ mb: 3 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 900, letterSpacing: '-0.04em' }}>
-            Lettres de crédit
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExport}
-            disabled={filteredLcs.length === 0}
-          >
-            Exporter
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            Nouvelle LC
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title="Lettres de crédit"
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExport}
+              disabled={filteredLcs.length === 0}
+            >
+              Exporter
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              Nouvelle LC
+            </Button>
+          </>
+        }
+      />
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={4}>
-          <SummaryCard
+          <StatCard
             title="Valeur disponible"
             value={formatMontant(stats.totalAvailable, { useCompactNotation: false })}
-            helper={`${stats.availableCount} LC utilisable(s) maintenant`}
-            tone="success"
+            valueFormat="text"
+            subtitle={`${stats.availableCount} LC utilisable(s) maintenant`}
+            color="success"
             icon={<AvailableIcon />}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
-          <SummaryCard
+          <StatCard
             title="LC non utilisées"
             value={stats.activeCount}
-            helper={stats.futureCount > 0 ? `${stats.futureCount} à venir` : ''}
-            tone="info"
+            valueFormat="text"
+            subtitle={stats.futureCount > 0 ? `${stats.futureCount} à venir` : ''}
+            color="info"
             icon={<BankIcon />}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
-          <SummaryCard
+          <StatCard
             title="Déjà utilisées"
             value={stats.usedCount}
-            helper={formatMontant(stats.totalUsed, { useCompactNotation: false })}
-            tone="neutral"
+            valueFormat="text"
+            subtitle={formatMontant(stats.totalUsed, { useCompactNotation: false })}
+            color="neutral"
             icon={<UsedIcon />}
           />
         </Grid>
@@ -458,57 +454,6 @@ function getFilterCount(filter, lcs) {
   if (filter === 'disponibles') return lcs.filter(isActiveLc).length;
   if (filter === 'utilisees') return lcs.filter(isUsedLc).length;
   return lcs.length;
-}
-
-function SummaryCard({ title, value, helper, icon, tone }) {
-  const palette = {
-    success: { bg: '#ecfdf3', color: '#047857' },
-    info: { bg: '#eff6ff', color: '#2563eb' },
-    neutral: { bg: '#f8fafc', color: '#475569' },
-    warning: { bg: '#fff7ed', color: '#c2410c' },
-  }[tone] || { bg: '#f8fafc', color: '#475569' };
-
-  return (
-    <Card
-      sx={{
-        height: '100%',
-        borderRadius: 4,
-        border: '1px solid',
-        borderColor: 'divider',
-        boxShadow: '0 18px 42px rgba(15, 23, 42, 0.06)',
-      }}
-    >
-      <CardContent>
-        <Stack direction="row" justifyContent="space-between" spacing={2}>
-          <Box>
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900, letterSpacing: 1 }}>
-              {title}
-            </Typography>
-            <Typography variant="h4" sx={{ fontWeight: 900, mt: 1, letterSpacing: '-0.04em' }}>
-              {value}
-            </Typography>
-            {helper && <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-              {helper}
-            </Typography>}
-          </Box>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 3,
-              display: 'grid',
-              placeItems: 'center',
-              bgcolor: palette.bg,
-              color: palette.color,
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
 }
 
 function LcRegisterCard({ lc, isMobile, onView, onBank, onSupplier, onCancel }) {

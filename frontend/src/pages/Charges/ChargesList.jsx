@@ -43,6 +43,8 @@ import { formatMontant } from '../../utils/formatNumber';
 import { useNavigate } from 'react-router-dom';
 import { productionLink } from '../Production/useProductionView';
 import { formatVaccineMoney } from '../../utils/vaccineExpenses';
+import PageHeader from '../../components/Layout/PageHeader';
+import StatCard from '../../components/StatCard';
 
 const CATEGORIES = [
   'Fixe (Loyer, Salaire...)',
@@ -291,37 +293,29 @@ function ChargesList() {
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
+      <PageHeader
+        title="Dépenses"
         sx={{ mb: 2.5 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={900}>
-            Dépenses
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button
-            variant="outlined"
-            startIcon={!isMobile && <FileDownloadIcon />}
-            disabled={loading || visibleCharges.length === 0}
-            onClick={handleExportExcel}
-          >
-            {isMobile ? 'Exporter' : 'Exporter Excel'}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={!isMobile && <AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nouvelle dépense
-          </Button>
-        </Stack>
-      </Stack>
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              startIcon={!isMobile && <FileDownloadIcon />}
+              disabled={loading || visibleCharges.length === 0}
+              onClick={handleExportExcel}
+            >
+              {isMobile ? 'Exporter' : 'Exporter Excel'}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={!isMobile && <AddIcon />}
+              onClick={() => handleOpenDialog()}
+            >
+              Nouvelle dépense
+            </Button>
+          </>
+        }
+      />
 
       <Box
         sx={{
@@ -331,10 +325,22 @@ function ChargesList() {
           mb: 2.5,
         }}
       >
-        <SummaryCard label="Total du mois" value={formatMontant(stats.totalMonth, { maximumFractionDigits: 0 })} helper={`${stats.countMonth} dépense(s)`} tone="error" />
-        <SummaryCard label="Aujourd'hui" value={formatMontant(stats.totalToday, { maximumFractionDigits: 0 })} tone="warning" />
-        <SummaryCard label="Principale catégorie du mois" value={stats.biggestCategory} tone="primary" />
-        <SummaryCard label="Payé depuis" value={`${stats.cashCount} caisse`} helper={`${stats.bankCount} banque(s)`} tone="success" />
+        <StatCard
+          title="Total du mois"
+          value={formatMontant(stats.totalMonth, { maximumFractionDigits: 0 })}
+          valueFormat="text"
+          subtitle={`${stats.countMonth} dépense(s)`}
+          color="error"
+        />
+        <StatCard title="Aujourd'hui" value={formatMontant(stats.totalToday, { maximumFractionDigits: 0 })} valueFormat="text" color="warning" />
+        <StatCard title="Principale catégorie du mois" value={stats.biggestCategory} valueFormat="text" />
+        <StatCard
+          title="Payé depuis"
+          value={`${stats.cashCount} caisse`}
+          valueFormat="text"
+          subtitle={`${stats.bankCount} banque(s)`}
+          color="success"
+        />
       </Box>
 
       <Card variant="outlined" sx={{ borderRadius: 4, mb: 2.5 }}>
@@ -514,24 +520,6 @@ function getCategoryColor(category) {
   if (cleanCategory.startsWith('Administration')) return 'success';
   if (cleanCategory.startsWith('Taxes')) return 'secondary';
   return 'default';
-}
-
-function SummaryCard({ label, value, helper, tone }) {
-  return (
-    <Card variant="outlined" sx={{ borderRadius: 4, height: '100%' }}>
-      <CardContent>
-        <Typography variant="caption" color="text.secondary" fontWeight={900}>
-          {label}
-        </Typography>
-        <Typography fontWeight={900} fontSize="1.5rem" sx={{ mt: 1, color: `${tone}.main`, lineHeight: 1.15 }}>
-          {value}
-        </Typography>
-        {helper && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-          {helper}
-        </Typography>}
-      </CardContent>
-    </Card>
-  );
 }
 
 function CategoryChip({ category }) {

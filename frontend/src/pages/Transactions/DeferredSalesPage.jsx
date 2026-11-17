@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, Grid, InputAdornment, Stack, TextField, Typography } from '@mui/material';
 import { ArrowBack, ArrowForward, Search } from '@mui/icons-material';
 import { formatShortDate } from '../../utils/dateFormatting';
+import PageHeader from '../../components/Layout/PageHeader';
 import useDeferredSales from './useDeferredSales';
 import DeferredSaleDrawer from './DeferredSaleDrawer';
 import { deferredStockQuantities } from './deferredStockQuantities';
@@ -27,10 +28,14 @@ export default function DeferredSalesPage() {
   const closeSale = () => { const next = new URLSearchParams(params); next.delete('vente'); setParams(next, { replace: true }); };
   return <Box sx={{ minWidth: 0 }}>
     <Button startIcon={<ArrowBack />} variant="outlined" onClick={() => navigate('/dashboard')} sx={{ mb: 2 }}>Retour à l’accueil</Button>
-    <Typography component="h1" variant="h4" fontWeight={800} sx={{ mb: 1 }}>Livraisons à suivre</Typography>
-    {!error && (!loading || pending.length > 0) && <Typography color="text.secondary" sx={{ mb: 3 }}>
-      {number(pending.length)} {pending.length === 1 ? 'vente' : 'ventes'} · {number(remaining)} {remaining === 1 ? 'œuf' : 'œufs'} à produire
-    </Typography>}
+    <PageHeader
+      title="Livraisons à suivre"
+      description={!error && (!loading || pending.length > 0) && (
+        <>
+          {number(pending.length)} {pending.length === 1 ? 'vente' : 'ventes'} · {number(remaining)} {remaining === 1 ? 'œuf' : 'œufs'} à produire
+        </>
+      )}
+    />
     {error ? <Alert severity="warning" action={<Button onClick={reload}>Réessayer</Button>}>{error}</Alert> : <>
       <TextField value={search} onChange={event => setSearch(event.target.value)} placeholder="Rechercher un client" inputProps={{ 'aria-label': 'Rechercher un client' }} size="small"
         InputProps={{ startAdornment: <InputAdornment position="start"><Search /></InputAdornment> }} sx={{ mb: 3, width: { xs: '100%', sm: 320 } }} />

@@ -34,6 +34,7 @@ import { formatShortDate, formatShortDateTime } from '../../utils/dateFormatting
 import TaskModal from '../../components/Tasks/TaskModal';
 import taskService from '../../services/taskService';
 import useNotificationStore from '../../store/notificationStore';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const VIEWS = [
   { key: 'open', label: 'À faire' },
@@ -176,26 +177,14 @@ function TasksList() {
 
   return (
     <Box>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', sm: 'flex-end' }}
-        spacing={2}
-        sx={{ mb: 3 }}
-      >
-        <Typography component="h1" variant="h4" sx={{ fontWeight: 900 }}>
-          Mes tâches
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleCreate}
-          disabled={loading}
-          sx={{ minHeight: 46, borderRadius: 2 }}
-        >
-          Nouvelle tâche
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Mes tâches"
+        actions={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate} disabled={loading}>
+            Nouvelle tâche
+          </Button>
+        }
+      />
 
       <Tabs
         value={view}

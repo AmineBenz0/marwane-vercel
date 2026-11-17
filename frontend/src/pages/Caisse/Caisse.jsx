@@ -1,4 +1,6 @@
 import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
+import PageHeader from '../../components/Layout/PageHeader';
+import StatCard from '../../components/StatCard';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -261,31 +263,23 @@ function Caisse() {
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
+      <PageHeader
+        title="Caisse"
         sx={{ mb: 2.5 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={900}>
-            Caisse
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button variant="outlined" startIcon={!isMobile && <RefreshIcon />} onClick={loadData} disabled={loading}>
-            Actualiser
-          </Button>
-          <Button variant="outlined" startIcon={!isMobile && <DownloadIcon />} onClick={handleExportExcel} disabled={visibleMovements.length === 0}>
-            Exporter en Excel
-          </Button>
-          <Button variant="contained" onClick={handleExportPDF} disabled={visibleMovements.length === 0}>
-            Exporter en PDF
-          </Button>
-        </Stack>
-      </Stack>
+        actions={
+          <>
+            <Button variant="outlined" startIcon={!isMobile && <RefreshIcon />} onClick={loadData} disabled={loading}>
+              Actualiser
+            </Button>
+            <Button variant="outlined" startIcon={!isMobile && <DownloadIcon />} onClick={handleExportExcel} disabled={visibleMovements.length === 0}>
+              Exporter en Excel
+            </Button>
+            <Button variant="contained" onClick={handleExportPDF} disabled={visibleMovements.length === 0}>
+              Exporter en PDF
+            </Button>
+          </>
+        }
+      />
 
       {error && (
         <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2.5, borderRadius: 3 }}>
@@ -302,17 +296,19 @@ function Caisse() {
         }}
       >
         <MainBalanceCard value={stats.totalDisponible} />
-        <SmallMoneyCard
-          label="Espèces en caisse"
-          value={stats.cashEnCaisse}
-          tone="success"
+        <StatCard
+          title="Espèces en caisse"
+          value={formatMontant(stats.cashEnCaisse, { useCompactNotation: false, maximumFractionDigits: 2 })}
+          valueFormat="text"
+          color="success"
           icon={<WalletIcon />}
         />
-        <SmallMoneyCard
-          label="LC disponibles"
-          value={stats.lcDisponibles}
-          helper={`${stats.lcCount} LC`}
-          tone="info"
+        <StatCard
+          title="LC disponibles"
+          value={formatMontant(stats.lcDisponibles, { useCompactNotation: false, maximumFractionDigits: 2 })}
+          valueFormat="text"
+          subtitle={`${stats.lcCount} LC`}
+          color="info"
           icon={<LcIcon />}
         />
       </Box>
@@ -483,47 +479,6 @@ function MainBalanceCard({ value }) {
           >
             MAD
           </Typography>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SmallMoneyCard({ label, value, helper, icon, tone }) {
-  const colors = {
-    success: { bg: '#ecfdf3', color: '#047857' },
-    info: { bg: '#eff6ff', color: '#2563eb' },
-  }[tone] || { bg: '#f8fafc', color: '#475569' };
-
-  return (
-    <Card variant="outlined" sx={{ height: '100%', borderRadius: 4 }}>
-      <CardContent>
-        <Stack direction="row" justifyContent="space-between" spacing={2}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900, letterSpacing: 1 }}>
-              {label}
-            </Typography>
-            <Typography variant="h4" sx={{ fontWeight: 950, mt: 1, letterSpacing: '-0.05em' }}>
-              {formatMontant(value, { useCompactNotation: false, maximumFractionDigits: 2 })}
-            </Typography>
-            {helper && <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-              {helper}
-            </Typography>}
-          </Box>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 3,
-              display: 'grid',
-              placeItems: 'center',
-              bgcolor: colors.bg,
-              color: colors.color,
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
         </Stack>
       </CardContent>
     </Card>

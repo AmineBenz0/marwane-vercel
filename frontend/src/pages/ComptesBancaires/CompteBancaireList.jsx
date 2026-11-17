@@ -44,6 +44,8 @@ import lettreCreditService from '../../services/lettreCreditService';
 import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
+import PageHeader from '../../components/Layout/PageHeader';
+import StatCard from '../../components/StatCard';
 
 const SOURCE_OPTIONS = [
   { value: 'virement', label: 'Virement' },
@@ -271,37 +273,29 @@ function CompteBancaireList() {
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
+      <PageHeader
+        title="Comptes bancaires"
         sx={{ mb: 2.5 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={900}>
-            Comptes bancaires
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button
-            variant="outlined"
-            startIcon={!isMobile && <AddIcon />}
-            onClick={() => handleOpenMovement()}
-            disabled={comptes.length === 0}
-          >
-            Ajouter mouvement
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={!isMobile && <BankIcon />}
-            onClick={() => setOpenAdd(true)}
-          >
-            Nouveau compte
-          </Button>
-        </Stack>
-      </Stack>
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              startIcon={!isMobile && <AddIcon />}
+              onClick={() => handleOpenMovement()}
+              disabled={comptes.length === 0}
+            >
+              Ajouter mouvement
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={!isMobile && <BankIcon />}
+              onClick={() => setOpenAdd(true)}
+            >
+              Nouveau compte
+            </Button>
+          </>
+        }
+      />
 
       <Box
         sx={{
@@ -312,12 +306,13 @@ function CompteBancaireList() {
         }}
       >
         <BigBalanceCard value={totalSolde} loading={loading} />
-        <SummaryCard
-          label="Comptes actifs"
+        <StatCard
+          title="Comptes actifs"
           value={comptes.length}
-          helper={comptes.length === 0 ? 'Aucun compte enregistré' : comptes.map((compte) => compte.nom_banque).join(', ')}
+          valueFormat="text"
+          subtitle={comptes.length === 0 ? 'Aucun compte enregistré' : comptes.map((compte) => compte.nom_banque).join(', ')}
           icon={<BankIcon />}
-          tone="info"
+          color="info"
           loading={loading}
         />
       </Box>
@@ -542,48 +537,6 @@ function BigBalanceCard({ value, loading }) {
           >
           {!loading && 'MAD'}
           </Typography>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SummaryCard({ label, value, helper, icon, tone, loading = false }) {
-  const colors = {
-    info: { bg: '#eff6ff', color: '#2563eb' },
-    success: { bg: '#ecfdf3', color: '#047857' },
-    error: { bg: '#fef2f2', color: '#dc2626' },
-  }[tone] || { bg: '#f8fafc', color: '#475569' };
-
-  return (
-    <Card variant="outlined" sx={{ height: '100%', borderRadius: 4 }}>
-      <CardContent sx={{ height: '100%' }}>
-        <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ height: '100%' }}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900, letterSpacing: 1 }}>
-              {label}
-            </Typography>
-            <Typography variant="h4" sx={{ fontWeight: 950, mt: 1, letterSpacing: '-0.05em' }}>
-              {loading ? <Skeleton width={90} /> : value}
-            </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.75 }} noWrap>
-              {loading ? <Skeleton width="90%" /> : helper}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 3,
-              display: 'grid',
-              placeItems: 'center',
-              bgcolor: colors.bg,
-              color: colors.color,
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
         </Stack>
       </CardContent>
     </Card>
