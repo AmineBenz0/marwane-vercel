@@ -26,20 +26,18 @@ const buildRows = (data, columns, customFormatters = {}) => data.map((row) => co
   return normaliseCellValue(formattedValue);
 }));
 
-const downloadWorkbook = async (rows, columns, filename, sheetName, sourceRows) => {
-  const { default: ExcelJS } = await import('exceljs');
-  const workbook = new ExcelJS.Workbook();
+const addWorksheet = (workbook, { data, columns, sheetName, customFormatters, filterRows = 0 }) => {
   const worksheet = workbook.addWorksheet(String(sheetName || 'Données').slice(0, 31));
   const headers = columns.map((column) => column.label || column.id);
 
   worksheet.addRow(headers);
-  rows.forEach((row) => worksheet.addRow(row));
+  buildRows(data, columns, customFormatters).forEach((row) => worksheet.addRow(row));
   worksheet.columns = columns.map((column) => ({
     width: column.excelWidth ?? Math.max(String(column.label || column.id).length + 2, 15),
   }));
   columns.forEach((column, columnIndex) => {
     if (typeof column.excelNumberFormat !== 'function') return;
-    sourceRows.forEach((sourceRow, rowIndex) => {
+    data.forEach((sourceRow, rowIndex) => {
       const cell = worksheet.getRow(rowIndex + 2).getCell(columnIndex + 1);
       const format = column.excelNumberFormat(sourceRow);
       if (format && typeof cell.value === 'number') cell.numFmt = format;
@@ -56,9 +54,15 @@ const downloadWorkbook = async (rows, columns, filename, sheetName, sourceRows) 
   headerRow.alignment = { vertical: 'middle' };
   worksheet.views = [{ state: 'frozen', ySplit: 1 }];
   worksheet.autoFilter = {
-    from: 'A1',
-    to: `${String.fromCharCode(65 + Math.max(columns.length - 1, 0))}1`,
+    from: { row: 1, column: 1 },
+    to: { row: filterRows + 1, column: columns.length },
   };
+};
+
+const downloadWorkbook = async (sheets, filename) => {
+  const { default: ExcelJS } = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  sheets.forEach((sheet) => addWorksheet(workbook, sheet));
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: EXCEL_MIME_TYPE });
@@ -86,21 +90,18 @@ const validateExportInput = (data, columns) => {
   return true;
 };
 
-const exportWorkbook = async (data, columns, filename, sheetName, customFormatters) => {
-  if (!validateExportInput(data, columns)) return;
-
+export const exportToExcelSheets = async (sheets, filename = 'export') => {
   try {
-    await downloadWorkbook(
-      buildRows(data, columns, customFormatters),
-      columns,
-      filename,
-      sheetName,
-      data
-    );
+    await downloadWorkbook(sheets, filename);
   } catch (error) {
     console.error("Erreur lors de l'export Excel:", error);
     throw new Error("Une erreur est survenue lors de l'export Excel");
   }
+};
+
+const exportWorkbook = (data, columns, filename, sheetName, customFormatters) => {
+  if (!validateExportInput(data, columns)) return Promise.resolve();
+  return exportToExcelSheets([{ data, columns, sheetName, customFormatters }], filename);
 };
 
 /**
