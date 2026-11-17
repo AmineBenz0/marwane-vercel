@@ -1,24 +1,5 @@
-/**
- * Composant principal de l'application.
- * 
- * Configure toutes les routes de l'application avec react-router-dom :
- * - /login : Page de connexion (publique)
- * - /dashboard : Dashboard (protégée)
- * - /transactions : Transactions (protégée)
- * - /transactions/:id : Détails d'une transaction (protégée)
- * - /clients : Clients (protégée)
- * - /clients/:id/profile : Profil client (protégée)
- * - /fournisseurs : Fournisseurs (protégée)
- * - /fournisseurs/:id/profile : Profil fournisseur (protégée)
- * - /produits : Produits (protégée)
- * - /caisse : Caisse (protégée)
- * - /audit : Audit (protégée, admin uniquement)
- * 
- * Redirection par défaut : /login
- */
-
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppLayout from './components/Layout/AppLayout';
@@ -61,252 +42,48 @@ function App() {
     <ErrorBoundary>
       <NotificationProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Suspense fallback={<PageLoading />}>
-            <Routes>
-        {/* Route publique : Login */}
-        <Route path="/login" element={<Login />} />
-
-        {/* Routes protégées : nécessitent une authentification */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/calendar"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <CalendarView />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/tasks"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <TasksList />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/livraisons-a-suivre" element={<ProtectedRoute><AppLayout><DeferredSalesPage /></AppLayout></ProtectedRoute>} />
-        <Route
-          path="/transactions"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Transactions />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/creances"
-          element={
-            <ProtectedRoute>
-              <AppLayout><ReceivablesPage /></AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/dettes"
-          element={
-            <ProtectedRoute>
-              <AppLayout><PayablesPage /></AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/transactions/:id"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <TransactionDetail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/clients"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Clients />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/clients/:id/profile"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <ClientProfile />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/fournisseurs"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Fournisseurs />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/fournisseurs/:id/profile"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <FournisseurProfile />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/produits"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Produits />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/produits/:id"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <ProduitDetail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/caisse"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Caisse />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/production/suivi-global"
-          element={
-            <ProtectedRoute>
-              <AppLayout><GlobalOverviewPage /></AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/production"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <ProductionDashboard />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/production/dashboard"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <ProductionDashboard />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/production/lots"
-          element={
-            <ProtectedRoute>
-              <AppLayout><LotsManagementPage /></AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/production/batiment/:id"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <BatimentProductionPage />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/charges"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <ChargesList />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/comptes-bancaires"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <CompteBancaireList />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/rapports/mensuel"
-          element={
-            <ProtectedRoute>
-              <AppLayout><MonthlyReportPage /></AppLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/lettres-credit"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <LettresCreditList />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/lettres-credit/:id"
-          element={
-            <ProtectedRoute>
-              <AppLayout>
-                <LettreCreditDetail />
-              </AppLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Redirection par défaut : vers /login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Route catch-all : redirige vers /login pour les routes inconnues */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-            </Routes>
-          </Suspense>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <Suspense fallback={<PageLoading />}>
+                      <Outlet />
+                    </Suspense>
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/calendar" element={<CalendarView />} />
+              <Route path="/tasks" element={<TasksList />} />
+              <Route path="/livraisons-a-suivre" element={<DeferredSalesPage />} />
+              <Route path="/transactions" element={<Transactions />} />
+              <Route path="/transactions/:id" element={<TransactionDetail />} />
+              <Route path="/creances" element={<ReceivablesPage />} />
+              <Route path="/dettes" element={<PayablesPage />} />
+              <Route path="/clients" element={<Clients />} />
+              <Route path="/clients/:id/profile" element={<ClientProfile />} />
+              <Route path="/fournisseurs" element={<Fournisseurs />} />
+              <Route path="/fournisseurs/:id/profile" element={<FournisseurProfile />} />
+              <Route path="/produits" element={<Produits />} />
+              <Route path="/produits/:id" element={<ProduitDetail />} />
+              <Route path="/caisse" element={<Caisse />} />
+              <Route path="/production" element={<ProductionDashboard />} />
+              <Route path="/production/dashboard" element={<ProductionDashboard />} />
+              <Route path="/production/suivi-global" element={<GlobalOverviewPage />} />
+              <Route path="/production/lots" element={<LotsManagementPage />} />
+              <Route path="/production/batiment/:id" element={<BatimentProductionPage />} />
+              <Route path="/charges" element={<ChargesList />} />
+              <Route path="/comptes-bancaires" element={<CompteBancaireList />} />
+              <Route path="/rapports/mensuel" element={<MonthlyReportPage />} />
+              <Route path="/lettres-credit" element={<LettresCreditList />} />
+              <Route path="/lettres-credit/:id" element={<LettreCreditDetail />} />
+            </Route>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
         </BrowserRouter>
       </NotificationProvider>
     </ErrorBoundary>

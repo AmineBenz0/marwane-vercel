@@ -36,11 +36,12 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 
 // ─── Field label component ───────────────────────────────────────────────────
-function FieldLabel({ children, required, id }) {
+function FieldLabel({ children, required, id, htmlFor }) {
   return (
     <Typography
       component="label"
       id={id}
+      htmlFor={htmlFor}
       variant="body2"
       sx={{
         display: 'block',
@@ -52,7 +53,7 @@ function FieldLabel({ children, required, id }) {
     >
       {children}
       {required && (
-        <Box component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Box>
+        <Box component="span" aria-hidden="true" sx={{ color: 'error.main', ml: 0.5 }}>*</Box>
       )}
     </Typography>
   );
@@ -138,6 +139,8 @@ function ModalForm({
       helperText: fieldHelperText,
       ...rest
     } = field;
+    const inputId = rest.id ?? `${formId}-${name}`;
+    const inputProps = { 'aria-required': required || undefined, ...rest.inputProps };
 
     // Custom render function
     if (render && typeof render === 'function') {
@@ -283,9 +286,11 @@ function ModalForm({
             case 'date':
               return (
                 <Box sx={{ mb: 2 }}>
-                  <FieldLabel required={required}>{label}</FieldLabel>
+                  <FieldLabel htmlFor={inputId} required={required}>{label}</FieldLabel>
                   <DateField
                     {...rest}
+                    id={inputId}
+                    inputProps={inputProps}
                     fullWidth
 
                     size="small"
@@ -305,9 +310,11 @@ function ModalForm({
             case 'number':
               return (
                 <Box sx={{ mb: 2 }}>
-                  <FieldLabel required={required}>{label}</FieldLabel>
+                  <FieldLabel htmlFor={inputId} required={required}>{label}</FieldLabel>
                   <TextField
                     {...rest}
+                    id={inputId}
+                    inputProps={inputProps}
                     fullWidth
                     type="number"
                     size="small"
@@ -327,9 +334,11 @@ function ModalForm({
             default:
               return (
                 <Box sx={{ mb: 2 }}>
-                  <FieldLabel required={required}>{label}</FieldLabel>
+                  <FieldLabel htmlFor={inputId} required={required}>{label}</FieldLabel>
                   <TextField
                     {...rest}
+                    id={inputId}
+                    inputProps={inputProps}
                     fullWidth
                     type={type}
                     size="small"
@@ -356,6 +365,7 @@ function ModalForm({
     <Dialog
       open={open}
       onClose={handleClose}
+      aria-labelledby={`${formId}-title`}
       maxWidth="sm"
       fullWidth
       fullScreen={isMobile}
@@ -369,6 +379,8 @@ function ModalForm({
       <form onSubmit={handleSubmit(handleFormSubmit)}>
         {/* Title bar */}
         <DialogTitle
+          component="div"
+          id={`${formId}-title-bar`}
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -376,10 +388,11 @@ function ModalForm({
             gap: 1,
           }}
         >
-          <Typography variant="h6" fontWeight={600} sx={{ flex: 1 }}>
+          <Typography component="h2" id={`${formId}-title`} variant="h6" fontWeight={600} sx={{ flex: 1 }}>
             {title}
           </Typography>
           <IconButton
+            aria-label="Fermer le formulaire"
             size="small"
             onClick={handleClose}
             disabled={loading}
