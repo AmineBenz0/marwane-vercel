@@ -27,6 +27,18 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_avo
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f migrations/production_deferred_refund_guards_atomic.sql >/dev/null
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/release4_staging_readiness.sql >/dev/null
 
+# An orphaned snapshot must also fail the read-only gate. The probe runs in
+# the same transaction as its synthetic insert so the failed check rolls it back.
+if output=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -c "INSERT INTO public.legacy_deferred_cancellations (id_transaction, historical_canceled_qty, original_row)
+      VALUES (-1, 6, '{}'::jsonb)" \
+  -f scripts/release4_staging_readiness.sql 2>&1); then
+  echo "Release 4 readiness accepted an orphaned legacy cancellation"; exit 1
+fi
+if [[ "$output" != *'historic canceled sales must have immutable identical baselines'* ]]; then
+  printf '%s\n' "$output" >&2; exit 1
+fi
+
 test "$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM public.legacy_deferred_cancellations")" = 1
 test "$(psql "$DATABASE_URL" -At -c "SELECT count(*) FROM public.avoirs_livraison_differee")" = 0
 test "$(psql "$DATABASE_URL" -At -c "

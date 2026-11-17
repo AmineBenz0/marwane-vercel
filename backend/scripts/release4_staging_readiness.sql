@@ -67,11 +67,11 @@ BEGIN
       SELECT 1 FROM pg_class
       WHERE oid='public.legacy_deferred_cancellations'::regclass AND relrowsecurity
     ) OR EXISTS (
-      SELECT 1 FROM public.transactions t
-      LEFT JOIN public.legacy_deferred_cancellations b ON b.id_transaction=t.id_transaction
-      WHERE b.id_transaction IS NOT NULL
-        AND (b.historical_canceled_qty <> t.quantite_annulee
-             OR b.original_row IS DISTINCT FROM to_jsonb(t))
+      SELECT 1 FROM public.legacy_deferred_cancellations b
+      LEFT JOIN public.transactions t ON t.id_transaction=b.id_transaction
+      WHERE t.id_transaction IS NULL
+         OR b.historical_canceled_qty IS DISTINCT FROM t.quantite_annulee
+         OR b.original_row IS DISTINCT FROM to_jsonb(t)
     ) THEN
       blockers := array_append(blockers, 'historic canceled sales must have immutable identical baselines');
     END IF;
@@ -94,7 +94,7 @@ BEGIN
       ) a ON true
       WHERE (b.id_transaction IS NOT NULL AND a.n > 0)
          OR (b.id_transaction IS NULL AND (t.quantite_annulee > 0 OR a.n > 0) AND
-             (a.n = 0 OR a.qty <> t.quantite_annulee OR a.max_qty <> a.qty
+             (a.n = 0 OR a.qty IS DISTINCT FROM t.quantite_annulee OR a.max_qty <> a.qty
               OR a.max_amount <> a.amount OR t.quantite <= 0
               OR a.amount <> round(t.montant_total * a.qty / nullif(t.quantite,0),2)))
     ) THEN
