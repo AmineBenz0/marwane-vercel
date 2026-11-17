@@ -86,7 +86,7 @@ describe('transaction PDF pagination', () => {
       }],
       est_promesse: index < 11,
       date_livraison_prevue: index < 11 ? '2026-11-15' : null,
-      quantite_couverte: 4,
+      quantite_couverte: 42,
       quantite_reservee: 0,
       quantite_en_attente: 1,
       quantite_a_produire: 1,
@@ -99,7 +99,7 @@ describe('transaction PDF pagination', () => {
     expect(paymentPages).toHaveLength(2);
     expect(deferredPages).toHaveLength(1);
     expect(deferredPages[0]).toContain('(COUVERT) Tj');
-    expect((deferredPages[0].match(/\(4\) Tj/g) || [])).toHaveLength(11);
+    expect((deferredPages[0].match(/\(42\) Tj/g) || [])).toHaveLength(11);
     const paymentCounts = paymentPages.map(page => (page.match(/PAYMENT-\d{3}/g) || []).length);
     const deferredCounts = deferredPages.map(page => (page.match(/En attente/g) || []).length);
     // Single-payment groups include their transaction context and amount.
@@ -160,7 +160,7 @@ describe('transaction PDF pagination', () => {
     annexPages.forEach(page => {
       expect(page).toContain('PARTNER-001');
       expect(page).toContain('PRODUCT-001');
-      expect(page).toContain('(100,00 MAD) Tj');
+      expect(page).toContain('(Initial : 100,00 MAD) Tj');
       expect(page).toContain('DATE RÈGL.');
     });
     const all = annexPages.join('\n');
@@ -184,7 +184,7 @@ describe('transaction PDF pagination', () => {
     expect((annex.match(/\(12,34\) Tj/g) || [])).toHaveLength(2);
   });
   it('shows immutable commercial avoirs separately from refunds with reconciled net totals', () => {
-    exportTransactionsReportPDF([transaction(0, {
+    exportTransactionsReportPDF([transaction(0), transaction(8, {
       montant_total: '1500.00',
       montant_avoir: '600.00',
       montant_net: '900.00',
@@ -217,6 +217,13 @@ describe('transaction PDF pagination', () => {
     expect(all).toContain('(900,00) Tj');
     expect(all).toContain('ANNULÉ');
     expect(all).not.toContain('(ID) Tj');
+    const [register, payments, notes, deliveries] = pages();
+    expect(register).toContain('(N°) Tj');
+    expect(register).toContain('(2) Tj');
+    expect(payments).toContain('(N° 2) Tj');
+    expect(payments).toContain('(Initial : 1 500,00 MAD) Tj');
+    expect(notes).toContain('(2) Tj');
+    expect(deliveries).toContain('(2) Tj');
     // The refund is in the payment history, while the credit is its own annex.
     expect((all.match(/\(Remboursement\) Tj/g) || []).length).toBe(1);
   });

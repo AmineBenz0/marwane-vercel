@@ -98,6 +98,47 @@ async function readPdf(page: Page, buttonName = 'Export PDF') {
 const amount = (value: unknown) =>
   Number(String(value ?? '0').replace(/[^\d,.-]/g, '').replace(',', '.'));
 
+test('product Excel includes every page and reconciles deferred quantities with the delivery register', async ({ page }) => {
+  const deferredSales = [
+    { ...txData[0], quantite_completee: 3 },
+    { ...txData[0], id_transaction: 501, quantite_completee: 1,
+      quantite_couverte: 15, quantite_en_attente: 1, quantite_reservee: 0, quantite_annulee: 4 },
+  ];
+  const writes = await mockFinancialApi(page, [
+    deferredSales[0],
+    ...Array.from({ length: 499 }, (_, index) => ({ ...txData[2], id_transaction: 1000 + index })),
+    deferredSales[1],
+    { ...txData[0], id_transaction: 502, quantite_completee: 2, quantite_couverte: 20,
+      quantite_en_attente: 0, quantite_reservee: 0 },
+    { ...txData[0], id_transaction: 503, est_actif: false, quantite_completee: 9 },
+  ]);
+  await page.route('**/api/v1/produits?**', route => route.fulfill({ json: [
+    { id_produit: 1, nom_produit: 'Œufs normaux', usage: 'vendu', est_actif: true },
+    { id_produit: 2, nom_produit: 'Œufs cassés', usage: 'vendu', est_actif: true },
+  ] }));
+  await page.route('**/api/v1/transactions/deferred-sales', route => route.fulfill({ json: deferredSales.map(sale => ({
+    ...sale, nom_client: 'Client Test', nom_produit: 'Œufs normaux',
+  })) }));
+
+  await page.goto('/produits');
+  const excel = page.getByRole('button', { name: 'Exporter Excel', exact: true });
+  await expect(excel).toBeEnabled();
+  const sheet = await exportSheet(page, () => excel.click());
+  const headings = new Map<string, number>();
+  sheet.getRow(1).eachCell((cell, column) => headings.set(String(cell.value), column));
+  const quantities = (row: number) => ['Quantité livrée', 'Stock prêt à compléter', 'À produire'].map(
+    heading => sheet.getRow(row).getCell(headings.get(heading)!).value,
+  );
+  expect(sheet.getCell('A2').value).toBe('Œufs normaux');
+  expect(quantities(2)).toEqual([6, 5, 6]);
+  expect(quantities(3)).toEqual([0, 0, 0]);
+
+  await page.goto('/livraisons-a-suivre');
+  await expect(page.getByText('2 ventes · 6 œufs à produire')).toBeVisible();
+  await expect(page.getByText(/5 prêts à compléter · 5 à produire/)).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
 test('Suivi global filters a lot and exports completed egg sales after credits', async ({ page }) => {
   await mockAuthenticatedSession(page);
   const cycles = [1, 2].map(id => ({ id_cycle: id, id_lot: 7, id_batiment: id,
@@ -402,6 +443,10 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
   expect(source).toContain('(10) Tj');
   expect(source).toContain('(5) Tj');
   expect(source).toContain('125,50');
+  const paymentPages = [...source.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
+    .map(match => match[1]).filter(stream => stream.includes('DATE RÈGL.'));
+  expect((paymentPages.join('\n').match(/\(En attente\) Tj/g) || [])).toHaveLength(2);
+  expect((paymentPages.join('\n').match(/\(Encaissé\) Tj/g) || [])).toHaveLength(1);
   expect(source).not.toContain('Clôturé');
   expect(writes).toEqual([]);
 });

@@ -1,4 +1,5 @@
 import { PDF_COLORS, pdfClean, pdfDate, pdfMoney } from './financialPdfStyles';
+import { getSettlementStatus, SETTLEMENT_STATUS_LABELS } from './settlementStatus';
 
 const LEFT = 11.5;
 const TOP = 43;
@@ -17,18 +18,10 @@ const OPERATIONS = {
   paiement: 'Paiement', remboursement: 'Remboursement',
   credit_recu: 'Crédit utilisé', credit_transfere: 'Crédit transféré',
 };
-const STATUSES = {
-  valide: 'Validé', en_attente: 'En attente', annule: 'Annulé', rejete: 'Rejeté',
-  emis: 'Émis', a_encaisser: 'À encaisser', encaisse: 'Encaissé',
-};
-
 function paymentCells(payment) {
   const credit = ['credit_recu', 'credit_transfere'].includes(payment.nature);
   const outgoing = ['remboursement', 'credit_transfere'].includes(payment.nature);
-  // Cancellation/rejection takes precedence over a cheque's historical state.
-  const status = ['annule', 'rejete'].includes(payment.statut) ? payment.statut
-    : payment.type_paiement === 'cheque' && payment.statut_cheque
-      ? payment.statut_cheque : payment.statut;
+  const status = getSettlementStatus(payment);
   const reference = credit ? '-' : ({
     cheque: payment.numero_cheque,
     virement: payment.reference_virement,
@@ -43,7 +36,7 @@ function paymentCells(payment) {
       credit ? '-' : TYPES[payment.type_paiement] || payment.type_paiement || '-',
       reference,
       payment.montant == null ? '-' : pdfMoney(outgoing ? -Math.abs(Number(payment.montant)) : payment.montant, false),
-      STATUSES[status] || status || '-',
+      SETTLEMENT_STATUS_LABELS[status] || status || '-',
     ].map(pdfClean),
   };
 }
@@ -103,12 +96,12 @@ export function addTransactionPaymentsSection(doc, sections, source) {
   groups.forEach((group, groupIndex) => {
     const kind = group.id_client != null ? 'Vente' : 'Achat';
     const context = [
-      wrap(pdfDate(group.date_transaction) + '\n' + kind +
+      wrap('N° ' + group.numero_export + '\n' + pdfDate(group.date_transaction) + '\n' + kind +
         (group.est_actif === false ? '\nAnnulée' : ''), 0),
       wrap(group.partner, 1, true),
       wrap(group.product, 2),
     ];
-    const money = wrap(pdfMoney(group.montant_total), 1, true);
+    const money = wrap('Initial : ' + pdfMoney(group.montant_total), 1, true);
     // Split only pathological cells taller than an entire page. Ordinary
     // payments and references stay together; no text is discarded.
     const payments = group.paiements.flatMap(payment => {
