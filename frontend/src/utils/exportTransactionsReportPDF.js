@@ -207,7 +207,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   addSection(
     doc, sections, 'Livraisons différées',
     String(deferred.length) + ' transactions concernées par une livraison différée',
-    ['N°', 'PRODUIT / BÂTIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COUVERT', 'RÉSERVÉ', 'ANNULÉ', 'RESTE'],
+    ['N°', 'PRODUIT / B\u00c2TIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COUVERT', 'RÉSERVÉ', 'ANNULÉ', 'RESTE'],
     deferred.map(row => [
       String(row.numero_export),
       row.product + '\n' + row.building,
