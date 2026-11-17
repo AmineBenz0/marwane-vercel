@@ -993,10 +993,29 @@ const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountFor
     .join(' · ');
 };
 
+const SETTLEMENT_STATUS_LABELS = {
+  valide: 'Validé',
+  en_attente: 'En attente',
+  annule: 'Annulé',
+  rejete: 'Rejeté',
+  emis: 'Émis',
+  a_encaisser: 'À encaisser',
+  encaisse: 'Encaissé',
+};
+
+const getSettlementStatus = ({ statut, statut_cheque, type_paiement }) => {
+  if (type_paiement !== 'cheque' || statut === 'annule' || statut === 'rejete') return statut;
+  if (statut_cheque === 'encaisse') return statut === 'valide' ? statut_cheque : statut;
+  return statut_cheque || (statut === 'valide' ? 'en_attente' : statut);
+};
+
 const getPaymentReglementSummary = (transaction, formatAmount = formatPaymentAmountForSummary) => {
   const reglements = (transaction.paiements || [])
-    .map((payment) => getPaymentReglementLabel(payment, formatAmount))
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((payment) => [
+      getPaymentReglementLabel(payment, formatAmount),
+      SETTLEMENT_STATUS_LABELS[getSettlementStatus(payment)],
+    ].filter(Boolean).join(' · '));
 
   return reglements.length > 0 ? reglements.join(' | ') : '-';
 };

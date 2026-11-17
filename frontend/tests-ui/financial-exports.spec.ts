@@ -311,7 +311,20 @@ test('quick filters share register rows and financial totals with Excel and PDF'
 });
 
 test('transaction register preserves exact settlements, legacy deferred quantities and active-only totals', async ({ page }) => {
-  const writes = await mockFinancialApi(page);
+  const sale = txData[0];
+  const paymentHistory = [
+    ...sale.paiements,
+    { date_paiement: '2026-10-24', type_paiement: 'cash', statut: 'annule', montant: '2.10' },
+    { date_paiement: '2026-10-25', type_paiement: 'cash', statut: 'en_attente', montant: '3.20' },
+    { date_paiement: '2026-10-26', type_paiement: 'cheque', statut: 'valide', statut_cheque: 'a_encaisser', numero_cheque: 'CHQ-001', montant: '4.30' },
+    { date_paiement: '2026-10-27', type_paiement: 'cheque', statut: 'rejete', statut_cheque: 'encaisse', numero_cheque: 'CHQ-002', montant: '5.40' },
+    { date_paiement: '2026-10-28', type_paiement: 'cheque', statut: 'en_attente', statut_cheque: 'encaisse', numero_cheque: 'CHQ-003', montant: '6.50' },
+    { date_paiement: '2026-10-29', type_paiement: 'cheque', statut: 'valide', statut_cheque: 'encaisse', numero_cheque: 'CHQ-004', montant: '7.60' },
+  ];
+  const writes = await mockFinancialApi(page, [
+    { ...sale, paiements: paymentHistory, montant_paye: '9.31', montant_restant: '90.69' },
+    ...txData.slice(1),
+  ]);
   await page.goto('/transactions');
   const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
   await expect(excel).toBeEnabled();
@@ -339,6 +352,8 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
     if (row.getCell(labelCol!).value === 'Total :') {
       total = amount(row.getCell(netCol!).value);
       expect(amount(row.getCell(totalCol!).value)).toBe(125.5);
+      expect(row.getCell(headings.get('Payé')!).value).toBe(9.31);
+      expect(row.getCell(headings.get('Reste')!).value).toBe(116.19);
     }
   }
   expect(transactions).toHaveLength(3);
@@ -352,6 +367,13 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
   const deferredRow = sheet.getRow(2);
   expect(deferredRow.getCell(payment).value).toMatch(/0,01.*0,10.*1,60/);
   expect(String(deferredRow.getCell(payment).value).match(/23\/10\/26/g)).toHaveLength(3);
+  const settlements = String(deferredRow.getCell(payment).value).split(' | ');
+  expect(settlements.map(entry => entry.split(' · ').at(-1))).toEqual([
+    'Validé', 'Validé', 'Validé', 'Annulé', 'En attente', 'À encaisser', 'Rejeté', 'En attente', 'Encaissé',
+  ]);
+  expect(settlements[5]).toMatch(/^26\/10\/26 · Chèque CHQ-001 · 4,30\sMAD · À encaisser$/);
+  expect(deferredRow.getCell(headings.get('Payé')!).value).toBe(9.31);
+  expect(deferredRow.getCell(headings.get('Reste')!).value).toBe(90.69);
   expect(deferredRow.getCell(headings.get('Quantité couverte')!).value).toBe(10);
   expect(deferredRow.getCell(headings.get('Stock prêt à compléter')!).value).toBe(5);
   expect(deferredRow.getCell(headings.get('Reste à fournir')!).value).toBe(10);
