@@ -56,6 +56,7 @@ import UnifiedSearch from '../UnifiedSearch';
 
 const DRAWER_WIDTH = 252;
 const DRAWER_COLLAPSED = 68;
+const contentGutter = { xs: 2, sm: 2.5, md: 3 };
 
 // ─── Navigation structure ─────────────────────────────────────────────────
 const NAV_SECTIONS = [
@@ -301,6 +302,10 @@ function AppLayout({ children }) {
     }
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!isMobile) setMobileOpen(false);
+  }, [isMobile]);
+
   // ── Sidebar Header (logo area) ───────────────────────────────────────
   const sidebarHeader = (
     <Box
@@ -373,6 +378,7 @@ function AppLayout({ children }) {
       {!isMobile && (
         <IconButton
           onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? 'Développer la navigation' : 'Réduire la navigation'}
           size="small"
           sx={{
             color: 'rgba(255,255,255,0.4)',
@@ -478,28 +484,6 @@ function AppLayout({ children }) {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
-      {/* ── AppBar ──────────────────────────────────────────────────────── */}
-      <IconButton
-        size="medium"
-        onClick={() => setMobileOpen(true)}
-        sx={{
-          display: { xs: 'inline-flex', md: 'none' },
-          position: 'fixed',
-          top: 12,
-          left: 12,
-          zIndex: theme.zIndex.drawer - 1,
-          width: 44,
-          height: 44,
-          color: '#FFFFFF',
-          backgroundColor: '#0F172A',
-          boxShadow: '0 14px 34px rgba(15, 23, 42, 0.22)',
-          '&:hover': { backgroundColor: '#111C33' },
-        }}
-        aria-label="Ouvrir le menu"
-      >
-        <MenuIcon sx={{ fontSize: 22 }} />
-      </IconButton>
-
       {/* ── User menu ───────────────────────────────────────────────────── */}
       <Menu
         anchorEl={anchorEl}
@@ -532,9 +516,10 @@ function AppLayout({ children }) {
       {/* ── Sidebar — mobile (temporary) ────────────────────────────────── */}
       <Drawer
         variant="temporary"
-        open={mobileOpen}
+        open={isMobile && mobileOpen}
         onClose={() => setMobileOpen(false)}
         ModalProps={{ keepMounted: true }}
+        PaperProps={{ id: 'mobile-navigation' }}
         sx={{
           display: { xs: 'block', md: 'none' },
           '& .MuiDrawer-paper': {
@@ -572,23 +557,40 @@ function AppLayout({ children }) {
       </Drawer>
 
       {/* ── Main content ────────────────────────────────────────────────── */}
-      <Box
-        component="main"
-        sx={{
-          flex: 1,
-          minWidth: 0,
-          minHeight: '100vh',
-          backgroundColor: 'background.default',
-          transition: theme.transitions.create('margin', {
-            duration: theme.transitions.duration.standard,
-          }),
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: { xs: 2, md: 3 }, pt: { xs: 1, md: 2 }, minHeight: 56, color: 'text.secondary' }}>
-          <UnifiedSearch />
-          <AlertCenter />
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box
+          component="header"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: { xs: 1, md: 2 },
+            px: contentGutter,
+            pt: { xs: 1.5, md: 2 },
+            color: 'text.secondary',
+          }}
+        >
+          <IconButton
+            onClick={() => setMobileOpen(true)}
+            aria-label="Ouvrir le menu"
+            aria-controls="mobile-navigation"
+            aria-expanded={isMobile && mobileOpen}
+            sx={{
+              display: { xs: 'inline-flex', md: 'none' },
+              width: 44,
+              height: 44,
+              color: 'common.white',
+              bgcolor: 'grey.900',
+              '&:hover': { bgcolor: 'grey.800' },
+            }}
+          >
+            <MenuIcon fontSize="small" />
+          </IconButton>
+          <UnifiedSearch key={location.pathname} />
+          <Box sx={{ ml: 'auto', flexShrink: 0, '& > button': { minWidth: 44, minHeight: 44 } }}>
+            <AlertCenter />
+          </Box>
         </Box>
-        <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 }, pt: { xs: 8, md: 3 }, maxWidth: '100%' }}>
+        <Box component="main" sx={{ p: contentGutter, minWidth: 0 }}>
           {isRecovering && (
             <Alert
               severity="warning"

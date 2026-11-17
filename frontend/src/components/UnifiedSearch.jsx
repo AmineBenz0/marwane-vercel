@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Box,
   CircularProgress,
+  ClickAwayListener,
   List,
   ListItemButton,
   ListItemText,
@@ -27,6 +28,7 @@ function UnifiedSearch() {
   const [open, setOpen] = useState(false);
   const [correctionRevision, setCorrectionRevision] = useState(0);
   const requestRef = useRef(null);
+  const inputRef = useRef(null);
   useCorrectionRefresh(() => {
     if (open && query.trim().length >= 2) setCorrectionRevision(value => value + 1);
   });
@@ -62,13 +64,11 @@ function UnifiedSearch() {
           const nextResults = response?.results || [];
           setResults(nextResults);
           setStatus(nextResults.length ? SEARCH_SUCCESS : SEARCH_EMPTY);
-          setOpen(true);
         }
       } catch (error) {
         if (error?.code !== 'ERR_CANCELED' && !controller.signal.aborted) {
           setResults([]);
           setStatus(SEARCH_ERROR);
-          setOpen(true);
         }
       }
     }, 250);
@@ -86,6 +86,14 @@ function UnifiedSearch() {
     setStatus(SEARCH_IDLE);
     setOpen(false);
     navigate(result.href);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape' && open) {
+      event.stopPropagation();
+      inputRef.current?.focus();
+      setOpen(false);
+    }
   };
 
   const renderContent = () => {
@@ -127,43 +135,52 @@ function UnifiedSearch() {
   };
 
   return (
-    <Box sx={{ position: 'relative', width: { xs: '100%', sm: 320, md: 400 } }}>
-      <TextField
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onFocus={() => query.trim().length >= 2 && setOpen(true)}
-        placeholder="Rechercher clients, produits…"
-        size="small"
-        fullWidth
-        InputProps={{
-          startAdornment: (
-            <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-          ),
+    <ClickAwayListener onClickAway={() => setOpen(false)}>
+      <Box
+        sx={{ position: 'relative', minWidth: 0, width: { xs: '100%', sm: 320, md: 400 } }}
+        onKeyDown={handleKeyDown}
+        onBlur={(event) => {
+          if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
         }}
-        inputProps={{
-          'aria-label': 'Recherche globale',
-          'aria-busy': status === SEARCH_LOADING,
-        }}
-      />
-      {open && (
-        <Paper
-          elevation={8}
-          sx={{
-            position: 'absolute',
-            zIndex: 10,
-            left: 0,
-            right: 0,
-            mt: 0.5,
-            maxHeight: 360,
-            overflow: 'auto',
+      >
+        <TextField
+          inputRef={inputRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => query.trim().length >= 2 && setOpen(true)}
+          placeholder="Rechercher clients, produits…"
+          size="small"
+          fullWidth
+          InputProps={{
+            startAdornment: (
+              <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+            ),
           }}
-        >
-          <List dense aria-live="polite">
-            {renderContent()}
-          </List>
-        </Paper>
-      )}
-    </Box>
+          inputProps={{
+            'aria-label': 'Recherche globale',
+            'aria-busy': status === SEARCH_LOADING,
+          }}
+        />
+        {open && (
+          <Paper
+            elevation={8}
+            sx={{
+              position: 'absolute',
+              zIndex: 10,
+              left: 0,
+              right: 0,
+              mt: 0.5,
+              maxHeight: 360,
+              overflow: 'auto',
+            }}
+          >
+            <List dense aria-live="polite">
+              {renderContent()}
+            </List>
+          </Paper>
+        )}
+      </Box>
+    </ClickAwayListener>
   );
 }
 

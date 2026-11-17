@@ -325,13 +325,19 @@ function ProduitsList() {
               </Typography>
             </Box>
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ width: { xs: '100%', md: 'auto' } }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              gap={1}
+              useFlexGap
+              flexWrap="wrap"
+              sx={{ minWidth: 0, flex: { md: '0 1 460px' } }}
+            >
               <TextField
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Rechercher un produit"
                 size="small"
-                sx={{ minWidth: { xs: '100%', md: 260 } }}
+                sx={{ flex: { sm: '1 1 220px' }, minWidth: 0 }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -346,7 +352,7 @@ function ProduitsList() {
                 onChange={(event) => setTypeFilter(event.target.value)}
                 label="Utilisation"
                 size="small"
-                sx={{ minWidth: { xs: '100%', sm: 190 } }}
+                sx={{ flex: { sm: '0 1 190px' }, minWidth: 0 }}
               >
                 <MenuItem value="">Tous les produits</MenuItem>
                 <MenuItem value="vendu">Vendus</MenuItem>
