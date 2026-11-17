@@ -10,7 +10,7 @@ import { formatShortDate } from './dateFormatting';
 const EXCEL_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const normaliseCellValue = (value) => {
-  if (value === null || value === undefined) return '';
+  if (value == null || value === '') return null;
   if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
   if (value instanceof Date) return formatShortDate(value);
   if (typeof value === 'number') return value;

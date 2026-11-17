@@ -384,6 +384,7 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
   expect(paymentRows.map(row => settlementValue(row, 'Montant'))).toEqual([0.01, 0.1, 1.6, 2.1, 3.2, 4.3, 5.4, 6.5, 7.6]);
   expect(['Date règlement', 'Moyen', 'Référence'].map(key => settlementValue(paymentRows[5], key)))
     .toEqual(['26/10/26', 'Chèque', 'CHQ-001']);
+  expect(settlementValue(paymentRows[0], 'Référence')).toBeNull();
   expect(deferredRow.getCell(headings.get('Payé')!).value).toBe(9.31);
   expect(deferredRow.getCell(headings.get('Reste')!).value).toBe(90.69);
   expect(deferredRow.getCell(headings.get('Quantité couverte')!).value).toBe(10);
@@ -391,6 +392,8 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
   expect(deferredRow.getCell(headings.get('Reste à fournir')!).value).toBe(10);
   expect(deferredRow.getCell(headings.get('À produire')!).value).toBe(5);
   expect(deferredRow.getCell(headings.get('Livraison prévue')!).value).toBe('15/11/26');
+  expect(sheet.getRow(4).getCell(headings.get('Livraison prévue')!).value).toBeNull();
+  expect(sheet.getRow(4).getCell(headings.get('Payé')!).value).toBe(0);
   expect(sheet.getRow(3).getCell(headings.get('Client / Fournisseur')!).value).toBe('Client historique');
   const source = await readPdf(page);
   expect(source).toContain('Client historique');
