@@ -86,8 +86,9 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   const period = validDates.length
     ? pdfDate(validDates[0]) + ' au ' + pdfDate(validDates[validDates.length - 1])
     : 'Periode selectionnee';
-  const source = rows.map(row => ({
+  const source = rows.map((row, index) => ({
     ...row,
+    numero_export: index + 1,
     partner: pdfClean(row.client_ou_fournisseur || '-'),
     product: pdfClean(row.produit_label || '-'),
     building: pdfClean(row.batiment_label || '-'),
@@ -95,6 +96,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   }));
 
   const transactionRows = source.map(row => [
+    String(row.numero_export),
     pdfDate(row.date_transaction),
     row.partner,
     row.product,
@@ -115,11 +117,13 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     },
     startY: 72,
     rowPageBreak: 'avoid',
-    head: [['DATE', 'PARTENAIRE', 'PRODUIT', 'QTÉ', 'NET', 'PAYÉ', 'RESTE', 'ÉTAT']],
+    head: [['N°', 'DATE', 'PARTENAIRE', 'PRODUIT', 'QTÉ', 'NET', 'PAYÉ', 'RESTE', 'ÉTAT']],
     body: transactionRows,
     foot: [[
-      { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 4 },
-      pdfMoney(total, false), pdfMoney(paid, false), pdfMoney(remaining, false), '',
+      { content: 'TOTAL ACTIF (hors opérations annulées)', colSpan: 5 },
+      ...[total, paid, remaining].map(value => ({
+        content: pdfMoney(value, false), styles: { halign: 'right' },
+      })), '',
     ]],
     showFoot: 'lastPage',
     footStyles: {
@@ -127,26 +131,27 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       fontStyle: 'bold', fontSize: 9, cellPadding: { top: 4, bottom: 4, left: 2, right: 2 },
     },
     columnStyles: {
-      0: { cellWidth: 22 },
-      1: { cellWidth: 64 },
-      2: { cellWidth: 54 },
-      3: { cellWidth: 16, halign: 'right' },
-      4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
-      5: { cellWidth: 29, halign: 'right' },
-      6: { cellWidth: 30, halign: 'right', textColor: PDF_COLORS.teal },
-      7: { cellWidth: 29, halign: 'center' },
+      0: { cellWidth: 14, halign: 'right', textColor: PDF_COLORS.muted },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 56 },
+      3: { cellWidth: 48 },
+      4: { cellWidth: 16, halign: 'right' },
+      5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+      6: { cellWidth: 29, halign: 'right' },
+      7: { cellWidth: 30, halign: 'right', textColor: PDF_COLORS.teal },
+      8: { cellWidth: 29, halign: 'center' },
     },
     didParseCell: data => {
-      if (data.section === 'body' && data.column.index === 4) {
+      if (data.section === 'body' && data.column.index === 5) {
         const row = source[data.row.index];
         data.cell.styles.textColor = row?.id_client != null ? PDF_COLORS.teal : PDF_COLORS.navy;
       }
-      if (data.section === 'body' && data.column.index === 7) {
+      if (data.section === 'body' && data.column.index === 8) {
         data.cell.text = [];
       }
     },
     didDrawCell: data => {
-      if (data.section !== 'body' || data.column.index !== 7) return;
+      if (data.section !== 'body' || data.column.index !== 8) return;
       // Cell.raw survives page splitting. Row.index is -1 on continuations.
       const status = data.cell.raw;
       if (status !== 'Annulée' && status !== 'Active') return;
@@ -174,13 +179,13 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       // Compatibility with an older response lacking itemized entries:
       // show the amount, but never infer or invent an effective date.
       return [{
-        date: '-', partner: row.partner, product: row.product,
+        number: row.numero_export, date: '-', partner: row.partner, product: row.product,
         cancelled: row.quantite_annulee, amount: row.montant_avoir,
         net: transactionNetAmount(row),
       }];
     }
     return issued.map(note => ({
-      date: pdfDate(note.date_effet), partner: row.partner, product: row.product,
+      number: row.numero_export, date: pdfDate(note.date_effet), partner: row.partner, product: row.product,
       cancelled: note.quantite_annulee,
       amount: note.montant_avoir,
       net: asNumber(row.montant_total) - asNumber(note.avoir_cumule),
@@ -189,21 +194,22 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
   addSection(
     doc, sections, 'Avoirs commerciaux',
     String(notes.length) + ' avoir(s) · remboursements dans les règlements',
-    ['DATE AVOIR', 'PARTENAIRE', 'PRODUIT', 'QTÉ ANNULÉE', 'AVOIR', 'NET APRÈS'],
+    ['N°', 'DATE AVOIR', 'PARTENAIRE', 'PRODUIT', 'QTÉ ANNULÉE', 'AVOIR', 'NET APRÈS'],
     notes.map(note => [
-      note.date, note.partner, note.product, pdfInteger(note.cancelled),
+      String(note.number), note.date, note.partner, note.product, pdfInteger(note.cancelled),
       pdfMoney(note.amount, false), pdfMoney(note.net, false),
     ]),
-    [30, 68, 66, 34, 37, 39],
-    [3, 4, 5],
+    [14, 30, 61, 59, 34, 37, 39],
+    [0, 4, 5, 6],
   );
 
   const deferred = source.filter(row => row.est_promesse);
   addSection(
     doc, sections, 'Livraisons différées',
     String(deferred.length) + ' transactions concernées par une livraison différée',
-    ['PRODUIT / BATIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COUVERT', 'RÉSERVÉ', 'ANNULÉ', 'RESTE'],
+    ['N°', 'PRODUIT / BÂTIMENT', 'SITUATION ET STOCK', 'LIVRAISON', 'COUVERT', 'RÉSERVÉ', 'ANNULÉ', 'RESTE'],
     deferred.map(row => [
+      String(row.numero_export),
       row.product + '\n' + row.building,
       pdfClean(row.etat_stock || row.status) + (row.quantite_a_produire == null
         ? '' : '\nÀ produire : ' + pdfInteger(row.quantite_a_produire)),
@@ -213,8 +219,8 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
       pdfInteger(row.quantite_annulee ?? 0),
       pdfInteger(row.quantite_en_attente),
     ]),
-    [80, 70, 28, 24, 24, 24, 24],
-    [3, 4, 5, 6],
+    [14, 72, 64, 28, 24, 24, 24, 24],
+    [0, 4, 5, 6, 7],
   );
 
   const totalPages = doc.getNumberOfPages();

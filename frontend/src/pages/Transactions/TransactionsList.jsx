@@ -66,6 +66,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { exportToExcelSheets } from '../../utils/exportToExcel';
 import { exportTransactionsReportPDF } from '../../utils/exportTransactionsReportPDF';
+import { getSettlementStatus, SETTLEMENT_STATUS_LABELS } from '../../utils/settlementStatus';
 import { sumActiveTransactionAmounts, transactionNetAmount } from '../../utils/transactionAmounts';
 import { resolveTransactionExportRows } from './resolveTransactionExportReferences';
 import { loadTransactionPages } from './transactionPages';
@@ -991,22 +992,6 @@ const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountFor
   return [formatShortDate(payment.date_paiement, ''), `${label}${referenceText}`, amount && signedAmount]
     .filter(Boolean)
     .join(' · ');
-};
-
-const SETTLEMENT_STATUS_LABELS = {
-  valide: 'Validé',
-  en_attente: 'En attente',
-  annule: 'Annulé',
-  rejete: 'Rejeté',
-  emis: 'Émis',
-  a_encaisser: 'À encaisser',
-  encaisse: 'Encaissé',
-};
-
-const getSettlementStatus = ({ statut, statut_cheque, type_paiement }) => {
-  if (type_paiement !== 'cheque' || statut === 'annule' || statut === 'rejete') return statut;
-  if (statut_cheque === 'encaisse') return statut === 'valide' ? statut_cheque : statut;
-  return statut_cheque || (statut === 'valide' ? 'en_attente' : statut);
 };
 
 const SETTLEMENT_OPERATION_LABELS = {

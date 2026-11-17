@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -27,8 +27,11 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import ProduitForm from './ProduitForm';
 import { get, post } from '../../services/api';
+import useCorrectionRefresh from '../../components/Corrections/useCorrectionRefresh';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { getProductUsage, productUsageLabels } from '../../utils/productUsage';
+import { deferredStockQuantities } from '../Transactions/deferredStockQuantities';
+import { loadTransactionPages } from '../Transactions/transactionPages';
 
 const formatMoney = (value, maximumFractionDigits = 2) => {
   const amount = Number(value || 0);
@@ -53,10 +56,14 @@ function ProduitsList() {
   const [transactions, setTransactions] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const loadVersion = useRef(0);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
+  useCorrectionRefresh(() => setCorrectionRevision(value => value + 1));
 
   const [modalOpen, setModalOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
@@ -89,6 +96,9 @@ function ProduitsList() {
           suppliers: new Set(),
           purchases: 0,
           quantity: 0,
+          delivered: 0,
+          reserved: 0,
+          toProduce: 0,
           total: 0,
           lastPurchase: null,
         };
@@ -98,6 +108,12 @@ function ProduitsList() {
           ? transaction.id_client : transaction.id_fournisseur);
         current.purchases += 1;
         current.quantity += Number(transaction.quantite || 0);
+        if (transaction.est_promesse && transaction.id_client != null && transaction.est_actif !== false) {
+          const { reserved, toProduce } = deferredStockQuantities(transaction);
+          current.delivered += Number(transaction.quantite_completee ?? 0);
+          current.reserved += reserved;
+          current.toProduce += toProduce;
+        }
         current.total += Number(transaction.montant_total || 0);
 
         if (
@@ -124,6 +140,7 @@ function ProduitsList() {
   }, [produits, search, typeFilter]);
 
   const fetchData = async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
 
@@ -135,12 +152,7 @@ function ProduitsList() {
             limit: 1000,
           },
         }),
-        get('/transactions', {
-          params: {
-            est_actif: true,
-            limit: 5000,
-          },
-        }),
+        loadTransactionPages(get, { est_actif: true }),
         get('/fournisseurs', {
           params: {
             est_actif: true,
@@ -150,21 +162,26 @@ function ProduitsList() {
         get('/clients', { params: { est_actif: true, limit: 1000 } }),
       ]);
 
+      if (version !== loadVersion.current) return;
       setProduits(produitsData || []);
       setTransactions(transactionsData || []);
       setFournisseurs(fournisseursData || []);
       setClients(clientsData || []);
+      setHasLoaded(true);
     } catch (err) {
+      if (version !== loadVersion.current) return;
+      setHasLoaded(false);
       console.error('Erreur lors du chargement des produits:', err);
       setError(err?.message || 'Une erreur est survenue lors du chargement des produits');
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, []);
+    return () => { loadVersion.current += 1; };
+  }, [correctionRevision]);
 
   const handleCreate = () => {
     setFormError(null);
@@ -219,6 +236,9 @@ function ProduitsList() {
           dernier_prix: lastPurchase?.prix_unitaire || '',
           dernier_achat: lastPurchase?.date_transaction || '',
           quantite_totale: insight?.quantity || 0,
+          quantite_livree: insight?.delivered ?? 0,
+          stock_reserve: insight?.reserved ?? 0,
+          quantite_a_produire: insight?.toProduce ?? 0,
           montant_total: insight?.total || 0,
         };
       });
@@ -233,6 +253,9 @@ function ProduitsList() {
           { id: 'dernier_prix', label: 'Dernier prix' },
           { id: 'dernier_achat', label: 'Dernière transaction' },
           { id: 'quantite_totale', label: 'Quantité totale' },
+          { id: 'quantite_livree', label: 'Quantité livrée' },
+          { id: 'stock_reserve', label: 'Stock prêt à compléter' },
+          { id: 'quantite_a_produire', label: 'À produire' },
           { id: 'montant_total', label: 'Montant total' },
         ],
         `produits_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
@@ -272,7 +295,7 @@ function ProduitsList() {
             variant="outlined"
             startIcon={!isMobile && <FileDownloadIcon />}
             onClick={handleExportExcel}
-            disabled={loading || filteredProduits.length === 0}
+            disabled={loading || !hasLoaded || filteredProduits.length === 0}
           >
             {isMobile ? 'Exporter' : 'Exporter Excel'}
           </Button>
