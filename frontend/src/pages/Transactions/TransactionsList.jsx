@@ -64,7 +64,7 @@ import PaymentStatusBadge from '../../components/PaymentStatusBadge';
 import { get, post, put, del } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
-import { exportToExcelAdvanced } from '../../utils/exportToExcel';
+import { exportToExcelSheets } from '../../utils/exportToExcel';
 import { exportTransactionsReportPDF } from '../../utils/exportTransactionsReportPDF';
 import { sumActiveTransactionAmounts, transactionNetAmount } from '../../utils/transactionAmounts';
 import { resolveTransactionExportRows } from './resolveTransactionExportReferences';
@@ -993,13 +993,66 @@ const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountFor
     .join(' · ');
 };
 
-const getPaymentReglementSummary = (transaction, formatAmount = formatPaymentAmountForSummary) => {
-  const reglements = (transaction.paiements || [])
-    .map((payment) => getPaymentReglementLabel(payment, formatAmount))
-    .filter(Boolean);
-
-  return reglements.length > 0 ? reglements.join(' | ') : '-';
+const SETTLEMENT_STATUS_LABELS = {
+  valide: 'Validé',
+  en_attente: 'En attente',
+  annule: 'Annulé',
+  rejete: 'Rejeté',
+  emis: 'Émis',
+  a_encaisser: 'À encaisser',
+  encaisse: 'Encaissé',
 };
+
+const getSettlementStatus = ({ statut, statut_cheque, type_paiement }) => {
+  if (type_paiement !== 'cheque' || statut === 'annule' || statut === 'rejete') return statut;
+  if (statut_cheque === 'encaisse') return statut === 'valide' ? statut_cheque : statut;
+  return statut_cheque || (statut === 'valide' ? 'en_attente' : statut);
+};
+
+const SETTLEMENT_OPERATION_LABELS = {
+  paiement: 'Paiement',
+  remboursement: 'Remboursement',
+  credit_recu: 'Crédit utilisé',
+  credit_transfere: 'Crédit transféré',
+};
+
+const settlementExportColumns = [
+  { id: 'numero_export', label: 'N° export' },
+  { id: 'date_transaction', label: 'Date transaction' },
+  { id: 'client_ou_fournisseur', label: 'Client / Fournisseur', excelWidth: 38 },
+  { id: 'produit_label', label: 'Produit vendu / acheté', excelWidth: 40 },
+  { id: 'etat_transaction', label: 'État transaction' },
+  { id: 'date_paiement', label: 'Date règlement' },
+  { id: 'operation', label: 'Opération', excelWidth: 20 },
+  { id: 'moyen', label: 'Moyen' },
+  { id: 'reference', label: 'Référence', excelWidth: 24 },
+  { id: 'montant', label: 'Montant', excelNumberFormat: () => '#,##0.00 "MAD"' },
+  { id: 'statut', label: 'Statut' },
+];
+
+const getSettlementExportRows = (transactions) => transactions.flatMap(transaction =>
+  (transaction.paiements || []).filter(Boolean).map(payment => {
+    const { nature, type_paiement } = payment;
+    const isTransfer = nature === 'credit_transfere';
+    const isCredit = isTransfer || nature === 'credit_recu';
+    const isOutgoing = isTransfer || nature === 'remboursement';
+    const amount = payment.montant == null ? null : Number(payment.montant);
+    return {
+      numero_export: transaction.numero_export,
+      date_transaction: transaction.date_transaction,
+      client_ou_fournisseur: transaction.client_ou_fournisseur,
+      produit_label: transaction.produit_label,
+      etat_transaction: transaction.etat_transaction,
+      date_paiement: formatShortDate(payment.date_paiement, ''),
+      operation: SETTLEMENT_OPERATION_LABELS[nature] || nature || 'Paiement',
+      moyen: isCredit ? '' : getPaymentTypeLabel(payment),
+      reference: isCredit ? '' : getPaymentReferenceValue(payment)
+        || (REFERENCE_PAYMENT_TYPES.has(type_paiement) ? 'réf. manquante' : ''),
+      montant: amount != null && isOutgoing ? -amount : amount,
+      statut: SETTLEMENT_STATUS_LABELS[getSettlementStatus(payment)],
+    };
+  })
+);
 
 const transactionExportColumns = [
   { id: 'date_transaction', label: 'Date' },
@@ -1013,7 +1066,7 @@ const transactionExportColumns = [
   { id: 'avoirs_details', label: 'Détail des avoirs', excelWidth: 47 },
   { id: 'montant_paye', label: 'Payé', excelNumberFormat: () => '#,##0.00 "MAD"' },
   { id: 'montant_restant', label: 'Reste', excelNumberFormat: () => '#,##0.00 "MAD"' },
-  { id: 'reglement', label: 'Règlement', excelWidth: 62 },
+  { id: 'numero_export', label: 'N° export' },
   { id: 'statut_paiement', label: 'Paiement' },
   { id: 'etat_stock', label: 'Stock' },
   { id: 'date_livraison_prevue', label: 'Livraison prévue' },
@@ -1031,10 +1084,11 @@ const deferredExportColumns = [
 export const exportTransactionWorkbook = (rows) => {
   const hasDeferred = rows.some(row => row.est_promesse);
   const columns = hasDeferred ? [...transactionExportColumns, ...deferredExportColumns] : transactionExportColumns;
-  const data = rows.map(row => {
+  const data = rows.map((row, index) => {
     const status = row.est_en_retard ? 'en_retard' : row.statut_paiement;
     return {
       ...row,
+      numero_export: index + 1,
       date_transaction: formatShortDate(row.date_transaction, row.date_transaction || '-'),
       date_livraison_prevue: row.date_livraison_prevue
         ? formatShortDate(row.date_livraison_prevue, row.date_livraison_prevue)
@@ -1047,7 +1101,7 @@ export const exportTransactionWorkbook = (rows) => {
         .join(' | '),
       montant_paye: Number(row.montant_paye ?? 0),
       montant_restant: Number(row.montant_restant ?? 0),
-      reglement: getPaymentReglementSummary(row, formatMontantComplet),
+      etat_transaction: row.est_actif === false ? 'Annulée' : 'Active',
       statut_paiement: {
         impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
       }[status] || status || '-',
@@ -1057,18 +1111,27 @@ export const exportTransactionWorkbook = (rows) => {
     };
   });
   const totals = sumActiveTransactionAmounts(rows);
-  return exportToExcelAdvanced(
-    [...data, {}, {
-      quantite: 'Total :', montant_total: totals.gross,
-      montant_avoir: totals.credits,
-      montant_net: totals.net,
-      montant_paye: totals.paid,
-      montant_restant: totals.remaining,
-    }],
-    columns,
-    `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`,
-    'Transactions',
-  );
+  const settlements = getSettlementExportRows(data);
+  return exportToExcelSheets([
+    {
+      sheetName: 'Transactions',
+      columns,
+      filterRows: data.length,
+      data: [...data, {}, {
+        quantite: 'Total :', montant_total: totals.gross,
+        montant_avoir: totals.credits,
+        montant_net: totals.net,
+        montant_paye: totals.paid,
+        montant_restant: totals.remaining,
+      }],
+    },
+    {
+      sheetName: 'Règlements',
+      columns: settlementExportColumns,
+      filterRows: settlements.length,
+      data: settlements,
+    },
+  ], `transactions_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}`);
 };
 
 const getSignedAmount = (transaction) => {

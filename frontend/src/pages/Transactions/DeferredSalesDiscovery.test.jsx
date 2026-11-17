@@ -11,7 +11,7 @@ vi.mock('../../services/api', () => ({ get: vi.fn(), post: vi.fn(), put: vi.fn()
 vi.mock('./TransactionForm', () => ({ default: () => null }));
 vi.mock('../../components/Filters/SmartFilterPanel', () => ({ default: () => null }));
 vi.mock('../../hooks/useNotification', () => ({ default: () => ({ success: vi.fn(), error: vi.fn() }) }));
-vi.mock('../../utils/exportToExcel', () => ({ exportToExcelAdvanced: vi.fn() }));
+vi.mock('../../utils/exportToExcel', () => ({ exportToExcelSheets: vi.fn() }));
 vi.mock('../../utils/exportToPDF', () => ({ exportToPDF: vi.fn() }));
 const paid = {
   id_transaction: 7, id_client: 1, id_fournisseur: null, id_produit: 1, id_batiment: 1,

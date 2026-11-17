@@ -67,15 +67,19 @@ async function mockFinancialApi(page: Page, transactions = txData, partnerName =
   return attemptedWrites;
 }
 
-async function exportSheet(page: Page, click: () => Promise<void>) {
+async function exportWorkbook(page: Page, click: () => Promise<void>, expectedSheets: number) {
   const [download] = await Promise.all([page.waitForEvent('download'), click()]);
   expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
   const file = await download.path();
   expect(file).toBeTruthy();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(file!);
-  expect(workbook.worksheets).toHaveLength(1);
-  return workbook.worksheets[0];
+  expect(workbook.worksheets).toHaveLength(expectedSheets);
+  return workbook;
+}
+
+async function exportSheet(page: Page, click: () => Promise<void>, expectedSheets = 1) {
+  return (await exportWorkbook(page, click, expectedSheets)).worksheets[0];
 }
 
 async function readPdf(page: Page, buttonName = 'Export PDF') {
@@ -231,7 +235,7 @@ test('unpaid exports include the second API page and reconcile cent-level credit
   await expect(page.getByRole('button', { name: 'Non payées (2)', exact: true })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Ventes', exact: true }).locator('p')).toHaveText(/0,30?\sMAD/);
   const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
-  const sheet = await exportSheet(page, () => excel.click());
+  const sheet = await exportSheet(page, () => excel.click(), 2);
   const columns = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, index) => columns.set(String(cell.value), index));
   const net = columns.get('Montant net')!;
@@ -282,7 +286,7 @@ test('quick filters share register rows and financial totals with Excel and PDF'
       await expect(table.getByText(label, { exact: true })).toHaveCount(partners.includes(partner) ? 1 : 0);
     }
 
-    const sheet = await exportSheet(page, () => excel.click());
+    const sheet = await exportSheet(page, () => excel.click(), 2);
     const exportedPartners: string[] = [];
     let excelTotal: number | undefined;
     sheet.eachRow((row, index) => {
@@ -311,11 +315,26 @@ test('quick filters share register rows and financial totals with Excel and PDF'
 });
 
 test('transaction register preserves exact settlements, legacy deferred quantities and active-only totals', async ({ page }) => {
-  const writes = await mockFinancialApi(page);
+  const sale = txData[0];
+  const paymentHistory = [
+    ...sale.paiements,
+    { date_paiement: '2026-10-24', type_paiement: 'cash', statut: 'annule', montant: '2.10' },
+    { date_paiement: '2026-10-25', type_paiement: 'cash', statut: 'en_attente', montant: '3.20' },
+    { date_paiement: '2026-10-26', type_paiement: 'cheque', statut: 'valide', statut_cheque: 'a_encaisser', numero_cheque: 'CHQ-001', montant: '4.30' },
+    { date_paiement: '2026-10-27', type_paiement: 'cheque', statut: 'rejete', statut_cheque: 'encaisse', numero_cheque: 'CHQ-002', montant: '5.40' },
+    { date_paiement: '2026-10-28', type_paiement: 'cheque', statut: 'en_attente', statut_cheque: 'encaisse', numero_cheque: 'CHQ-003', montant: '6.50' },
+    { date_paiement: '2026-10-29', type_paiement: 'cheque', statut: 'valide', statut_cheque: 'encaisse', numero_cheque: 'CHQ-004', montant: '7.60' },
+  ];
+  const writes = await mockFinancialApi(page, [
+    { ...sale, paiements: paymentHistory, montant_paye: '9.31', montant_restant: '90.69' },
+    ...txData.slice(1),
+  ]);
   await page.goto('/transactions');
   const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
   await expect(excel).toBeEnabled();
-  const sheet = await exportSheet(page, () => excel.click());
+  const workbook = await exportWorkbook(page, () => excel.click(), 2);
+  expect(workbook.worksheets.map(sheet => sheet.name)).toEqual(['Transactions', 'Règlements']);
+  const [sheet, settlements] = workbook.worksheets;
   const headings = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, col) => headings.set(String(cell.value), col));
   const statusCol = headings.get('État');
@@ -339,6 +358,8 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
     if (row.getCell(labelCol!).value === 'Total :') {
       total = amount(row.getCell(netCol!).value);
       expect(amount(row.getCell(totalCol!).value)).toBe(125.5);
+      expect(row.getCell(headings.get('Payé')!).value).toBe(9.31);
+      expect(row.getCell(headings.get('Reste')!).value).toBe(116.19);
     }
   }
   expect(transactions).toHaveLength(3);
@@ -348,15 +369,31 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
     { date: '22/10/26', state: 'Active', money: 25.5 },
   ]));
   expect(total).toBe(125.5);
-  const payment = headings.get('Règlement')!;
   const deferredRow = sheet.getRow(2);
-  expect(deferredRow.getCell(payment).value).toMatch(/0,01.*0,10.*1,60/);
-  expect(String(deferredRow.getCell(payment).value).match(/23\/10\/26/g)).toHaveLength(3);
+  expect(headings.has('Règlement')).toBe(false);
+  const settlementColumns = new Map<string, number>();
+  settlements.getRow(1).eachCell((cell, col) => settlementColumns.set(String(cell.value), col));
+  const settlementValue = (row: ExcelJS.Row, name: string) => row.getCell(settlementColumns.get(name)!).value;
+  const paymentRows = settlements.getRows(2, paymentHistory.length)!;
+  expect(settlements.rowCount).toBe(paymentHistory.length + 1);
+  expect(paymentRows.map(row => settlementValue(row, 'Statut'))).toEqual([
+    'Validé', 'Validé', 'Validé', 'Annulé', 'En attente', 'À encaisser', 'Rejeté', 'En attente', 'Encaissé',
+  ]);
+  expect(paymentRows.map(row => settlementValue(row, 'N° export')))
+    .toEqual(Array(paymentHistory.length).fill(deferredRow.getCell(headings.get('N° export')!).value));
+  expect(paymentRows.map(row => settlementValue(row, 'Montant'))).toEqual([0.01, 0.1, 1.6, 2.1, 3.2, 4.3, 5.4, 6.5, 7.6]);
+  expect(['Date règlement', 'Moyen', 'Référence'].map(key => settlementValue(paymentRows[5], key)))
+    .toEqual(['26/10/26', 'Chèque', 'CHQ-001']);
+  expect(settlementValue(paymentRows[0], 'Référence')).toBeNull();
+  expect(deferredRow.getCell(headings.get('Payé')!).value).toBe(9.31);
+  expect(deferredRow.getCell(headings.get('Reste')!).value).toBe(90.69);
   expect(deferredRow.getCell(headings.get('Quantité couverte')!).value).toBe(10);
   expect(deferredRow.getCell(headings.get('Stock prêt à compléter')!).value).toBe(5);
   expect(deferredRow.getCell(headings.get('Reste à fournir')!).value).toBe(10);
   expect(deferredRow.getCell(headings.get('À produire')!).value).toBe(5);
   expect(deferredRow.getCell(headings.get('Livraison prévue')!).value).toBe('15/11/26');
+  expect(sheet.getRow(4).getCell(headings.get('Livraison prévue')!).value).toBeNull();
+  expect(sheet.getRow(4).getCell(headings.get('Payé')!).value).toBe(0);
   expect(sheet.getRow(3).getCell(headings.get('Client / Fournisseur')!).value).toBe('Client historique');
   const source = await readPdf(page);
   expect(source).toContain('Client historique');

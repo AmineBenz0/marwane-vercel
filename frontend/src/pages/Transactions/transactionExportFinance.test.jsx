@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { exportTransactionWorkbook } from './TransactionsList';
-import { exportToExcelAdvanced } from '../../utils/exportToExcel';
+import { exportToExcelSheets } from '../../utils/exportToExcel';
 
 vi.mock('../../utils/exportToExcel', () => ({
-  exportToExcelAdvanced: vi.fn().mockResolvedValue(undefined),
+  exportToExcelSheets: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('Release 4 Phase 6 transaction Excel', () => {
@@ -42,8 +42,8 @@ describe('Release 4 Phase 6 transaction Excel', () => {
       ],
     };
     await exportTransactionWorkbook([sale]);
-    expect(exportToExcelAdvanced).toHaveBeenCalledOnce();
-    const [rows, columns] = exportToExcelAdvanced.mock.calls[0];
+    expect(exportToExcelSheets).toHaveBeenCalledOnce();
+    const [[{ data: rows, columns }, { data: settlements }]] = exportToExcelSheets.mock.calls[0];
     const header = Object.fromEntries(columns.map(column => [column.id, column.label]));
     expect(header).toMatchObject({
       montant_total: 'Montant initial',
@@ -58,9 +58,10 @@ describe('Release 4 Phase 6 transaction Excel', () => {
     }
     expect(rows[0].avoirs_details).toContain('10/11/26');
     expect(rows[0].avoirs_details).toContain('600,00');
-    const [payment, refund] = rows[0].reglement.split(' | ');
-    expect(payment).toMatch(/^22\/10\/26 · .*1\s500,00/);
-    expect(refund).toMatch(/^11\/11\/26 · Remboursement.*− 600,00/);
+    expect(settlements).toMatchObject([
+      { numero_export: rows[0].numero_export, date_paiement: '22/10/26', operation: 'Paiement', montant: 1500, statut: 'Validé' },
+      { numero_export: rows[0].numero_export, date_paiement: '11/11/26', operation: 'Remboursement', montant: -600, statut: 'Validé' },
+    ]);
     const totals = rows.at(-1);
     expect(totals).toMatchObject({ montant_total: 1500, montant_avoir: 600, montant_net: 900, montant_paye: 900, montant_restant: 0 });
   });
@@ -77,7 +78,9 @@ describe('Release 4 Phase 6 transaction Excel', () => {
         montant_avoir: '100.00', montant_net: '400.00', montant_paye: '500.00',
         montant_restant: '-100.00' },
     ]);
-    const totals = exportToExcelAdvanced.mock.calls[0][0].at(-1);
+    const [[register, settlements]] = exportToExcelSheets.mock.calls[0];
+    expect(settlements).toMatchObject({ sheetName: 'Règlements', data: [] });
+    const totals = register.data.at(-1);
     expect(totals).toMatchObject({ montant_total: 100, montant_avoir: 0, montant_net: 100, montant_paye: 70, montant_restant: 30 });
   });
 });
