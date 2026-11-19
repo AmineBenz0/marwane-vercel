@@ -134,12 +134,25 @@ Attendre 5-10 secondes que la base de données soit prête.
 
 ```powershell
 # Option A : Via Docker (si backend est en Docker)
-docker compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade heads
 
 # Option B : Via Python local (si backend est en local)
 cd backend
-python -m alembic upgrade head
+python -m alembic upgrade heads
 ```
+
+> **Base vide (nouvelle installation) :** Alembic seul ne suffit pas. Le schéma complet
+> demande aussi les rôles `app_runtime`/`anon`/`authenticated` et six scripts SQL de
+> `backend/migrations/` appliqués dans un ordre précis. Utilisez le script qui reproduit
+> la CI (base locale jetable uniquement) :
+>
+> ```bash
+> cd backend
+> DATABASE_URL="postgresql://postgres@localhost:5432/comptabilite_db?sslmode=disable" \
+>   bash scripts/bootstrap_local_db.sh
+> ```
+>
+> Notez `heads` (pluriel) : il existe plusieurs têtes Alembic parallèles, `head` échoue.
 
 #### **Étape 3 : Démarrer le Backend en Mode Développement**
 
@@ -324,7 +337,7 @@ docker compose logs -f frontend
 
 ```bash
 # Si vous avez ajouté de nouvelles migrations
-docker compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade heads
 ```
 
 #### **Étape 7 : Tester en Production**
@@ -413,7 +426,7 @@ git pull origin main
 docker compose down
 docker compose build --no-cache frontend
 docker compose up -d
-docker compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade heads
 ```
 
 **7. Tester en production**
@@ -470,7 +483,7 @@ Ouvrir `http://comptabilite.westeurope.cloudapp.azure.com` et vérifier.
 
 1. **Appliquer les migrations**
    ```bash
-   docker compose exec backend alembic upgrade head
+   docker compose exec backend alembic upgrade heads
    ```
 
 2. **Recréer l'utilisateur admin**
