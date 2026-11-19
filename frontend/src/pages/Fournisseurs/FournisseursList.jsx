@@ -27,6 +27,7 @@ import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const fournisseurValidationSchema = yup.object().shape({
   nom_fournisseur: yup
@@ -187,38 +188,25 @@ function FournisseursList() {
 
   return (
     <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' }, fontWeight: 900 }}>
-            Fournisseurs
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Retrouvez rapidement un fournisseur, consultez son profil ou ajoutez-en un nouveau.
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1.5 }}>
-          <Button
-            variant="outlined"
-            startIcon={!isMobile && <FileDownloadIcon />}
-            onClick={handleExportExcel}
-            disabled={loading || fournisseurs.length === 0}
-          >
-            {isMobile ? 'Exporter' : 'Exporter Excel'}
-          </Button>
-          <Button variant="contained" startIcon={!isMobile && <AddIcon />} onClick={handleCreate}>
-            {isMobile ? 'Créer' : 'Créer un fournisseur'}
-          </Button>
-        </Box>
-      </Box>
+      <PageHeader
+        title="Fournisseurs"
+        description="Retrouvez rapidement un fournisseur, consultez son profil ou ajoutez-en un nouveau."
+        actions={(
+          <>
+            <Button
+              variant="outlined"
+              startIcon={!isMobile && <FileDownloadIcon />}
+              onClick={handleExportExcel}
+              disabled={loading || fournisseurs.length === 0}
+            >
+              {isMobile ? 'Exporter' : 'Exporter Excel'}
+            </Button>
+            <Button variant="contained" startIcon={!isMobile && <AddIcon />} onClick={handleCreate}>
+              {isMobile ? 'Nouveau' : 'Nouveau fournisseur'}
+            </Button>
+          </>
+        )}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>

@@ -44,6 +44,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import { useNavigate } from 'react-router-dom';
 import { productionLink } from '../Production/useProductionView';
 import { formatVaccineMoney } from '../../utils/vaccineExpenses';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const CATEGORIES = [
   'Fixe (Loyer, Salaire...)',
@@ -294,40 +295,29 @@ function ChargesList() {
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
-        sx={{ mb: 2.5 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={900}>
-            Dépenses
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Enregistrer les sorties hors achats fournisseurs: loyer, salaire, électricité, réparation, taxes ou divers.
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button
-            variant="outlined"
-            startIcon={!isMobile && <FileDownloadIcon />}
-            disabled={loading || visibleCharges.length === 0}
-            onClick={handleExportExcel}
-          >
-            {isMobile ? 'Exporter' : 'Exporter Excel'}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={!isMobile && <AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nouvelle dépense
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title="Dépenses"
+        description="Enregistrer les sorties hors achats fournisseurs: loyer, salaire, électricité, réparation, taxes ou divers."
+        actions={(
+          <>
+            <Button
+              variant="outlined"
+              startIcon={!isMobile && <FileDownloadIcon />}
+              disabled={loading || visibleCharges.length === 0}
+              onClick={handleExportExcel}
+            >
+              {isMobile ? 'Exporter' : 'Exporter Excel'}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={!isMobile && <AddIcon />}
+              onClick={() => handleOpenDialog()}
+            >
+              Nouvelle dépense
+            </Button>
+          </>
+        )}
+      />
 
       <Box
         sx={{

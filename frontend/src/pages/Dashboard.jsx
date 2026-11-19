@@ -44,6 +44,7 @@ import DeferredSalesCard from './Transactions/DeferredSalesCard';
 import { loadTransactionPages } from './Transactions/transactionPages';
 import { formatMontant, formatSimpleNumber } from '../utils/formatNumber';
 import { formatNumberForAxis, formatMontantForTooltip } from '../utils/formatNumberForChart';
+import PageHeader from '../components/Layout/PageHeader';
 
 const ACTIONS = [
   {
@@ -261,22 +262,10 @@ function Dashboard() {
 
   return (
     <Box sx={{ maxWidth: 1480, mx: 'auto', pb: 3 }}>
-      <Stack spacing={1} sx={{ mb: 2.5 }}>
-        <Typography
-          component="h1"
-          sx={{
-            fontWeight: 900,
-            fontSize: { xs: '1.75rem', sm: '2.1rem', md: '2.45rem' },
-            lineHeight: 1.08,
-            color: '#17211D',
-          }}
-        >
-          Accueil quotidien
-        </Typography>
-        <Typography sx={{ maxWidth: 760, color: '#69736D', lineHeight: 1.55 }}>
-          Les priorit&eacute;s du jour, la production et les actions rapides au m&ecirc;me endroit.
-        </Typography>
-      </Stack>
+      <PageHeader
+        title="Accueil quotidien"
+        description="Les priorités du jour, la production et les actions rapides au même endroit."
+      />
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} lg={7}>

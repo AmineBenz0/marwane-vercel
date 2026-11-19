@@ -42,6 +42,7 @@ import { formatCalendarMonth, formatShortDate } from '../../utils/dateFormatting
 import TaskModal from '../../components/Tasks/TaskModal';
 import taskService from '../../services/taskService';
 import useNotification from '../../hooks/useNotification';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const getTaskDate = (task) => {
   if (!task?.date_debut) return null;
@@ -233,32 +234,17 @@ function CalendarView() {
 
   return (
     <Box sx={{ pb: 5 }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-end' }}
-        spacing={2}
-        sx={{ mb: 3 }}
-      >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 900, color: '#17211D' }}>
-            Calendrier
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            {isMobile
-              ? 'Les prochaines taches, date par date.'
-              : 'Vue mensuelle complete avec les prochaines taches a cote.'}
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleNewTask()}
-          sx={{ minHeight: 46, borderRadius: 2 }}
-        >
-          Nouvelle tache
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Calendrier"
+        description={isMobile
+          ? 'Les prochaines tâches, date par date.'
+          : 'Le mois en cours, avec les prochaines tâches à côté.'}
+        actions={(
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleNewTask()}>
+            Nouvelle tâche
+          </Button>
+        )}
+      />
 
       {isMobile ? (
         <MobileAgenda

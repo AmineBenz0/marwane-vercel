@@ -34,6 +34,7 @@ import { useNavigate } from 'react-router-dom';
 import { get, post } from '../../services/api';
 import { getBusinessDateInput } from '../../utils/businessDate';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const money = (value) => new Intl.NumberFormat('fr-FR', {
   style: 'currency', currency: 'MAD', maximumFractionDigits: 2,
@@ -190,7 +191,10 @@ function FinancialLedgerPage({ direction }) {
   const [partiesLoading, setPartiesLoading] = useState(false);
 
   const endpoint = isReceivable ? '/transactions/creances' : '/transactions/dettes';
-  const title = isReceivable ? 'Créances clients' : 'Dettes fournisseurs';
+  const title = isReceivable ? 'À encaisser' : 'À payer';
+  const description = isReceivable
+    ? 'Ce que les clients doivent encore payer, avec les échéances.'
+    : 'Ce qui reste à payer aux fournisseurs, avec les échéances.';
   const partyLabel = isReceivable ? 'Client' : 'Fournisseur';
   const partyEndpoint = isReceivable ? '/clients' : '/fournisseurs';
 
@@ -324,13 +328,11 @@ function FinancialLedgerPage({ direction }) {
 
   return (
     <Box>
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} sx={{ mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>{title}</Typography>
-          <Typography color="text.secondary">Suivi centralisé des soldes et échéances.</Typography>
-        </Box>
-        <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualiser</Button>
-      </Stack>
+      <PageHeader
+        title={title}
+        description={description}
+        actions={<Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualiser</Button>}
+      />
 
       <SummaryCards summary={data.summary} />
       <SmartFilterPanel
