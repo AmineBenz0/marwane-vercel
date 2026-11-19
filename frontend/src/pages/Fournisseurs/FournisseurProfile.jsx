@@ -69,6 +69,7 @@ import ModalForm from '../../components/ModalForm/ModalForm';
 import TransactionForm from '../Transactions/TransactionForm';
 import FinancialInsights from '../../components/FinancialInsights/FinancialInsights';
 import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
+import BalanceCardList from '../../components/BalanceCardList';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
 import { get, put, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -104,6 +105,8 @@ function FournisseurProfile() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // The balance table needs ~760px; below 'lg' (with the sidebar) it would scroll sideways.
+  const narrowBalance = useMediaQuery(theme.breakpoints.down('lg'));
   const notification = useNotification();
 
   // États pour les données
@@ -761,53 +764,73 @@ function FournisseurProfile() {
             </Grid>
           </Grid>
 
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 720 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Produit</TableCell>
-                  <TableCell align="right">Montant à payer</TableCell>
-                  <TableCell>Règlement</TableCell>
-                  <TableCell>Échéance</TableCell>
-                  <TableCell align="right">Payé</TableCell>
-                  <TableCell align="right">Solde</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {fournisseurSoldeRows.length === 0 ? (
+          {narrowBalance ? (
+            <BalanceCardList
+              rows={fournisseurSoldeRows.map((transaction) => ({
+                key: transaction.id_transaction,
+                title: produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`,
+                date: formatDate(transaction.date_transaction),
+                detail: `${transaction.quantite} × ${formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}`,
+                amount: formatMontant(transaction.montant_total, { useCompactNotation: false }),
+                paid: formatMontant(transaction.montant_paye || 0, { useCompactNotation: false }),
+                remaining: formatMontant(transaction.montant_restant || 0, { useCompactNotation: false }),
+                hasRemaining: Number(transaction.montant_restant || 0) > 0,
+                payment: getPaymentLabel(transaction),
+                due: formatDate(transaction.date_echeance),
+              }))}
+              emptyText="Aucun achat fournisseur sur cette période"
+              paidLabel="Réglé"
+              remainingLabel="Solde"
+            />
+          ) : (
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 720 }}>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                      Aucun achat fournisseur sur cette période
-                    </TableCell>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Produit</TableCell>
+                    <TableCell align="right">Montant à payer</TableCell>
+                    <TableCell>Règlement</TableCell>
+                    <TableCell>Échéance</TableCell>
+                    <TableCell align="right">Payé</TableCell>
+                    <TableCell align="right">Solde</TableCell>
                   </TableRow>
-                ) : (
-                  fournisseurSoldeRows.map((transaction) => (
-                    <TableRow key={transaction.id_transaction} hover>
-                      <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
-                      <TableCell>
-                        {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {transaction.quantite} × {formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 800 }}>
-                        {formatMontant(transaction.montant_total, { useCompactNotation: false })}
-                      </TableCell>
-                      <TableCell>{getPaymentLabel(transaction)}</TableCell>
-                      <TableCell>{formatDate(transaction.date_echeance)}</TableCell>
-                      <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
-                        {formatMontant(transaction.montant_paye || 0, { useCompactNotation: false })}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
-                        {formatMontant(transaction.montant_restant || 0, { useCompactNotation: false })}
+                </TableHead>
+                <TableBody>
+                  {fournisseurSoldeRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                        Aucun achat fournisseur sur cette période
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  ) : (
+                    fournisseurSoldeRows.map((transaction) => (
+                      <TableRow key={transaction.id_transaction} hover>
+                        <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
+                        <TableCell>
+                          {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {transaction.quantite} × {formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 800 }}>
+                          {formatMontant(transaction.montant_total, { useCompactNotation: false })}
+                        </TableCell>
+                        <TableCell>{getPaymentLabel(transaction)}</TableCell>
+                        <TableCell>{formatDate(transaction.date_echeance)}</TableCell>
+                        <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
+                          {formatMontant(transaction.montant_paye || 0, { useCompactNotation: false })}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
+                          {formatMontant(transaction.montant_restant || 0, { useCompactNotation: false })}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
       </Box>
