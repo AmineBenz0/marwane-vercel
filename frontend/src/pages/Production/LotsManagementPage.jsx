@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import { Link, useSearchParams } from 'react-router-dom';
 import { batimentService } from '../../services/productionService';
 import LotPanel from './LotPanel';
 import { localToday, productionLink } from './useProductionView';
+import PageHeader from '../../components/Layout/PageHeader';
 
 export default function LotsManagementPage() {
   const [params] = useSearchParams();
@@ -38,8 +39,7 @@ export default function LotsManagementPage() {
       <Button component={Link} to={productionLink(historyBuildingId, params.get('date') || localToday())}
         startIcon={<ArrowBack />} sx={{ mb: 1.5 }}>Retour au bâtiment</Button>
     )}
-    {view === 'overview' && <><Typography component="h1" variant="h3" fontWeight={800} sx={{ mb: 1 }}>Gestion des lots</Typography>
-    <Typography color="text.secondary" sx={{ mb: 3 }}>Retrouvez les lots en cours et terminés de chaque bâtiment.</Typography></>}
+    {view === 'overview' && <PageHeader title="Gestion des lots" description="Retrouvez les lots en cours et terminés de chaque bâtiment." />}
     {loading ? <CircularProgress aria-label="Chargement des bâtiments" />
       : error ? <Alert severity="error" action={<Button onClick={() => setRevision((value) => value + 1)}>Réessayer</Button>}>{error}</Alert>
         : <LotPanel key={historyBuildingId ?? 'all'} buildings={buildings} managementMode

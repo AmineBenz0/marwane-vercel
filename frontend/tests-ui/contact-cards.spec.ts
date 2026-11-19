@@ -123,7 +123,7 @@ for (const plural of ['clients', 'fournisseurs'] as const) {
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Exporter Excel', exact: true }).click();
     expect((await downloadPromise).suggestedFilename()).toMatch(/\.xlsx$/);
-    await page.getByRole('button', { name: `Créer un ${state.singular}`, exact: true }).click();
+    await page.getByRole('button', { name: `Nouveau ${state.singular}`, exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('textbox').fill('Nouveau contact');
     if (plural === 'fournisseurs') {

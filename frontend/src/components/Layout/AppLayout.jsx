@@ -78,9 +78,9 @@ const NAV_SECTIONS = [
   {
     label: 'Ventes & achats',
     items: [
-      { text: 'Transactions', icon: <ReceiptIcon sx={{ fontSize: 20 }} />, path: '/transactions' },
-      { text: 'Créances clients', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/creances' },
-      { text: 'Dettes fournisseurs', icon: <MoneyOffIcon sx={{ fontSize: 20 }} />, path: '/dettes' },
+      { text: 'Ventes & achats', icon: <ReceiptIcon sx={{ fontSize: 20 }} />, path: '/transactions' },
+      { text: 'À encaisser', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/creances' },
+      { text: 'À payer', icon: <MoneyOffIcon sx={{ fontSize: 20 }} />, path: '/dettes' },
       { text: 'Clients', icon: <PeopleIcon sx={{ fontSize: 20 }} />, path: '/clients' },
       { text: 'Fournisseurs', icon: <BusinessIcon sx={{ fontSize: 20 }} />, path: '/fournisseurs' },
       { text: 'Produits', icon: <InventoryIcon sx={{ fontSize: 20 }} />, path: '/produits' },

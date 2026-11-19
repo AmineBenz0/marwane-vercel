@@ -47,7 +47,7 @@ it.each([false, true])('preserves fractional balances and signed movements (mobi
 it('preserves account and credit-letter amounts in movement choices', async () => {
   render(<CompteBancaireList />);
   await screen.findByText('1,25 MAD');
-  fireEvent.click(screen.getByRole('button', { name: 'Ajouter mouvement' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nouveau mouvement' }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Compte bancaire' }));
   fireEvent.click(await screen.findByRole('option', { name: /Banque test - 1,25\sMAD/ }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Type' }));

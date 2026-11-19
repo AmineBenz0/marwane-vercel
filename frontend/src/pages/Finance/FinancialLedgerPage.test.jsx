@@ -21,7 +21,7 @@ describe('FinancialLedgerPage', () => {
 
   it('renders the receivables workflow and confirms a payment', async () => {
     render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
-    expect(await screen.findByRole('heading', { name: 'Créances clients' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'À encaisser' })).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: /paiement/i }));
     expect(await screen.findByRole('dialog')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: /marquer comme payé|enregistrer le paiement/i }));

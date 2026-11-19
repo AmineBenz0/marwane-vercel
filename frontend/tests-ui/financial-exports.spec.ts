@@ -82,7 +82,7 @@ async function exportSheet(page: Page, click: () => Promise<void>, expectedSheet
   return (await exportWorkbook(page, click, expectedSheets)).worksheets[0];
 }
 
-async function readPdf(page: Page, buttonName = 'Export PDF') {
+async function readPdf(page: Page, buttonName = 'Exporter PDF') {
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: buttonName, exact: true }).click(),
@@ -223,7 +223,7 @@ test('monthly downloads agree on dated balances, projection labels and fractiona
   });
   await page.goto('/rapports/mensuel');
   await page.getByLabel('Mois du rapport').fill('2026-11');
-  const excel = page.getByRole('button', { name: 'Excel', exact: true });
+  const excel = page.getByRole('button', { name: 'Exporter Excel', exact: true });
   await expect(excel).toBeEnabled();
   const sheet = await exportSheet(page, () => excel.click());
   const items = new Map<string, unknown>();
@@ -249,7 +249,7 @@ test('monthly downloads agree on dated balances, projection labels and fractiona
   expect(valueCell('Remboursements clients (inclus dans les sorties)').value).toBe(0.01);
   expect(valueCell('Sorties caisse').value).toBe(0.01);
   await expect(page.getByText('Remboursements clients (inclus dans les sorties)')).toBeVisible();
-  const source = await readPdf(page, 'PDF');
+  const source = await readPdf(page, 'Exporter PDF');
   const pageCount = (source.match(/\/Type \/Page\b/g) || []).length;
   expect(pageCount).toBeGreaterThan(1);
   for (const label of ['Rapport mensuel', 'PROJECTION AU 30/11/26', 'ACTUEL AU 08/11/26', '195,00 MAD',
@@ -275,7 +275,7 @@ test('unpaid exports include the second API page and reconcile cent-level credit
   await page.goto('/transactions?view=non_payees');
   await expect(page.getByRole('button', { name: 'Non payées (2)', exact: true })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Ventes', exact: true }).locator('p')).toHaveText(/0,30?\sMAD/);
-  const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
+  const excel = page.getByRole('button', { name: 'Exporter Excel', exact: true });
   const sheet = await exportSheet(page, () => excel.click(), 2);
   const columns = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, index) => columns.set(String(cell.value), index));
@@ -302,7 +302,7 @@ test('quick filters share register rows and financial totals with Excel and PDF'
   ];
   const writes = await mockFinancialApi(page, transactions);
   await page.goto('/transactions');
-  const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
+  const excel = page.getByRole('button', { name: 'Exporter Excel', exact: true });
   const metric = (label: string) => page.getByRole('group', { name: label, exact: true }).locator('p');
   const table = page.getByRole('table');
   const allPartners = ['Client Test', 'Client historique', 'Fournisseur Test'];
@@ -351,7 +351,7 @@ test('quick filters share register rows and financial totals with Excel and PDF'
   await expect(page.getByRole('button', { name: 'Livraisons différées (0)', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(metric('Toutes les opérations')).toHaveText('0');
   await expect(excel).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Export PDF', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Exporter PDF', exact: true })).toBeDisabled();
   expect(writes).toEqual([]);
 });
 
@@ -371,7 +371,7 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
     ...txData.slice(1),
   ]);
   await page.goto('/transactions');
-  const excel = page.getByRole('button', { name: 'Export Excel', exact: true });
+  const excel = page.getByRole('button', { name: 'Exporter Excel', exact: true });
   await expect(excel).toBeEnabled();
   const workbook = await exportWorkbook(page, () => excel.click(), 2);
   expect(workbook.worksheets.map(sheet => sheet.name)).toEqual(['Transactions', 'Règlements']);
@@ -484,7 +484,7 @@ test('wide transaction PDF remains paginated and keeps deferred and payment deta
     '[STAGE DEMO 2026-10-12] Marché Central Rabat avec une raison sociale assez longue',
   );
   await page.goto('/transactions');
-  await expect(page.getByRole('button', { name: 'Export PDF', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Exporter PDF', exact: true })).toBeEnabled();
   const source = await readPdf(page);
   const pageCount = (source.match(/\/Type \/Page\b/g) || []).length;
   expect(pageCount).toBeGreaterThanOrEqual(3);

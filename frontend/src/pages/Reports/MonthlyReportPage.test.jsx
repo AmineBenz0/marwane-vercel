@@ -49,7 +49,7 @@ describe('MonthlyReportPage', () => {
     expect(await screen.findByText('3', { exact: true })).toBeVisible();
     expect(screen.getByText(/Variation nette stock/)).toBeVisible();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter Excel' }));
     await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ indicateur: 'Entrées banques' }),
@@ -72,8 +72,8 @@ describe('MonthlyReportPage', () => {
     await screen.findByRole('region', { name: 'Situation actuelle' });
     fireEvent.click(screen.getByRole('button', { name: 'Situation à la fin du mois' }));
     expect(await screen.findByText(/300,00/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter Excel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter PDF' }));
     const expected = [
       { indicateur: 'Solde caisse au 30/09/26', valeur: '100.00', type: 'money' },
       { indicateur: 'Solde Banque Test au 30/09/26', valeur: '300.00', type: 'money' },
@@ -96,7 +96,7 @@ describe('MonthlyReportPage', () => {
     fireEvent(window, new Event(CORRECTION_EVENT));
 
     expect(await screen.findByText(/99,99/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter PDF' }));
     expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
       expect.objectContaining({ ventes_nettes: '99.99', avoirs_commerciaux: '0.01' }),
       'rapport_mensuel_2026-09',
@@ -133,7 +133,7 @@ it('identifies future month-end balances as projections without changing the rec
   render(<MonthlyReportPage />);
   const snapshot = await screen.findByRole('button', { name: 'Projection à la fin du mois' });
   expect(snapshot).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Exporter Excel' }));
   await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalled());
   const firstRow = exportToExcelAdvanced.mock.calls[0][0][0];
   expect(firstRow).toEqual({ indicateur: 'Période', valeur: '01/11/26 – 30/11/26' });
@@ -159,7 +159,7 @@ it('keeps original sales, dated avoirs, and refunds distinct across PDF and Exce
   expect(await screen.findByText('Ventes nettes')).toBeVisible();
   expect(screen.getByText(/Ventes initiales.*Avoirs émis/)).toBeVisible();
   expect(screen.getByText('Remboursements clients (inclus dans les sorties)')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Exporter Excel' }));
   await waitFor(() => expect(exportToExcelAdvanced).toHaveBeenCalled());
   const rows = exportToExcelAdvanced.mock.calls.at(-1)[0];
   const byLabel = Object.fromEntries(rows.map(row => [row.indicateur, row.valeur]));
@@ -167,7 +167,7 @@ it('keeps original sales, dated avoirs, and refunds distinct across PDF and Exce
   expect(byLabel['Ventes initiales']).toBe('1500.00');
   expect(byLabel['Avoirs commerciaux émis']).toBe('600.00');
   expect(byLabel['Remboursements clients (inclus dans les sorties)']).toBe('600.00');
-  fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Exporter PDF' }));
   expect(exportMonthlyReportPDF).toHaveBeenCalledWith(
     expect.objectContaining({
       ventes: '1500.00', avoirs_commerciaux: '600.00',

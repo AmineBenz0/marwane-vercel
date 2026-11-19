@@ -27,6 +27,7 @@ import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import { get, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const clientValidationSchema = yup.object().shape({
   nom_client: yup
@@ -172,38 +173,25 @@ function ClientsList() {
 
   return (
     <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' }, fontWeight: 900 }}>
-            Clients
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Retrouvez rapidement un client, consultez son profil ou ajoutez-en un nouveau.
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1.5 }}>
-          <Button
-            variant="outlined"
-            startIcon={!isMobile && <FileDownloadIcon />}
-            onClick={handleExportExcel}
-            disabled={loading || clients.length === 0}
-          >
-            {isMobile ? 'Exporter' : 'Exporter Excel'}
-          </Button>
-          <Button variant="contained" startIcon={!isMobile && <AddIcon />} onClick={handleCreate}>
-            {isMobile ? 'Créer' : 'Créer un client'}
-          </Button>
-        </Box>
-      </Box>
+      <PageHeader
+        title="Clients"
+        description="Retrouvez rapidement un client, consultez son profil ou ajoutez-en un nouveau."
+        actions={(
+          <>
+            <Button
+              variant="outlined"
+              startIcon={!isMobile && <FileDownloadIcon />}
+              onClick={handleExportExcel}
+              disabled={loading || clients.length === 0}
+            >
+              {isMobile ? 'Exporter' : 'Exporter Excel'}
+            </Button>
+            <Button variant="contained" startIcon={!isMobile && <AddIcon />} onClick={handleCreate}>
+              {isMobile ? 'Nouveau' : 'Nouveau client'}
+            </Button>
+          </>
+        )}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>

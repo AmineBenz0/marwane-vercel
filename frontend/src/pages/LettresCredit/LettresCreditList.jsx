@@ -41,6 +41,7 @@ import lettreCreditService from '../../services/lettreCreditService';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
 import LCFormModal from './LCFormModal';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const FILTERS = [
   { value: 'disponibles', label: 'Non utilisées' },
@@ -248,37 +249,28 @@ function LettresCreditList() {
 
   return (
     <Box>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
-        sx={{ mb: 3 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 900, letterSpacing: '-0.04em' }}>
-            Lettres de crédit
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExport}
-            disabled={filteredLcs.length === 0}
-          >
-            Exporter
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            Nouvelle LC
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title="Lettres de crédit"
+        actions={(
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExport}
+              disabled={filteredLcs.length === 0}
+            >
+              Exporter Excel
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              Nouvelle LC
+            </Button>
+          </>
+        )}
+      />
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={4}>
