@@ -321,6 +321,10 @@ function TransactionsExcelRegister({
             size="small"
             sx={{
               minWidth: 800,
+              // Fixed column shares: long content wraps or is cut inside its column
+              // instead of pushing the table wider than the screen.
+              tableLayout: 'fixed',
+              width: '100%',
               '& th': {
                 py: 1.25,
                 px: 1,
@@ -345,6 +349,16 @@ function TransactionsExcelRegister({
               },
             }}
           >
+            <colgroup>
+              <col style={{ width: 92 }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '19%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: 40 }} />
+            </colgroup>
             <TableHead>
               <TableRow>
                 <TableCell>Type</TableCell>
@@ -433,33 +447,50 @@ const shorten = (value, max = 16) => (value && value.length > max ? `${value.sli
 
 // One short line per payment: "Chèque n° 123 · 50 MAD" (orange when a reference is missing).
 // Only the first lines are shown; the rest is summarised so a row never grows out of proportion.
+// Cancelled payments no longer count, so they are not listed.
+const getListedPayments = (transaction) => (transaction.paiements || [])
+  .filter((payment) => payment && payment.statut !== 'annule');
+
+const NATURE_LABELS = {
+  remboursement: 'Remboursement',
+  credit_transfere: 'Crédit transféré',
+  credit_recu: 'Crédit utilisé',
+};
+const NEGATIVE_NATURES = new Set(['remboursement', 'credit_transfere']);
+
+const hasMissingReference = (payment) => (
+  REFERENCE_PAYMENT_TYPES.has(payment.type_paiement) && !getPaymentReferenceValue(payment)
+);
+
 function PaymentLines({ transaction, formatMontant }) {
-  const payments = (transaction.paiements || []).filter(Boolean);
+  const payments = getListedPayments(transaction);
   if (payments.length === 0) return null;
   const visible = payments.slice(0, MAX_PAYMENT_LINES);
   const hidden = payments.length - visible.length;
   return (
-    <Box sx={{ mt: 0.25, maxWidth: 180, ml: 'auto' }}>
+    <Box sx={{ mt: 0.25 }}>
       {visible.map((payment, index) => {
         const reference = getPaymentReferenceValue(payment);
-        const missingReference = REFERENCE_PAYMENT_TYPES.has(payment.type_paiement) && !reference;
+        const missingReference = hasMissingReference(payment);
+        const natureLabel = NATURE_LABELS[payment.nature];
+        const sign = NEGATIVE_NATURES.has(payment.nature) ? '−' : '';
         const amount = payment.montant !== null && payment.montant !== undefined
-          ? ` · ${formatMontant(Math.abs(Number(payment.montant)))}` : '';
-        const full = `${getPaymentTypeLabel(payment)}${reference ? ` n° ${reference}` : ''}`;
+          ? ` · ${sign}${formatMontant(Math.abs(Number(payment.montant)))}` : '';
+        const type = `${natureLabel ? `${natureLabel} · ` : ''}${getPaymentTypeLabel(payment)}`;
         return (
           <Typography
             key={payment.id_paiement || index}
             variant="caption"
             display="block"
-            title={`${full}${amount}`}
-            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, lineHeight: 1.3, mb: 0.25, overflowWrap: 'anywhere' }}
+            title={`${type}${reference ? ` n° ${reference}` : ''}${amount}`}
+            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, lineHeight: 1.3, mb: 0.25, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
           >
-            {getPaymentTypeLabel(payment)}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
+            {type}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
           </Typography>
         );
       })}
       {hidden > 0 && (
-        <Typography variant="caption" display="block" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+        <Typography variant="caption" display="block" sx={{ color: 'text.secondary', fontStyle: 'italic', whiteSpace: 'normal' }}>
           + {hidden} autre{hidden > 1 ? 's' : ''} paiement{hidden > 1 ? 's' : ''}
         </Typography>
       )}
@@ -473,7 +504,11 @@ function DeliveryInfo({ transaction, inactive }) {
   const waiting = Number(transaction.quantite_en_attente);
   const covered = Number(transaction.quantite_couverte);
   return (
-    <Stack spacing={0.5} alignItems="flex-start" sx={{ mt: 0.5 }}>
+    <Stack
+      spacing={0.5}
+      alignItems="flex-start"
+      sx={{ mt: 0.5, '& .MuiChip-root': { height: 'auto', maxWidth: '100%' }, '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
+    >
       <DeferredSaleStatusBadge sale={transaction} />
       {transaction.date_livraison_prevue && (
         <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>
@@ -596,8 +631,7 @@ function TransactionMobileCard({
         </Stack>
       </Stack>
       <DeliveryInfo transaction={transaction} inactive={inactive} />
-      {!inactive && (transaction.paiements || []).some((payment) => payment
-        && REFERENCE_PAYMENT_TYPES.has(payment.type_paiement) && !getPaymentReferenceValue(payment)) && (
+      {!inactive && getListedPayments(transaction).some(hasMissingReference) && (
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'warning.dark', fontWeight: 700 }}>
           Référence de paiement manquante
         </Typography>
@@ -659,12 +693,12 @@ function TransactionExcelRow({
         />
       </TableCell>
       <TableCell>
-        <Typography fontWeight={850} title={partnerName} sx={{ maxWidth: 105, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography fontWeight={850} title={partnerName} sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {partnerName}
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography title={productName} sx={{ maxWidth: 105, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography title={productName} sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {productName}
         </Typography>
         <Typography variant="caption" color="text.secondary">
