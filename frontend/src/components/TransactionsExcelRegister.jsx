@@ -173,8 +173,8 @@ function TransactionsExcelRegister({
   emptyDescription = "Essayez d'élargir la période ou de supprimer certains filtres.",
 }) {
   const theme = useTheme();
-  // Below ~1300px an 8-column table cannot fit without sideways scrolling: use cards instead.
-  const isMobile = useMediaQuery(theme.breakpoints.down(1300));
+  // Below 'lg' (1200px) the 8-column table cannot fit next to the sidebar: use cards instead.
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const groupedRows = useMemo(() => {
     const sortedRows = [...rows].sort((a, b) => {
       const dateDiff = getDateTimestamp(b.date_transaction) - getDateTimestamp(a.date_transaction);
@@ -350,7 +350,7 @@ function TransactionsExcelRegister({
                 <TableCell>Type</TableCell>
                 <TableCell>Client / Fournisseur</TableCell>
                 <TableCell>Produit</TableCell>
-                <TableCell align="right">Montant</TableCell>
+                <TableCell align="right">Total net</TableCell>
                 <TableCell align="right">Déjà payé</TableCell>
                 <TableCell align="right">Reste</TableCell>
                 <TableCell>Statut</TableCell>
