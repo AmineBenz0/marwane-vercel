@@ -16,7 +16,9 @@ import {
   TableRow,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   Delete as DeleteIcon,
   Edit as EditIcon,
@@ -27,6 +29,8 @@ import {
 import { format } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import PaymentStatusBadge from './PaymentStatusBadge';
+import DeferredSaleStatusBadge from '../pages/Transactions/DeferredSaleStatusBadge';
+import { transactionNetAmount } from '../utils/transactionAmounts';
 
 const PAYMENT_TYPE_LABELS = {
   cash: 'Espèce',
@@ -106,6 +110,8 @@ const formatPaymentAmountForSummary = (value) => {
   );
 };
 
+const COLUMN_COUNT = 8;
+
 const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountForSummary) => {
   if (!payment) return null;
 
@@ -138,8 +144,7 @@ export const getPaymentReglementSummary = (transaction, formatAmount = formatPay
 };
 
 const getSignedAmount = (transaction, field = 'montant_total') => {
-  const value = field === 'montant_total'
-    ? (transaction.montant_net ?? transaction.montant_total) : transaction[field];
+  const value = field === 'montant_total' ? transactionNetAmount(transaction) : transaction[field];
   const amount = Math.abs(Number(value || 0));
   return isClientTransaction(transaction) ? amount : -amount;
 };
@@ -167,6 +172,9 @@ function TransactionsExcelRegister({
   emptyTitle = 'Aucune transaction trouvée',
   emptyDescription = "Essayez d'élargir la période ou de supprimer certains filtres.",
 }) {
+  const theme = useTheme();
+  // Below 'lg' (1200px) the 8-column table cannot fit next to the sidebar: use cards instead.
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const groupedRows = useMemo(() => {
     const sortedRows = [...rows].sort((a, b) => {
       const dateDiff = getDateTimestamp(b.date_transaction) - getDateTimestamp(a.date_transaction);
@@ -190,18 +198,21 @@ function TransactionsExcelRegister({
         followUpCount: 0,
       };
 
-      const total = Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
-      if (isClientTransaction(transaction)) {
-        group.entries += total;
-      } else {
-        group.exits += total;
-      }
-      group.paid += Number(transaction.montant_paye || 0);
-      group.remaining += Number(transaction.montant_restant || 0);
+      // Cancelled (inactive) transactions stay visible but never count in the totals.
+      if (transaction.est_actif !== false) {
+        const total = Math.abs(transactionNetAmount(transaction));
+        if (isClientTransaction(transaction)) {
+          group.entries += total;
+        } else {
+          group.exits += total;
+        }
+        group.paid += Math.abs(Number(transaction.montant_paye || 0));
+        group.remaining += Number(transaction.montant_restant || 0);
 
-      const status = getPaymentStatus(transaction);
-      if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
-        group.followUpCount += 1;
+        const status = getPaymentStatus(transaction);
+        if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
+          group.followUpCount += 1;
+        }
       }
 
       group.rows.push(transaction);
@@ -253,6 +264,47 @@ function TransactionsExcelRegister({
           />
         </Stack>
 
+        {isMobile ? (
+          <Stack spacing={1.5}>
+            {loading ? (
+              <Typography align="center" sx={{ py: 4 }}>Chargement des transactions...</Typography>
+            ) : groupedRows.length === 0 ? (
+              <Box sx={{ py: 4, textAlign: 'center' }}>
+                <Typography fontWeight={800}>{emptyTitle}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{emptyDescription}</Typography>
+              </Box>
+            ) : groupedRows.map((group) => (
+              <Box key={group.dateKey}>
+                <Box sx={{ ...groupRowSx, px: 1.5, py: 0.75, borderRadius: 2, mb: 1, fontSize: '0.8rem' }}>
+                  {group.label} · {group.rows.length} opération{group.rows.length > 1 ? 's' : ''}
+                </Box>
+                <Stack spacing={1}>
+                  {group.rows.map((transaction) => (
+                    <TransactionMobileCard
+                      key={transaction.id_transaction}
+                      transaction={transaction}
+                      getClientOuFournisseur={getClientOuFournisseur}
+                      produitsMap={produitsMap}
+                      batimentsMap={batimentsMap}
+                      formatMontant={formatAmount}
+                      onView={onView}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onReactivate={onReactivate}
+                    />
+                  ))}
+                </Stack>
+                <Box sx={{ ...summaryRowSx, px: 1.5, py: 0.75, borderRadius: 2, mt: 1, fontSize: '0.8rem' }}>
+                  {getDailySummaryLabel(group)}
+                  {' · '}
+                  {group.followUpCount > 0
+                    ? `${group.followUpCount} à suivre`
+                    : 'Tout est réglé'}
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        ) : (
         <TableContainer
           sx={{
             width: '100%',
@@ -268,14 +320,19 @@ function TransactionsExcelRegister({
           <Table
             size="small"
             sx={{
-              minWidth: { xs: 1120, md: 1240 },
+              minWidth: 800,
+              // Fixed column shares: long content wraps or is cut inside its column
+              // instead of pushing the table wider than the screen.
+              tableLayout: 'fixed',
+              width: '100%',
               '& th': {
                 py: 1.25,
-                px: 1.5,
+                px: 1,
                 bgcolor: '#edf5ef',
                 color: '#263d3a',
                 fontWeight: 900,
-                whiteSpace: 'nowrap',
+                whiteSpace: 'normal',
+                lineHeight: 1.25,
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em',
                 fontSize: { xs: '0.68rem', md: '0.76rem' },
@@ -284,7 +341,7 @@ function TransactionsExcelRegister({
               },
               '& td': {
                 py: 1.15,
-                px: 1.5,
+                px: 1,
                 whiteSpace: 'nowrap',
                 fontSize: { xs: '0.72rem', md: '0.8125rem' },
                 borderBottom: '1px solid',
@@ -292,18 +349,24 @@ function TransactionsExcelRegister({
               },
             }}
           >
+            <colgroup>
+              <col style={{ width: 92 }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '19%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: 40 }} />
+            </colgroup>
             <TableHead>
               <TableRow>
-                <TableCell sx={stickyDateHeaderSx}>Date</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Client / Fournisseur</TableCell>
                 <TableCell>Produit</TableCell>
-                <TableCell>Bâtiment</TableCell>
-                <TableCell align="right">Quantité</TableCell>
-                <TableCell align="right">Montant net</TableCell>
-                <TableCell align="right">Payé</TableCell>
+                <TableCell align="right">Total net</TableCell>
+                <TableCell align="right">Déjà payé</TableCell>
                 <TableCell align="right">Reste</TableCell>
-                <TableCell>Règlement</TableCell>
                 <TableCell>Statut</TableCell>
                 <TableCell align="center" sx={stickyActionHeaderSx} aria-label="Actions" />
               </TableRow>
@@ -311,13 +374,13 @@ function TransactionsExcelRegister({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={12} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 5 }}>
                     Chargement des transactions...
                   </TableCell>
                 </TableRow>
               ) : groupedRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 5 }}>
                     <Typography fontWeight={800}>{emptyTitle}</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       {emptyDescription}
@@ -328,9 +391,8 @@ function TransactionsExcelRegister({
                 groupedRows.map((group) => (
                   <React.Fragment key={group.dateKey}>
                     <TableRow>
-                      <TableCell sx={stickyDateGroupSx}>{group.label}</TableCell>
-                      <TableCell colSpan={11} sx={groupRowSx}>
-                        Journée du {group.label} - {group.rows.length} opération{group.rows.length > 1 ? 's' : ''}
+                      <TableCell colSpan={COLUMN_COUNT} sx={groupRowSx}>
+                        {group.label} · {group.rows.length} opération{group.rows.length > 1 ? 's' : ''}
                       </TableCell>
                     </TableRow>
 
@@ -350,8 +412,8 @@ function TransactionsExcelRegister({
                     ))}
 
                     <TableRow>
-                      <TableCell sx={stickyDateSummarySx}>Total jour</TableCell>
-                      <TableCell colSpan={5} sx={summaryRowSx}>
+                      <TableCell sx={summaryRowSx}>Total jour</TableCell>
+                      <TableCell colSpan={2} sx={{ ...summaryRowSx, whiteSpace: 'normal', minWidth: 0 }}>
                         {getDailySummaryLabel(group)}
                       </TableCell>
                       <TableCell align="right" sx={summaryRowSx}>
@@ -361,9 +423,9 @@ function TransactionsExcelRegister({
                       </TableCell>
                       <TableCell align="right" sx={summaryRowSx}>{formatAmount(group.paid)}</TableCell>
                       <TableCell align="right" sx={summaryRowSx}>{formatAmount(group.remaining)}</TableCell>
-                      <TableCell colSpan={3} sx={summaryRowSx}>
+                      <TableCell colSpan={2} sx={summaryRowSx}>
                         {group.followUpCount > 0
-                          ? `${group.followUpCount} opération${group.followUpCount > 1 ? 's' : ''} à suivre`
+                          ? `${group.followUpCount} à suivre`
                           : 'Tout est réglé'}
                       </TableCell>
                     </TableRow>
@@ -373,54 +435,217 @@ function TransactionsExcelRegister({
             </TableBody>
           </Table>
         </TableContainer>
+        )}
 
       </CardContent>
     </Card>
   );
 }
 
-function PaymentReglementsCell({ payments, formatMontant }) {
-  if (!payments || payments.length === 0) {
-    return <Typography color="text.secondary">Aucun règlement</Typography>;
-  }
+const MAX_PAYMENT_LINES = 2;
+const shorten = (value, max = 16) => (value && value.length > max ? `${value.slice(0, max - 1)}…` : value);
 
+// One short line per payment: "Chèque n° 123 · 50 MAD" (orange when a reference is missing).
+// Only the first lines are shown; the rest is summarised so a row never grows out of proportion.
+// Cancelled payments no longer count, so they are not listed.
+const getListedPayments = (transaction) => (transaction.paiements || [])
+  .filter((payment) => payment && payment.statut !== 'annule');
+
+const NATURE_LABELS = {
+  remboursement: 'Remboursement',
+  credit_transfere: 'Crédit transféré',
+  credit_recu: 'Crédit utilisé',
+};
+const NEGATIVE_NATURES = new Set(['remboursement', 'credit_transfere']);
+
+const hasMissingReference = (payment) => (
+  REFERENCE_PAYMENT_TYPES.has(payment.type_paiement) && !getPaymentReferenceValue(payment)
+);
+
+function PaymentLines({ transaction, formatMontant }) {
+  const payments = getListedPayments(transaction);
+  if (payments.length === 0) return null;
+  const visible = payments.slice(0, MAX_PAYMENT_LINES);
+  const hidden = payments.length - visible.length;
   return (
-    <Box sx={{ display: 'flex', gap: 0.65, flexWrap: 'wrap', maxWidth: 380 }}>
-      {payments.map((payment, index) => {
-        const label = getPaymentReglementLabel(payment, formatMontant);
+    <Box sx={{ mt: 0.25 }}>
+      {visible.map((payment, index) => {
         const reference = getPaymentReferenceValue(payment);
-        const missingReference = REFERENCE_PAYMENT_TYPES.has(payment?.type_paiement) && !reference;
-        const isLc = payment?.type_paiement === 'lc';
-        const isCash = payment?.type_paiement === 'cash';
-        const color = missingReference ? '#9a5b00' : (isLc ? '#315f85' : '#0f5f4b');
-        const backgroundColor = missingReference
-          ? 'rgba(237, 108, 2, 0.12)'
-          : (isLc ? 'rgba(49, 95, 133, 0.12)' : 'rgba(16, 114, 90, 0.10)');
-
+        const missingReference = hasMissingReference(payment);
+        const natureLabel = NATURE_LABELS[payment.nature];
+        const sign = NEGATIVE_NATURES.has(payment.nature) ? '−' : '';
+        const amount = payment.montant !== null && payment.montant !== undefined
+          ? ` · ${sign}${formatMontant(Math.abs(Number(payment.montant)))}` : '';
+        const type = `${natureLabel ? `${natureLabel} · ` : ''}${getPaymentTypeLabel(payment)}`;
         return (
-          <Tooltip
-            key={payment.id_paiement || `${payment.type_paiement}-${index}`}
-            title={label}
+          <Typography
+            key={payment.id_paiement || index}
+            variant="caption"
+            display="block"
+            title={`${type}${reference ? ` n° ${reference}` : ''}${amount}`}
+            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, lineHeight: 1.3, mb: 0.25, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
           >
-            <Chip
-              size="small"
-              label={label}
-              sx={{
-                maxWidth: isCash ? 140 : 270,
-                height: 24,
-                fontWeight: 850,
-                color,
-                backgroundColor,
-                '& .MuiChip-label': {
-                  px: 0.9,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                },
-              }}
-            />
-          </Tooltip>
+            {type}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
+          </Typography>
         );
       })}
+      {hidden > 0 && (
+        <Typography variant="caption" display="block" sx={{ color: 'text.secondary', fontStyle: 'italic', whiteSpace: 'normal' }}>
+          + {hidden} autre{hidden > 1 ? 's' : ''} paiement{hidden > 1 ? 's' : ''}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+// Deferred-delivery details (status, planned date, eggs still to produce).
+function DeliveryInfo({ transaction, inactive }) {
+  if (!transaction.est_promesse) return null;
+  const waiting = Number(transaction.quantite_en_attente);
+  const covered = Number(transaction.quantite_couverte);
+  return (
+    <Stack
+      spacing={0.5}
+      alignItems="flex-start"
+      sx={{ mt: 0.5, '& .MuiChip-root': { height: 'auto', maxWidth: '100%' }, '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
+    >
+      <DeferredSaleStatusBadge sale={transaction} />
+      {transaction.date_livraison_prevue && (
+        <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>
+      )}
+      {!inactive && waiting > 0 && (
+        <Typography variant="caption">
+          {covered > 0 ? `${formatNumberValue(covered)} œufs réservés · ` : ''}{formatNumberValue(waiting)} à produire
+        </Typography>
+      )}
+    </Stack>
+  );
+}
+
+function RowActionsMenu({ transaction, inactive, bg = 'transparent', onView, onEdit, onDelete, onReactivate }) {
+  const [anchor, setAnchor] = useState(null);
+  const hasRowActions = Boolean(onView || (onEdit && !inactive) || (inactive && onReactivate) || (!inactive && onDelete));
+  if (!hasRowActions) return null;
+  const run = (action) => { setAnchor(null); action(transaction); };
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <IconButton
+          size="small"
+          aria-label="Actions"
+          onClick={(event) => { event.stopPropagation(); setAnchor(event.currentTarget); }}
+          sx={{ width: 28, height: 28, p: 0.25, bgcolor: bg }}
+        >
+          <MoreVertIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        {onView && (
+          <MenuItem onClick={() => run(onView)}>
+            <VisibilityIcon fontSize="small" sx={{ mr: 1 }} />
+            Voir
+          </MenuItem>
+        )}
+        {onEdit && !inactive && (
+          <MenuItem onClick={() => run(onEdit)}>
+            <EditIcon fontSize="small" sx={{ mr: 1 }} />
+            Modifier
+          </MenuItem>
+        )}
+        {inactive && onReactivate ? (
+          <MenuItem onClick={() => run(onReactivate)}>
+            <RestoreIcon fontSize="small" sx={{ mr: 1 }} />
+            Réactiver
+          </MenuItem>
+        ) : onDelete ? (
+          <MenuItem onClick={() => run(onDelete)} sx={{ color: 'error.main' }}>
+            <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+            Désactiver
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </>
+  );
+}
+
+function TransactionMobileCard({
+  transaction, getClientOuFournisseur, produitsMap, batimentsMap, formatMontant,
+  onView, onEdit, onDelete, onReactivate,
+}) {
+  const isSale = isClientTransaction(transaction);
+  const inactive = transaction.est_actif === false;
+  const status = getPaymentStatus(transaction);
+  const remaining = Number(transaction.montant_restant || 0);
+  const partner = getClientOuFournisseur?.(transaction) || '-';
+  const product = produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`;
+  const batiment = transaction.id_batiment
+    ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`) : null;
+  const total = getSignedAmount(transaction);
+
+  return (
+    <Box
+      onClick={onView ? () => onView(transaction) : undefined}
+      sx={{
+        p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2.5,
+        bgcolor: inactive ? 'grey.50' : 'background.paper', opacity: inactive ? 0.72 : 1,
+        cursor: onView ? 'pointer' : 'default',
+      }}
+    >
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Chip
+              size="small"
+              label={isSale ? 'Vente' : 'Achat'}
+              sx={{
+                fontWeight: 900,
+                color: isSale ? 'success.main' : 'error.main',
+                backgroundColor: isSale ? 'rgba(46, 125, 50, 0.09)' : 'rgba(211, 47, 47, 0.09)',
+              }}
+            />
+            <Typography fontWeight={800} noWrap>{partner}</Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>
+            {formatNumberValue(transaction.quantite)} × {product}{batiment ? ` · ${batiment}` : ''}
+          </Typography>
+        </Box>
+        <Stack direction="row" alignItems="center" sx={{ flexShrink: 0 }}>
+          <Typography fontWeight={900} color={isSale ? 'success.main' : 'error.main'}>
+            {formatSignedAmount(total, formatMontant)}
+          </Typography>
+          <RowActionsMenu
+            transaction={transaction}
+            inactive={inactive}
+            onView={onView}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onReactivate={onReactivate}
+          />
+        </Stack>
+      </Stack>
+      <DeliveryInfo transaction={transaction} inactive={inactive} />
+      {!inactive && getListedPayments(transaction).some(hasMissingReference) && (
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'warning.dark', fontWeight: 700 }}>
+          Référence de paiement manquante
+        </Typography>
+      )}
+      {!inactive && (
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
+          <PaymentStatusBadge statut={status} />
+          {remaining > 0 && (
+            <Typography variant="body2" color="warning.main" fontWeight={800}>
+              Reste {formatMontant(remaining)}
+            </Typography>
+          )}
+        </Stack>
+      )}
     </Box>
   );
 }
@@ -448,23 +673,6 @@ function TransactionExcelRow({
   const totalAmount = getSignedAmount(transaction);
   const inactive = transaction.est_actif === false;
   const rowBackground = inactive ? 'grey.50' : 'background.paper';
-  const [actionMenuAnchor, setActionMenuAnchor] = useState(null);
-  const actionMenuOpen = Boolean(actionMenuAnchor);
-  const hasRowActions = Boolean(onView || (onEdit && !inactive) || (inactive && onReactivate) || (!inactive && onDelete));
-
-  const handleOpenActionMenu = (event) => {
-    setActionMenuAnchor(event.currentTarget);
-  };
-
-  const handleCloseActionMenu = () => {
-    setActionMenuAnchor(null);
-  };
-
-  const handleMenuAction = (action) => {
-    handleCloseActionMenu();
-    action(transaction);
-  };
-
   return (
     <TableRow
       hover={!inactive}
@@ -473,9 +681,6 @@ function TransactionExcelRow({
         '& td': { bgcolor: rowBackground },
       }}
     >
-      <TableCell sx={{ ...stickyDateBodySx, bgcolor: rowBackground }}>
-        {formatDateSafe(transaction.date_transaction)}
-      </TableCell>
       <TableCell>
         <Chip
           size="small"
@@ -488,121 +693,50 @@ function TransactionExcelRow({
         />
       </TableCell>
       <TableCell>
-        <Typography fontWeight={850} sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography fontWeight={850} title={partnerName} sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {partnerName}
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography title={productName} sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {productName}
         </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {formatNumberValue(transaction.quantite)}{batimentName !== '-' ? ` · ${batimentName}` : ''}
+        </Typography>
       </TableCell>
-      <TableCell>{batimentName}</TableCell>
-      <TableCell align="right">{formatNumberValue(transaction.quantite)}</TableCell>
       <TableCell align="right">
         <Typography component="span" fontWeight={900} color={isSale ? 'success.main' : 'error.main'}>
           {formatSignedAmount(totalAmount, formatMontant)}
         </Typography>
       </TableCell>
-      <TableCell align="right">{formatMontant(paidAmount)}</TableCell>
+      <TableCell align="right">
+        {formatMontant(paidAmount)}
+        <PaymentLines transaction={transaction} formatMontant={formatMontant} />
+      </TableCell>
       <TableCell align="right">
         <Typography component="span" fontWeight={800} color={remainingAmount > 0 ? 'warning.main' : 'success.main'}>
           {formatMontant(remainingAmount)}
         </Typography>
       </TableCell>
-      <TableCell sx={{ whiteSpace: 'normal', minWidth: 250 }}>
-        <PaymentReglementsCell payments={transaction.paiements || []} formatMontant={formatMontant} />
-      </TableCell>
-      <TableCell>
+      <TableCell sx={{ whiteSpace: 'normal' }}>
         {!inactive && <PaymentStatusBadge statut={paymentStatus} />}
+        <DeliveryInfo transaction={transaction} inactive={inactive} />
       </TableCell>
       <TableCell align="right" sx={stickyActionBodySx}>
-        <Stack direction="row" spacing={0} justifyContent="center" alignItems="center" sx={{ minWidth: 28 }}>
-          {hasRowActions && (
-            <>
-              <Box
-                sx={{
-                  width: 28,
-                  height: 28,
-                  display: 'grid',
-                  placeItems: 'center',
-                  borderRadius: 1,
-                  bgcolor: rowBackground,
-                }}
-              >
-                <Tooltip title="Actions">
-                  <IconButton size="small" onClick={handleOpenActionMenu} sx={{ width: 26, height: 26, p: 0.25 }}>
-                    <MoreVertIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Menu
-                anchorEl={actionMenuAnchor}
-                open={actionMenuOpen}
-                onClose={handleCloseActionMenu}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              >
-                {onView && (
-                  <MenuItem onClick={() => handleMenuAction(onView)}>
-                    <VisibilityIcon fontSize="small" sx={{ mr: 1 }} />
-                    Voir
-                  </MenuItem>
-                )}
-                {onEdit && !inactive && (
-                  <MenuItem onClick={() => handleMenuAction(onEdit)}>
-                    <EditIcon fontSize="small" sx={{ mr: 1 }} />
-                    Modifier
-                  </MenuItem>
-                )}
-                {inactive && onReactivate ? (
-                  <MenuItem onClick={() => handleMenuAction(onReactivate)}>
-                    <RestoreIcon fontSize="small" sx={{ mr: 1 }} />
-                    Réactiver
-                  </MenuItem>
-                ) : onDelete ? (
-                  <MenuItem onClick={() => handleMenuAction(onDelete)} sx={{ color: 'error.main' }}>
-                    <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                    Désactiver
-                  </MenuItem>
-                ) : null}
-              </Menu>
-            </>
-          )}
-        </Stack>
+        <RowActionsMenu
+          transaction={transaction}
+          inactive={inactive}
+          bg={rowBackground}
+          onView={onView}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onReactivate={onReactivate}
+        />
       </TableCell>
     </TableRow>
   );
 }
-
-const stickyDateHeaderSx = {
-  position: 'sticky',
-  left: 0,
-  zIndex: 4,
-  boxShadow: '1px 0 0 rgba(15, 23, 42, 0.08)',
-};
-
-const stickyDateBodySx = {
-  position: 'sticky',
-  left: 0,
-  zIndex: 2,
-  fontWeight: 850,
-  boxShadow: '1px 0 0 rgba(15, 23, 42, 0.08)',
-};
-
-const stickyDateGroupSx = {
-  ...stickyDateBodySx,
-  bgcolor: '#e8f2fa',
-  color: '#254c6d',
-  fontWeight: 950,
-};
-
-const stickyDateSummarySx = {
-  ...stickyDateBodySx,
-  bgcolor: '#e5f4ed',
-  color: '#0f5f4b',
-  fontWeight: 950,
-};
 
 const stickyActionHeaderSx = {
   position: 'sticky',
