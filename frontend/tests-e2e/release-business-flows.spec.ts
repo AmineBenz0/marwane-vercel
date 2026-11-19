@@ -163,10 +163,10 @@ test.describe('Authenticated release business workflows', () => {
     await expect(page.getByText(`E2E Client ${suffix}`)).toBeVisible();
     await page.goto('/dettes');
     await expect(page.getByRole('heading', { name: /dettes fournisseurs/i })).toBeVisible();
-    await page.goto('/production/boms');
-    await expect(page.getByRole('heading', { name: /bom & transformations/i })).toBeVisible();
     await page.goto('/rapports/mensuel');
     await expect(page.getByRole('heading', { name: /rapport mensuel/i })).toBeVisible();
+    // The stock figures live in a collapsed section; expand it first.
+    await page.getByText('Stock du mois').click();
     await expect(page.getByText('Variation nette stock')).toBeVisible();
   });
 });

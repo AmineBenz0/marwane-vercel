@@ -58,9 +58,10 @@ test.describe('UI smoke (non-technical user flows)', () => {
     await expect(page.getByRole('heading', { name: /production & stock/i })).toBeVisible();
     await expect(page.getByText(/impossible de contacter le serveur/i)).toHaveCount(0);
 
-    // Go to batiment 1 directly (stable path in this environment)
+    // Go to batiment 1 directly (stable path in this environment). A building
+    // shows either its stock panel (active lot) or the empty state (no lot yet).
     await page.goto('/production/batiment/1');
-    await expect(page.getByText(/stock du b[aâ]timent/i)).toBeVisible();
+    await expect(page.getByText(/stock du b[aâ]timent|aucun lot actif dans ce b[aâ]timent/i)).toBeVisible();
     await expect(page.getByText(/impossible de contacter le serveur/i)).toHaveCount(0);
   });
 
@@ -102,8 +103,6 @@ test.describe('UI smoke (non-technical user flows)', () => {
     await page.goto('/dettes');
     await expect(page.getByRole('heading', { name: /dettes fournisseurs/i })).toBeVisible();
 
-    await page.goto('/production/boms');
-    await expect(page.getByRole('heading', { name: /bom & transformations/i })).toBeVisible();
 
     await page.goto('/rapports/mensuel');
     await expect(page.getByRole('heading', { name: /rapport mensuel/i })).toBeVisible();

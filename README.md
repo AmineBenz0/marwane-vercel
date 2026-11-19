@@ -96,6 +96,17 @@ projet/
    npm install
    ```
 
+### Base de données locale vide
+
+Le schéma = migrations Alembic (`upgrade heads`, plusieurs têtes) + six scripts SQL de
+`backend/migrations/` dans un ordre fixe. Pour une base locale jetable :
+
+```bash
+cd backend
+DATABASE_URL="postgresql://postgres@localhost:5432/comptabilite_db?sslmode=disable" \
+  bash scripts/bootstrap_local_db.sh
+```
+
 ### Développement
 
 **Backend** (port 8000)

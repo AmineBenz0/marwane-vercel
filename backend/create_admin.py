@@ -9,6 +9,7 @@ Usage:
 
 import sys
 import getpass
+from pydantic import TypeAdapter, EmailStr, ValidationError
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine
 from app.models.user import Utilisateur
@@ -42,6 +43,14 @@ def create_admin_user(email: str = None, password: str = None, name: str = None)
                 print("❌ Les mots de passe ne correspondent pas!")
                 sys.exit(1)
         
+        # Use the same validation as the login endpoint (EmailStr): an address it
+        # rejects (e.g. admin@test.local) would create an account that can never sign in.
+        try:
+            email = TypeAdapter(EmailStr).validate_python(email)
+        except ValidationError as exc:
+            print(f"❌ Email invalide pour la connexion: {exc.errors()[0]['msg']}")
+            sys.exit(1)
+
         # Vérifier si l'utilisateur existe déjà (gérer le cas où la colonne est_actif n'existe pas encore)
         try:
             existing_user = db.query(Utilisateur).filter(Utilisateur.email == email).first()

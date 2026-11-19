@@ -210,7 +210,7 @@ function SmartFilterPanel({
         // Permet de passer un composant personnalisé
         if (filter.renderComponent) {
           return (
-            <Box key={filter.id} {...commonProps}>
+            <Box key={filter.id} sx={{ ...commonProps.sx, width: commonProps.fullWidth ? "100%" : undefined }}>
               {filter.renderComponent({
                 value,
                 onChange: (newValue) => handleFilterChange(filter.id, newValue),
