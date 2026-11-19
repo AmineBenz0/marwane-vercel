@@ -793,14 +793,11 @@ function ClientProfile() {
           </Grid>
 
           <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 1080 }}>
+            <Table size="small" sx={{ minWidth: 760 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Date</TableCell>
                   <TableCell>Produit</TableCell>
-                  <TableCell>Bâtiment</TableCell>
-                  <TableCell align="right">Quantité</TableCell>
-                  <TableCell align="right">Prix</TableCell>
                   <TableCell align="right">Montant net</TableCell>
                   <TableCell>Règlement</TableCell>
                   <TableCell>Échéance</TableCell>
@@ -811,7 +808,7 @@ function ClientProfile() {
               <TableBody>
                 {clientCreanceRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                       Aucune vente client sur cette période
                     </TableCell>
                   </TableRow>
@@ -819,10 +816,13 @@ function ClientProfile() {
                   clientCreanceRows.map((transaction) => (
                     <TableRow key={transaction.id_transaction} hover>
                       <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
-                      <TableCell>{produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}</TableCell>
-                      <TableCell>{transaction.id_batiment ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`) : '-'}</TableCell>
-                      <TableCell align="right">{transaction.quantite}</TableCell>
-                      <TableCell align="right">{formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}</TableCell>
+                      <TableCell>
+                        {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {transaction.quantite} × {formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}
+                          {transaction.id_batiment ? ` · ${batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`}` : ''}
+                        </Typography>
+                      </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 800 }}>
                         {formatMontant(Number(transaction.montant_net ?? transaction.montant_total ?? 0), { useCompactNotation: false })}
                       </TableCell>
