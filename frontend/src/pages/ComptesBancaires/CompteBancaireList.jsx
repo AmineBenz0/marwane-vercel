@@ -42,6 +42,7 @@ import lettreCreditService from '../../services/lettreCreditService';
 import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const SOURCE_OPTIONS = [
   { value: 'virement', label: 'Virement' },
@@ -270,40 +271,29 @@ function CompteBancaireList() {
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
-        sx={{ mb: 2.5 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={900}>
-            Comptes bancaires
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Voir l'argent disponible en banque, par compte, avec les derniers mouvements visibles directement.
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button
-            variant="outlined"
-            startIcon={!isMobile && <AddIcon />}
-            onClick={() => handleOpenMovement()}
-            disabled={comptes.length === 0}
-          >
-            Ajouter mouvement
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={!isMobile && <BankIcon />}
-            onClick={() => setOpenAdd(true)}
-          >
-            Nouveau compte
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title="Comptes bancaires"
+        description="Voir l'argent disponible en banque, par compte, avec les derniers mouvements visibles directement."
+        actions={(
+          <>
+            <Button
+              variant="outlined"
+              startIcon={!isMobile && <AddIcon />}
+              onClick={() => handleOpenMovement()}
+              disabled={comptes.length === 0}
+            >
+              Nouveau mouvement
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={!isMobile && <BankIcon />}
+              onClick={() => setOpenAdd(true)}
+            >
+              Nouveau compte
+            </Button>
+          </>
+        )}
+      />
 
       <Box
         sx={{

@@ -13,6 +13,7 @@ import useProductionView, { isClosingDayToday, productionLink } from './useProdu
 import useProductionStock from './useProductionStock';
 import { DailyActivity, DailySectionHeader, StockSummary } from './ProductionViews';
 import useNotificationStore from '../../store/notificationStore';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const formatNumber = (value) => value == null ? '—' : Number(value).toLocaleString('fr-FR');
 const formatEggs = (value) => formatNumber(value) + ' œufs';
@@ -85,10 +86,10 @@ function ProductionDashboard() {
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
       <ProductionDeferredNotice savedProduction={savedProduction} />
-      <Box sx={{ mb: 3 }}>
-        <Typography component="h1" variant="h3" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, letterSpacing: '-0.04em' }}>Production & stock</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1 }}>Le stock disponible, la collecte et les saisies de vos bâtiments.</Typography>
-      </Box>
+      <PageHeader
+        title="Production & stock"
+        description="Le stock disponible, la collecte et les saisies de vos bâtiments."
+      />
       <Box component="section" aria-label="Stock actuel" aria-busy={stockLoading}>
         {stockLoading ? <Box sx={{ p: 3 }}><CircularProgress size={24} aria-label="Chargement du stock actuel" /></Box>
           : stockError ? <Alert severity="error" sx={{ mb: 2.5 }} action={<Button color="inherit" onClick={reloadStock}>Réessayer le stock</Button>}>{stockError}</Alert>

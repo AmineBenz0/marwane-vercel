@@ -30,6 +30,7 @@ import {
   weekLabel,
   weekStart,
 } from './globalOverviewCalculations';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const COLUMN_GROUPS = [
   { key: 'effectif', label: 'Effectif & mortalité', fill: ['#eaf0fc', '#283958'], edge: ['#b8c8ec', '#536d9d'] },
@@ -570,11 +571,11 @@ function GlobalOverviewPage() {
 
   return (
     <Box sx={{ pb: 4, minWidth: 0 }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={1.25} sx={{ mb: 1.5 }}>
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={800}>Suivi global</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>Registre de production et de coûts</Typography>
-        </Box>
+      <PageHeader
+        title="Suivi global"
+        description="Registre de production et de coûts, lot par lot."
+        sx={{ mb: 2 }}
+        actions={(
         <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
           <Button size="small" sx={{ display: { xs: demosEnabled ? 'inline-flex' : 'none', sm: 'none' } }} aria-expanded={actionsOpen} aria-controls="overview-actions" onClick={() => setActionsOpen((open) => !open)}>Options</Button>
           <Box id="overview-actions" sx={{ display: { xs: actionsOpen ? 'block' : 'none', sm: 'block' }, order: { xs: 3, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
@@ -588,7 +589,8 @@ function GlobalOverviewPage() {
             <MenuItem onClick={() => handleExport('pdf')}>PDF (.pdf)</MenuItem>
           </Menu>
         </Stack>
-      </Stack>
+        )}
+      />
       {!demoMode && data?.unassignedExcluded && (
         <Alert severity="info" sx={{ mb: 1.5 }}>
           Les charges et ventes sans lot ni bâtiment ne sont pas réparties entre plusieurs lots actifs. Elles restent dans les rapports financiers généraux.

@@ -38,6 +38,7 @@ import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportCaisseReport } from '../../utils/exportToPDF';
 import { formatMontant } from '../../utils/formatNumber';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const PERIODS = [
   { value: '30days', label: '30 derniers jours' },
@@ -254,34 +255,23 @@ function Caisse() {
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
-        sx={{ mb: 2.5 }}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={900}>
-            Caisse
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Voir l'argent disponible maintenant, sans répéter les détails déjà présents dans transactions, LC ou comptes bancaires.
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button variant="outlined" startIcon={!isMobile && <RefreshIcon />} onClick={loadData} disabled={loading}>
-            Actualiser
-          </Button>
-          <Button variant="outlined" startIcon={!isMobile && <DownloadIcon />} onClick={handleExportExcel} disabled={visibleMovements.length === 0}>
-            Excel
-          </Button>
-          <Button variant="contained" onClick={handleExportPDF} disabled={visibleMovements.length === 0}>
-            PDF
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title="Caisse"
+        description="L'argent disponible maintenant : espèces en caisse et lettres de crédit utilisables."
+        actions={(
+          <>
+            <Button variant="outlined" startIcon={!isMobile && <RefreshIcon />} onClick={loadData} disabled={loading}>
+              Actualiser
+            </Button>
+            <Button variant="outlined" startIcon={!isMobile && <DownloadIcon />} onClick={handleExportExcel} disabled={visibleMovements.length === 0}>
+              Exporter Excel
+            </Button>
+            <Button variant="outlined" onClick={handleExportPDF} disabled={visibleMovements.length === 0}>
+              Exporter PDF
+            </Button>
+          </>
+        )}
+      />
 
       {error && (
         <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2.5, borderRadius: 3 }}>

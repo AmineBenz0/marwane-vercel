@@ -58,6 +58,7 @@ import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
 import TransactionsExcelRegister from '../../components/TransactionsExcelRegister';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
 
@@ -618,60 +619,33 @@ function TransactionsList() {
 
   return (
     <Box sx={{ maxWidth: 1480, mx: 'auto', overflowX: 'hidden' }}>
-      <Box
-        sx={{
-          p: { xs: 2, md: 3 },
-          mb: 3,
-          borderRadius: 4,
-          border: '1px solid',
-          borderColor: 'divider',
-          background:
-            'linear-gradient(135deg, rgba(240,253,250,0.92), rgba(255,251,235,0.82)), #fff',
-        }}
-      >
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          justifyContent="space-between"
-          alignItems={{ xs: 'stretch', md: 'flex-start' }}
-          spacing={2}
-        >
-          <Box>
-            <Typography
-              component="h1"
-              sx={{
-                fontSize: { xs: '1.8rem', md: '2.45rem' },
-                fontWeight: 900,
-                letterSpacing: 0,
-                color: '#17211D',
-              }}
-            >
-              Ventes & achats
-            </Typography>
-          </Box>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+      <PageHeader
+        title="Ventes & achats"
+        description="Toutes les ventes aux clients et les achats aux fournisseurs, jour par jour."
+        actions={(
+          <>
             <Button
               variant="outlined"
               startIcon={<FileDownloadIcon />}
               onClick={() => handleExport('excel')}
               disabled={loading || exporting || rowsForExport.length === 0}
             >
-              Export Excel
+              Exporter Excel
             </Button>
             <Button
               variant="outlined"
-              color="error"
               startIcon={<PictureAsPdfIcon />}
               onClick={() => handleExport('pdf')}
               disabled={loading || exporting || rowsForExport.length === 0}
             >
-              Export PDF
+              Exporter PDF
             </Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
               Nouvelle transaction
             </Button>
-          </Stack>
-        </Stack>
-      </Box>
+          </>
+        )}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>

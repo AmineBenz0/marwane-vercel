@@ -32,6 +32,7 @@ import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { getProductUsage, productUsageLabels } from '../../utils/productUsage';
 import { deferredStockQuantities } from '../Transactions/deferredStockQuantities';
 import { loadTransactionPages } from '../Transactions/transactionPages';
+import PageHeader from '../../components/Layout/PageHeader';
 
 const formatMoney = (value, maximumFractionDigits = 2) => {
   const amount = Number(value || 0);
@@ -269,45 +270,29 @@ function ProduitsList() {
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'flex-start' }}
-        spacing={2}
-        sx={{ mb: 2.5 }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            component="h1"
-            fontWeight={900}
-            sx={{ fontSize: { xs: '1.65rem', sm: '2rem', md: '2.25rem' } }}
-          >
-            Produits
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 760 }}>
-            Chaque produit est vendu à un client ou acheté chez un fournisseur.
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-          <Button
-            variant="outlined"
-            startIcon={!isMobile && <FileDownloadIcon />}
-            onClick={handleExportExcel}
-            disabled={loading || !hasLoaded || filteredProduits.length === 0}
-          >
-            {isMobile ? 'Exporter' : 'Exporter Excel'}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={!isMobile && <AddIcon />}
-            onClick={handleCreate}
-          >
-            {isMobile ? 'Créer' : 'Créer un produit'}
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title="Produits"
+        description="Chaque produit est vendu à un client ou acheté chez un fournisseur."
+        actions={(
+          <>
+            <Button
+              variant="outlined"
+              startIcon={!isMobile && <FileDownloadIcon />}
+              onClick={handleExportExcel}
+              disabled={loading || !hasLoaded || filteredProduits.length === 0}
+            >
+              {isMobile ? 'Exporter' : 'Exporter Excel'}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={!isMobile && <AddIcon />}
+              onClick={handleCreate}
+            >
+              {isMobile ? 'Nouveau' : 'Nouveau produit'}
+            </Button>
+          </>
+        )}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
