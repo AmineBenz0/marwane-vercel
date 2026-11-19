@@ -41,6 +41,8 @@ function LettreCreditDetail() {
   const [correction, setCorrection] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyError, setHistoryError] = useState('');
+  // A 409 is a business-rule refusal (e.g. the LC must be reconciled first), not a failure.
+  const [historyBlocked, setHistoryBlocked] = useState(false);
   const [reload, setReload] = useState(0);
   useCorrectionRefresh(() => setReload(v => v + 1));
 
@@ -50,10 +52,13 @@ function LettreCreditDetail() {
       if (!lc) setLoading(true);
       try {
         const [data, allCessions, context] = await Promise.all([lettreCreditService.getById(id), lettreCreditService.getCessions(),
-          get(`/lettres-credit/${id}/correction-context`).catch(err => ({ error: err.message }))]);
+          // silent: this panel reports the problem inline (and the correction dialog explains
+          // it again), so the global error toast would only duplicate it on every page open.
+          get(`/lettres-credit/${id}/correction-context`, { silent: true })
+            .catch(err => ({ error: err.message, blocked: err.status === 409 }))]);
         if (!active) return;
         setLc(data);
-        setHistory(context.history || []); setHistoryError(context.error || '');
+        setHistory(context.history || []); setHistoryError(context.error || ''); setHistoryBlocked(Boolean(context.blocked));
         setCessions(allCessions.filter((cession) => cession.id_lc === parseInt(id, 10)));
       } catch (err) {
         if (!active) return;
@@ -208,7 +213,9 @@ function LettreCreditDetail() {
       </Grid>
       <Box sx={{ mt: 3 }}>
         <Typography component="h2" variant="h6">Historique des modifications</Typography>
-        {historyError && <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{historyError}</Alert>}
+        {historyError && (historyBlocked
+          ? <Alert severity="warning">{historyError}</Alert>
+          : <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{historyError}</Alert>)}
         {history.map(row => <Paper variant="outlined" key={row.operation_id} sx={{ p: 2, mt: 1 }}>
           <Typography>{formatDate(row.recorded_at)} · Utilisateur n° {row.actor_id}</Typography>
           <Typography sx={{ overflowWrap: 'anywhere' }}>{row.reason}</Typography>
