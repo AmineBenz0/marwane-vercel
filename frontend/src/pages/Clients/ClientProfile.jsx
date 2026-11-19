@@ -67,6 +67,7 @@ import TransactionForm from '../Transactions/TransactionForm';
 import ClientDeferredSales from './ClientDeferredSales';
 import FinancialInsights from '../../components/FinancialInsights/FinancialInsights';
 import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
+import BalanceCardList from '../../components/BalanceCardList';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
 import { get, put, post } from '../../services/api';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -102,6 +103,8 @@ function ClientProfile() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // The balance table needs ~760px; below 'lg' (with the sidebar) it would scroll sideways.
+  const narrowBalance = useMediaQuery(theme.breakpoints.down('lg'));
   const notification = useNotification();
 
   // États pour les données
@@ -638,6 +641,7 @@ function ClientProfile() {
         </Button>
         <Box sx={{ 
           flexGrow: 1, 
+          minWidth: 0,
           display: 'flex', 
           flexDirection: { xs: 'column', sm: 'row' },
           alignItems: { xs: 'flex-start', sm: 'center' }, 
@@ -647,7 +651,7 @@ function ClientProfile() {
           <Typography 
             variant="h4" 
             component="h1"
-            sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
+            sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' }, overflowWrap: 'anywhere', minWidth: 0 }}
           >
             {client.nom_client}
           </Typography>
@@ -792,54 +796,74 @@ function ClientProfile() {
             </Grid>
           </Grid>
 
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 1080 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Produit</TableCell>
-                  <TableCell>Bâtiment</TableCell>
-                  <TableCell align="right">Quantité</TableCell>
-                  <TableCell align="right">Prix</TableCell>
-                  <TableCell align="right">Montant net</TableCell>
-                  <TableCell>Règlement</TableCell>
-                  <TableCell>Échéance</TableCell>
-                  <TableCell align="right">Encaissé</TableCell>
-                  <TableCell align="right">Reste</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {clientCreanceRows.length === 0 ? (
+          {narrowBalance ? (
+            <BalanceCardList
+              rows={clientCreanceRows.map((transaction) => ({
+                key: transaction.id_transaction,
+                title: produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`,
+                date: formatDate(transaction.date_transaction),
+                detail: `${transaction.quantite} × ${formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}` + (transaction.id_batiment ? ` · ${batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`}` : ''),
+                amount: formatMontant(Number(transaction.montant_net ?? transaction.montant_total ?? 0), { useCompactNotation: false }),
+                paid: formatMontant(Math.abs(Number(transaction.montant_paye || 0)), { useCompactNotation: false }),
+                remaining: formatMontant(Math.abs(Number(transaction.montant_restant || 0)), { useCompactNotation: false }),
+                hasRemaining: Number(transaction.montant_restant || 0) > 0,
+                payment: getPaymentLabel(transaction),
+                due: formatDate(transaction.date_echeance),
+              }))}
+              emptyText="Aucune vente client sur cette période"
+              paidLabel="Encaissé"
+              remainingLabel="Reste"
+            />
+          ) : (
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 760 }}>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
-                      Aucune vente client sur cette période
-                    </TableCell>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Produit</TableCell>
+                    <TableCell align="right">Montant net</TableCell>
+                    <TableCell>Règlement</TableCell>
+                    <TableCell>Échéance</TableCell>
+                    <TableCell align="right">Encaissé</TableCell>
+                    <TableCell align="right">Reste</TableCell>
                   </TableRow>
-                ) : (
-                  clientCreanceRows.map((transaction) => (
-                    <TableRow key={transaction.id_transaction} hover>
-                      <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
-                      <TableCell>{produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}</TableCell>
-                      <TableCell>{transaction.id_batiment ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`) : '-'}</TableCell>
-                      <TableCell align="right">{transaction.quantite}</TableCell>
-                      <TableCell align="right">{formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 800 }}>
-                        {formatMontant(Number(transaction.montant_net ?? transaction.montant_total ?? 0), { useCompactNotation: false })}
-                      </TableCell>
-                      <TableCell>{getPaymentLabel(transaction)}</TableCell>
-                      <TableCell>{formatDate(transaction.date_echeance)}</TableCell>
-                      <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
-                        {formatMontant(Math.abs(Number(transaction.montant_paye || 0)), { useCompactNotation: false })}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
-                        {formatMontant(Math.abs(Number(transaction.montant_restant || 0)), { useCompactNotation: false })}
+                </TableHead>
+                <TableBody>
+                  {clientCreanceRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                        Aucune vente client sur cette période
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  ) : (
+                    clientCreanceRows.map((transaction) => (
+                      <TableRow key={transaction.id_transaction} hover>
+                        <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
+                        <TableCell>
+                          {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {transaction.quantite} × {formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}
+                            {transaction.id_batiment ? ` · ${batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`}` : ''}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 800 }}>
+                          {formatMontant(Number(transaction.montant_net ?? transaction.montant_total ?? 0), { useCompactNotation: false })}
+                        </TableCell>
+                        <TableCell>{getPaymentLabel(transaction)}</TableCell>
+                        <TableCell>{formatDate(transaction.date_echeance)}</TableCell>
+                        <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
+                          {formatMontant(Math.abs(Number(transaction.montant_paye || 0)), { useCompactNotation: false })}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
+                          {formatMontant(Math.abs(Number(transaction.montant_restant || 0)), { useCompactNotation: false })}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
       </Box>
