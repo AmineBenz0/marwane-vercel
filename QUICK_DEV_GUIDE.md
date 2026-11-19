@@ -65,7 +65,7 @@ git pull origin main
 docker compose down
 docker compose build --no-cache frontend
 docker compose up -d
-docker compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade heads
 ```
 
 ---
@@ -128,7 +128,7 @@ Pour plus de détails, voir : **[DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW
 
 **Solution** :
 ```bash
-docker compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade heads
 docker compose exec backend python create_admin.py
 ```
 
