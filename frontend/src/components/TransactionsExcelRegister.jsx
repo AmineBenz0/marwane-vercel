@@ -112,14 +112,6 @@ const formatPaymentAmountForSummary = (value) => {
 
 const COLUMN_COUNT = 9;
 
-// Short, human summary of how a transaction was paid: "Espèce, Chèque".
-const getPaymentModesLabel = (transaction) => {
-  const labels = [...new Set((transaction.paiements || [])
-    .filter((payment) => payment && payment.nature !== 'remboursement')
-    .map((payment) => getPaymentTypeLabel(payment)))];
-  return labels.join(', ');
-};
-
 const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountForSummary) => {
   if (!payment) return null;
 
@@ -435,6 +427,32 @@ function TransactionsExcelRegister({
   );
 }
 
+// One short line per payment: "Chèque n° 123 · 50 MAD" (orange when a reference is missing).
+function PaymentLines({ transaction, formatMontant }) {
+  const payments = (transaction.paiements || []).filter(Boolean);
+  if (payments.length === 0) return null;
+  return (
+    <Box sx={{ mt: 0.25, maxWidth: 210, ml: 'auto' }}>
+      {payments.map((payment, index) => {
+        const reference = getPaymentReferenceValue(payment);
+        const missingReference = REFERENCE_PAYMENT_TYPES.has(payment.type_paiement) && !reference;
+        const amount = payment.montant !== null && payment.montant !== undefined
+          ? ` · ${formatMontant(Math.abs(Number(payment.montant)))}` : '';
+        return (
+          <Typography
+            key={payment.id_paiement || index}
+            variant="caption"
+            display="block"
+            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, whiteSpace: 'normal', lineHeight: 1.3, mb: 0.25 }}
+          >
+            {getPaymentTypeLabel(payment)}{reference ? ` n° ${reference}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
+          </Typography>
+        );
+      })}
+    </Box>
+  );
+}
+
 // Deferred-delivery details (status, planned date, eggs still to produce).
 function DeliveryInfo({ transaction, inactive }) {
   if (!transaction.est_promesse) return null;
@@ -599,7 +617,6 @@ function TransactionExcelRow({
   const paidAmount = Number(transaction.montant_paye || 0);
   const remainingAmount = Number(transaction.montant_restant || 0);
   const totalAmount = getSignedAmount(transaction);
-  const paymentModes = getPaymentModesLabel(transaction);
   const inactive = transaction.est_actif === false;
   const rowBackground = inactive ? 'grey.50' : 'background.paper';
   return (
@@ -625,12 +642,12 @@ function TransactionExcelRow({
         />
       </TableCell>
       <TableCell>
-        <Typography fontWeight={850} sx={{ maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography fontWeight={850} sx={{ maxWidth: 125, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {partnerName}
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography sx={{ maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography sx={{ maxWidth: 125, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {productName}
         </Typography>
         <Typography variant="caption" color="text.secondary">
@@ -644,9 +661,7 @@ function TransactionExcelRow({
       </TableCell>
       <TableCell align="right">
         {formatMontant(paidAmount)}
-        {paymentModes && (
-          <Typography variant="caption" color="text.secondary" display="block">{paymentModes}</Typography>
-        )}
+        <PaymentLines transaction={transaction} formatMontant={formatMontant} />
       </TableCell>
       <TableCell align="right">
         <Typography component="span" fontWeight={800} color={remainingAmount > 0 ? 'warning.main' : 'success.main'}>
