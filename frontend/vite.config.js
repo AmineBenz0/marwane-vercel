@@ -15,10 +15,11 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 5173,
     proxy: {
+      // The FastAPI app serves its routes under /api/v1, so the path is forwarded
+      // unchanged. Override the target with VITE_DEV_API_TARGET if needed.
       '/api': {
-        target: 'http://127.0.0.1:8001',
+        target: process.env.VITE_DEV_API_TARGET || 'http://127.0.0.1:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
   }
