@@ -63,3 +63,27 @@ it('shows corrected reference, serial and issuer in retained history', async () 
   expect(screen.getByText('Numéro de série : Non renseigné → SERIE-123')).toBeVisible();
   expect(screen.getByText('Banque émettrice : Ancienne banque → Banque corrigée')).toBeVisible();
 });
+it('loads the correction context silently and shows a business-rule refusal as a warning, not a toast or error', async () => {
+  get.mockImplementation(async path => {
+    if (path.endsWith('/correction-context')) {
+      throw Object.assign(new Error('Réconciliez les utilisations de cette LC avant de la corriger.'), { status: 409 });
+    }
+    return {};
+  });
+  render(<LettreCreditDetail />);
+  const alert = (await screen.findByText('Réconciliez les utilisations de cette LC avant de la corriger.')).closest('[role="alert"]');
+  expect(alert.className).toMatch(/MuiAlert-(standard|filled|outlined)Warning/);
+  expect(screen.queryByRole('button', { name: 'Réessayer' })).not.toBeInTheDocument();
+  expect(get).toHaveBeenCalledWith('/lettres-credit/7/correction-context', { silent: true });
+  expect(notification.error).not.toHaveBeenCalled();
+});
+it('keeps a genuine server failure as an error with a retry button', async () => {
+  get.mockImplementation(async path => {
+    if (path.endsWith('/correction-context')) throw Object.assign(new Error('Erreur serveur'), { status: 500 });
+    return {};
+  });
+  render(<LettreCreditDetail />);
+  const alert = (await screen.findByText('Erreur serveur')).closest('[role="alert"]');
+  expect(alert.className).toMatch(/MuiAlert-(standard|filled|outlined)Error/);
+  expect(screen.getByRole('button', { name: 'Réessayer' })).toBeVisible();
+});
