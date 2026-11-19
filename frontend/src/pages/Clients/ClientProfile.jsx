@@ -638,6 +638,7 @@ function ClientProfile() {
         </Button>
         <Box sx={{ 
           flexGrow: 1, 
+          minWidth: 0,
           display: 'flex', 
           flexDirection: { xs: 'column', sm: 'row' },
           alignItems: { xs: 'flex-start', sm: 'center' }, 
@@ -647,7 +648,7 @@ function ClientProfile() {
           <Typography 
             variant="h4" 
             component="h1"
-            sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' } }}
+            sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' }, overflowWrap: 'anywhere', minWidth: 0 }}
           >
             {client.nom_client}
           </Typography>

@@ -630,8 +630,8 @@ function FournisseurProfile() {
         >
           Retour
         </Button>
-        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Typography variant="h4" component="h1">
+        <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="h4" component="h1" sx={{ overflowWrap: 'anywhere', minWidth: 0 }}>
             {fournisseur.nom_fournisseur}
           </Typography>
         </Box>

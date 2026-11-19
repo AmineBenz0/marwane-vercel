@@ -110,7 +110,7 @@ const formatPaymentAmountForSummary = (value) => {
   );
 };
 
-const COLUMN_COUNT = 9;
+const COLUMN_COUNT = 8;
 
 const getPaymentReglementLabel = (payment, formatAmount = formatPaymentAmountForSummary) => {
   if (!payment) return null;
@@ -173,7 +173,8 @@ function TransactionsExcelRegister({
   emptyDescription = "Essayez d'élargir la période ou de supprimer certains filtres.",
 }) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // Below ~1300px an 8-column table cannot fit without sideways scrolling: use cards instead.
+  const isMobile = useMediaQuery(theme.breakpoints.down(1300));
   const groupedRows = useMemo(() => {
     const sortedRows = [...rows].sort((a, b) => {
       const dateDiff = getDateTimestamp(b.date_transaction) - getDateTimestamp(a.date_transaction);
@@ -319,14 +320,15 @@ function TransactionsExcelRegister({
           <Table
             size="small"
             sx={{
-              minWidth: 880,
+              minWidth: 800,
               '& th': {
                 py: 1.25,
                 px: 1,
                 bgcolor: '#edf5ef',
                 color: '#263d3a',
                 fontWeight: 900,
-                whiteSpace: 'nowrap',
+                whiteSpace: 'normal',
+                lineHeight: 1.25,
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em',
                 fontSize: { xs: '0.68rem', md: '0.76rem' },
@@ -345,13 +347,12 @@ function TransactionsExcelRegister({
           >
             <TableHead>
               <TableRow>
-                <TableCell>Date</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Client / Fournisseur</TableCell>
                 <TableCell>Produit</TableCell>
                 <TableCell align="right">Montant</TableCell>
                 <TableCell align="right">Déjà payé</TableCell>
-                <TableCell align="right">Reste à payer</TableCell>
+                <TableCell align="right">Reste</TableCell>
                 <TableCell>Statut</TableCell>
                 <TableCell align="center" sx={stickyActionHeaderSx} aria-label="Actions" />
               </TableRow>
@@ -398,7 +399,7 @@ function TransactionsExcelRegister({
 
                     <TableRow>
                       <TableCell sx={summaryRowSx}>Total jour</TableCell>
-                      <TableCell colSpan={3} sx={summaryRowSx}>
+                      <TableCell colSpan={2} sx={{ ...summaryRowSx, whiteSpace: 'normal', minWidth: 0 }}>
                         {getDailySummaryLabel(group)}
                       </TableCell>
                       <TableCell align="right" sx={summaryRowSx}>
@@ -427,28 +428,41 @@ function TransactionsExcelRegister({
   );
 }
 
+const MAX_PAYMENT_LINES = 2;
+const shorten = (value, max = 16) => (value && value.length > max ? `${value.slice(0, max - 1)}…` : value);
+
 // One short line per payment: "Chèque n° 123 · 50 MAD" (orange when a reference is missing).
+// Only the first lines are shown; the rest is summarised so a row never grows out of proportion.
 function PaymentLines({ transaction, formatMontant }) {
   const payments = (transaction.paiements || []).filter(Boolean);
   if (payments.length === 0) return null;
+  const visible = payments.slice(0, MAX_PAYMENT_LINES);
+  const hidden = payments.length - visible.length;
   return (
-    <Box sx={{ mt: 0.25, maxWidth: 210, ml: 'auto' }}>
-      {payments.map((payment, index) => {
+    <Box sx={{ mt: 0.25, maxWidth: 180, ml: 'auto' }}>
+      {visible.map((payment, index) => {
         const reference = getPaymentReferenceValue(payment);
         const missingReference = REFERENCE_PAYMENT_TYPES.has(payment.type_paiement) && !reference;
         const amount = payment.montant !== null && payment.montant !== undefined
           ? ` · ${formatMontant(Math.abs(Number(payment.montant)))}` : '';
+        const full = `${getPaymentTypeLabel(payment)}${reference ? ` n° ${reference}` : ''}`;
         return (
           <Typography
             key={payment.id_paiement || index}
             variant="caption"
             display="block"
-            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, whiteSpace: 'normal', lineHeight: 1.3, mb: 0.25 }}
+            title={`${full}${amount}`}
+            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, lineHeight: 1.3, mb: 0.25, overflowWrap: 'anywhere' }}
           >
-            {getPaymentTypeLabel(payment)}{reference ? ` n° ${reference}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
+            {getPaymentTypeLabel(payment)}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
           </Typography>
         );
       })}
+      {hidden > 0 && (
+        <Typography variant="caption" display="block" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+          + {hidden} autre{hidden > 1 ? 's' : ''} paiement{hidden > 1 ? 's' : ''}
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -582,6 +596,12 @@ function TransactionMobileCard({
         </Stack>
       </Stack>
       <DeliveryInfo transaction={transaction} inactive={inactive} />
+      {!inactive && (transaction.paiements || []).some((payment) => payment
+        && REFERENCE_PAYMENT_TYPES.has(payment.type_paiement) && !getPaymentReferenceValue(payment)) && (
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'warning.dark', fontWeight: 700 }}>
+          Référence de paiement manquante
+        </Typography>
+      )}
       {!inactive && (
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
           <PaymentStatusBadge statut={status} />
@@ -627,9 +647,6 @@ function TransactionExcelRow({
         '& td': { bgcolor: rowBackground },
       }}
     >
-      <TableCell sx={{ fontWeight: 700 }}>
-        {formatDateSafe(transaction.date_transaction)}
-      </TableCell>
       <TableCell>
         <Chip
           size="small"
@@ -642,12 +659,12 @@ function TransactionExcelRow({
         />
       </TableCell>
       <TableCell>
-        <Typography fontWeight={850} sx={{ maxWidth: 125, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography fontWeight={850} title={partnerName} sx={{ maxWidth: 105, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {partnerName}
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography sx={{ maxWidth: 125, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography title={productName} sx={{ maxWidth: 105, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {productName}
         </Typography>
         <Typography variant="caption" color="text.secondary">
