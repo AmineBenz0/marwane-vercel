@@ -837,6 +837,9 @@ def get_client_score(
     
     montant_paye = Decimal(str(montant_paye_query or '0'))
     taux_paiement = float((montant_paye / montant_total * 100) if montant_total > 0 else 0)
+    # An overpayment (paid more than the total, e.g. after a correction) must not push
+    # the rate above 100 %: the score part is capped at 40 points.
+    taux_paiement = min(100.0, max(0.0, taux_paiement))
     score_paiement = round((taux_paiement / 100) * 40, 2)
     
     # 2. Calculer le score de respect des délais (30 points max)
