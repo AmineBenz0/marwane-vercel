@@ -112,12 +112,11 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
             })}
           </Stack>
           {selected && (() => {
-            const count = Math.max(0, selected.disponible - reserved(selected));
             const otherCalibres = selected.type_oeuf === 'normal'
               ? allChoices.filter(c => c.type_oeuf === 'normal' && c.key !== selected.key && c.disponible > 0) : [];
             const rows = (selected.sources.length ? dispatch : []).map(source => ({
               key: source.id_production,
-              label: `Production du ${formatShortDate(source.date_production)}`,
+              label: formatShortDate(source.date_production),
               value: `${source.disponible.toLocaleString('fr-FR')} œufs`,
               hint: source.deducted > 0 ? `− ${source.deducted.toLocaleString('fr-FR')} pour cette vente` : null,
             }));
@@ -127,7 +126,7 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
             return <Box aria-label={`Stock pour la vente ${index + 1}`} sx={{ mt: 0.5 }}>
               {rows.length > 0
                 ? <ExpandableDetails label="Voir le stock par date" meta={calibre ? `calibre ${calibre} · ${days}` : days}>
-                  <DetailRows rows={rows} ariaLabel="Stock par date de production" />
+                  <StockRows rows={rows} />
                 </ExpandableDetails>
                 : calibre && <Typography variant="body2" color="text.secondary">Calibre {calibre}</Typography>}
               {otherCalibres.length > 0 && <Typography variant="caption" color="text.secondary" display="block">
@@ -179,4 +178,18 @@ function typeChoices(allChoices, line) {
     if (inStock.length) return inStock[0];
     return [...candidates].sort((a, b) => CALIBRE_FALLBACK.indexOf(a.calibre) - CALIBRE_FALLBACK.indexOf(b.calibre))[0];
   }).filter(Boolean);
+}
+
+/** Days this sale takes eggs from first (oldest first); the other days behind "Tout afficher". */
+function StockRows({ rows }) {
+  const [showAll, setShowAll] = useState(false);
+  const used = rows.filter((row) => row.hint);
+  const partial = used.length > 0 && used.length < rows.length && !showAll;
+  return <>
+    <DetailRows rows={partial ? used : rows} ariaLabel="Stock par date de production" />
+    {used.length > 0 && used.length < rows.length && <Button size="small" onClick={() => setShowAll((v) => !v)}
+      sx={{ mt: 0.5, ml: -0.75, textTransform: 'none', fontWeight: 700 }}>
+      {showAll ? 'Afficher seulement les jours utilisés' : `Tout afficher (${rows.length} jours)`}
+    </Button>}
+  </>;
 }

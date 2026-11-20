@@ -89,4 +89,17 @@ describe('sale stock selection', () => {
     expect(screen.getByText(/calibre moyen · 1 jour/)).toBeVisible();
     expect(screen.getByText(/Aussi en stock : 50 gros/)).toBeVisible();
   });
+
+  it('lists the days this sale takes eggs from, the others behind "Tout afficher"', async () => {
+    render(<Form initial={{ quantite: 50 }} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Choisir Normaux' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir le stock par date' }));
+    const list = await screen.findByRole('list', { name: 'Stock par date de production' });
+    expect(list).toHaveTextContent('20/10/26');
+    expect(list).toHaveTextContent('− 50 pour cette vente');
+    expect(list).not.toHaveTextContent('21/10/26');
+    fireEvent.click(screen.getByRole('button', { name: 'Tout afficher (2 jours)' }));
+    expect(screen.getByRole('list', { name: 'Stock par date de production' })).toHaveTextContent('21/10/26');
+  });
 });
+
