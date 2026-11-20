@@ -502,7 +502,6 @@ function PaymentLines({ transaction, formatMontant }) {
 function DeliveryInfo({ transaction, inactive }) {
   if (!transaction.est_promesse) return null;
   const waiting = Number(transaction.quantite_en_attente);
-  const covered = Number(transaction.quantite_couverte);
   return (
     <Stack
       spacing={0.5}
@@ -510,13 +509,12 @@ function DeliveryInfo({ transaction, inactive }) {
       sx={{ mt: 0.5, '& .MuiChip-root': { height: 'auto', maxWidth: '100%' }, '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
     >
       <DeferredSaleStatusBadge sale={transaction} />
+      {/* Short on purpose: reserved-stock details live on the sale's own page. */}
       {transaction.date_livraison_prevue && (
-        <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>
+        <Typography variant="caption">Livraison le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>
       )}
       {!inactive && waiting > 0 && (
-        <Typography variant="caption">
-          {covered > 0 ? `${formatNumberValue(covered)} œufs réservés · ` : ''}{formatNumberValue(waiting)} à produire
-        </Typography>
+        <Typography variant="caption">{formatNumberValue(waiting)} œufs à produire</Typography>
       )}
     </Stack>
   );

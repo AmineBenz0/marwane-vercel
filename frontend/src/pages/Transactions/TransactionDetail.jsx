@@ -34,20 +34,11 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-} from '@mui/material';
 import { get, post, put, del } from '../../services/api';
 import { format } from 'date-fns';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant as formatMontantUtil } from '../../utils/formatNumber';
 import PaymentStatusBadge from '../../components/PaymentStatusBadge';
-import PaymentTypeBadge from '../../components/PaymentTypeBadge';
 import PaiementForm from '../../components/PaiementForm';
 import useNotification from '../../hooks/useNotification';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -532,250 +523,224 @@ function TransactionDetail() {
     );
   }
 
+  const isSale = Boolean(transaction.id_client);
+  const hasCredits = Number(transaction.montant_avoir || 0) > 0 || (transaction.avoirs_livraison_differee || []).length > 0;
+  // The app font draws the French thousands separator (U+202F) almost zero-width: "1875,00".
+  // A regular no-break space keeps "1 875,00 MAD" readable.
+  const wide = (text) => String(text).replace(/\u202F/g, '\u00A0');
+  const money = (value) => wide(formatMontant(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const unitPrice = (value) => wide(formatMontant(value, { minimumFractionDigits: 2, maximumFractionDigits: 3 }));
+  const isEggSale = Boolean(transaction.id_production || transaction.est_promesse);
+  const quantityText = transaction.quantite
+    ? `${wide(Number(transaction.quantite).toLocaleString('fr-FR'))}${isEggSale ? ' œufs' : ''}`
+    : '-';
+  // Cheques not yet cashed are not counted as paid by the API: show them on their own line
+  // so "Impayé" never hides money that is on its way.
+  const isPendingPayment = (p) => p.statut !== 'annule' && p.statut !== 'rejete' && p.nature !== 'remboursement'
+    && (p.statut === 'en_attente' || (p.type_paiement === 'cheque' && ['a_encaisser', 'en_attente', 'emis'].includes(p.statut_cheque)));
+  const pendingAmount = (paiements || []).filter(isPendingPayment).reduce((sum, p) => sum + Number(p.montant || 0), 0);
+  const remaining = Number(statutPaiement?.montant_restant || 0);
+  const stillOwed = Math.max(0, remaining - pendingAmount);
+  const paymentLabel = (p) => {
+    if (p.nature === 'remboursement') return 'Remboursement';
+    if (p.est_affectation || ['credit_recu', 'credit_transfere'].includes(p.nature)) return 'Crédit affecté';
+    const type = { cash: 'Espèces', cheque: 'Chèque', virement: 'Virement', carte: 'Carte', lc: 'LC', compensation: 'Compensation', autre: 'Autre' }[p.type_paiement] || readableStatus(p.type_paiement);
+    const ref = p.numero_cheque || p.reference_virement || p.numero_reference_lc || (p.id_lc ? `LC #${p.id_lc}` : '');
+    return ref ? `${type} n° ${ref}` : type;
+  };
+  const paymentStatusChip = (p) => {
+    const pending = isPendingPayment(p);
+    const label = p.type_paiement === 'cheque' && p.statut_cheque
+      ? (CHEQUE_STATUS_LABELS[p.statut_cheque] || readableStatus(p.statut_cheque))
+      : (PAYMENT_STATUS_LABELS[p.statut] || readableStatus(p.statut));
+    const ok = p.statut_cheque === 'encaisse' || (!p.statut_cheque && p.statut === 'valide');
+    return <Chip label={label} size="small" color={ok ? 'success' : pending ? 'warning' : 'default'} variant={ok ? 'outlined' : 'filled'} />;
+  };
+  const amountRow = (label, value, sx = {}) => (
+    <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={2}>
+      <Typography variant="body2" color="text.secondary">{label}</Typography>
+      <Typography fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...sx }}>{value}</Typography>
+    </Stack>
+  );
+  const cardSx = { height: '100%' };
+  const cardContentSx = { p: { xs: 2, sm: 2.5 } };
+
   return (
     <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      {/* En-tête avec bouton retour */}
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: { xs: 'column', sm: 'row' },
-        alignItems: { xs: 'flex-start', sm: 'center' }, 
-        mb: { xs: 2, sm: 2.5, md: 3 }, 
-        gap: { xs: 1.5, sm: 2 } 
-      }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate(returnPath)}
-          variant="outlined"
-          size={isMobile ? 'small' : 'medium'}
-        >
-          {fromDeliveries ? 'Retour aux livraisons' : 'Retour'}
-        </Button>
-        <Typography 
-          variant="h4" 
-          component="h1"
-          sx={{ fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}
-        >
-          {transaction.id_client ? 'Vente' : 'Achat'} n° {transaction.id_transaction}
-        </Typography>
-        {transaction.est_actif === false && <Button variant="outlined" onClick={() => setReactivationOpen(true)}>
-          {transaction.id_client ? 'Réactiver la vente' : 'Réactiver l’achat'}
-        </Button>}
-      </Box>
+      <Button
+        startIcon={<ArrowBackIcon />}
+        onClick={() => navigate(returnPath)}
+        variant="outlined"
+        size={isMobile ? 'small' : 'medium'}
+        sx={{ mb: 2 }}
+      >
+        {fromDeliveries ? 'Retour aux livraisons' : 'Retour'}
+      </Button>
 
-      {/* Détails de la transaction */}
-      <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-        <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-          <Typography 
-            variant="h6" 
-            gutterBottom
-            sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-          >
-            {transaction.id_client ? 'Détails de la vente' : 'Détails de l’achat'}
-          </Typography>
-          <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
-          <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-            {transaction.est_promesse ? <Grid item xs={12}>
-              <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <Typography component="h2" variant="h6" fontWeight={700}>Livraison différée</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-                  {[transaction.nom_batiment_source, transaction.date_livraison_prevue ? `Prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : null].filter(Boolean).join(' · ')}
-                </Typography>
-                <DeferredSaleStockSummary sale={transaction} />
-                {deferredCancellationEnabled() && transaction.est_actif &&
-                  Number(transaction.quantite_en_attente) > 0 && <Button
-                    variant="outlined" color="error" size="small" sx={{ mt: 2 }}
-                    onClick={() => setCancelRemainderOpen(true)}>
-                    Annuler les œufs restants
-                  </Button>}
-                {cancellationReceipt && <Alert severity="success" sx={{ mt: 2 }}>
-                  {Number(cancellationReceipt.quantite_annulee).toLocaleString('fr-FR')} œufs annulés.
-                  Avoir de {formatMontant(cancellationReceipt.montant_avoir)} enregistré.
-                  {Number(cancellationReceipt.credit_client) > 0
-                    ? ` Crédit client : ${formatMontant(cancellationReceipt.credit_client)}.`
-                    : ' Aucun remboursement automatique.'}
-                </Alert>}
-              </Box>
-            </Grid> : transaction.id_production ? <Grid item xs={12}>
-              <Typography variant="body2">Origine : {transaction.nom_batiment_source}</Typography>
-              <ExpandableDetails label="Origine du stock">
-                {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
-                  <Typography variant="body2" key={source.id_production}>{formatShortDate(source.date_production)} : {source.quantite} œufs prélevés</Typography> )
-                  : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
-              </ExpandableDetails>
-            </Grid> : null}
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Date</Typography>
-                <Typography variant="body1" fontWeight="medium">{formatDate(transaction.date_transaction)}</Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">{transaction.id_client ? 'Client' : 'Fournisseur'}</Typography>
-                <Typography variant="body1" fontWeight="medium" sx={{ overflowWrap: 'anywhere' }}>{getClientOuFournisseur()}</Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {transaction.id_production ? 'Type d’œufs' : 'Produit'}
-                </Typography>
-                <Typography variant="body1" fontWeight="medium">
-                  {getProduitName()}
+      {/* Summary: who, how much, paid or not. */}
+      <Card sx={{ mb: 2.5 }}>
+        <CardContent sx={cardContentSx}>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'flex-start' }} spacing={2}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                {isSale ? 'Vente' : 'Achat'} n° {transaction.id_transaction}
+              </Typography>
+              <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.35rem', sm: '1.75rem' }, fontWeight: 800, overflowWrap: 'anywhere' }}>
+                {getClientOuFournisseur()}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {[formatDate(transaction.date_transaction), transaction.nom_batiment_source].filter(Boolean).join(' · ')}
+              </Typography>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }}>
+                {transaction.est_actif === false && <Chip size="small" label={isSale ? 'Vente annulée' : 'Achat annulé'} />}
+                {statutPaiement && <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />}
+                {pendingAmount > 0 && <Chip size="small" color="warning" label={`Chèque en attente : ${money(pendingAmount)}`} />}
+                {transaction.est_promesse && transaction.date_livraison_prevue && <Chip size="small" variant="outlined" label={`Livraison le ${formatShortDate(transaction.date_livraison_prevue)}`} />}
+              </Stack>
+            </Box>
+            <Stack alignItems={{ xs: 'flex-start', md: 'flex-end' }} spacing={1.5} sx={{ flexShrink: 0 }}>
+              <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+                <Typography variant="caption" color="text.secondary">{hasCredits ? 'Montant initial' : 'Montant total'}</Typography>
+                <Typography sx={{ fontSize: { xs: '1.5rem', sm: '1.85rem' }, fontWeight: 800, color: 'primary.main', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {money(transaction.montant_total)}
                 </Typography>
               </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Quantité
-                </Typography>
-                <Typography variant="body1" fontWeight="medium">
-                  {transaction.quantite || '-'}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Prix unitaire
-                </Typography>
-                <Typography variant="body1" fontWeight="medium">
-                  {transaction.prix_unitaire ? formatMontant(transaction.prix_unitaire) : '-'}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {Number(transaction.montant_avoir || 0) > 0 || (transaction.avoirs_livraison_differee || []).length ? 'Montant initial' : 'Montant total'}
-                </Typography>
-                <Typography variant="h6" color="primary" fontWeight="bold">
-                  {formatMontant(transaction.montant_total)}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                {statutPaiement && remaining > 0 && transaction.est_actif !== false && (
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddPaiement}>Ajouter un paiement</Button>
+                )}
+                {transaction.est_actif === false && <Button variant="outlined" onClick={() => setReactivationOpen(true)}>
+                  {isSale ? 'Réactiver la vente' : 'Réactiver l’achat'}
+                </Button>}
+              </Stack>
+            </Stack>
+          </Stack>
         </CardContent>
       </Card>
 
-      {transaction.est_promesse && <Card sx={{ mb: 3 }}><CardContent>
-        <DeferredSaleHistory transactionId={transaction.id_transaction} refreshKey={`${transaction.quantite_couverte}:${transaction.quantite_annulee || 0}:${transaction.row_version}`} />
-      </CardContent></Card>}
-      {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
-          <Typography component="h2" variant="h6" fontWeight={700}>Paiement</Typography>
-          <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />
-        </Stack>
-        {transaction.est_promesse && (Number(transaction.montant_avoir || 0) > 0 || (transaction.avoirs_livraison_differee || []).length > 0)
-          ? <DeferredSaleFinancialSummary sale={transaction} />
-          : <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="space-between">
-            <Box><Typography variant="body2" color="text.secondary">Réglé</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_paye)}</Typography></Box>
-            {Number(statutPaiement.montant_restant) > 0 && <Box><Typography variant="body2" color="text.secondary">{transaction.id_client ? 'Reste à encaisser' : 'Reste à payer'}</Typography><Typography fontWeight={700}>{formatMontant(statutPaiement.montant_restant)}</Typography></Box>}
-          </Stack>}
-        {CREDIT_REFUNDS_ENABLED && transaction.est_actif && Number(statutPaiement.montant_restant) < -0.009 && (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Crédit disponible : {formatMontant(-Number(statutPaiement.montant_restant))}
-            </Typography>
-            <Button variant="outlined" onClick={() => setRefundOpen(true)}>
-              {transaction.id_client ? 'Rembourser le client' : 'Enregistrer un remboursement fournisseur'}
-            </Button>
-          </Box>
-        )}
-        {Number(statutPaiement.montant_restant) > 0 && <Stack direction="row" spacing={2} alignItems="center" useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddPaiement}>Ajouter un paiement</Button>
-          {transaction.date_echeance && <Typography variant="body2" color={statutPaiement.est_en_retard ? 'error.main' : 'text.secondary'}>Échéance : {formatDate(transaction.date_echeance)}</Typography>}
-        </Stack>}
-        {CREDIT_REFUNDS_ENABLED && <TransactionCreditPanel transaction={transaction} />}
-      </CardContent></Card>}
+      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
+        {/* What was sold / bought. On phones it comes after the payment block. */}
+        <Grid item xs={12} md={7} sx={{ order: { xs: 2, md: 1 } }}>
+          <Card sx={cardSx}>
+            <CardContent sx={cardContentSx}>
+              <Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+                {isSale ? 'Ce qui a été vendu' : 'Ce qui a été acheté'}
+              </Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2} sx={{ p: 1.5, borderRadius: 2, bgcolor: 'background.default' }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{getProduitName()}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {quantityText}{transaction.prix_unitaire ? ` × ${unitPrice(transaction.prix_unitaire)}` : ''}
+                  </Typography>
+                </Box>
+                <Typography fontWeight={800} sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{money(transaction.montant_total)}</Typography>
+              </Stack>
 
-      {statutPaiement && <Card sx={{ mb: 3 }}><CardContent>
-        <ExpandableDetails label="Détail des règlements">
-            {loadingPaiements ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                <CircularProgress size={30} />
-              </Box>
-            ) : paiements && paiements.length > 0 ? (
-              <TableContainer>
-                  <Table size={isMobile ? 'small' : 'medium'}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell align="right">Montant</TableCell>
-                      {!isMobile && <TableCell>Type</TableCell>}
-                      {!isMobile && <TableCell>Référence</TableCell>}
-                      <TableCell>Statut</TableCell>
-                      <TableCell align="center">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {paiements.map((paiement) => (
-                      <TableRow key={paiement.id_paiement}>
-                        <TableCell>{formatDate(paiement.date_paiement)}</TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="medium" color={paiement.nature === 'remboursement' ? 'error.main' : 'success.main'}>
-                            {paiement.nature === 'remboursement' ? '− ' : ''}{formatMontant(paiement.montant)}
-                          </Typography>
-                        </TableCell>
-                        {!isMobile && (
-                          <TableCell>
-                            {paiement.nature === 'remboursement' ? 'Remboursement' :
-                              paiement.est_affectation || ['credit_recu','credit_transfere'].includes(paiement.nature) ? 'Crédit affecté' :
-                              <PaymentTypeBadge type={paiement.type_paiement} />}
-                          </TableCell>
-                        )}
-                        {!isMobile && (
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                              {paiement.numero_cheque || paiement.reference_virement || paiement.numero_reference_lc || (paiement.id_lc ? `LC #${paiement.id_lc}` : '-')}
-                            </Typography>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          {paiement.type_paiement === 'cheque' && paiement.statut_cheque ? (
-                            <Chip 
-                              label={CHEQUE_STATUS_LABELS[paiement.statut_cheque] || readableStatus(paiement.statut_cheque)}
-                              size="small"
-                              color={paiement.statut_cheque === 'encaisse' ? 'success' : 'default'}
-                            />
-                          ) : (
-                            <Chip 
-                              label={PAYMENT_STATUS_LABELS[paiement.statut] || readableStatus(paiement.statut)}
-                              size="small"
-                              color={paiement.statut === 'valide' ? 'success' : 'default'}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                            {!['remboursement','credit_recu','credit_transfere'].includes(paiement.nature) && (
-                              <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => handleEditPaiement(paiement)}>
-                                Modifier
-                              </Button>
-                            )}
-                            {!['credit_recu','credit_transfere'].includes(paiement.nature) && (
-                              <Button size="small" color="error" startIcon={<DeleteIcon fontSize="small" />} onClick={() => handleDeletePaiementClick(paiement)} aria-label="Annuler ce règlement">
-                                Annuler
-                              </Button>
-                            )}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            ) : (
-              <Box sx={{ textAlign: 'center', py: 3 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Aucun paiement enregistré pour cette transaction
+              {transaction.est_promesse ? (
+                <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                  <Typography component="h3" variant="subtitle1" fontWeight={700}>Livraison différée</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+                    {[transaction.nom_batiment_source, transaction.date_livraison_prevue ? `Prévue le ${formatShortDate(transaction.date_livraison_prevue)}` : null].filter(Boolean).join(' · ')}
+                  </Typography>
+                  <DeferredSaleStockSummary sale={transaction} />
+                  <ExpandableDetails label="Voir les productions affectées">
+                    <DeferredSaleHistory embedded transactionId={transaction.id_transaction} refreshKey={`${transaction.quantite_couverte}:${transaction.quantite_annulee || 0}:${transaction.row_version}`} />
+                  </ExpandableDetails>
+                  {deferredCancellationEnabled() && transaction.est_actif &&
+                    Number(transaction.quantite_en_attente) > 0 && <Button
+                      variant="outlined" color="error" size="small" sx={{ mt: 1 }}
+                      onClick={() => setCancelRemainderOpen(true)}>
+                      Annuler les œufs restants
+                    </Button>}
+                  {cancellationReceipt && <Alert severity="success" sx={{ mt: 2 }}>
+                    {Number(cancellationReceipt.quantite_annulee).toLocaleString('fr-FR')} œufs annulés.
+                    Avoir de {formatMontant(cancellationReceipt.montant_avoir)} enregistré.
+                    {Number(cancellationReceipt.credit_client) > 0
+                      ? ` Crédit client : ${formatMontant(cancellationReceipt.credit_client)}.`
+                      : ' Aucun remboursement automatique.'}
+                  </Alert>}
+                </Box>
+              ) : transaction.id_production ? (
+                <ExpandableDetails label="Origine du stock">
+                  {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
+                    <Typography variant="body2" key={source.id_production}>{formatShortDate(source.date_production)} : {Number(source.quantite).toLocaleString('fr-FR')} œufs prélevés</Typography>)
+                    : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
+                </ExpandableDetails>
+              ) : null}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Money: always lists the payments themselves, with their state. */}
+        {statutPaiement && <Grid item xs={12} md={5} sx={{ order: { xs: 1, md: 2 } }}>
+          <Card sx={cardSx}>
+            <CardContent sx={cardContentSx}>
+              <Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>Paiement</Typography>
+              {transaction.est_promesse && hasCredits
+                ? <DeferredSaleFinancialSummary sale={transaction} />
+                : <Stack spacing={1}>
+                  {amountRow(isSale ? 'Encaissé' : 'Payé', money(statutPaiement.montant_paye))}
+                  {pendingAmount > 0 && amountRow('Chèque en attente', money(pendingAmount), { color: 'warning.dark' })}
+                  {remaining > 0 && amountRow(isSale ? 'Reste à encaisser' : 'Reste à payer', money(stillOwed), { color: stillOwed > 0 ? 'warning.dark' : 'text.primary' })}
+                </Stack>}
+              {transaction.date_echeance && remaining > 0 && (
+                <Typography variant="body2" sx={{ mt: 1 }} color={statutPaiement.est_en_retard ? 'error.main' : 'text.secondary'}>
+                  Échéance : {formatDate(transaction.date_echeance)}
                 </Typography>
-
-              </Box>
-            )}
-        </ExpandableDetails>
-      </CardContent></Card>}
+              )}
+              {CREDIT_REFUNDS_ENABLED && transaction.est_actif && remaining < -0.009 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Crédit disponible : {formatMontant(-remaining)}
+                  </Typography>
+                  <Button variant="outlined" onClick={() => setRefundOpen(true)}>
+                    {isSale ? 'Rembourser le client' : 'Enregistrer un remboursement fournisseur'}
+                  </Button>
+                </Box>
+              )}
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Règlements</Typography>
+              {loadingPaiements ? (
+                <CircularProgress size={24} />
+              ) : paiements && paiements.length > 0 ? (
+                <Stack spacing={1.25}>
+                  {paiements.map((paiement) => (
+                    <Box key={paiement.id_paiement} sx={{ p: 1.25, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{paymentLabel(paiement)}</Typography>
+                          <Typography variant="caption" color="text.secondary">{formatDate(paiement.date_paiement)}</Typography>
+                        </Box>
+                        <Stack alignItems="flex-end" spacing={0.5} sx={{ flexShrink: 0 }}>
+                          <Typography variant="body2" fontWeight={800} sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }} color={paiement.nature === 'remboursement' ? 'error.main' : 'text.primary'}>
+                            {paiement.nature === 'remboursement' ? '− ' : ''}{money(paiement.montant)}
+                          </Typography>
+                          {paymentStatusChip(paiement)}
+                        </Stack>
+                      </Stack>
+                      <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, ml: -0.75 }}>
+                        {!['remboursement', 'credit_recu', 'credit_transfere'].includes(paiement.nature) && (
+                          <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => handleEditPaiement(paiement)}>
+                            Modifier
+                          </Button>
+                        )}
+                        {!['credit_recu', 'credit_transfere'].includes(paiement.nature) && (
+                          <Button size="small" color="error" startIcon={<DeleteIcon fontSize="small" />} onClick={() => handleDeletePaiementClick(paiement)} aria-label="Annuler ce règlement">
+                            Annuler
+                          </Button>
+                        )}
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
+              ) : (
+                <Typography variant="body2" color="text.secondary">Aucun paiement enregistré pour le moment.</Typography>
+              )}
+              {CREDIT_REFUNDS_ENABLED && <TransactionCreditPanel transaction={transaction} />}
+            </CardContent>
+          </Card>
+        </Grid>}
+      </Grid>
 
       <Box sx={{ mb: { xs: 2, sm: 3 } }}>
         <TransactionAuditHistory key={transaction.id_transaction} transactionId={transaction.id_transaction} />
