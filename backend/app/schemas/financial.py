@@ -39,6 +39,8 @@ class FinancialSummary(BaseModel):
     paye: Decimal
     reste: Decimal  # Owed: pending payments (uncashed cheques) excluded
     en_attente: Decimal = Decimal('0.00')
+    # Credits held by contacts (overpayments, advances), kept apart from "reste".
+    credit: Decimal = Decimal('0.00')
     count: int
     overdue_count: int
 

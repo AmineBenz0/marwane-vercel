@@ -211,25 +211,14 @@ def financial_position_as_of(db: Session, as_of: date, *, include_pending: bool 
     handed over by the date but not effective by then (uncashed cheques) are no
     longer counted as owed. The default keeps the strict ledger figure.
     """
-    payments = _payment_totals_subquery(db, as_of)
-    credits = _commercial_credit_totals_subquery(db, as_of)
-    net_sale, _ = _net_sale_expression(credits)
-    remaining = net_sale - func.coalesce(payments.c.montant_paye, literal(Decimal("0.00")))
-    query = db.query(Transaction)
-    if include_pending:
-        pending = _pending_totals_subquery(db, as_of)
-        remaining = _owed_expression(remaining, func.coalesce(pending.c.montant_en_attente, literal(Decimal("0.00"))))
-        query = query.outerjoin(pending, pending.c.id_transaction == Transaction.id_transaction)
-    row = query.with_entities(
-        func.sum(case((Transaction.id_client.isnot(None), remaining), else_=0)).label("receivables"),
-        func.sum(case((Transaction.id_fournisseur.isnot(None), remaining), else_=0)).label("payables"),
-    ).outerjoin(
-        payments, payments.c.id_transaction == Transaction.id_transaction,
-    ).outerjoin(
-        credits, credits.c.id_transaction == Transaction.id_transaction,
-    ).filter(Transaction.est_actif.is_(True), Transaction.date_transaction <= as_of).one()
-    return {"receivables": Decimal(str(row.receivables or 0)) - sum(advance_balances(db, direction="receivable", as_of=as_of).values(), Decimal("0")),
-            "payables": Decimal(str(row.payables or 0)) - sum(advance_balances(db, direction="payable", as_of=as_of).values(), Decimal("0"))}
+    # Netting happens per contact only: a supplier's credit (overpayment, advance)
+    # reduces what is owed to that supplier, never what is owed to the others.
+    result = {}
+    for direction, key in (("receivable", "receivables"), ("payable", "payables")):
+        balances = contact_balances(db, direction=direction, contact_ids=None, as_of=as_of, include_pending=include_pending)
+        result[key] = sum((b for b in balances.values() if b > 0), Decimal("0"))
+        result[f"{key}_credits"] = sum((-b for b in balances.values() if b < 0), Decimal("0"))
+    return result
 
 
 def _movement_flows(query, movement) -> dict[str, Decimal]:
@@ -307,7 +296,8 @@ def contact_balances(
 
     IDs come from the already filtered/paginated contact list. A successful
     query confirms zero for contacts without active transactions. Failures
-    propagate rather than returning misleading zero balances.
+    propagate rather than returning misleading zero balances. ``contact_ids=None``
+    returns every contact with active transactions or advances.
 
     ``include_pending=True`` returns what is owed once pending payments
     (uncashed cheques) arrive, as shown on screens; the default is the strict
@@ -316,7 +306,7 @@ def contact_balances(
     columns = {"receivable": Transaction.id_client, "payable": Transaction.id_fournisseur}
     if direction not in columns:
         raise ValueError("direction invalide")
-    if not contact_ids:
+    if contact_ids is not None and not contact_ids:
         return {}
 
     contact_id = columns[direction]
@@ -337,15 +327,17 @@ def contact_balances(
         )
         .outerjoin(payment_totals, payment_totals.c.id_transaction == Transaction.id_transaction)
         .outerjoin(credit_totals, credit_totals.c.id_transaction == Transaction.id_transaction)
-        .filter(Transaction.est_actif.is_(True), contact_id.in_(contact_ids))
+        .filter(Transaction.est_actif.is_(True), contact_id.isnot(None))
     )
+    if contact_ids is not None:
+        query = query.filter(contact_id.in_(contact_ids))
     if as_of is not None:
         query = query.filter(Transaction.date_transaction <= as_of)
     rows = query.group_by(contact_id).all()
-    balances = dict.fromkeys(contact_ids, Decimal("0"))
+    balances = dict.fromkeys(contact_ids or [], Decimal("0"))
     balances.update({row.contact_id: Decimal(str(row.balance)) for row in rows})
     for contact, amount in advance_balances(db, direction=direction, contact_ids=contact_ids, as_of=as_of).items():
-        balances[contact] -= amount
+        balances[contact] = balances.get(contact, Decimal("0")) - amount
     return balances
 
 
@@ -579,7 +571,6 @@ def summarize_financial_transactions(
         func.coalesce(func.sum(Transaction.montant_total), literal(Decimal("0"))).label("total_brut"),
         func.coalesce(func.sum(credit_amount), literal(Decimal("0"))).label("total_avoirs"),
         func.coalesce(func.sum(paid), literal(Decimal("0"))).label("paye"),
-        func.coalesce(func.sum(remaining), literal(Decimal("0"))).label("reste"),
         func.coalesce(func.sum(pending), literal(Decimal("0"))).label("en_attente"),
         func.count(Transaction.id_transaction).label("count"),
         func.coalesce(
@@ -587,12 +578,23 @@ def summarize_financial_transactions(
             0,
         ).label("overdue_count"),
     ).one()
+    # "Reste" nets transactions per contact only: one contact's credit does not
+    # reduce what the others owe. Credits are returned apart.
+    contact = Transaction.id_client if direction == "receivable" else Transaction.id_fournisseur
+    per_contact = query.with_entities(
+        contact.label("contact"), func.sum(remaining).label("reste"),
+    ).group_by(contact).subquery("contact_remaining")
+    totals = db.query(
+        func.coalesce(func.sum(case((per_contact.c.reste > 0, per_contact.c.reste), else_=0)), literal(Decimal("0"))).label("reste"),
+        func.coalesce(func.sum(case((per_contact.c.reste < 0, -per_contact.c.reste), else_=0)), literal(Decimal("0"))).label("credit"),
+    ).one()
     return {
         "total": Decimal(str(summary.total or 0)),
         "total_brut": Decimal(str(summary.total_brut or 0)).quantize(Decimal("0.01")),
         "total_avoirs": Decimal(str(summary.total_avoirs or 0)).quantize(Decimal("0.01")),
         "paye": Decimal(str(summary.paye or 0)),
-        "reste": Decimal(str(summary.reste or 0)),
+        "reste": Decimal(str(totals.reste or 0)),
+        "credit": Decimal(str(totals.credit or 0)).quantize(Decimal("0.01")),
         "en_attente": Decimal(str(summary.en_attente or 0)).quantize(Decimal("0.01")),
         "count": int(summary.count or 0),
         "overdue_count": int(summary.overdue_count or 0),
