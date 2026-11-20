@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import DateField from '../../utils/DateField';
 import { get } from '../../services/api';
 import useCorrectionFlow from '../../components/Corrections/useCorrectionFlow';
 import CorrectionReview from '../../components/Corrections/CorrectionReview';
 import { changedValues, eggCategory, money } from '../../components/Corrections/correctionValues';
+import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 const original = tx => ({ date_transaction: tx.date_transaction?.slice(0, 10) || '', date_echeance: tx.date_echeance?.slice(0, 10) || '',
   quantite: String(tx.quantite), prix_unitaire: String(tx.prix_unitaire), id_produit: tx.id_produit || '', id_batiment: tx.id_batiment || '',
@@ -90,7 +91,7 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
     && Boolean(eggCategory(row.nom_produit)) === Boolean(eggCategory(oldProduct?.nom_produit)));
   return <Dialog open={open} onClose={() => !flow.busy && !flow.uncertain && onClose()} fullWidth maxWidth="sm"
     PaperProps={{ component: 'form', onSubmit: submit }} aria-labelledby="transaction-edit-title">
-    <DialogTitle id="transaction-edit-title">Modifier la transaction n° {transaction.id_transaction}</DialogTitle>
+    <DialogTitleWithClose id="transaction-edit-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>Modifier la transaction n° {transaction.id_transaction}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
       <Alert severity="info">{inactive ? 'Réactivez cette transaction depuis son détail avant de la modifier.' : 'Les conséquences sur le paiement et le stock seront présentées avant confirmation.'}</Alert>

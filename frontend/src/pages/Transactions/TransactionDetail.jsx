@@ -41,8 +41,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 import { get, post, put, del } from '../../services/api';
 import { format } from 'date-fns';
@@ -74,6 +72,15 @@ const CREDIT_REFUNDS_ENABLED = import.meta.env.VITE_ENABLE_CREDIT_REFUND_WRITES 
 /**
  * Composant TransactionDetail.
  */
+// Readable labels for payment and cheque statuses (the API returns codes such as 'en_attente').
+const PAYMENT_STATUS_LABELS = { valide: 'Validé', en_attente: 'En attente', annule: 'Annulé', rejete: 'Rejeté' };
+const CHEQUE_STATUS_LABELS = { a_encaisser: 'À encaisser', emis: 'Émis', en_attente: 'En attente', encaisse: 'Encaissé', rejete: 'Rejeté', annule: 'Annulé' };
+const readableStatus = (code) => {
+  if (!code) return '—';
+  const text = String(code).replace(/_/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 function TransactionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -548,45 +555,12 @@ function TransactionDetail() {
           component="h1"
           sx={{ fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.125rem' } }}
         >
-          Transaction #{transaction.id_transaction}
+          {transaction.id_client ? 'Vente' : 'Achat'} n° {transaction.id_transaction}
         </Typography>
         {transaction.est_actif === false && <Button variant="outlined" onClick={() => setReactivationOpen(true)}>
           {transaction.id_client ? 'Réactiver la vente' : 'Réactiver l’achat'}
         </Button>}
       </Box>
-
-      {/* Informations principales */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-              <Typography 
-                variant="h6" 
-                gutterBottom
-                sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
-              >
-                Informations Générales
-              </Typography>
-              <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
-              <Stack spacing={1.5}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Date de transaction
-                  </Typography>
-                  <Typography variant="body1">{formatDate(transaction.date_transaction)}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Client / Fournisseur
-                  </Typography>
-                  <Typography variant="body1">{getClientOuFournisseur()}</Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-      </Grid>
 
       {/* Détails de la transaction */}
       <Card sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}>
@@ -596,7 +570,7 @@ function TransactionDetail() {
             gutterBottom
             sx={{ fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' } }}
           >
-            Détails de la Transaction
+            {transaction.id_client ? 'Détails de la vente' : 'Détails de l’achat'}
           </Typography>
           <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
           <Grid container spacing={{ xs: 1.5, sm: 2 }}>
@@ -629,6 +603,18 @@ function TransactionDetail() {
                   : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
               </ExpandableDetails>
             </Grid> : null}
+            <Grid item xs={12} sm={6}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Date</Typography>
+                <Typography variant="body1" fontWeight="medium">{formatDate(transaction.date_transaction)}</Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">{transaction.id_client ? 'Client' : 'Fournisseur'}</Typography>
+                <Typography variant="body1" fontWeight="medium" sx={{ overflowWrap: 'anywhere' }}>{getClientOuFournisseur()}</Typography>
+              </Box>
+            </Grid>
             <Grid item xs={12} sm={6}>
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -749,13 +735,13 @@ function TransactionDetail() {
                         <TableCell>
                           {paiement.type_paiement === 'cheque' && paiement.statut_cheque ? (
                             <Chip 
-                              label={paiement.statut_cheque}
+                              label={CHEQUE_STATUS_LABELS[paiement.statut_cheque] || readableStatus(paiement.statut_cheque)}
                               size="small"
                               color={paiement.statut_cheque === 'encaisse' ? 'success' : 'default'}
                             />
                           ) : (
                             <Chip 
-                              label={paiement.statut}
+                              label={PAYMENT_STATUS_LABELS[paiement.statut] || readableStatus(paiement.statut)}
                               size="small"
                               color={paiement.statut === 'valide' ? 'success' : 'default'}
                             />
@@ -763,24 +749,16 @@ function TransactionDetail() {
                         </TableCell>
                         <TableCell align="center">
                           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                            {!['remboursement','credit_recu','credit_transfere'].includes(paiement.nature) && <Tooltip title="Modifier">
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => handleEditPaiement(paiement)}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>}
-                            {!['credit_recu','credit_transfere'].includes(paiement.nature) && <Tooltip title="Annuler ce règlement">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleDeletePaiementClick(paiement)}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>}
+                            {!['remboursement','credit_recu','credit_transfere'].includes(paiement.nature) && (
+                              <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => handleEditPaiement(paiement)}>
+                                Modifier
+                              </Button>
+                            )}
+                            {!['credit_recu','credit_transfere'].includes(paiement.nature) && (
+                              <Button size="small" color="error" startIcon={<DeleteIcon fontSize="small" />} onClick={() => handleDeletePaiementClick(paiement)} aria-label="Annuler ce règlement">
+                                Annuler
+                              </Button>
+                            )}
                           </Box>
                         </TableCell>
                       </TableRow>

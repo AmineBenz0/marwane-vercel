@@ -1,6 +1,6 @@
 import DateField from '../../utils/DateField';
 import ProductionSourcePicker from './ProductionSourcePicker';
-import SaleSummary from './SaleSummary';
+import SaleLineDetails from './SaleSummary';
 import { saleStockSummary } from './saleStockSummary';
 /**
  * Composant TransactionForm.
@@ -52,6 +52,8 @@ import {
   Divider,
   Collapse,
   Grid,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -823,6 +825,10 @@ function TransactionForm({
     0
   );
   const montantRestant = Math.max(0, montantTotal - montantPaye);
+  const theme = useTheme();
+  // Full-screen form on phones (it used to be a floating card scrolled inside the page).
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
+  const isSale = watchedTypeEntite === 'client';
   const isEditing = initialValues && initialValues.id_transaction;
 
   const saleBlocked = watchedTypeEntite === 'client' && (watchedLignes || []).some((line, index, lines) => {
@@ -1177,8 +1183,8 @@ function TransactionForm({
   const totalsAndActions = (
     <Box sx={{
       display: 'flex',
-      flexDirection: watchedTypeEntite === 'client' ? 'column' : { xs: 'column', md: 'row' },
-      alignItems: 'stretch',
+      flexDirection: { xs: 'column', md: 'row' },
+      alignItems: { xs: 'stretch', md: 'center' },
       justifyContent: 'space-between',
       gap: { xs: 1.5, md: 3 },
       width: '100%',
@@ -1189,64 +1195,44 @@ function TransactionForm({
         aria-label="Récapitulatif des montants"
         sx={{
           display: 'grid',
-          gridTemplateColumns: watchedTypeEntite === 'client'
-            ? 'minmax(0, 1fr)'
-            : { xs: 'minmax(0, 1fr)', sm: 'repeat(3, minmax(0, 1fr))' },
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           flex: '1 1 auto',
           minWidth: 0,
-          width: watchedTypeEntite === 'client' ? '100%' : { xs: '100%', md: 'auto' },
           gap: { xs: 1, sm: 2, md: 2.5 },
-          '& > div': {
-            minWidth: 0,
-            display: watchedTypeEntite === 'client' ? 'flex' : { xs: 'flex', sm: 'block' },
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 1,
-          },
+          '& > div': { minWidth: 0 },
         }}
       >
         <Box>
-          <Typography variant="caption" color="text.secondary"
-            sx={{ whiteSpace: watchedTypeEntite === 'client' ? 'normal' : 'nowrap' }}>
-            {watchedTypeEntite === 'client' ? 'Montant de la vente' : 'Montant de l’achat'}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {isSale ? 'Montant de la vente' : 'Montant de l’achat'}
           </Typography>
-          <Typography variant="subtitle1" fontWeight={800}
-            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-            {montantTotal.toFixed(2)} MAD
+          <Typography variant="subtitle1" fontWeight={800} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {formatMontant(montantTotal, { minimumFractionDigits: 2, useCompactNotation: false })}
           </Typography>
         </Box>
         <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Déjà payé</Typography>
-          <Typography variant="subtitle1" fontWeight={700}
-            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-            {montantPaye.toFixed(2)} MAD
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Déjà payé</Typography>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {formatMontant(montantPaye, { minimumFractionDigits: 2, useCompactNotation: false })}
           </Typography>
         </Box>
         <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Reste à payer</Typography>
-          <Typography variant="subtitle1" fontWeight={800} color="primary.main"
-            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-            {montantRestant.toFixed(2)} MAD
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Reste à payer</Typography>
+          <Typography variant="subtitle1" fontWeight={800} color="primary.main" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {formatMontant(montantRestant, { minimumFractionDigits: 2, useCompactNotation: false })}
           </Typography>
         </Box>
       </Box>
       <Box sx={{
         display: 'flex',
-        flexDirection: watchedTypeEntite === 'client' ? 'column-reverse' : { xs: 'column-reverse', sm: 'row' },
+        flexDirection: 'row',
         alignItems: 'stretch',
         justifyContent: 'flex-end',
         gap: 1,
-        mt: watchedTypeEntite === 'client' ? 2 : 0,
-        ml: watchedTypeEntite === 'client' ? 0 : { md: 'auto' },
-        width: watchedTypeEntite === 'client' ? '100%' : { xs: '100%', sm: 'auto' },
+        width: { xs: '100%', md: 'auto' },
         flexShrink: 0,
       }}>
-        <Button
-          onClick={handleClose}
-          disabled={loading}
-          color="inherit"
-          sx={{ flex: { xs: 1, sm: 'initial' }, whiteSpace: 'nowrap' }}
-        >
+        <Button onClick={handleClose} disabled={loading} color="inherit" sx={{ whiteSpace: 'nowrap' }}>
           Annuler
         </Button>
         <Button
@@ -1254,13 +1240,13 @@ function TransactionForm({
           variant="contained"
           disabled={loading || !isDirty || saleBlocked}
           startIcon={loading ? <CircularProgress size={16} /> : null}
-          sx={{ flex: { xs: 1, sm: 'initial' }, whiteSpace: 'nowrap' }}
+          sx={{ whiteSpace: 'nowrap', minWidth: { md: 180 }, flex: { xs: 1, md: 'initial' } }}
         >
           {loading
             ? 'Enregistrement...'
             : isEditing
               ? 'Vérifier les modifications'
-              : watchedTypeEntite === 'client'
+              : isSale
                 ? 'Enregistrer la vente'
                 : "Enregistrer l’achat"}
         </Button>
@@ -1275,6 +1261,7 @@ function TransactionForm({
       onClose={handleClose}
       maxWidth="lg"
       fullWidth
+      fullScreen={isPhone}
       PaperProps={{
         // Let React Hook Form render consistent French errors for every required field.
         component: 'form',
@@ -1282,8 +1269,8 @@ function TransactionForm({
         onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
         sx: {
           minHeight: { xs: 0, sm: '640px' },
-          maxHeight: '90vh',
-          borderRadius: 4,
+          maxHeight: { xs: '100%', sm: '90vh' },
+          borderRadius: { xs: 0, sm: 4 },
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -1319,7 +1306,9 @@ function TransactionForm({
                 {isEditing ? 'Modifier la transaction' : 'Nouvelle transaction'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Choisissez le partenaire et les lignes de vente ou d’achat, puis validez.
+                {isSale
+                  ? 'Le client, les œufs vendus, puis le paiement.'
+                  : 'Le fournisseur, les produits achetés, puis le paiement.'}
               </Typography>
             </Box>
             <IconButton onClick={handleClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
@@ -1374,7 +1363,7 @@ function TransactionForm({
                   <Box
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gridTemplateColumns: '1fr 1fr',
                       gap: 1.5,
                       mb: 2,
                     }}
@@ -1415,8 +1404,8 @@ function TransactionForm({
                             }
                           }}
                           sx={{
-                            p: { xs: 1.25, sm: 1.5 },
-                            minHeight: 68,
+                            p: { xs: 1, sm: 1.5 },
+                            minHeight: { xs: 48, sm: 68 },
                             borderRadius: 3,
                             border: '2px solid',
                             borderColor: isSelected ? option.activeColor : 'divider',
@@ -1436,7 +1425,7 @@ function TransactionForm({
                           <Typography sx={{ fontSize: 16, fontWeight: 800 }}>
                             {option.title}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
                             {option.subtitle}
                           </Typography>
                         </Box>
@@ -1452,68 +1441,10 @@ function TransactionForm({
               <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 2, borderRadius: 2.5, bgcolor: 'background.paper' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
                   <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>1</Box>
-                  <Typography variant="subtitle1" fontWeight={800}>Informations de la transaction</Typography>
+                  <Typography variant="subtitle1" fontWeight={800}>{isSale ? 'Client et date' : 'Fournisseur et date'}</Typography>
                 </Box>
                 <Grid container spacing={1.25}>
-                  <Grid item xs={12} md={4}>
-              {/* Date de transaction */}
-              <Controller
-                name="date_transaction"
-                control={control}
-                render={({ field, fieldState: { error } }) => (
-                  <DateField
-                    {...field}
-                    onChange={(event) => {
-                      const previousDate = field.value;
-                      const nextDate = event.target.value;
-                      field.onChange(event);
-                      const dueDate = watch('date_echeance');
-                      if (!dueDate || dueDate === getDefaultDueDate(previousDate || today())) {
-                        setValue('date_echeance', getDefaultDueDate(nextDate || today()));
-                      }
-                    }}
-                    fullWidth
-                    label="Date de transaction"
-                    size="small"
-                    error={!!error}
-                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                    helperText={error?.message || ''}
-                    required
-                    disabled={loading}
-                    margin="dense"
-                    variant="outlined"
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                  />
-                )}
-              />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-              {/* Date d'échéance (optionnel) */}
-              <Controller
-                name="date_echeance"
-                control={control}
-                render={({ field, fieldState: { error } }) => (
-                  <DateField
-                    {...field}
-                    fullWidth
-                    label="Date d'échéance du paiement (facultatif)"
-                    size="small"
-                    error={!!error}
-                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                    helperText={error?.message || 'Date limite pour le paiement'}
-                    disabled={loading}
-                    margin="dense"
-                    variant="outlined"
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                  />
-                )}
-              />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} md={8}>
               {/* Sélection Client OU Fournisseur */}
               <FormControl component="fieldset" margin="dense" fullWidth error={!!errors.type_entite} sx={{ display: 'none' }}>
                 <FormLabel component="legend">Type d'entité</FormLabel>
@@ -1616,10 +1547,44 @@ function TransactionForm({
               )}
 
                   </Grid>
+                  <Grid item xs={12} md={4}>
+              {/* Date de transaction */}
+              <Controller
+                name="date_transaction"
+                control={control}
+                render={({ field, fieldState: { error } }) => (
+                  <DateField
+                    {...field}
+                    onChange={(event) => {
+                      const previousDate = field.value;
+                      const nextDate = event.target.value;
+                      field.onChange(event);
+                      const dueDate = watch('date_echeance');
+                      if (!dueDate || dueDate === getDefaultDueDate(previousDate || today())) {
+                        setValue('date_echeance', getDefaultDueDate(nextDate || today()));
+                      }
+                    }}
+                    fullWidth
+                    label="Date de transaction"
+                    size="small"
+                    error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                    helperText={error?.message || ''}
+                    required
+                    disabled={loading}
+                    margin="dense"
+                    variant="outlined"
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                )}
+              />
+                  </Grid>
                 </Grid>
               </Paper>
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: watchedTypeEntite === 'client' ? { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 340px' } : 'minmax(0, 1fr)', gap: 2, alignItems: 'start' }}>
+              <Box>
               {/* Produits et paiements */}
               <Paper variant="outlined" sx={{ mb: 2, p: { xs: 1.25, sm: 2 }, borderRadius: 2.5, backgroundColor: 'background.paper' }}>
                 <Box
@@ -1632,11 +1597,15 @@ function TransactionForm({
                     mb: 1.5,
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <Box sx={{ width: 26, height: 26, flexShrink: 0, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
                     <Box>
-                      <Typography variant="subtitle1" fontWeight={800}>Produits</Typography>
-                      <Typography variant="caption" color="text.secondary">Sélectionnez l’origine des œufs pour une vente ou les produits pour un achat.</Typography>
+                      <Typography variant="subtitle1" fontWeight={800}>{isSale ? 'Œufs vendus' : 'Produits achetés'}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {isSale
+                          ? 'Pour chaque vente : le bâtiment d’où viennent les œufs, la quantité, le prix, puis le paiement.'
+                          : 'Pour chaque produit : la quantité, le prix, puis le paiement.'}
+                      </Typography>
                     </Box>
                   </Box>
                   {!isEditing && (
@@ -1677,7 +1646,7 @@ function TransactionForm({
                                   <TextField
                                     {...field}
                                     fullWidth
-                                    label={shouldShowBatimentSource ? "Quantite vendue (oeufs) *" : "Quantite *"}
+                                    label={shouldShowBatimentSource ? "Quantité vendue (œufs) *" : "Quantité *"}
                                     type="number"
                                     inputProps={{ min: 1, step: 1 }}
                                     value={field.value ?? ''}
@@ -1745,7 +1714,7 @@ function TransactionForm({
                         <Typography variant="subtitle2" fontWeight={800}>{watchedTypeEntite === 'client' ? 'Vente' : 'Produit'} {index + 1}</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                           <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
-                            <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total de la ligne : {ligneTotal.toFixed(2)} MAD</Typography>
+                            <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total : {formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Typography>
                           </Box>
                           {!isEditing && watchedLignes.length > 1 && (
                             <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
@@ -1759,6 +1728,9 @@ function TransactionForm({
                         produits={produits}
                         disabled={loading} transactionId={initialValues.id_transaction}
                         saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
+                      {shouldShowBatimentSource && <SaleLineDetails
+                        line={ligne} index={index} lines={watchedLignes || []} control={control}
+                        saleDate={watch('date_transaction')} loading={loading} renderPayment={renderLinePayment} />}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>
                         {/* Produit */}
@@ -1816,18 +1788,42 @@ function TransactionForm({
                         );
                   })}
                 </Box>
+                {/* Due date: only relevant while something remains to be paid. */}
+                {montantRestant > 0 && (
+                  <Grid container spacing={1.25} sx={{ mt: 1 }}>
+                  <Grid item xs={12} sm={6} md={4}>
+              {/* Date d'échéance (optionnel) */}
+              <Controller
+                name="date_echeance"
+                control={control}
+                render={({ field, fieldState: { error } }) => (
+                  <DateField
+                    {...field}
+                    fullWidth
+                    label="À payer avant le (facultatif)"
+                    size="small"
+                    error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                    helperText={error?.message || 'Date limite de paiement pour ce qui reste à payer'}
+                    disabled={loading}
+                    margin="dense"
+                    variant="outlined"
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                )}
+              />
+                  </Grid>
+                  </Grid>
+                )}
               </Paper>
-              {watchedTypeEntite === 'client' && <SaleSummary
-                lines={watchedLignes || []} products={produits} control={control} saleDate={watch('date_transaction')}
-                loading={loading} renderPayment={renderLinePayment}>
-                {totalsAndActions}
-              </SaleSummary>}
               </Box>
             </Box>
           )}
         </DialogContent>
 
-        {watchedTypeEntite !== 'client' && <DialogActions
+        <DialogActions
           sx={{
             px: { xs: 1.5, sm: 3 },
             py: 1.5,
@@ -1841,7 +1837,7 @@ function TransactionForm({
           }}
         >
           {totalsAndActions}
-        </DialogActions>}
+        </DialogActions>
     </Dialog>
 
     <Dialog open={Boolean(editReview && open)}

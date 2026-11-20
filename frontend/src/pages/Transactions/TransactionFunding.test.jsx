@@ -34,9 +34,9 @@ describe('Transaction purchase footer', () => {
     const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
     expect(summary).toBeVisible();
     expect(summary).toHaveTextContent('Montant de l’achat');
-    expect(summary).toHaveTextContent('100.00 MAD');
+    expect(summary).toHaveTextContent('100,00 MAD');
     expect(summary).toHaveTextContent('Déjà payé');
-    expect(summary).toHaveTextContent('0.00 MAD');
+    expect(summary).toHaveTextContent('0,00 MAD');
     expect(summary).toHaveTextContent('Reste à payer');
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Vérifier les modifications' })).toBeVisible();
@@ -47,7 +47,7 @@ describe('Transaction purchase footer', () => {
     render(<TransactionForm open initialValues={transaction} onClose={vi.fn()} onSubmit={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole('combobox', { name: /Fournisseur/ })).toHaveTextContent('Supplier'));
     const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
-    expect(summary).toHaveTextContent('100.00 MAD');
+    expect(summary).toHaveTextContent('100,00 MAD');
     expect(summary).toHaveTextContent('Reste à payer');
   });
 });

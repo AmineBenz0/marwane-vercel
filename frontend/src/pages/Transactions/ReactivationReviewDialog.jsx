@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   Alert, Button, Checkbox, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, FormControlLabel, Stack, Typography,
+  DialogContent, FormControlLabel, Stack, Typography,
 } from '@mui/material';
 import { announceCorrection } from '../../components/Corrections/useCorrectionFlow';
 import { get, patch } from '../../services/api';
+import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 const stockActions = { entree: 'Entrée', sortie: 'Sortie', reservation: 'Réservation rétablie' };
 
@@ -59,7 +60,7 @@ export default function ReactivationReviewDialog({ transaction, onClose, onSaved
 
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={() => !saving && onClose()} aria-labelledby={titleId}>
-      <DialogTitle id={titleId}>Réactiver {transaction.id_client ? 'la vente' : 'l’achat'} ?</DialogTitle>
+      <DialogTitleWithClose id={titleId} onClose={onClose} disabled={saving}>Réactiver {transaction.id_client ? 'la vente' : 'l’achat'} ?</DialogTitleWithClose>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           {loading && <CircularProgress aria-label="Vérification de la réactivation" size={24} />}

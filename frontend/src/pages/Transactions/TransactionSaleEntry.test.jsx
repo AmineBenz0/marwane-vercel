@@ -9,7 +9,7 @@ const sources = [
   { id_production: 12, date_production: '2026-10-21', type_oeuf: 'normal', calibre: 'gros', grammage: 66, nombre_oeufs: 80, disponible: 80, vendable: true },
 ];
 const props = { open: true, onClose: vi.fn(), onSubmit: vi.fn() };
-const quantity = () => screen.getByRole('spinbutton', { name: /Quantite vendue/ });
+const quantity = () => screen.getByRole('spinbutton', { name: /Quantité vendue/ });
 const price = () => screen.getByRole('spinbutton', { name: /Prix unitaire/ });
 const selectBuilding = async (name) => {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Bâtiment source/ }));
@@ -32,9 +32,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
-  it('keeps the sale summary and actions in their sidebar', async () => {
+  it('shows the stock under the sale line and the totals and actions in the footer', async () => {
     render(<TransactionForm {...props} />);
-    expect(await screen.findByRole('complementary', { name: 'Résumé de la vente' })).toBeVisible();
+    expect(await screen.findByLabelText('Stock pour la vente 1')).toBeVisible();
     const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
     expect(summary).toHaveTextContent('Montant de la vente');
     expect(summary).toHaveTextContent('Déjà payé');
@@ -191,7 +191,7 @@ describe('sale entry preserves user input', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Gros' }));
     expect(quantity()).toHaveValue(50);
     expect(price()).toHaveValue(1.25);
-    expect(screen.getByText('Total de la ligne : 62.50 MAD')).toBeVisible();
+    expect(screen.getByText('Total : 62,50 MAD')).toBeVisible();
   });
 
   it('preserves draft values across parent rerenders and flags an excessive quantity', async () => {
