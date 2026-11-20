@@ -410,10 +410,10 @@ function Caisse() {
               <TableContainer sx={{ overflowX: 'auto' }}>
                 <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
                   <colgroup>
-                    <col style={{ width: '20%' }} />
-                    <col style={{ width: '38%' }} />
-                    <col style={{ width: '24%' }} />
-                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '19%' }} />
+                    <col style={{ width: '35%' }} />
+                    <col style={{ width: '23%' }} />
+                    <col style={{ width: '23%' }} />
                   </colgroup>
                   <TableHead>
                     <TableRow>
@@ -567,8 +567,9 @@ function MovementRow({ movement }) {
       </TableCell>
       <TableCell><CellText variant="body2" lines={2}>{getMovementOrigin(movement)}</CellText></TableCell>
       <TableCell align="right">
-        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>
-          {formatSignedAmount(movement)}
+        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'}>
+          {/* Large amounts may break before the currency only, never inside the number. */}
+          {String(formatSignedAmount(movement)).replace(/\u00A0(MAD)$/, ' $1')}
         </Typography>
       </TableCell>
     </TableRow>
