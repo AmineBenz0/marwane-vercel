@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent,
-  DialogTitle, Divider, Stack, Typography,
+  Divider, Stack, Typography,
 } from '@mui/material';
 import { get, post } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
+import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 const money = value => formatMontant(value, { useCompactNotation: false, minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const eggs = value => `${Number(value || 0).toLocaleString('fr-FR')} œufs`;
@@ -84,7 +85,7 @@ export default function DeferredSaleCancellationDialog({
 
   return <Dialog open={Boolean(open)} onClose={close} fullWidth maxWidth="sm"
     aria-labelledby="cancel-deferred-sale-heading">
-    <DialogTitle id="cancel-deferred-sale-heading">Annuler les œufs restants ?</DialogTitle>
+    <DialogTitleWithClose id="cancel-deferred-sale-heading" onClose={close}>Annuler les œufs restants ?</DialogTitleWithClose>
     <DialogContent dividers>
       {loading ? <Stack alignItems="center" spacing={1.5} sx={{ py: 3 }}>
         <CircularProgress size={26} aria-label="Calcul de l'avoir" />

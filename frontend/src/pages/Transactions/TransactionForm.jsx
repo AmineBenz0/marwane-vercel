@@ -1,6 +1,6 @@
 import DateField from '../../utils/DateField';
 import ProductionSourcePicker from './ProductionSourcePicker';
-import SaleSummary from './SaleSummary';
+import SaleLineDetails from './SaleSummary';
 import { saleStockSummary } from './saleStockSummary';
 /**
  * Composant TransactionForm.
@@ -28,6 +28,7 @@ import { keyframes } from '@emotion/react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
+  Stack,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -52,6 +53,8 @@ import {
   Divider,
   Collapse,
   Grid,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -70,8 +73,10 @@ import { transactionValidationSchema } from './transactionValidation';
 const EMPTY_INITIAL_VALUES = {};
 
 const today = () => new Date().toISOString().split('T')[0];
-const tomorrow = () => {
-  const value = new Date(`${today()}T00:00:00Z`);
+// The day after a given ISO date (default: today), used as the default planned delivery date.
+const tomorrow = (from = today()) => {
+  const value = new Date(`${String(from).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(value.getTime())) return tomorrow();
   value.setUTCDate(value.getUTCDate() + 1);
   return value.toISOString().split('T')[0];
 };
@@ -337,6 +342,8 @@ function TransactionForm({
     clearErrors,
     watch,
     setValue,
+    trigger,
+    getValues,
   } = useForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
@@ -359,6 +366,10 @@ function TransactionForm({
   const watchedTypeEntite = watch('type_entite');
   const watchedFournisseurId = watch('id_fournisseur');
   const isEditingTransaction = Boolean(initialValues?.id_transaction);
+  // The server refuses changes to the amounts/identity of a paid transaction, and to the
+  // identity of a deferred delivery: lock those fields up front instead of failing on save.
+  const financialLocked = isEditingTransaction && paiementsExistants.length > 0;
+  const identityLocked = financialLocked || (isEditingTransaction && Boolean(initialValues?.est_promesse));
   useEffect(() => {
     if (!open || isEditingTransaction || watchedTypeEntite !== 'client') return;
     (watchedLignes || []).forEach((line, index, lines) => {
@@ -823,6 +834,10 @@ function TransactionForm({
     0
   );
   const montantRestant = Math.max(0, montantTotal - montantPaye);
+  const theme = useTheme();
+  // Full-screen form on phones (it used to be a floating card scrolled inside the page).
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
+  const isSale = watchedTypeEntite === 'client';
   const isEditing = initialValues && initialValues.id_transaction;
 
   const saleBlocked = watchedTypeEntite === 'client' && (watchedLignes || []).some((line, index, lines) => {
@@ -967,7 +982,7 @@ function TransactionForm({
                 )}
                 <Grid container spacing={2}>
                   {/* Montant */}
-                  <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                  <Grid item xs={12} sm={6} md={4}>
                     <Controller
                       name={`lignes.${index}.paiements.${pIndex}.montant`}
                       control={control}
@@ -990,7 +1005,7 @@ function TransactionForm({
                   </Grid>
 
                   {/* Type de paiement */}
-                  <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                  <Grid item xs={12} sm={6} md={4}>
                     <Controller
                       name={`lignes.${index}.paiements.${pIndex}.type`}
                       control={control}
@@ -1042,7 +1057,7 @@ function TransactionForm({
                   </Grid>
 
                   {/* Date du paiement */}
-                  <Grid item xs={12} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                  <Grid item xs={12} md={4}>
                     <Controller
                       name={`lignes.${index}.paiements.${pIndex}.date`}
                       control={control}
@@ -1066,7 +1081,7 @@ function TransactionForm({
                   {/* Champs conditionnels */}
                   {paiement.type === 'cheque' && (
                     <>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.numero_cheque`}
                           control={control}
@@ -1075,7 +1090,7 @@ function TransactionForm({
                           )}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.banque`}
                           control={control}
@@ -1089,7 +1104,7 @@ function TransactionForm({
 
                   {(paiement.source_reglement === 'banque' || (!paiement.source_reglement && paiement.type === 'virement')) && (
                     <>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.id_compte`}
                           control={control}
@@ -1121,7 +1136,7 @@ function TransactionForm({
                   )}
                   {paiement.type === 'virement' && (
                     <>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.reference`}
                           control={control}
@@ -1177,8 +1192,8 @@ function TransactionForm({
   const totalsAndActions = (
     <Box sx={{
       display: 'flex',
-      flexDirection: watchedTypeEntite === 'client' ? 'column' : { xs: 'column', md: 'row' },
-      alignItems: 'stretch',
+      flexDirection: { xs: 'column', md: 'row' },
+      alignItems: { xs: 'stretch', md: 'center' },
       justifyContent: 'space-between',
       gap: { xs: 1.5, md: 3 },
       width: '100%',
@@ -1189,64 +1204,44 @@ function TransactionForm({
         aria-label="Récapitulatif des montants"
         sx={{
           display: 'grid',
-          gridTemplateColumns: watchedTypeEntite === 'client'
-            ? 'minmax(0, 1fr)'
-            : { xs: 'minmax(0, 1fr)', sm: 'repeat(3, minmax(0, 1fr))' },
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           flex: '1 1 auto',
           minWidth: 0,
-          width: watchedTypeEntite === 'client' ? '100%' : { xs: '100%', md: 'auto' },
           gap: { xs: 1, sm: 2, md: 2.5 },
-          '& > div': {
-            minWidth: 0,
-            display: watchedTypeEntite === 'client' ? 'flex' : { xs: 'flex', sm: 'block' },
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 1,
-          },
+          '& > div': { minWidth: 0 },
         }}
       >
         <Box>
-          <Typography variant="caption" color="text.secondary"
-            sx={{ whiteSpace: watchedTypeEntite === 'client' ? 'normal' : 'nowrap' }}>
-            {watchedTypeEntite === 'client' ? 'Montant de la vente' : 'Montant de l’achat'}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {isSale ? 'Montant de la vente' : 'Montant de l’achat'}
           </Typography>
-          <Typography variant="subtitle1" fontWeight={800}
-            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-            {montantTotal.toFixed(2)} MAD
+          <Typography variant="subtitle1" fontWeight={800} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {formatMontant(montantTotal, { minimumFractionDigits: 2, useCompactNotation: false })}
           </Typography>
         </Box>
         <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Déjà payé</Typography>
-          <Typography variant="subtitle1" fontWeight={700}
-            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-            {montantPaye.toFixed(2)} MAD
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Déjà payé</Typography>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {formatMontant(montantPaye, { minimumFractionDigits: 2, useCompactNotation: false })}
           </Typography>
         </Box>
         <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Reste à payer</Typography>
-          <Typography variant="subtitle1" fontWeight={800} color="primary.main"
-            sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-            {montantRestant.toFixed(2)} MAD
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Reste à payer</Typography>
+          <Typography variant="subtitle1" fontWeight={800} color="primary.main" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {formatMontant(montantRestant, { minimumFractionDigits: 2, useCompactNotation: false })}
           </Typography>
         </Box>
       </Box>
       <Box sx={{
         display: 'flex',
-        flexDirection: watchedTypeEntite === 'client' ? 'column-reverse' : { xs: 'column-reverse', sm: 'row' },
+        flexDirection: 'row',
         alignItems: 'stretch',
         justifyContent: 'flex-end',
         gap: 1,
-        mt: watchedTypeEntite === 'client' ? 2 : 0,
-        ml: watchedTypeEntite === 'client' ? 0 : { md: 'auto' },
-        width: watchedTypeEntite === 'client' ? '100%' : { xs: '100%', sm: 'auto' },
+        width: { xs: '100%', md: 'auto' },
         flexShrink: 0,
       }}>
-        <Button
-          onClick={handleClose}
-          disabled={loading}
-          color="inherit"
-          sx={{ flex: { xs: 1, sm: 'initial' }, whiteSpace: 'nowrap' }}
-        >
+        <Button onClick={handleClose} disabled={loading} color="inherit" sx={{ whiteSpace: 'nowrap' }}>
           Annuler
         </Button>
         <Button
@@ -1254,13 +1249,13 @@ function TransactionForm({
           variant="contained"
           disabled={loading || !isDirty || saleBlocked}
           startIcon={loading ? <CircularProgress size={16} /> : null}
-          sx={{ flex: { xs: 1, sm: 'initial' }, whiteSpace: 'nowrap' }}
+          sx={{ whiteSpace: 'nowrap', minWidth: { md: 180 }, flex: { xs: 1, md: 'initial' } }}
         >
           {loading
             ? 'Enregistrement...'
             : isEditing
-              ? 'Vérifier les modifications'
-              : watchedTypeEntite === 'client'
+              ? 'Enregistrer les modifications'
+              : isSale
                 ? 'Enregistrer la vente'
                 : "Enregistrer l’achat"}
         </Button>
@@ -1275,6 +1270,7 @@ function TransactionForm({
       onClose={handleClose}
       maxWidth="lg"
       fullWidth
+      fullScreen={isPhone}
       PaperProps={{
         // Let React Hook Form render consistent French errors for every required field.
         component: 'form',
@@ -1282,8 +1278,8 @@ function TransactionForm({
         onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
         sx: {
           minHeight: { xs: 0, sm: '640px' },
-          maxHeight: '90vh',
-          borderRadius: 4,
+          maxHeight: { xs: '100%', sm: '90vh' },
+          borderRadius: { xs: 0, sm: 4 },
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -1316,11 +1312,15 @@ function TransactionForm({
                   letterSpacing: '-0.03em',
                 }}
               >
-                {isEditing ? 'Modifier la transaction' : 'Nouvelle transaction'}
+                {isEditing
+                  ? `${isSale ? 'Modifier la vente' : 'Modifier l’achat'} n° ${initialValues.id_transaction}`
+                  : 'Nouvelle transaction'}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Choisissez le partenaire et les lignes de vente ou d’achat, puis validez.
-              </Typography>
+              {isEditing && identityLocked && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {financialLocked
+                  ? 'Déjà payée en partie : seules l’échéance et les paiements peuvent changer.'
+                  : 'Livraison différée : le client, la date, le bâtiment et le type d’œufs sont fixes.'}
+              </Typography>}
             </Box>
             <IconButton onClick={handleClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
               <CloseIcon />
@@ -1337,7 +1337,7 @@ function TransactionForm({
               ? `À compléter ou corriger : ${fieldPaths.map((path) => getFieldLabel(path, watchedTypeEntite)).join(', ')}.`
               : genericError
                 ? 'Une information obligatoire manque. Vérifiez les champs signalés en rouge.'
-                : errors.root?.message || errorMessage;
+                : shortServerError(errors.root?.message || errorMessage);
             return (
               <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
                 <Typography fontWeight={800}>{summary}</Typography>
@@ -1367,14 +1367,14 @@ function TransactionForm({
             </Box>
           ) : (
             <Box sx={{ mt: 1 }}>
-              <Controller
+              {!isEditing && <Controller
                 name="type_entite"
                 control={control}
                 render={({ field }) => (
                   <Box
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                      gridTemplateColumns: '1fr 1fr',
                       gap: 1.5,
                       mb: 2,
                     }}
@@ -1383,7 +1383,6 @@ function TransactionForm({
                       {
                         value: 'client',
                         title: 'Vente client',
-                        subtitle: "Produits vendus, argent qui entre",
                         disabled: prefillFournisseurId !== null && prefillFournisseurId !== undefined,
                         activeColor: 'primary.main',
                         activeBg: 'rgba(13, 148, 136, 0.05)',
@@ -1391,7 +1390,6 @@ function TransactionForm({
                       {
                         value: 'fournisseur',
                         title: 'Achat fournisseur',
-                        subtitle: "Produits achetés, argent qui sort",
                         disabled: prefillClientId !== null && prefillClientId !== undefined,
                         activeColor: 'primary.main',
                         activeBg: 'rgba(13, 148, 136, 0.05)',
@@ -1415,8 +1413,8 @@ function TransactionForm({
                             }
                           }}
                           sx={{
-                            p: { xs: 1.25, sm: 1.5 },
-                            minHeight: 68,
+                            p: { xs: 1, sm: 1.5 },
+                            minHeight: { xs: 48, sm: 68 },
                             borderRadius: 3,
                             border: '2px solid',
                             borderColor: isSelected ? option.activeColor : 'divider',
@@ -1436,15 +1434,12 @@ function TransactionForm({
                           <Typography sx={{ fontSize: 16, fontWeight: 800 }}>
                             {option.title}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {option.subtitle}
-                          </Typography>
                         </Box>
                       );
                     })}
                   </Box>
                 )}
-              />
+              />}
               {errors.type_entite && (
                 <FormHelperText error>{errors.type_entite.message}</FormHelperText>
               )}
@@ -1452,68 +1447,10 @@ function TransactionForm({
               <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 2, borderRadius: 2.5, bgcolor: 'background.paper' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
                   <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>1</Box>
-                  <Typography variant="subtitle1" fontWeight={800}>Informations de la transaction</Typography>
+                  <Typography variant="subtitle1" fontWeight={800}>{isSale ? 'Client et dates' : 'Fournisseur et dates'}</Typography>
                 </Box>
                 <Grid container spacing={1.25}>
-                  <Grid item xs={12} md={4}>
-              {/* Date de transaction */}
-              <Controller
-                name="date_transaction"
-                control={control}
-                render={({ field, fieldState: { error } }) => (
-                  <DateField
-                    {...field}
-                    onChange={(event) => {
-                      const previousDate = field.value;
-                      const nextDate = event.target.value;
-                      field.onChange(event);
-                      const dueDate = watch('date_echeance');
-                      if (!dueDate || dueDate === getDefaultDueDate(previousDate || today())) {
-                        setValue('date_echeance', getDefaultDueDate(nextDate || today()));
-                      }
-                    }}
-                    fullWidth
-                    label="Date de transaction"
-                    size="small"
-                    error={!!error}
-                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                    helperText={error?.message || ''}
-                    required
-                    disabled={loading}
-                    margin="dense"
-                    variant="outlined"
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                  />
-                )}
-              />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-              {/* Date d'échéance (optionnel) */}
-              <Controller
-                name="date_echeance"
-                control={control}
-                render={({ field, fieldState: { error } }) => (
-                  <DateField
-                    {...field}
-                    fullWidth
-                    label="Date d'échéance du paiement (facultatif)"
-                    size="small"
-                    error={!!error}
-                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                    helperText={error?.message || 'Date limite pour le paiement'}
-                    disabled={loading}
-                    margin="dense"
-                    variant="outlined"
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                  />
-                )}
-              />
-                  </Grid>
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} md={6}>
               {/* Sélection Client OU Fournisseur */}
               <FormControl component="fieldset" margin="dense" fullWidth error={!!errors.type_entite} sx={{ display: 'none' }}>
                 <FormLabel component="legend">Type d'entité</FormLabel>
@@ -1563,7 +1500,7 @@ function TransactionForm({
                       error={!!error}
                       sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
-                      disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
+                      disabled={loading || identityLocked || (prefillClientId !== null && prefillClientId !== undefined)}
                       value={field.value || ''}
                     >
                       <MenuItem value="">
@@ -1596,7 +1533,7 @@ function TransactionForm({
                       error={!!error}
                       sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
-                      disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
+                      disabled={loading || identityLocked || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                       value={field.value || ''}
                     >
                       <MenuItem value="">
@@ -1616,10 +1553,68 @@ function TransactionForm({
               )}
 
                   </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+              {/* Date de transaction */}
+              <Controller
+                name="date_transaction"
+                control={control}
+                render={({ field, fieldState: { error } }) => (
+                  <DateField
+                    {...field}
+                    onChange={(event) => {
+                      const previousDate = field.value;
+                      const nextDate = event.target.value;
+                      field.onChange(event);
+                      const dueDate = watch('date_echeance');
+                      if (!dueDate || dueDate === getDefaultDueDate(previousDate || today())) {
+                        setValue('date_echeance', getDefaultDueDate(nextDate || today()));
+                      }
+                    }}
+                    fullWidth
+                    label="Date de transaction"
+                    size="small"
+                    error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                    helperText={error?.message || ''}
+                    required
+                    disabled={loading || identityLocked}
+                    margin="dense"
+                    variant="outlined"
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                )}
+              />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+              {/* Date d'échéance (optionnel) */}
+              <Controller
+                name="date_echeance"
+                control={control}
+                render={({ field, fieldState: { error } }) => (
+                  <DateField
+                    {...field}
+                    fullWidth
+                    label="Date d'échéance du paiement (facultatif)"
+                    size="small"
+                    error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                    helperText={error?.message || ''}
+                    disabled={loading}
+                    margin="dense"
+                    variant="outlined"
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                )}
+              />
+                  </Grid>
                 </Grid>
               </Paper>
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: watchedTypeEntite === 'client' ? { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 340px' } : 'minmax(0, 1fr)', gap: 2, alignItems: 'start' }}>
+              <Box>
               {/* Produits et paiements */}
               <Paper variant="outlined" sx={{ mb: 2, p: { xs: 1.25, sm: 2 }, borderRadius: 2.5, backgroundColor: 'background.paper' }}>
                 <Box
@@ -1632,11 +1627,10 @@ function TransactionForm({
                     mb: 1.5,
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <Box sx={{ width: 26, height: 26, flexShrink: 0, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
                     <Box>
-                      <Typography variant="subtitle1" fontWeight={800}>Produits</Typography>
-                      <Typography variant="caption" color="text.secondary">Sélectionnez l’origine des œufs pour une vente ou les produits pour un achat.</Typography>
+                      <Typography variant="subtitle1" fontWeight={800}>{isSale ? 'Œufs vendus' : 'Produits achetés'}</Typography>
                     </Box>
                   </Box>
                   {!isEditing && (
@@ -1677,7 +1671,7 @@ function TransactionForm({
                                   <TextField
                                     {...field}
                                     fullWidth
-                                    label={shouldShowBatimentSource ? "Quantite vendue (oeufs) *" : "Quantite *"}
+                                    label={shouldShowBatimentSource ? "Quantité vendue (œufs) *" : "Quantité *"}
                                     type="number"
                                     inputProps={{ min: 1, step: 1 }}
                                     value={field.value ?? ''}
@@ -1685,7 +1679,7 @@ function TransactionForm({
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message}
                                     size="small"
-                                    disabled={loading}
+                                    disabled={loading || financialLocked}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
@@ -1718,7 +1712,7 @@ function TransactionForm({
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || ''}
                                     size="small"
-                                    disabled={loading}
+                                    disabled={loading || financialLocked}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
@@ -1744,9 +1738,9 @@ function TransactionForm({
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, gap: 1 }}>
                         <Typography variant="subtitle2" fontWeight={800}>{watchedTypeEntite === 'client' ? 'Vente' : 'Produit'} {index + 1}</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                          <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
-                            <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total de la ligne : {ligneTotal.toFixed(2)} MAD</Typography>
-                          </Box>
+                          {watchedLignes.length > 1 && <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
+                            <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total : {formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Typography>
+                          </Box>}
                           {!isEditing && watchedLignes.length > 1 && (
                             <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
                               <DeleteIcon fontSize="small" />
@@ -1757,8 +1751,18 @@ function TransactionForm({
                       {shouldShowBatimentSource && <ProductionSourcePicker
                         index={index} control={control} setValue={setValue} batiments={batiments}
                         produits={produits}
-                        disabled={loading} transactionId={initialValues.id_transaction}
+                        disabled={loading || identityLocked} transactionId={initialValues.id_transaction}
                         saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
+                      {shouldShowBatimentSource && <SaleLineDetails
+                        line={ligne} index={index} lines={watchedLignes || []} products={produits} control={control}
+                        onDeferredChange={(checked) => {
+                          // Default planned delivery: the day after the sale (editable).
+                          if (checked && !getValues(`lignes.${index}.date_livraison_prevue`)) {
+                            setValue(`lignes.${index}.date_livraison_prevue`, tomorrow(getValues('date_transaction')), { shouldDirty: true });
+                          }
+                          setTimeout(() => trigger(`lignes.${index}.quantite`), 0);
+                        }}
+                        saleDate={watch('date_transaction')} loading={loading} renderPayment={renderLinePayment} />}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>
                         {/* Produit */}
@@ -1767,14 +1771,15 @@ function TransactionForm({
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
-                                <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
-                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
+                                <FormControl fullWidth size="small" error={!!error} disabled={loading || financialLocked} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
+                                  <InputLabel id={`ligne-${index}-produit-label`}>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
+                                      labelId={`ligne-${index}-produit-label`}
                                       size="small"
                                       value={field.value || ''}
                                     label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}
-                                      disabled={loading}
+                                      disabled={loading || financialLocked}
                                       onChange={(event) => {
                                         field.onChange(event);
                                         const selected = produits.find(p => Number(p.id_produit) === Number(event.target.value));
@@ -1817,17 +1822,12 @@ function TransactionForm({
                   })}
                 </Box>
               </Paper>
-              {watchedTypeEntite === 'client' && <SaleSummary
-                lines={watchedLignes || []} products={produits} control={control} saleDate={watch('date_transaction')}
-                loading={loading} renderPayment={renderLinePayment}>
-                {totalsAndActions}
-              </SaleSummary>}
               </Box>
             </Box>
           )}
         </DialogContent>
 
-        {watchedTypeEntite !== 'client' && <DialogActions
+        <DialogActions
           sx={{
             px: { xs: 1.5, sm: 3 },
             py: 1.5,
@@ -1841,86 +1841,89 @@ function TransactionForm({
           }}
         >
           {totalsAndActions}
-        </DialogActions>}
+        </DialogActions>
     </Dialog>
 
     <Dialog open={Boolean(editReview && open)}
       onClose={reviewSaving ? undefined : () => setEditReview(null)}
-      fullWidth maxWidth="sm" aria-labelledby="edit-review-title">
-      <DialogTitle id="edit-review-title">Vérifier les modifications</DialogTitle>
+      fullWidth maxWidth="xs" aria-labelledby="edit-review-title">
+      <DialogTitle id="edit-review-title">Confirmer la modification</DialogTitle>
       <DialogContent>
-        <Box sx={{ pt: 1 }}>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Cet aperçu compare les valeurs saisies. Il ne valide ni le stock ni les mouvements
-            comptables. Les règles du serveur seront appliquées à l’enregistrement.
-          </Alert>
-          {reviewError && <Alert severity="error" sx={{ mb: 2 }}>{reviewError}</Alert>}
-          {editReview && (() => {
-            const keys = [
-              ['date_transaction', 'Date de transaction'], ['date_echeance', 'Date d’échéance'],
-              ['id_client', 'Client'], ['id_fournisseur', 'Fournisseur'],
-              ['id_produit', 'Produit'], ['id_batiment', 'Bâtiment source'],
-              ['id_production', 'Saisie source'], ['quantite', 'Quantité'],
-              ['prix_unitaire', 'Prix unitaire'], ['est_promesse', 'Livraison différée'],
-              ['date_livraison_prevue', 'Date prévue de livraison'],
-            ];
-            const normalize = (key, value) => {
-              if (value === undefined || value === null || value === '') return null;
-              if (key === 'est_promesse') return Boolean(value);
-              if (['quantite', 'prix_unitaire', 'id_client', 'id_fournisseur',
-                'id_produit', 'id_batiment', 'id_production'].includes(key)) return Number(value);
-              if (key.startsWith('date_')) return String(value).slice(0, 10);
-              return value;
-            };
-            const changed = keys.filter(([key]) => key in editReview.payload
-              && normalize(key, initialValues[key]) !== normalize(key, editReview.payload[key]));
-            const labelValue = (key, value) => {
-              const normalized = normalize(key, value);
-              if (normalized === null) return 'Non renseigné';
-              if (key === 'est_promesse') return normalized ? 'Oui' : 'Non';
-              if (key.startsWith('date_')) return normalized.split('-').reverse().join('/');
-              if (key === 'prix_unitaire') return formatMontant(normalized, { useCompactNotation: false });
-              return String(normalized);
-            };
-            return <Box>
-              {changed.length === 0 && <Typography variant="body2" color="text.secondary">
-                Aucun champ de la transaction n’a changé. Vérifiez les paiements associés.
-              </Typography>}
-              {changed.map(([key, label]) => <Box key={key} sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="body2" fontWeight={700}>{label}</Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 0.5 }}>
-                  <Box><Typography variant="caption" color="text.secondary">Avant</Typography>
-                    <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{labelValue(key, initialValues[key])}</Typography></Box>
-                  <Box><Typography variant="caption" color="text.secondary">Après</Typography>
-                    <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{labelValue(key, editReview.payload[key])}</Typography></Box>
-                </Box>
-              </Box>)}
-              {changed.some(([key]) => ['quantite', 'prix_unitaire'].includes(key)) && (
-                <Typography variant="body2" sx={{ mt: 2 }} fontWeight={700}>
-                  Montant total estimé : {formatMontant(
-                    Number(editReview.payload.quantite ?? initialValues.quantite) *
-                    Number(editReview.payload.prix_unitaire ?? initialValues.prix_unitaire),
-                    { useCompactNotation: false })}
-                </Typography>
-              )}
-              {paiementsExistants.length > 0 && <Alert severity="warning" sx={{ mt: 2 }}>
-                Cette transaction possède des paiements. Les modifications financières restent
-                limitées par le serveur.
-              </Alert>}
-            </Box>;
-          })()}
-        </Box>
+        {editReview && (() => {
+          const keys = [
+            ['date_transaction', 'Date'], ['date_echeance', 'Échéance'],
+            ['id_client', 'Client'], ['id_fournisseur', 'Fournisseur'],
+            ['id_produit', 'Produit'], ['id_batiment', 'Bâtiment'],
+            ['quantite', 'Quantité'], ['prix_unitaire', 'Prix unitaire'],
+            ['est_promesse', 'Livraison différée'], ['date_livraison_prevue', 'Livraison prévue'],
+          ];
+          const normalize = (key, value) => {
+            if (value === undefined || value === null || value === '') return null;
+            if (key === 'est_promesse') return Boolean(value);
+            if (['quantite', 'prix_unitaire', 'id_client', 'id_fournisseur',
+              'id_produit', 'id_batiment'].includes(key)) return Number(value);
+            if (key.startsWith('date_')) return String(value).slice(0, 10);
+            return value;
+          };
+          const changed = keys.filter(([key]) => key in editReview.payload
+            && normalize(key, initialValues[key]) !== normalize(key, editReview.payload[key]));
+          const money = (value) => formatMontant(value, { minimumFractionDigits: 2, useCompactNotation: false });
+          const labelValue = (key, value) => {
+            const v = normalize(key, value);
+            if (v === null) return '—';
+            if (key === 'est_promesse') return v ? 'Oui' : 'Non';
+            if (key.startsWith('date_')) return v.split('-').reverse().join('/');
+            if (key === 'prix_unitaire') return money(v);
+            if (key === 'quantite') return v.toLocaleString('fr-FR');
+            if (key === 'id_client') return clients.find((c) => Number(c.id_client) === v)?.nom_client || '—';
+            if (key === 'id_fournisseur') return fournisseurs.find((f) => Number(f.id_fournisseur) === v)?.nom_fournisseur || '—';
+            if (key === 'id_produit') return produits.find((p) => Number(p.id_produit) === v)?.nom_produit || '—';
+            if (key === 'id_batiment') return batiments.find((b) => Number(b.id_batiment) === v)?.nom || '—';
+            return String(v);
+          };
+          const totalChanged = changed.some(([key]) => ['quantite', 'prix_unitaire'].includes(key));
+          const newTotal = Number(editReview.payload.quantite ?? initialValues.quantite)
+            * Number(editReview.payload.prix_unitaire ?? initialValues.prix_unitaire);
+          const newPayments = (editReview.payload.paiements || []).filter((p) => !p.id_paiement);
+          return <Stack spacing={1.25}>
+            {changed.length === 0 && newPayments.length === 0 && <Typography variant="body2" color="text.secondary">Rien n’a changé.</Typography>}
+            {changed.map(([key, label]) => <Box key={key}>
+              <Typography variant="caption" color="text.secondary">{label}</Typography>
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                <Box component="span" sx={{ color: 'text.secondary', textDecoration: 'line-through' }}>{labelValue(key, initialValues[key])}</Box>
+                {' → '}
+                <Box component="span" fontWeight={800}>{labelValue(key, editReview.payload[key])}</Box>
+              </Typography>
+            </Box>)}
+            {newPayments.length > 0 && <Typography variant="body2">
+              {newPayments.length === 1 ? 'Nouveau paiement' : `${newPayments.length} nouveaux paiements`} :{' '}
+              <Box component="span" fontWeight={800}>{money(newPayments.reduce((sum, p) => sum + Number(p.montant || 0), 0))}</Box>
+            </Typography>}
+            {totalChanged && <Typography variant="body2" sx={{ pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+              Nouveau total : <Box component="span" fontWeight={800}>{money(newTotal)}</Box>
+            </Typography>}
+            {reviewError && <Alert severity="error">{shortServerError(reviewError)}</Alert>}
+          </Stack>;
+        })()}
       </DialogContent>
       <DialogActions sx={{ p: 2, gap: 1 }}>
         <Button color="inherit" disabled={reviewSaving || loading}
-          onClick={() => { setEditReview(null); setReviewError(''); }}>Retour aux modifications</Button>
+          onClick={() => { setEditReview(null); setReviewError(''); }}>Retour</Button>
         <Button variant="contained" disabled={reviewSaving || loading} onClick={confirmEditReview}>
-          {reviewSaving || loading ? 'Enregistrement…' : 'Confirmer l’enregistrement'}
+          {reviewSaving || loading ? 'Enregistrement…' : 'Enregistrer'}
         </Button>
       </DialogActions>
     </Dialog>
     </>
   );
+}
+
+// Server refusals are long and technical: keep only what the user needs to do.
+function shortServerError(message) {
+  if (/historique de paiement est immuable/i.test(message)) return 'Cette transaction a déjà un paiement : ce changement est impossible. Annulez-la et créez-en une nouvelle.';
+  if (/livraison différée sont fixes/i.test(message)) return 'Livraison différée : ce changement est impossible. Annulez-la et créez-en une nouvelle.';
+  if (/inférieure au stock déjà réservé/i.test(message)) return 'La quantité ne peut pas être inférieure aux œufs déjà réservés.';
+  return message;
 }
 
 export default TransactionForm;

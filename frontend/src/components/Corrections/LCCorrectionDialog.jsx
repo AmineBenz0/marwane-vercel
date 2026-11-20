@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import DateField from '../../utils/DateField';
 import { get } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useCreditFlow from './useCreditFlow';
+import DialogTitleWithClose from '../DialogTitleWithClose';
 
 const metadataLabels = { numero_reference: 'Référence LC', banque_emettrice: 'Banque émettrice' };
 
@@ -57,7 +58,7 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const accountLabel = id => accounts.find(a => a.id_compte === id)?.nom_banque || `Compte n° ${id}`;
   return <Dialog open maxWidth="sm" fullWidth aria-labelledby="lc-correction-title"
     onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', onSubmit: submit }}>
-    <DialogTitle id="lc-correction-title">{cancelUsage ? 'Annuler l’utilisation de la LC' : 'Modifier la lettre de crédit'}</DialogTitle>
+    <DialogTitleWithClose id="lc-correction-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{cancelUsage ? 'Annuler l’utilisation de la LC' : 'Modifier la lettre de crédit'}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {(loadError || flow.error) && <Alert severity="error">{loadError || flow.error}</Alert>}
       {loadError && <Button onClick={() => setReload(v => v + 1)}>Réessayer le chargement</Button>}

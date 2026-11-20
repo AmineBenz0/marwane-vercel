@@ -30,6 +30,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import PaymentStatusBadge from './PaymentStatusBadge';
 import DeferredSaleStatusBadge from '../pages/Transactions/DeferredSaleStatusBadge';
+import { isPendingPayment, remainingAfterPending } from '../pages/Transactions/pendingPayments';
 import { transactionNetAmount } from '../utils/transactionAmounts';
 
 const PAYMENT_TYPE_LABELS = {
@@ -207,7 +208,8 @@ function TransactionsExcelRegister({
           group.exits += total;
         }
         group.paid += Math.abs(Number(transaction.montant_paye || 0));
-        group.remaining += Number(transaction.montant_restant || 0);
+        // Uncashed cheques are on their way: they are not counted as still owed.
+        group.remaining += remainingAfterPending(transaction.montant_restant, transaction.paiements);
 
         const status = getPaymentStatus(transaction);
         if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
@@ -477,15 +479,16 @@ function PaymentLines({ transaction, formatMontant }) {
         const amount = payment.montant !== null && payment.montant !== undefined
           ? ` · ${sign}${formatMontant(Math.abs(Number(payment.montant)))}` : '';
         const type = `${natureLabel ? `${natureLabel} · ` : ''}${getPaymentTypeLabel(payment)}`;
+        const pending = isPendingPayment(payment);
         return (
           <Typography
             key={payment.id_paiement || index}
             variant="caption"
             display="block"
-            title={`${type}${reference ? ` n° ${reference}` : ''}${amount}`}
-            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, lineHeight: 1.3, mb: 0.25, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
+            title={`${type}${reference ? ` n° ${reference}` : ''}${amount}${pending ? ' · en attente' : ''}`}
+            sx={{ color: missingReference || pending ? 'warning.dark' : 'text.secondary', fontWeight: missingReference || pending ? 700 : 400, lineHeight: 1.3, mb: 0.25, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
           >
-            {type}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
+            {type}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}{pending ? ' · en attente' : ''}
           </Typography>
         );
       })}
@@ -502,7 +505,6 @@ function PaymentLines({ transaction, formatMontant }) {
 function DeliveryInfo({ transaction, inactive }) {
   if (!transaction.est_promesse) return null;
   const waiting = Number(transaction.quantite_en_attente);
-  const covered = Number(transaction.quantite_couverte);
   return (
     <Stack
       spacing={0.5}
@@ -510,13 +512,12 @@ function DeliveryInfo({ transaction, inactive }) {
       sx={{ mt: 0.5, '& .MuiChip-root': { height: 'auto', maxWidth: '100%' }, '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
     >
       <DeferredSaleStatusBadge sale={transaction} />
+      {/* Short on purpose: reserved-stock details live on the sale's own page. */}
       {transaction.date_livraison_prevue && (
-        <Typography variant="caption">Prévue le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>
+        <Typography variant="caption">Livraison le {formatDateSafe(transaction.date_livraison_prevue)}</Typography>
       )}
       {!inactive && waiting > 0 && (
-        <Typography variant="caption">
-          {covered > 0 ? `${formatNumberValue(covered)} œufs réservés · ` : ''}{formatNumberValue(waiting)} à produire
-        </Typography>
+        <Typography variant="caption">{formatNumberValue(waiting)} œufs à produire</Typography>
       )}
     </Stack>
   );
@@ -586,7 +587,7 @@ function TransactionMobileCard({
   const isSale = isClientTransaction(transaction);
   const inactive = transaction.est_actif === false;
   const status = getPaymentStatus(transaction);
-  const remaining = Number(transaction.montant_restant || 0);
+  const remaining = remainingAfterPending(transaction.montant_restant, transaction.paiements);
   const partner = getClientOuFournisseur?.(transaction) || '-';
   const product = produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`;
   const batiment = transaction.id_batiment
@@ -673,7 +674,7 @@ function TransactionExcelRow({
     ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`)
     : '-';
   const paidAmount = Number(transaction.montant_paye || 0);
-  const remainingAmount = Number(transaction.montant_restant || 0);
+  const remainingAmount = remainingAfterPending(transaction.montant_restant, transaction.paiements);
   const totalAmount = getSignedAmount(transaction);
   const inactive = transaction.est_actif === false;
   const rowBackground = inactive ? 'grey.50' : 'background.paper';

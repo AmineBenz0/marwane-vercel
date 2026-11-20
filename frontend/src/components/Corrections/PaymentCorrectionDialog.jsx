@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from '@mui/material';
+import { Alert, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField } from '@mui/material';
 import DateField from '../../utils/DateField';
 import { get } from '../../services/api';
 import useCorrectionFlow from './useCorrectionFlow';
 import CorrectionReview from './CorrectionReview';
 import { changedValues, methods } from './correctionValues';
+import DialogTitleWithClose from '../DialogTitleWithClose';
 
 const initial = payment => ({ date_paiement: payment.date_paiement?.slice(0, 10) || '', montant: String(payment.montant),
   date_encaissement_effective: payment.date_encaissement_effective?.slice(0, 10) || '', statut_cheque: payment.statut_cheque || '',
@@ -54,7 +55,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
   const names = { id_compte: Object.fromEntries(accounts.map(row => [row.id_compte, `${row.nom_banque} · ${row.numero_compte}`])) };
   return <Dialog open onClose={() => !flow.busy && !flow.uncertain && onClose()} maxWidth="sm" fullWidth
     aria-labelledby="payment-correction-title" PaperProps={{ component: 'form', onSubmit: submit }}>
-    <DialogTitle id="payment-correction-title">Modifier le paiement n° {payment.id_paiement}</DialogTitle>
+    <DialogTitleWithClose id="payment-correction-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>Modifier le paiement n° {payment.id_paiement}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
         {(error || flow.error) && <Alert severity="error" role="alert">{error || flow.error}</Alert>}

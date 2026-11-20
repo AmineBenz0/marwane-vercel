@@ -9,12 +9,12 @@ const sources = [
   { id_production: 12, date_production: '2026-10-21', type_oeuf: 'normal', calibre: 'gros', grammage: 66, nombre_oeufs: 80, disponible: 80, vendable: true },
 ];
 const props = { open: true, onClose: vi.fn(), onSubmit: vi.fn() };
-const quantity = () => screen.getByRole('spinbutton', { name: /Quantite vendue/ });
+const quantity = () => screen.getByRole('spinbutton', { name: /Quantité vendue/ });
 const price = () => screen.getByRole('spinbutton', { name: /Prix unitaire/ });
 const selectBuilding = async (name) => {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Bâtiment source/ }));
   fireEvent.click(await screen.findByRole('option', { name, exact: true }));
-  await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
+  await screen.findByRole('button', { name: 'Choisir Normaux' });
 };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -32,9 +32,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('sale entry preserves user input', () => {
-  it('keeps the sale summary and actions in their sidebar', async () => {
+  it('shows the stock under the sale line and the totals and actions in the footer', async () => {
     render(<TransactionForm {...props} />);
-    expect(await screen.findByRole('complementary', { name: 'Résumé de la vente' })).toBeVisible();
+    expect(await screen.findByText('Choisissez le bâtiment d’où viennent les œufs.')).toBeVisible();
     const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
     expect(summary).toHaveTextContent('Montant de la vente');
     expect(summary).toHaveTextContent('Déjà payé');
@@ -49,9 +49,9 @@ describe('sale entry preserves user input', () => {
       date_transaction: '2026-10-21', date_livraison_prevue: '2099-10-29',
       quantite: 50, prix_unitaire: 1.5, est_promesse: true, allocation_automatique: true,
     }} />);
-    await screen.findByText('Stock et prélèvements prévus');
+    await screen.findByText('Voir le stock par date');
     expect(screen.getByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
-    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('29/10/99');
     expect(quantity()).toHaveValue(50);
   });
 
@@ -63,9 +63,9 @@ describe('sale entry preserves user input', () => {
     await selectBuilding('Bâtiment A');
     fireEvent.change(quantity(), { target: { value: '100' } });
     fireEvent.change(price(), { target: { value: '1.5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Livraison différée' }));
-    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '26/10/2099' } });
     fireEvent.change(quantity(), { target: { value: '60' } });
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
     expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
@@ -88,9 +88,9 @@ describe('sale entry preserves user input', () => {
     await selectBuilding('Bâtiment A');
     fireEvent.change(quantity(), { target: { value: '100' } });
     fireEvent.change(price(), { target: { value: '1.5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Livraison différée' }));
-    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '26/10/2099' } });
 
     await selectBuilding('Bâtiment B');
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
@@ -98,7 +98,7 @@ describe('sale entry preserves user input', () => {
     expect(quantity()).toHaveValue(100);
     expect(price()).toHaveValue(1.5);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Gros' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
     expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).not.toBeChecked();
     expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enregistrer la vente' })).toBeDisabled();
@@ -112,16 +112,16 @@ describe('sale entry preserves user input', () => {
       quantite: 1000, prix_unitaire: 1.5, est_promesse: true, allocation_automatique: true,
     }} />);
     expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
-    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
-    await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('29/10/99');
+    await screen.findByRole('button', { name: 'Choisir Normaux' });
     await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/production-sources', expect.objectContaining({ params: expect.objectContaining({ through_date: new Date().toISOString().slice(0, 10), exclude_transaction_id: 31 }) })));
     fireEvent.change(price(), { target: { value: '1.6' } });
-    const save = screen.getByRole('button', { name: 'Vérifier les modifications' });
+    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
-    expect(await screen.findByRole('dialog', { name: 'Vérifier les modifications' })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Confirmer la modification' })).toBeVisible();
     expect(submit).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’enregistrement' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(submit.mock.calls[0][0]).toMatchObject({
       est_promesse: true, date_livraison_prevue: '2099-10-29', prix_unitaire: 1.6,
@@ -140,13 +140,13 @@ describe('sale entry preserves user input', () => {
       quantite: 1000, prix_unitaire: '1.50', est_promesse: true, allocation_automatique: true,
     }} />);
     const expectedDate = await screen.findByLabelText(/Date prévue de livraison/);
-    fireEvent.change(expectedDate, { target: { value: '2099-10-30' } });
-    const save = screen.getByRole('button', { name: 'Vérifier les modifications' });
+    fireEvent.change(expectedDate, { target: { value: '30/10/2099' } });
+    const save = screen.getByRole('button', { name: 'Enregistrer les modifications' });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
-    expect(await screen.findByRole('dialog', { name: 'Vérifier les modifications' })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Confirmer la modification' })).toBeVisible();
     expect(submit).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’enregistrement' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     const sent = submit.mock.calls[0][0];
     expect(sent.date_livraison_prevue).toBe('2099-10-30');
@@ -167,12 +167,17 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(quantity(), { target: { value: '1000' } });
     fireEvent.change(price(), { target: { value: '1.20' } });
     await selectBuilding('Bâtiment A');
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
-    expect(await screen.findByText(`Les ${(1000 - available).toLocaleString('fr-FR').replace(/\s/g, ' ')} œufs manquants seront fournis ultérieurement.`)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
+    expect(await screen.findByText(new RegExp(`Il manque ${(1000 - available).toLocaleString('fr-FR').replace(/\s/g, ' ')} œufs : ils seront livrés plus tard`))).toBeVisible();
     const save = screen.getByRole('button', { name: 'Enregistrer la vente' });
     expect(save).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Livraison différée' }));
-    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    // Defaults to the day after the sale date (today here), and stays editable.
+    const next = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    const [y, m, d] = next.toISOString().slice(0, 10).split('-');
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue(`${d}/${m}/${y.slice(2)}`);
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '26/10/2099' } });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
@@ -185,13 +190,10 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(quantity(), { target: { value: '50' } });
     fireEvent.change(price(), { target: { value: '1.25' } });
     await selectBuilding('Bâtiment A');
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
     expect(quantity()).toHaveValue(50);
     expect(price()).toHaveValue(1.25);
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Gros' }));
-    expect(quantity()).toHaveValue(50);
-    expect(price()).toHaveValue(1.25);
-    expect(screen.getByText('Total de la ligne : 62.50 MAD')).toBeVisible();
+    expect(screen.getByRole('group', { name: 'Récapitulatif des montants' })).toHaveTextContent('62,50 MAD');
   });
 
   it('preserves draft values across parent rerenders and flags an excessive quantity', async () => {
@@ -203,8 +205,8 @@ describe('sale entry preserves user input', () => {
     expect(quantity()).toHaveValue(70);
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment A');
-    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
-    await screen.findByText(/Les 10 œufs manquants/);
+    fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
+    await screen.findByText(/Il manque 10 œufs/);
     expect(quantity()).toHaveValue(70);
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment B');
