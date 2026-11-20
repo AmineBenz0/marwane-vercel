@@ -186,3 +186,14 @@ def test_no_overdue_alert_when_a_cheque_covers_the_debt(db_session, purchases):
     assert rows["covered"].id_transaction not in alerted
     assert {rows["part_pending"].id_transaction, rows["unpaid"].id_transaction,
             rows["bounced"].id_transaction} <= alerted
+
+
+def test_party_card_shows_owed_and_pending(db_session, purchases):
+    from app.services.credits import party_credit_history
+    supplier, _ = purchases
+    data = party_credit_history(db_session, id_fournisseur=supplier.id_fournisseur)
+    # The ledger balance is unchanged; the card shows what is owed and the cheques on their way.
+    assert Decimal(data["balance"]) == Decimal("360")
+    assert Decimal(data["montant_du"]) == Decimal("220")
+    assert Decimal(data["montant_en_attente"]) == Decimal("140")
+
