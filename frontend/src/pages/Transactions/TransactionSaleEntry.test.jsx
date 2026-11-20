@@ -168,10 +168,15 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(price(), { target: { value: '1.20' } });
     await selectBuilding('Bâtiment A');
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
-    expect(await screen.findByText(new RegExp(`Les ${(1000 - available).toLocaleString('fr-FR').replace(/\s/g, ' ')} œufs manquants seront fournis ultérieurement\\.`))).toBeVisible();
+    expect(await screen.findByText(new RegExp(`Il manque ${(1000 - available).toLocaleString('fr-FR').replace(/\s/g, ' ')} œufs : ils seront livrés plus tard`))).toBeVisible();
     const save = screen.getByRole('button', { name: 'Enregistrer la vente' });
     expect(save).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Livraison différée' }));
+    // Defaults to the day after the sale date (today here), and stays editable.
+    const next = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    const [y, m, d] = next.toISOString().slice(0, 10).split('-');
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue(`${d}/${m}/${y.slice(2)}`);
     fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '26/10/2099' } });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
@@ -188,7 +193,7 @@ describe('sale entry preserves user input', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
     expect(quantity()).toHaveValue(50);
     expect(price()).toHaveValue(1.25);
-    expect(screen.getByText('Total : 62,50 MAD')).toBeVisible();
+    expect(screen.getByRole('group', { name: 'Récapitulatif des montants' })).toHaveTextContent('62,50 MAD');
   });
 
   it('preserves draft values across parent rerenders and flags an excessive quantity', async () => {
@@ -201,7 +206,7 @@ describe('sale entry preserves user input', () => {
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment A');
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
-    await screen.findByText(/Les 10 œufs manquants/);
+    await screen.findByText(/Il manque 10 œufs/);
     expect(quantity()).toHaveValue(70);
     expect(price()).toHaveValue(2.5);
     await selectBuilding('Bâtiment B');

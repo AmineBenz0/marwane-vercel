@@ -121,18 +121,18 @@ export default function ProductionSourcePicker({ index, control, setValue, batim
               value: `${source.disponible.toLocaleString('fr-FR')} œufs`,
               hint: source.deducted > 0 ? `− ${source.deducted.toLocaleString('fr-FR')} pour cette vente` : null,
             }));
-            return <Box aria-label={`Stock pour la vente ${index + 1}`} sx={{ mt: 1 }}>
-              <Typography variant="body2">
-                <Box component="span" fontWeight={700}>{count.toLocaleString('fr-FR')} œufs en stock</Box>
-                {` au ${formatShortDate(saleDate)}`}
-                {sizeLabels[selected.calibre] ? ` · calibre ${sizeLabels[selected.calibre].toLowerCase()} (automatique)` : ''}
-              </Typography>
+            // The count is already on the chosen button: only the calibre and the details link here.
+            const calibre = sizeLabels[selected.calibre]?.toLowerCase();
+            const days = `${rows.length} jour${rows.length > 1 ? 's' : ''}`;
+            return <Box aria-label={`Stock pour la vente ${index + 1}`} sx={{ mt: 0.5 }}>
+              {rows.length > 0
+                ? <ExpandableDetails label="Voir le stock par date" meta={calibre ? `calibre ${calibre} · ${days}` : days}>
+                  <DetailRows rows={rows} ariaLabel="Stock par date de production" />
+                </ExpandableDetails>
+                : calibre && <Typography variant="body2" color="text.secondary">Calibre {calibre}</Typography>}
               {otherCalibres.length > 0 && <Typography variant="caption" color="text.secondary" display="block">
-                Les œufs les plus anciens partent en premier. Aussi en stock : {otherCalibres.map(c => `${c.disponible.toLocaleString('fr-FR')} ${sizeLabels[c.calibre]?.toLowerCase() || ''}`).join(', ')}.
+                Aussi en stock : {otherCalibres.map(c => `${c.disponible.toLocaleString('fr-FR')} ${sizeLabels[c.calibre]?.toLowerCase() || ''}`).join(', ')}
               </Typography>}
-              {rows.length > 0 && <ExpandableDetails label="Voir le stock par date" meta={`${rows.length} jour${rows.length > 1 ? 's' : ''}`} sx={{ mt: 0.25 }}>
-                <DetailRows rows={rows} ariaLabel="Stock par date de production" />
-              </ExpandableDetails>}
             </Box>;
           })()}
         </>}

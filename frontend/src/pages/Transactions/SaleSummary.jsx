@@ -26,13 +26,12 @@ export default function SaleLineDetails({ line, index, lines, products = [], con
               sx={{ m: 0 }}
               label="Livraison différée"
               disabled={loading}
-              control={<Checkbox {...field} checked={!!field.value} onChange={(event) => { field.onChange(event.target.checked); onDeferredChange?.(); }} />}
+              control={<Checkbox {...field} checked={!!field.value} onChange={(event) => { field.onChange(event.target.checked); onDeferredChange?.(event.target.checked); }} />}
             />
           )} />
           {stock.ready && stock.pending > 0 && (
             <Typography variant="body2" sx={{ mb: 1 }}>
-              Stock insuffisant : {format(stock.covered)} œufs disponibles maintenant.
-              Les {format(stock.pending)} œufs manquants seront fournis ultérieurement.
+              Il manque {format(stock.pending)} œufs : ils seront livrés plus tard.
             </Typography>
           )}
           {line.est_promesse && (
@@ -48,12 +47,12 @@ export default function SaleLineDetails({ line, index, lines, products = [], con
                 InputLabelProps={{ shrink: true }}
                 inputProps={{ min: saleDate }}
                 error={!!fieldState.error}
-                helperText={fieldState.error?.message || 'Les prochaines productions seront affectées à cette vente selon l’ordre des commandes.'}
+                helperText={fieldState.error?.message}
               />
             )} />
           )}
           {!line.est_promesse && stock.pending > 0 && (
-            <Alert severity="warning" sx={{ mt: 1 }}>Acceptez la livraison différée ou réduisez la quantité.</Alert>
+            <Alert severity="warning" sx={{ mt: 1 }}>Cochez « Livraison différée » ou réduisez la quantité.</Alert>
           )}
         </Box>
       )}

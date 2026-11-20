@@ -73,8 +73,10 @@ import { transactionValidationSchema } from './transactionValidation';
 const EMPTY_INITIAL_VALUES = {};
 
 const today = () => new Date().toISOString().split('T')[0];
-const tomorrow = () => {
-  const value = new Date(`${today()}T00:00:00Z`);
+// The day after a given ISO date (default: today), used as the default planned delivery date.
+const tomorrow = (from = today()) => {
+  const value = new Date(`${String(from).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(value.getTime())) return tomorrow();
   value.setUTCDate(value.getUTCDate() + 1);
   return value.toISOString().split('T')[0];
 };
@@ -341,6 +343,7 @@ function TransactionForm({
     watch,
     setValue,
     trigger,
+    getValues,
   } = useForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
@@ -1313,11 +1316,6 @@ function TransactionForm({
                   ? `${isSale ? 'Modifier la vente' : 'Modifier l’achat'} n° ${initialValues.id_transaction}`
                   : 'Nouvelle transaction'}
               </Typography>
-              {!isEditing && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                {isSale
-                  ? 'Le client, les œufs vendus, puis le paiement.'
-                  : 'Le fournisseur, les produits achetés, puis le paiement.'}
-              </Typography>}
               {isEditing && identityLocked && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {financialLocked
                   ? 'Déjà payée en partie : seules l’échéance et les paiements peuvent changer.'
@@ -1385,7 +1383,6 @@ function TransactionForm({
                       {
                         value: 'client',
                         title: 'Vente client',
-                        subtitle: "Produits vendus, argent qui entre",
                         disabled: prefillFournisseurId !== null && prefillFournisseurId !== undefined,
                         activeColor: 'primary.main',
                         activeBg: 'rgba(13, 148, 136, 0.05)',
@@ -1393,7 +1390,6 @@ function TransactionForm({
                       {
                         value: 'fournisseur',
                         title: 'Achat fournisseur',
-                        subtitle: "Produits achetés, argent qui sort",
                         disabled: prefillClientId !== null && prefillClientId !== undefined,
                         activeColor: 'primary.main',
                         activeBg: 'rgba(13, 148, 136, 0.05)',
@@ -1437,9 +1433,6 @@ function TransactionForm({
                         >
                           <Typography sx={{ fontSize: 16, fontWeight: 800 }}>
                             {option.title}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-                            {option.subtitle}
                           </Typography>
                         </Box>
                       );
@@ -1607,7 +1600,7 @@ function TransactionForm({
                     size="small"
                     error={!!error}
                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                    helperText={error?.message || 'Date limite pour le paiement'}
+                    helperText={error?.message || ''}
                     disabled={loading}
                     margin="dense"
                     variant="outlined"
@@ -1638,11 +1631,6 @@ function TransactionForm({
                     <Box sx={{ width: 26, height: 26, flexShrink: 0, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>2</Box>
                     <Box>
                       <Typography variant="subtitle1" fontWeight={800}>{isSale ? 'Œufs vendus' : 'Produits achetés'}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {isSale
-                          ? 'Pour chaque vente : le bâtiment d’où viennent les œufs, la quantité, le prix, puis le paiement.'
-                          : 'Pour chaque produit : la quantité, le prix, puis le paiement.'}
-                      </Typography>
                     </Box>
                   </Box>
                   {!isEditing && (
@@ -1750,9 +1738,9 @@ function TransactionForm({
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, gap: 1 }}>
                         <Typography variant="subtitle2" fontWeight={800}>{watchedTypeEntite === 'client' ? 'Vente' : 'Produit'} {index + 1}</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                          <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
+                          {watchedLignes.length > 1 && <Box sx={{ px: 1.25, py: 0.5, bgcolor: 'rgba(13, 148, 136, 0.08)', color: 'primary.main', borderRadius: 1.5 }}>
                             <Typography variant="caption" fontWeight={800} sx={{ whiteSpace: 'nowrap' }}>Total : {formatMontant(ligneTotal, { minimumFractionDigits: 2, useCompactNotation: false })}</Typography>
-                          </Box>
+                          </Box>}
                           {!isEditing && watchedLignes.length > 1 && (
                             <IconButton size="small" color="error" onClick={() => handleRemoveLine(index)} disabled={loading} aria-label={`Supprimer le produit ${index + 1}`}>
                               <DeleteIcon fontSize="small" />
@@ -1767,7 +1755,13 @@ function TransactionForm({
                         saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
                       {shouldShowBatimentSource && <SaleLineDetails
                         line={ligne} index={index} lines={watchedLignes || []} products={produits} control={control}
-                        onDeferredChange={() => setTimeout(() => trigger(`lignes.${index}.quantite`), 0)}
+                        onDeferredChange={(checked) => {
+                          // Default planned delivery: the day after the sale (editable).
+                          if (checked && !getValues(`lignes.${index}.date_livraison_prevue`)) {
+                            setValue(`lignes.${index}.date_livraison_prevue`, tomorrow(getValues('date_transaction')), { shouldDirty: true });
+                          }
+                          setTimeout(() => trigger(`lignes.${index}.quantite`), 0);
+                        }}
                         saleDate={watch('date_transaction')} loading={loading} renderPayment={renderLinePayment} />}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>

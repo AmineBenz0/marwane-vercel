@@ -86,7 +86,7 @@ describe('sale stock selection', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Choisir Normaux' }));
     expect(screen.queryByRole('button', { name: /Choisir Normaux (Moyen|Gros)/ })).not.toBeInTheDocument();
     await waitFor(() => expect(line()).toMatchObject({ id_produit: 7, id_production: 20, source_available: 30 }));
-    expect(screen.getByText(/calibre moyen \(automatique\)/)).toBeVisible();
+    expect(screen.getByText(/calibre moyen · 1 jour/)).toBeVisible();
     expect(screen.getByText(/Aussi en stock : 50 gros/)).toBeVisible();
   });
 });
