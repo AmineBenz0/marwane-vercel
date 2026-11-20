@@ -11,12 +11,12 @@ export default function SaleSummary({ lines, products, control, saleDate, loadin
         const stock = saleStockSummary(line, index, lines);
         const name = products.find(p => Number(p.id_produit) === Number(line.id_produit))?.nom_produit;
         return <Box key={index}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>{lines.length > 1 ? `Vente ${index + 1} · ` : ''}{name || 'Choisissez le type d’œufs'}</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>{lines.length > 1 ? `Vente ${index + 1} · ` : ''}{name || 'Choisissez d’abord le produit'}</Typography>
           <Stack spacing={1} aria-live="polite">
             {[
-              ['Demandés', stock.requested.toLocaleString('fr-FR')],
-              ['Stock disponible à réserver', stock.ready ? stock.covered.toLocaleString('fr-FR') : '—'],
-              ['Reste à produire', stock.ready ? stock.pending.toLocaleString('fr-FR') : '—'],
+              ['Œufs vendus', stock.requested.toLocaleString('fr-FR')],
+              ['Disponibles maintenant (stock)', stock.ready ? stock.covered.toLocaleString('fr-FR') : '—'],
+              ['À produire plus tard', stock.ready ? stock.pending.toLocaleString('fr-FR') : '—'],
             ].map(([label, value]) => <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
               <Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="body2" fontWeight={700}>{value}</Typography>
             </Box>)}

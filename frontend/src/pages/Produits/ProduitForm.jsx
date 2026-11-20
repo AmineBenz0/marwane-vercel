@@ -23,12 +23,12 @@ const produitFields = [
   },
   {
     name: 'usage',
-    label: 'Utilisation',
+    label: 'Ce produit est',
     type: 'select',
     required: true,
     options: [
-      { value: 'vendu', label: 'Vendu — transaction client' },
-      { value: 'achete', label: 'Acheté — transaction fournisseur' },
+      { value: 'vendu', label: 'Vendu à des clients' },
+      { value: 'achete', label: 'Acheté chez des fournisseurs' },
     ],
   },
 ];
@@ -72,7 +72,7 @@ function ProduitForm({
       initialValues={defaultInitialValues}
       validationSchema={produitValidationSchema}
       fields={produitFields}
-      title={isEditing ? 'Modifier le produit' : 'Créer un produit'}
+      title={isEditing ? 'Modifier le produit' : 'Nouveau produit'}
       submitLabel={isEditing ? 'Modifier' : 'Créer'}
       loading={loading}
       errorMessage={errorMessage}

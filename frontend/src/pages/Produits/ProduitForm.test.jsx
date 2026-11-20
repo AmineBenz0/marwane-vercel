@@ -4,8 +4,8 @@ import ProduitForm from './ProduitForm';
 
 describe('ProduitForm', () => {
   it.each([
-    ['vendu', 'Vendu — transaction client'],
-    ['achete', 'Acheté — transaction fournisseur'],
+    ['vendu', 'Vendu à des clients'],
+    ['achete', 'Acheté chez des fournisseurs'],
   ])('submits the single %s usage without product types', async (usage, label) => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(<ProduitForm open onClose={vi.fn()} onSubmit={onSubmit} />);
@@ -26,6 +26,6 @@ describe('ProduitForm', () => {
     render(<ProduitForm open onClose={vi.fn()} onSubmit={vi.fn()} initialValues={{
       id_produit: 1, nom_produit: 'Produit', usage: 'vendu', est_actif: true,
     }} />);
-    expect(screen.getByRole('combobox')).toHaveTextContent('Vendu — transaction client');
+    expect(screen.getByRole('combobox')).toHaveTextContent('Vendu à des clients');
   });
 });

@@ -1498,7 +1498,7 @@ function TransactionForm({
                   <DateField
                     {...field}
                     fullWidth
-                    label="Date d'échéance du paiement (optionnel)"
+                    label="Date d'échéance du paiement (facultatif)"
                     size="small"
                     error={!!error}
                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}

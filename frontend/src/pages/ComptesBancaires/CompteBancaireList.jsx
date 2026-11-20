@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   InputAdornment,
   MenuItem,
@@ -43,6 +42,7 @@ import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
 import PageHeader from '../../components/Layout/PageHeader';
+import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 const SOURCE_OPTIONS = [
   { value: 'virement', label: 'Virement' },
@@ -713,7 +713,7 @@ function EmptyBankState({ onCreate }) {
 function AddAccountDialog({ open, form, setForm, submitting, onClose, onSubmit }) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle sx={{ fontWeight: 900 }}>Nouveau compte bancaire</DialogTitle>
+      <DialogTitleWithClose onClose={onClose} disabled={submitting}>Nouveau compte bancaire</DialogTitleWithClose>
       <DialogContent dividers>
         <Box component="form" id="bank-account-form" onSubmit={onSubmit}>
           <Stack spacing={2} sx={{ mt: 0.5 }}>
@@ -782,7 +782,7 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 900 }}>Ajouter un mouvement bancaire</DialogTitle>
+      <DialogTitleWithClose onClose={onClose}>Nouveau mouvement bancaire</DialogTitleWithClose>
       <DialogContent dividers>
         <Box component="form" id="bank-movement-form" onSubmit={onSubmit}>
           <Stack spacing={2} sx={{ mt: 0.5 }}>
