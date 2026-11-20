@@ -39,6 +39,7 @@ import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { exportCaisseReport } from '../../utils/exportToPDF';
 import { formatMontant } from '../../utils/formatNumber';
 import PageHeader from '../../components/Layout/PageHeader';
+import CellText from '../../components/CellText';
 
 const PERIODS = [
   { value: '30days', label: '30 derniers jours' },
@@ -407,7 +408,13 @@ function Caisse() {
               </Stack>
             ) : (
               <TableContainer sx={{ overflowX: 'auto' }}>
-                <Table sx={{ minWidth: 760 }}>
+                <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup>
+                    <col style={{ width: '19%' }} />
+                    <col style={{ width: '35%' }} />
+                    <col style={{ width: '23%' }} />
+                    <col style={{ width: '23%' }} />
+                  </colgroup>
                   <TableHead>
                     <TableRow>
                       <TableCell>Date</TableCell>
@@ -550,18 +557,19 @@ function MovementRow({ movement }) {
       <TableCell>
         <Stack direction="row" spacing={1} alignItems="flex-start">
           {isEntry ? <TrendingUpIcon color="success" fontSize="small" /> : <TrendingDownIcon color="error" fontSize="small" />}
-          <Box>
-            <Typography fontWeight={900}>{getMovementLabel(movement)}</Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <CellText fontWeight={900} lines={2}>{getMovementLabel(movement)}</CellText>
             <Typography variant="caption" color="text.secondary">
               {isEntry ? 'Entrée' : 'Sortie'}
             </Typography>
           </Box>
         </Stack>
       </TableCell>
-      <TableCell>{getMovementOrigin(movement)}</TableCell>
+      <TableCell><CellText variant="body2" lines={2}>{getMovementOrigin(movement)}</CellText></TableCell>
       <TableCell align="right">
-        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>
-          {formatSignedAmount(movement)}
+        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'}>
+          {/* Large amounts may break before the currency only, never inside the number. */}
+          {String(formatSignedAmount(movement)).replace(/\u00A0(MAD)$/, ' $1')}
         </Typography>
       </TableCell>
     </TableRow>

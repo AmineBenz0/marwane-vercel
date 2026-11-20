@@ -839,8 +839,15 @@ function ClientProfile() {
                     clientCreanceRows.map((transaction) => (
                       <TableRow key={transaction.id_transaction} hover>
                         <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
-                        <TableCell>
-                          {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}
+                        <TableCell sx={{ maxWidth: 180 }}>
+                          {/* Long product names are cut with "…" (full name on hover) so the table never scrolls sideways. */}
+                          <Typography
+                            variant="body2"
+                            title={produitsMap.get(transaction.id_produit) || ''}
+                            sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          >
+                            {produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`}
+                          </Typography>
                           <Typography variant="caption" color="text.secondary" display="block">
                             {transaction.quantite} × {formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}
                             {transaction.id_batiment ? ` · ${batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`}` : ''}
