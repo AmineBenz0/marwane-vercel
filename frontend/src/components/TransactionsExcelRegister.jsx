@@ -544,6 +544,10 @@ function RowActionsMenu({ transaction, inactive, bg = 'transparent', onView, onE
         anchorEl={anchor}
         open={Boolean(anchor)}
         onClose={() => setAnchor(null)}
+        // The menu renders in a portal, but React still bubbles its clicks to
+        // the parent card, whose own click opens the detail page. Stop them so
+        // "Modifier" / "Désactiver" (and closing the menu) stay on this page.
+        onClick={(event) => event.stopPropagation()}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
