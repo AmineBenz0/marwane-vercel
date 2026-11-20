@@ -5,6 +5,7 @@ import {
   Warning as WarningIcon,
   Error as ErrorIcon,
   TrendingUp as TrendingUpIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 
 const PAYMENT_STATUS_CONFIG = {
@@ -17,6 +18,12 @@ const PAYMENT_STATUS_CONFIG = {
     label: 'Payé',
     color: 'success',
     icon: CheckCircleIcon,
+  },
+  // Nothing owed any more, but a cheque handed over is not cashed yet.
+  cheque_en_attente: {
+    label: 'Chèque en attente',
+    color: 'info',
+    icon: ScheduleIcon,
   },
   partiel: {
     label: 'Partiel',

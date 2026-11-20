@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, case, func, literal, or_
+from sqlalchemy import Numeric, and_, case, func, literal, or_, type_coerce
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.caisse import Caisse
@@ -22,8 +22,8 @@ from app.models.compte_bancaire import CompteBancaire, MouvementBancaire
 from app.models.credit import Avance
 from app.models.deferred_sale_adjustment import DeferredSaleAdjustment
 from app.services.credit_balances import advance_balances
-from app.models.paiement import Paiement
-from app.models.transaction import Transaction
+from app.models.paiement import CLOSED_CHEQUE_STATUSES, Paiement
+from app.models.transaction import SETTLED_PAYMENT_STATUSES, Transaction
 from app.models.client import Client
 from app.models.fournisseur import Fournisseur
 from app.models.produit import Produit
@@ -65,7 +65,7 @@ def payment_status(transaction: Transaction, today: Optional[date] = None) -> st
     status = transaction.statut_paiement
     if today is None:
         today = business_date()
-    if status not in {"paye", "surpaye"} and transaction.date_echeance and transaction.date_echeance < today:
+    if status not in SETTLED_PAYMENT_STATUSES and transaction.date_echeance and transaction.date_echeance < today:
         return "en_retard"
     return status
 
@@ -136,6 +136,53 @@ def _payment_totals_subquery(db: Session, as_of: Optional[date] = None):
     return query.group_by(Paiement.id_transaction).subquery("effective_payment_totals")
 
 
+def _pending_payment_predicate(as_of: Optional[date] = None):
+    """SQL twin of ``Paiement.est_en_attente``: handed over, not effective yet.
+
+    With ``as_of``, a payment handed over by that date counts as pending if it
+    was not effective by then: still pending today, or a cheque cashed later.
+    """
+    open_cheque = or_(Paiement.statut_cheque.is_(None), Paiement.statut_cheque.notin_(CLOSED_CHEQUE_STATUSES))
+    pending_now = and_(
+        Paiement.nature == "paiement",
+        open_cheque,
+        or_(
+            Paiement.statut == "en_attente",
+            and_(Paiement.statut == "valide", Paiement.type_paiement == "cheque"),
+        ),
+    )
+    if as_of is None:
+        return pending_now
+    cashed_after_cutoff = and_(
+        Paiement.nature == "paiement",
+        Paiement.statut == "valide",
+        Paiement.type_paiement == "cheque",
+        Paiement.statut_cheque == "encaisse",
+        _effective_payment_date_expression() > as_of,
+    )
+    return and_(Paiement.date_paiement <= as_of, or_(pending_now, cashed_after_cutoff))
+
+
+def _pending_totals_subquery(db: Session, as_of: Optional[date] = None):
+    """Aggregate pending payments per transaction (see _pending_payment_predicate)."""
+    return db.query(
+        Paiement.id_transaction.label("id_transaction"),
+        type_coerce(func.sum(Paiement.montant), MONEY).label("montant_en_attente"),
+    ).filter(_pending_payment_predicate(as_of)).group_by(Paiement.id_transaction).subquery("pending_payment_totals")
+
+
+MONEY = Numeric(15, 2)
+
+
+def _owed_expression(remaining, pending):
+    """SQL twin of ``Transaction.montant_du``: owed once pending payments arrive."""
+    return type_coerce(case(
+        (remaining <= 0, remaining),
+        (remaining - pending <= 0, literal(Decimal("0.00"))),
+        else_=remaining - pending,
+    ), MONEY)
+
+
 def _commercial_credit_totals_subquery(db: Session, as_of: Optional[date] = None):
     """Aggregate each transaction's immutable avoirs before joining any payments.
 
@@ -157,13 +204,23 @@ def _net_sale_expression(credit_totals):
     return Transaction.montant_total - adjustment, adjustment
 
 
-def financial_position_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
-    """Net receivables/payables using only postings effective through the date."""
+def financial_position_as_of(db: Session, as_of: date, *, include_pending: bool = False) -> dict[str, Decimal]:
+    """Net receivables/payables using only postings effective through the date.
+
+    ``include_pending=True`` applies the "owed" rule used on screens: payments
+    handed over by the date but not effective by then (uncashed cheques) are no
+    longer counted as owed. The default keeps the strict ledger figure.
+    """
     payments = _payment_totals_subquery(db, as_of)
     credits = _commercial_credit_totals_subquery(db, as_of)
     net_sale, _ = _net_sale_expression(credits)
     remaining = net_sale - func.coalesce(payments.c.montant_paye, literal(Decimal("0.00")))
-    row = db.query(
+    query = db.query(Transaction)
+    if include_pending:
+        pending = _pending_totals_subquery(db, as_of)
+        remaining = _owed_expression(remaining, func.coalesce(pending.c.montant_en_attente, literal(Decimal("0.00"))))
+        query = query.outerjoin(pending, pending.c.id_transaction == Transaction.id_transaction)
+    row = query.with_entities(
         func.sum(case((Transaction.id_client.isnot(None), remaining), else_=0)).label("receivables"),
         func.sum(case((Transaction.id_fournisseur.isnot(None), remaining), else_=0)).label("payables"),
     ).outerjoin(
@@ -242,12 +299,19 @@ def bank_activity_as_of(db: Session, as_of: date) -> dict[str, Decimal]:
     return _movement_flows(_bank_movements_as_of(db, as_of), MouvementBancaire)
 
 
-def contact_balances(db: Session, *, direction: str, contact_ids: list[int], as_of: Optional[date] = None) -> dict[int, Decimal]:
+def contact_balances(
+    db: Session, *, direction: str, contact_ids: list[int], as_of: Optional[date] = None,
+    include_pending: bool = False,
+) -> dict[int, Decimal]:
     """Return net balances for one contact page in a single aggregate query.
 
     IDs come from the already filtered/paginated contact list. A successful
     query confirms zero for contacts without active transactions. Failures
     propagate rather than returning misleading zero balances.
+
+    ``include_pending=True`` returns what is owed once pending payments
+    (uncashed cheques) arrive, as shown on screens; the default is the strict
+    ledger balance that credit logic relies on.
     """
     columns = {"receivable": Transaction.id_client, "payable": Transaction.id_fournisseur}
     if direction not in columns:
@@ -260,10 +324,16 @@ def contact_balances(db: Session, *, direction: str, contact_ids: list[int], as_
     credit_totals = _commercial_credit_totals_subquery(db, as_of)
     net_sale, _ = _net_sale_expression(credit_totals)
     paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0.00")))
+    balance = net_sale - paid
+    query = db.query(Transaction)
+    if include_pending:
+        pending_totals = _pending_totals_subquery(db, as_of)
+        balance = _owed_expression(balance, func.coalesce(pending_totals.c.montant_en_attente, literal(Decimal("0.00"))))
+        query = query.outerjoin(pending_totals, pending_totals.c.id_transaction == Transaction.id_transaction)
     query = (
-        db.query(
+        query.with_entities(
             contact_id.label("contact_id"),
-            func.sum(net_sale - paid).label("balance"),
+            func.sum(balance).label("balance"),
         )
         .outerjoin(payment_totals, payment_totals.c.id_transaction == Transaction.id_transaction)
         .outerjoin(credit_totals, credit_totals.c.id_transaction == Transaction.id_transaction)
@@ -279,20 +349,26 @@ def contact_balances(db: Session, *, direction: str, contact_ids: list[int], as_
     return balances
 
 
-def _payment_expressions(payment_totals, net_sale, today: date):
-    """Build SQL statuses from the same corrected total as the Python model."""
+def _payment_expressions(payment_totals, pending_totals, net_sale, today: date):
+    """Build SQL statuses from the same corrected total as the Python model.
+
+    Returns (paid, owed, pending, status). ``owed`` mirrors Transaction.montant_du:
+    pending payments (uncashed cheques) are not counted as owed.
+    """
     paid = func.coalesce(payment_totals.c.montant_paye, literal(Decimal("0.00")))
-    remaining = net_sale - paid
+    pending = func.coalesce(pending_totals.c.montant_en_attente, literal(Decimal("0.00")))
+    owed = _owed_expression(net_sale - paid, pending)
     raw_status = case(
         (paid > net_sale, literal("surpaye")),
         (paid >= net_sale, literal("paye")),
-        (paid == literal(Decimal("0")), literal("impaye")),
+        (paid + pending >= net_sale, literal("cheque_en_attente")),
+        (and_(paid == literal(Decimal("0")), pending == literal(Decimal("0"))), literal("impaye")),
         else_=literal("partiel"),
     )
     canonical_status = case(
         (
             and_(
-                raw_status.notin_(["paye", "surpaye"]),
+                raw_status.notin_(list(SETTLED_PAYMENT_STATUSES)),
                 Transaction.date_echeance.isnot(None),
                 Transaction.date_echeance < today,
             ),
@@ -300,7 +376,7 @@ def _payment_expressions(payment_totals, net_sale, today: date):
         ),
         else_=raw_status,
     )
-    return paid, remaining, canonical_status
+    return paid, owed, pending, canonical_status
 
 
 def _apply_collection_filters(
@@ -390,14 +466,18 @@ def _collection_query_components(
 ):
     """Build the set-based query and expressions shared by page and summary."""
     effective_totals = _payment_totals_subquery(db)
+    pending_totals = _pending_totals_subquery(db)
     credit_totals = _commercial_credit_totals_subquery(db)
     net_sale, credit_amount = _net_sale_expression(credit_totals)
-    paid, remaining, canonical_status = _payment_expressions(
-        effective_totals, net_sale, today or business_date(),
+    paid, remaining, pending, canonical_status = _payment_expressions(
+        effective_totals, pending_totals, net_sale, today or business_date(),
     )
     query = db.query(Transaction).outerjoin(
         effective_totals,
         effective_totals.c.id_transaction == Transaction.id_transaction,
+    ).outerjoin(
+        pending_totals,
+        pending_totals.c.id_transaction == Transaction.id_transaction,
     ).outerjoin(
         credit_totals,
         credit_totals.c.id_transaction == Transaction.id_transaction,
@@ -416,7 +496,7 @@ def _collection_query_components(
         query = query.filter(canonical_status == "en_retard")
     if statut:
         query = query.filter(canonical_status == statut.lower())
-    return query, paid, remaining, canonical_status, net_sale, credit_amount
+    return query, paid, remaining, pending, canonical_status, net_sale, credit_amount
 
 
 def query_financial_transactions(
@@ -439,7 +519,7 @@ def query_financial_transactions(
 ):
     """Return transactions using database-side filters, ordering, and paging."""
     _validate_collection_sort(sort_by, sort_order)
-    query, _, remaining, _, _, _ = _collection_query_components(
+    query, _, remaining, _, _, _, _ = _collection_query_components(
         db,
         direction=direction,
         statut=statut,
@@ -481,7 +561,7 @@ def summarize_financial_transactions(
     today: Optional[date] = None,
 ) -> dict:
     """Calculate collection totals in SQL without materializing all rows."""
-    query, paid, remaining, canonical_status, net_sale, credit_amount = _collection_query_components(
+    query, paid, remaining, pending, canonical_status, net_sale, credit_amount = _collection_query_components(
         db,
         direction=direction,
         statut=statut,
@@ -500,6 +580,7 @@ def summarize_financial_transactions(
         func.coalesce(func.sum(credit_amount), literal(Decimal("0"))).label("total_avoirs"),
         func.coalesce(func.sum(paid), literal(Decimal("0"))).label("paye"),
         func.coalesce(func.sum(remaining), literal(Decimal("0"))).label("reste"),
+        func.coalesce(func.sum(pending), literal(Decimal("0"))).label("en_attente"),
         func.count(Transaction.id_transaction).label("count"),
         func.coalesce(
             func.sum(case((canonical_status == "en_retard", 1), else_=0)),
@@ -512,6 +593,7 @@ def summarize_financial_transactions(
         "total_avoirs": Decimal(str(summary.total_avoirs or 0)).quantize(Decimal("0.01")),
         "paye": Decimal(str(summary.paye or 0)),
         "reste": Decimal(str(summary.reste or 0)),
+        "en_attente": Decimal(str(summary.en_attente or 0)).quantize(Decimal("0.01")),
         "count": int(summary.count or 0),
         "overdue_count": int(summary.overdue_count or 0),
     }
@@ -533,6 +615,8 @@ def serialize_financial_transaction(transaction: Transaction, today: Optional[da
         "montant_net": transaction.montant_net,
         "montant_paye": transaction.montant_paye,
         "montant_restant": transaction.montant_restant,
+        "montant_en_attente": transaction.montant_en_attente,
+        "montant_du": transaction.montant_du,
         "statut_paiement": payment_status(transaction, today),
         "est_en_retard": payment_status(transaction, today) == "en_retard",
         "nombre_paiements": len(transaction.paiements),

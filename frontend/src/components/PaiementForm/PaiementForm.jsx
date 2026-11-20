@@ -54,7 +54,8 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
   const [loadingLcs, setLoadingLcs] = useState(false);
   
   // Calculer le montant restant côté frontend (si transaction fournie)
-  const montantRestant = transaction?.montant_restant || 0;
+  // Owed: uncashed cheques already handed over are not owed any more.
+  const montantRestant = Number(transaction?.montant_du ?? transaction?.montant_restant ?? 0);
   const montantRestantApres = montantRestant - (parseFloat(montant) || 0);
 
   // Charger les LC disponibles quand le type est LC

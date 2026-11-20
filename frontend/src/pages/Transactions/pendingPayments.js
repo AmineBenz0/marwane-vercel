@@ -17,3 +17,12 @@ export const remainingAfterPending = (montantRestant, payments) => {
   if (remaining <= 0) return remaining;
   return Math.max(0, remaining - pendingPaymentAmount(payments));
 };
+
+// What is still owed, as shown on screens. The API sends it as montant_du
+// (cheques handed over but not cashed are not owed); older payloads without it
+// fall back to the same rule computed from the listed payments.
+export const owedAmount = (transaction) => {
+  if (!transaction) return 0;
+  if (transaction.montant_du !== undefined && transaction.montant_du !== null) return Number(transaction.montant_du);
+  return remainingAfterPending(transaction.montant_restant, transaction.paiements);
+};

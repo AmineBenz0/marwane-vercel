@@ -8,6 +8,11 @@ from decimal import Decimal
 from sqlalchemy.sql import func
 from app.database import Base
 
+# A payment in one of these statuses may still be on its way (see est_en_attente).
+PENDING_PAYMENT_STATUSES = ("valide", "en_attente")
+# A cheque in one of these states is either settled or will never settle.
+CLOSED_CHEQUE_STATUSES = ("encaisse", "rejete", "annule")
+
 
 class Paiement(Base):
     """
@@ -149,6 +154,20 @@ class Paiement(Base):
         if self.type_paiement == "cheque":
             return self.statut_cheque == "encaisse"
         return True
+
+    @property
+    def est_en_attente(self) -> bool:
+        """A payment handed over but not effective yet (typically an uncashed cheque).
+
+        It does not count as paid in the ledger (``est_effectif``), but it no
+        longer counts as owed either: see ``Transaction.montant_du``. Rejected
+        or cancelled payments, refunds and credit transfers are never pending.
+        """
+        if self.nature != "paiement" or self.statut not in PENDING_PAYMENT_STATUSES:
+            return False
+        if self.statut_cheque in CLOSED_CHEQUE_STATUSES:
+            return False
+        return not self.est_effectif
 
     @hybrid_property
     def montant_net(self):
