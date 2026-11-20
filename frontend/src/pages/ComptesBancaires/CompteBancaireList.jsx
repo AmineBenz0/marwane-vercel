@@ -426,10 +426,10 @@ function CompteBancaireList() {
                   <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
                     <colgroup>
                       <col style={{ width: '15%' }} />
-                      <col style={{ width: '24%' }} />
-                      <col style={{ width: '29%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '23%' }} />
+                      <col style={{ width: '27%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '21%' }} />
                     </colgroup>
                     <TableHead>
                       <TableRow>
@@ -670,8 +670,9 @@ function MovementRow({ movement }) {
       </TableCell>
       <TableCell><CellText variant="body2">{movement.reference || '-'}</CellText></TableCell>
       <TableCell align="right">
-        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>
-          {formatSignedAmount(movement)}
+        <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'}>
+          {/* Large amounts may break before the currency only, never inside the number. */}
+          {String(formatSignedAmount(movement)).replace(/\u00A0(MAD)$/, ' $1')}
         </Typography>
       </TableCell>
     </TableRow>
