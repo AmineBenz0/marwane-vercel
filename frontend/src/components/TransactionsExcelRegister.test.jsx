@@ -1,5 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import TransactionsExcelRegister from './TransactionsExcelRegister';
 
 const formatMontant = (value) => `${Number(value || 0)} MAD`;
@@ -62,5 +62,56 @@ describe('TransactionsExcelRegister payment lines', () => {
     expect(within(table).getByText('Virement n° VIR-1 · 20 MAD')).toBeInTheDocument();
     expect(within(table).getByText('+ 1 autre paiement')).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Total net' })).toBeInTheDocument();
+  });
+});
+
+describe('TransactionsExcelRegister row actions on the card layout', () => {
+  const useCardLayout = () => {
+    const original = window.matchMedia;
+    window.matchMedia = (query) => ({
+      matches: true, media: query, onchange: null,
+      addListener: () => {}, removeListener: () => {},
+      addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+    });
+    return () => { window.matchMedia = original; };
+  };
+
+  const renderCards = (handlers) => render(
+    <TransactionsExcelRegister
+      rows={[{ ...baseSale, montant_paye: '0.00', montant_restant: '100.00', paiements: [] }]}
+      getClientOuFournisseur={() => 'Client Test'}
+      produitsMap={new Map([[1, 'Œufs']])}
+      formatMontant={formatMontant}
+      {...handlers}
+    />,
+  );
+
+  it.each([
+    ['Modifier', 'onEdit'],
+    ['Désactiver', 'onDelete'],
+  ])('"%s" runs its own action without also opening the detail page', async (label, handlerName) => {
+    const restore = useCardLayout();
+    try {
+      const handlers = { onView: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
+      renderCards(handlers);
+      fireEvent.click(await screen.findByRole('button', { name: 'Actions' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: label }));
+      expect(handlers[handlerName]).toHaveBeenCalledTimes(1);
+      expect(handlers.onView).not.toHaveBeenCalled();
+    } finally {
+      restore();
+    }
+  });
+
+  it('tapping a card still opens the detail page', async () => {
+    const restore = useCardLayout();
+    try {
+      const handlers = { onView: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
+      renderCards(handlers);
+      fireEvent.click(await screen.findByText('Client Test'));
+      expect(handlers.onView).toHaveBeenCalledTimes(1);
+    } finally {
+      restore();
+    }
   });
 });
