@@ -158,7 +158,7 @@ PaymentDialog.propTypes = {
   onSaved: PropTypes.func.isRequired,
 };
 
-function SummaryCards({ summary }) {
+function SummaryCards({ summary, isReceivable }) {
   const cards = [
     ['Total', summary?.total, 'text.primary'],
     ['Payé', summary?.paye, 'success.main'],
@@ -174,7 +174,13 @@ function SummaryCards({ summary }) {
               <Typography variant="caption" color="text.secondary">{label}</Typography>
               <Typography variant="h6" sx={{ color, fontWeight: 700, mt: 0.5 }}>{count ? Number(value || 0).toLocaleString('fr-FR') : money(value)}</Typography>
               {label === 'Reste' && Number(summary?.en_attente || 0) > 0 && (
-                <Typography variant="caption" color="info.main">+ {money(summary.en_attente)} en chèques non encaissés</Typography>
+                <Typography variant="caption" color="info.main" display="block">+ {money(summary.en_attente)} en chèques non encaissés</Typography>
+              )}
+              {/* Credits are per contact: they no longer reduce what the others owe. */}
+              {label === 'Reste' && Number(summary?.credit || 0) > 0 && (
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {isReceivable ? 'Crédit des clients' : 'Crédit chez les fournisseurs'} : {money(summary.credit)}
+                </Typography>
               )}
             </CardContent>
           </Card>
@@ -185,6 +191,7 @@ function SummaryCards({ summary }) {
 }
 
 SummaryCards.propTypes = {
+  isReceivable: PropTypes.bool,
   summary: PropTypes.shape({
     total: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     paye: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
@@ -354,7 +361,7 @@ function FinancialLedgerPage({ direction }) {
         actions={<Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Actualiser</Button>}
       />
 
-      <SummaryCards summary={data.summary} />
+      <SummaryCards summary={data.summary} isReceivable={isReceivable} />
       <SmartFilterPanel
         pageKey={`financial-ledger-${direction}`}
         filterDefinitions={filterDefinitions}

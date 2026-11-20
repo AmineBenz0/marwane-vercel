@@ -141,9 +141,12 @@ def test_phase3_dated_net_amounts_ignore_future_avoirs_and_refunds(
         db_session, direction="receivable", contact_ids=[scenario["customer"]],
         as_of=cutoff,
     ) == {scenario["customer"]: Decimal(remaining)}
-    assert financial_position_as_of(db_session, cutoff)["receivables"] == (
-        Decimal(remaining) + Decimal("100.00")
-    )
+    position = financial_position_as_of(db_session, cutoff)
+    # Debts minus credits is still the full net position...
+    assert position["receivables"] - position["receivables_credits"] == Decimal(remaining) + Decimal("100.00")
+    # ...but this client's credit no longer reduces what the other client owes.
+    assert position["receivables"] == max(Decimal(remaining), Decimal("0")) + Decimal("100.00")
+    assert position["receivables_credits"] == max(-Decimal(remaining), Decimal("0"))
 
 
 def test_phase3_current_model_and_sql_collection_are_identical(db_session, scenario):
@@ -184,7 +187,9 @@ def test_caisse_outstanding_balances_match_dated_financial_position(db_session, 
     monkeypatch.setattr(caisse, "business_date", lambda: cutoff)
     summary = caisse.get_solde_complet(db=db_session, current_user=test_user)
     position = financial_position_as_of(db_session, cutoff)
-    assert summary.creances_clients == position["receivables"] == Decimal("-500.00")
+    # 100 owed by the other client; this client's 600 credit is kept apart, not netted.
+    assert summary.creances_clients == position["receivables"] == Decimal("100.00")
+    assert position["receivables_credits"] == Decimal("600.00")
     assert summary.dettes_fournisseurs == position["payables"] == Decimal("0.00")
 
 
@@ -233,7 +238,9 @@ def test_phase3_payment_status_switches_to_customer_credit_before_refund(db_sess
     assert summary["count"] == 1
     assert summary["total"] == Decimal("900.00")
     assert summary["paye"] == Decimal("1500.00")
-    assert summary["reste"] == Decimal("-600.00")
+    # The client's credit is shown apart, not as a negative remainder.
+    assert summary["reste"] == Decimal("0.00")
+    assert summary["credit"] == Decimal("600.00")
 
 
 def test_phase3_financial_endpoints_expose_original_avoir_and_net(client, scenario):

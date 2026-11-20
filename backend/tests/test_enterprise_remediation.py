@@ -403,6 +403,7 @@ def test_receivables_page_is_database_paginated_but_summary_covers_all_matches(
         "paye": "5.00",
         "en_attente": "0.00",
         "reste": "55.00",
+        "credit": "0.00",
         "count": 3,
         "overdue_count": 1,
     }
