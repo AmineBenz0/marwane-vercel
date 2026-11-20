@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import DateField from '../../utils/DateField';
 import { get, post } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { getBusinessDateInput } from '../../utils/businessDate';
 import { announceCorrection } from './useCorrectionFlow';
+import DialogTitleWithClose from '../DialogTitleWithClose';
 
 export default function RefundDialog({ transaction, credit, onClose, onSaved }) {
   const [values, setValues] = useState(() => ({ montant: String(credit), date_paiement: getBusinessDateInput(), type_paiement: 'cash', id_compte: '' }));
@@ -61,7 +62,7 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
   const back = () => { command.current = null; setReview(null); setError(''); setStale(false); };
   return <Dialog open onClose={() => !busy && !uncertain && onClose()} maxWidth="sm" fullWidth aria-labelledby="refund-title"
     PaperProps={{ component: 'form', onSubmit: prepare }}>
-    <DialogTitle id="refund-title">{customer ? 'Enregistrer un remboursement au client' : 'Enregistrer un remboursement du fournisseur'}</DialogTitle>
+    <DialogTitleWithClose id="refund-title" onClose={onClose} disabled={busy || uncertain}>{customer ? 'Enregistrer un remboursement au client' : 'Enregistrer un remboursement du fournisseur'}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {error && <Alert severity="error">{error}</Alert>}
       {review ? <>

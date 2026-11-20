@@ -34,12 +34,12 @@ describe('Transaction purchase footer', () => {
     const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
     expect(summary).toBeVisible();
     expect(summary).toHaveTextContent('Montant de l’achat');
-    expect(summary).toHaveTextContent('100.00 MAD');
+    expect(summary).toHaveTextContent('100,00 MAD');
     expect(summary).toHaveTextContent('Déjà payé');
-    expect(summary).toHaveTextContent('0.00 MAD');
+    expect(summary).toHaveTextContent('0,00 MAD');
     expect(summary).toHaveTextContent('Reste à payer');
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Vérifier les modifications' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Enregistrer les modifications' })).toBeVisible();
   });
 
   it('retains supplier purchase totals even when payments exist', async () => {
@@ -47,7 +47,7 @@ describe('Transaction purchase footer', () => {
     render(<TransactionForm open initialValues={transaction} onClose={vi.fn()} onSubmit={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole('combobox', { name: /Fournisseur/ })).toHaveTextContent('Supplier'));
     const summary = screen.getByRole('group', { name: 'Récapitulatif des montants' });
-    expect(summary).toHaveTextContent('100.00 MAD');
+    expect(summary).toHaveTextContent('100,00 MAD');
     expect(summary).toHaveTextContent('Reste à payer');
   });
 });
@@ -66,10 +66,10 @@ describe('Supplier funding while editing a transaction', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Mode de paiement' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Espèces' }));
     expect(screen.getByRole('combobox', { name: /Compte bancaire/ })).toHaveTextContent('Bank B');
-    fireEvent.click(screen.getByRole('button', { name: 'Vérifier les modifications' }));
-    expect(await screen.findByRole('dialog', { name: 'Vérifier les modifications' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
+    expect(await screen.findByRole('dialog', { name: 'Confirmer la modification' })).toBeVisible();
     expect(submit).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’enregistrement' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({
       source_reglement: 'banque', id_compte: 2, type_paiement: 'cash',

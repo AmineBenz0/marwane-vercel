@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Dialog, DialogActions, DialogContent, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import DateField from '../../utils/DateField';
 import { getBusinessDateInput } from '../../utils/businessDate';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { formatMontant } from '../../utils/formatNumber';
 import { get } from '../../services/api';
 import useCreditFlow from './useCreditFlow';
+import DialogTitleWithClose from '../DialogTitleWithClose';
 
 const titles = { advance: 'Enregistrer une avance', return_advance: 'Restituer une avance',
   cancel_allocation: 'Annuler l’affectation', cancel_advance: 'Annuler l’avance' };
@@ -42,7 +43,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
   };
   return <Dialog open fullWidth maxWidth="sm" aria-labelledby="credit-dialog-title"
     onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', onSubmit: submit }}>
-    <DialogTitle id="credit-dialog-title">{titles[action]}</DialogTitle>
+    <DialogTitleWithClose id="credit-dialog-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{titles[action]}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {(flow.error || loadError) && <Alert severity="error" action={loadError ? <Button onClick={() => setReload(v => v + 1)}>Réessayer</Button> : undefined}>{flow.error || loadError}</Alert>}
       {flow.review ? <>

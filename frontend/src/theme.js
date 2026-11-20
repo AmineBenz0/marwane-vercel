@@ -110,7 +110,8 @@ const theme = createTheme({
 
   // ── Typographie ──────────────────────────────────────────────────────────
   typography: {
-    fontFamily: '"Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif',
+    // "Thousands Separator" only covers U+202F: see index.css.
+    fontFamily: '"Thousands Separator", "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif',
     fontWeightLight:   300,
     fontWeightRegular: 400,
     fontWeightMedium:  500,

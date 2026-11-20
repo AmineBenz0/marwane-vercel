@@ -120,7 +120,7 @@ describe('deferred sale stock reservations', () => {
 
 it('preserves the source-building filter when opening stock-reserved sales', async () => {
   render(<MemoryRouter initialEntries={['/transactions?view=deferred&stock=reserved&building=1']}><TransactionsList /></MemoryRouter>);
-  await screen.findByText('600 œufs réservés · 400 à produire');
+  await screen.findByText('400 œufs à produire');
   await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions', expect.objectContaining({ params: expect.objectContaining({ est_promesse: true, id_batiment: 1 }) })));
   expect(screen.getByText('Bâtiment : Bâtiment A')).toBeVisible();
   expect(screen.getByText('Client 3')).toBeVisible();
