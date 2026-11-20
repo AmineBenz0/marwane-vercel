@@ -4,6 +4,8 @@ export const isPendingPayment = (payment) => Boolean(payment)
   && payment.statut !== 'annule'
   && payment.statut !== 'rejete'
   && payment.nature !== 'remboursement'
+  // Same rule as the API: a cheque marked cashed, rejected or cancelled is never pending.
+  && !['encaisse', 'rejete', 'annule'].includes(payment.statut_cheque)
   && (payment.statut === 'en_attente'
     || (payment.type_paiement === 'cheque' && ['a_encaisser', 'en_attente', 'emis'].includes(payment.statut_cheque)));
 
