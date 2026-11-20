@@ -47,6 +47,9 @@ import DeferredSaleHistory from './DeferredSaleHistory';
 import DeferredSaleCancellationDialog from './DeferredSaleCancellationDialog';
 import DeferredSaleFinancialSummary from './DeferredSaleFinancialSummary';
 import ReactivationReviewDialog from './ReactivationReviewDialog';
+import TransactionForm from './TransactionForm';
+import { isPendingPayment, pendingPaymentAmount } from './pendingPayments';
+import TransactionEditForm from './TransactionEditForm';
 import { deferredCancellationEnabled } from './deferredCancellationAccess';
 import TransactionAuditHistory from './TransactionAuditHistory';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
@@ -489,6 +492,41 @@ function TransactionDetail() {
     setPaiementDialogOpen(true);
   };
 
+  // Edit the sale/purchase itself, with the same forms as the register's "Modifier" action.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState(null);
+  const closeEdit = () => { if (!editLoading) { setEditOpen(false); setEditError(null); } };
+  const handleEditSubmit = async (data) => {
+    setEditLoading(true);
+    setEditError(null);
+    try {
+      const transactionData = { ...data };
+      delete transactionData.paiement;
+      const result = await put(`/transactions/${transaction.id_transaction}`, transactionData);
+      if (data.paiements && data.paiements.length > 0) {
+        try {
+          await Promise.all(data.paiements.map((p) => {
+            const pData = { ...p, id_transaction: transaction.id_transaction };
+            return p.id_paiement ? put(`/paiements/${p.id_paiement}`, pData) : post('/paiements', pData);
+          }));
+        } catch (err) {
+          console.error('Erreur lors de la gestion des paiements:', err);
+          notification.warning('Transaction modifiée mais certains paiements ont échoué');
+        }
+      }
+      notification.success('Transaction modifiée avec succès');
+      setEditOpen(false);
+      await refreshPaiements();
+      return result;
+    } catch (err) {
+      setEditError(err?.message || 'Une erreur est survenue lors de l\'enregistrement');
+      throw err;
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
@@ -536,9 +574,7 @@ function TransactionDetail() {
     : '-';
   // Cheques not yet cashed are not counted as paid by the API: show them on their own line
   // so "Impayé" never hides money that is on its way.
-  const isPendingPayment = (p) => p.statut !== 'annule' && p.statut !== 'rejete' && p.nature !== 'remboursement'
-    && (p.statut === 'en_attente' || (p.type_paiement === 'cheque' && ['a_encaisser', 'en_attente', 'emis'].includes(p.statut_cheque)));
-  const pendingAmount = (paiements || []).filter(isPendingPayment).reduce((sum, p) => sum + Number(p.montant || 0), 0);
+  const pendingAmount = pendingPaymentAmount(paiements);
   const remaining = Number(statutPaiement?.montant_restant || 0);
   const stillOwed = Math.max(0, remaining - pendingAmount);
   const paymentLabel = (p) => {
@@ -608,6 +644,11 @@ function TransactionDetail() {
               <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                 {statutPaiement && remaining > 0 && transaction.est_actif !== false && (
                   <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddPaiement}>Ajouter un paiement</Button>
+                )}
+                {transaction.est_actif !== false && (
+                  <Button variant="outlined" startIcon={<EditIcon />} onClick={() => { setEditError(null); setEditOpen(true); }}>
+                    {isSale ? 'Modifier la vente' : 'Modifier l’achat'}
+                  </Button>
                 )}
                 {transaction.est_actif === false && <Button variant="outlined" onClick={() => setReactivationOpen(true)}>
                   {isSale ? 'Réactiver la vente' : 'Réactiver l’achat'}
@@ -748,6 +789,27 @@ function TransactionDetail() {
           <CorrectionHistory transactionId={transaction.id_transaction} readOnly revision={transaction.row_version} />
         )}
       </Box>
+      {editOpen && (CORRECTION_WRITES_ENABLED ? (
+        <TransactionEditForm
+          open
+          initialValues={transaction}
+          onClose={closeEdit}
+          onCorrected={async () => {
+            setEditOpen(false);
+            await refreshPaiements();
+            notification.success('Correction enregistrée');
+          }}
+        />
+      ) : (
+        <TransactionForm
+          open
+          onClose={closeEdit}
+          onSubmit={handleEditSubmit}
+          initialValues={transaction}
+          loading={editLoading}
+          errorMessage={editError}
+        />
+      ))}
       {reactivationOpen && <ReactivationReviewDialog
         transaction={transaction}
         onClose={() => setReactivationOpen(false)}

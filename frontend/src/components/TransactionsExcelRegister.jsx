@@ -30,6 +30,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import PaymentStatusBadge from './PaymentStatusBadge';
 import DeferredSaleStatusBadge from '../pages/Transactions/DeferredSaleStatusBadge';
+import { isPendingPayment, remainingAfterPending } from '../pages/Transactions/pendingPayments';
 import { transactionNetAmount } from '../utils/transactionAmounts';
 
 const PAYMENT_TYPE_LABELS = {
@@ -207,7 +208,8 @@ function TransactionsExcelRegister({
           group.exits += total;
         }
         group.paid += Math.abs(Number(transaction.montant_paye || 0));
-        group.remaining += Number(transaction.montant_restant || 0);
+        // Uncashed cheques are on their way: they are not counted as still owed.
+        group.remaining += remainingAfterPending(transaction.montant_restant, transaction.paiements);
 
         const status = getPaymentStatus(transaction);
         if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
@@ -477,15 +479,16 @@ function PaymentLines({ transaction, formatMontant }) {
         const amount = payment.montant !== null && payment.montant !== undefined
           ? ` · ${sign}${formatMontant(Math.abs(Number(payment.montant)))}` : '';
         const type = `${natureLabel ? `${natureLabel} · ` : ''}${getPaymentTypeLabel(payment)}`;
+        const pending = isPendingPayment(payment);
         return (
           <Typography
             key={payment.id_paiement || index}
             variant="caption"
             display="block"
-            title={`${type}${reference ? ` n° ${reference}` : ''}${amount}`}
-            sx={{ color: missingReference ? 'warning.dark' : 'text.secondary', fontWeight: missingReference ? 700 : 400, lineHeight: 1.3, mb: 0.25, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
+            title={`${type}${reference ? ` n° ${reference}` : ''}${amount}${pending ? ' · en attente' : ''}`}
+            sx={{ color: missingReference || pending ? 'warning.dark' : 'text.secondary', fontWeight: missingReference || pending ? 700 : 400, lineHeight: 1.3, mb: 0.25, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
           >
-            {type}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}
+            {type}{reference ? ` n° ${shorten(reference)}` : ''}{missingReference ? ' · sans réf.' : ''}{amount}{pending ? ' · en attente' : ''}
           </Typography>
         );
       })}
@@ -580,7 +583,7 @@ function TransactionMobileCard({
   const isSale = isClientTransaction(transaction);
   const inactive = transaction.est_actif === false;
   const status = getPaymentStatus(transaction);
-  const remaining = Number(transaction.montant_restant || 0);
+  const remaining = remainingAfterPending(transaction.montant_restant, transaction.paiements);
   const partner = getClientOuFournisseur?.(transaction) || '-';
   const product = produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`;
   const batiment = transaction.id_batiment
@@ -667,7 +670,7 @@ function TransactionExcelRow({
     ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`)
     : '-';
   const paidAmount = Number(transaction.montant_paye || 0);
-  const remainingAmount = Number(transaction.montant_restant || 0);
+  const remainingAmount = remainingAfterPending(transaction.montant_restant, transaction.paiements);
   const totalAmount = getSignedAmount(transaction);
   const inactive = transaction.est_actif === false;
   const rowBackground = inactive ? 'grey.50' : 'background.paper';
