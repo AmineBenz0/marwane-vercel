@@ -2,7 +2,6 @@ import DateField from '../../utils/DateField';
 import { useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
@@ -10,16 +9,14 @@ import {
   TextField,
   MenuItem,
   CircularProgress,
-  IconButton,
   Box,
-  Typography,
 } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import lettreCreditService from '../../services/lettreCreditService';
 import { get } from '../../services/api';
 import useNotification from '../../hooks/useNotification';
 import { format } from 'date-fns';
+import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 function LCFormModal({ open, onClose, onSuccess }) {
   const notification = useNotification();
@@ -114,14 +111,9 @@ function LCFormModal({ open, onClose, onSuccess }) {
         }
       }}
     >
-      <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography component="span" variant="h6" sx={{ fontWeight: 900 }}>
-          Nouvelle lettre de crédit
-        </Typography>
-        <IconButton onClick={onClose} disabled={isSubmitting} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <DialogTitleWithClose onClose={onClose} disabled={isSubmitting}>
+        Nouvelle lettre de crédit
+      </DialogTitleWithClose>
 
       <DialogContent dividers sx={{ backgroundColor: 'background.default', p: 3 }}>
         {loadingClients ? (
