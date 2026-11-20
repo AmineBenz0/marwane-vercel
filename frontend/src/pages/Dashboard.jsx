@@ -438,36 +438,37 @@ function MetricCard({ label, value, helper, icon, color, loading, onClick }) {
     <Card sx={{ height: '100%', borderRadius: 3 }}>
       <CardActionArea onClick={onClick} sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start' }}>
         <CardContent sx={{ p: 2.5 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 800, letterSpacing: '0.08em' }}>
-                {label}
-              </Typography>
-              {loading ? <Skeleton width={120} height={36} /> : (
-                <Typography sx={{ mt: 0.5, fontWeight: 900, fontSize: { xs: '1.45rem', sm: '1.6rem' }, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
-                  {value}
-                </Typography>
-              )}
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-                {helper}
-              </Typography>
-            </Box>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.4 }}>
+              {label}
+            </Typography>
             <Box
               sx={{
-                width: 42,
-                height: 42,
-                borderRadius: 2.25,
+                width: 36,
+                height: 36,
+                borderRadius: 2,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color,
                 backgroundColor: alpha(color, 0.13),
                 flexShrink: 0,
+                '& .MuiSvgIcon-root': { fontSize: 20 },
               }}
             >
               {icon}
             </Box>
           </Stack>
+          {/* Full card width for the amount, never broken inside a number or the currency. */}
+          {loading ? <Skeleton width={140} height={38} /> : (
+            <Typography sx={{ mt: 0.75, fontWeight: 900, fontSize: { xs: '1.45rem', lg: '1.5rem' }, lineHeight: 1.2 }}>
+              {/* The number keeps its non-breaking spaces; only the space before the currency may break. */}
+              {String(value).replace(/\u00A0(MAD)$/, ' $1')}
+            </Typography>
+          )}
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            {helper}
+          </Typography>
         </CardContent>
       </CardActionArea>
     </Card>
