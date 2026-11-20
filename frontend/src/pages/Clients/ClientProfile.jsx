@@ -839,7 +839,7 @@ function ClientProfile() {
                     clientCreanceRows.map((transaction) => (
                       <TableRow key={transaction.id_transaction} hover>
                         <TableCell>{formatDate(transaction.date_transaction)}</TableCell>
-                        <TableCell sx={{ maxWidth: 280 }}>
+                        <TableCell sx={{ maxWidth: 210 }}>
                           {/* Long product names are cut with "…" (full name on hover) so the table never scrolls sideways. */}
                           <Typography
                             variant="body2"

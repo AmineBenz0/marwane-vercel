@@ -43,6 +43,7 @@ import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
 import PageHeader from '../../components/Layout/PageHeader';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
+import CellText from '../../components/CellText';
 
 const SOURCE_OPTIONS = [
   { value: 'virement', label: 'Virement' },
@@ -88,6 +89,8 @@ const getMovementTitle = (movement) => {
 function CompteBancaireList() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // The history sits in a side column (~480px at 1200px): use the movement cards below 1300px.
+  const narrowHistory = useMediaQuery(theme.breakpoints.down(1300));
   const notification = useNotification();
 
   const [comptes, setComptes] = useState([]);
@@ -412,7 +415,7 @@ function CompteBancaireList() {
                 <Alert severity="info" sx={{ borderRadius: 3 }}>
                   Aucun mouvement bancaire trouvé.
                 </Alert>
-              ) : isMobile ? (
+              ) : narrowHistory ? (
                 <Stack spacing={1.25}>
                   {visibleMovements.map((movement) => (
                     <MovementMobileCard key={movement.id_mouvement} movement={movement} />
@@ -420,7 +423,14 @@ function CompteBancaireList() {
                 </Stack>
               ) : (
                 <TableContainer sx={{ overflowX: 'auto' }}>
-                  <Table sx={{ minWidth: 820 }}>
+                  <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
+                    <colgroup>
+                      <col style={{ width: '15%' }} />
+                      <col style={{ width: '24%' }} />
+                      <col style={{ width: '29%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                    </colgroup>
                     <TableHead>
                       <TableRow>
                         <TableCell>Date</TableCell>
@@ -644,21 +654,21 @@ function MovementRow({ movement }) {
     <TableRow hover>
       <TableCell>{formatDate(movement.date_mouvement, true)}</TableCell>
       <TableCell>
-        <Typography fontWeight={800}>{movement.compte_nom || '-'}</Typography>
-        <Typography variant="caption" color="text.secondary">{movement.compte_numero || ''}</Typography>
+        <CellText fontWeight={800} lines={2}>{movement.compte_nom || '-'}</CellText>
+        <CellText variant="caption" color="text.secondary" display="block">{movement.compte_numero || ''}</CellText>
       </TableCell>
       <TableCell>
         <Stack direction="row" spacing={1} alignItems="flex-start">
           {isEntry ? <TrendingUpIcon color="success" fontSize="small" /> : <TrendingDownIcon color="error" fontSize="small" />}
-          <Box>
-            <Typography fontWeight={900}>{getMovementTitle(movement)}</Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <CellText fontWeight={900} lines={2}>{getMovementTitle(movement)}</CellText>
             <Typography variant="caption" color="text.secondary">
               {SOURCE_LABELS[movement.source] || movement.source || '-'} · {isEntry ? 'Entrée' : 'Sortie'}
             </Typography>
           </Box>
         </Stack>
       </TableCell>
-      <TableCell>{movement.reference || '-'}</TableCell>
+      <TableCell><CellText variant="body2">{movement.reference || '-'}</CellText></TableCell>
       <TableCell align="right">
         <Typography fontWeight={950} color={isEntry ? 'success.main' : 'error.main'} sx={{ whiteSpace: 'nowrap' }}>
           {formatSignedAmount(movement)}

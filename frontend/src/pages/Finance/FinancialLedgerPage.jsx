@@ -35,6 +35,7 @@ import { get, post } from '../../services/api';
 import { getBusinessDateInput } from '../../utils/businessDate';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PageHeader from '../../components/Layout/PageHeader';
+import CellText from '../../components/CellText';
 
 const money = (value) => new Intl.NumberFormat('fr-FR', {
   style: 'currency', currency: 'MAD', maximumFractionDigits: 2,
@@ -179,7 +180,8 @@ function FinancialLedgerPage({ direction }) {
   const navigate = useNavigate();
   const isReceivable = direction === 'receivable';
   const theme = useTheme();
-  const mobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // Cards below 1200px: next to the sidebar the 7-column table cannot fit.
+  const mobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [data, setData] = useState({ items: [], summary: {} });
   const [filters, setFilters] = useState({ id_tiers: '', recherche: '', statut: '', echeance_debut: '', echeance_fin: '', overdue_only: false });
   const [page, setPage] = useState(0);
@@ -349,10 +351,19 @@ function FinancialLedgerPage({ direction }) {
         <Stack spacing={1.5}>{rows.map((item) => <LedgerCard key={item.id_transaction} item={item} partyLabel={partyLabel} onPay={() => setSelected(item)} onParty={() => goToParty(item)} />)}</Stack>
       ) : (
         <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
+          <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+            <colgroup>
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: 136 }} />
+            </colgroup>
             <TableHead><TableRow><TableCell>{partyLabel}</TableCell><TableCell>Produit</TableCell><TableCell>Échéance</TableCell><TableCell align="right">Total</TableCell><TableCell align="right">Reste</TableCell><TableCell>Statut</TableCell><TableCell align="right">Action</TableCell></TableRow></TableHead>
             <TableBody>{rows.map((item) => <TableRow key={item.id_transaction} hover sx={item.est_en_retard ? { backgroundColor: 'rgba(211, 47, 47, 0.06)' } : undefined}>
-              <TableCell>{partyPath(item) ? <Button variant="text" size="small" onClick={() => goToParty(item)} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0 }}>{item.client_nom || item.fournisseur_nom || '—'}</Button> : item.client_nom || item.fournisseur_nom || '—'}</TableCell><TableCell>{item.produit_nom || '—'}</TableCell><TableCell>{item.date_echeance || '—'}</TableCell><TableCell align="right">{money(item.montant_total)}</TableCell><TableCell align="right">{money(item.montant_restant)}</TableCell><TableCell><Chip size="small" color={item.est_en_retard ? 'error' : item.statut_paiement === 'paye' ? 'success' : 'warning'} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></TableCell><TableCell align="right"><Button size="small" startIcon={<AddIcon />} onClick={() => setSelected(item)} disabled={Number(item.montant_restant) <= 0}>Paiement</Button></TableCell>
+              <TableCell>{partyPath(item) ? <Button variant="text" size="small" onClick={() => goToParty(item)} title={item.client_nom || item.fournisseur_nom || ''} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0, maxWidth: '100%', justifyContent: 'flex-start', textAlign: 'left' }}><CellText component="span" variant="body2" fontWeight={700} lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText></Button> : <CellText variant="body2" lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText>}</TableCell><TableCell><CellText variant="body2" lines={2}>{item.produit_nom || '—'}</CellText></TableCell><TableCell>{item.date_echeance || '—'}</TableCell><TableCell align="right">{money(item.montant_total)}</TableCell><TableCell align="right">{money(item.montant_restant)}</TableCell><TableCell><Chip size="small" color={item.est_en_retard ? 'error' : item.statut_paiement === 'paye' ? 'success' : 'warning'} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></TableCell><TableCell align="right"><Button size="small" startIcon={<AddIcon />} onClick={() => setSelected(item)} disabled={Number(item.montant_restant) <= 0}>Paiement</Button></TableCell>
             </TableRow>)}</TableBody>
           </Table>
           <TablePagination component="div" count={data.summary?.count || 0} page={page} onPageChange={(_, nextPage) => setPage(nextPage)} rowsPerPage={pageSize} rowsPerPageOptions={[pageSize]} labelDisplayedRows={({ from, to, count }) => `${from}–${to} sur ${count}`} />
@@ -364,7 +375,7 @@ function FinancialLedgerPage({ direction }) {
 }
 
 function LedgerCard({ item, partyLabel, onPay, onParty }) {
-  return <Card variant="outlined" sx={item.est_en_retard ? { borderColor: 'error.main' } : undefined}><CardContent><Stack spacing={1}><Stack direction="row" justifyContent="space-between"><Button variant="text" onClick={onParty} disabled={!onParty} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0 }}>{item.client_nom || item.fournisseur_nom || '—'}</Button><Chip size="small" color={item.est_en_retard ? 'error' : item.statut_paiement === 'paye' ? 'success' : 'warning'} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></Stack><Typography variant="body2" color="text.secondary">{partyLabel} · {item.produit_nom || 'Produit'} · échéance {item.date_echeance || 'non définie'}</Typography><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="caption" color="text.secondary">Reste</Typography><Typography fontWeight={700}>{money(item.montant_restant)}</Typography></Box><Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={onPay} disabled={Number(item.montant_restant) <= 0}>Ajouter</Button></Stack></Stack></CardContent></Card>;
+  return <Card variant="outlined" sx={item.est_en_retard ? { borderColor: 'error.main' } : undefined}><CardContent><Stack spacing={1}><Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}><Button variant="text" onClick={onParty} disabled={!onParty} title={item.client_nom || item.fournisseur_nom || ''} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0, justifyContent: 'flex-start', textAlign: 'left' }}><CellText component="span" variant="body1" fontWeight={700} lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText></Button><Chip size="small" color={item.est_en_retard ? 'error' : item.statut_paiement === 'paye' ? 'success' : 'warning'} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></Stack><Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{partyLabel} · {item.produit_nom || 'Produit'} · échéance {item.date_echeance || 'non définie'}</Typography><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="caption" color="text.secondary">Reste</Typography><Typography fontWeight={700}>{money(item.montant_restant)}</Typography></Box><Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={onPay} disabled={Number(item.montant_restant) <= 0}>Ajouter</Button></Stack></Stack></CardContent></Card>;
 }
 
 LedgerCard.propTypes = {
