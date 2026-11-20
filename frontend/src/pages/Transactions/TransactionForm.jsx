@@ -973,7 +973,7 @@ function TransactionForm({
                 )}
                 <Grid container spacing={2}>
                   {/* Montant */}
-                  <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                  <Grid item xs={12} sm={6} md={4}>
                     <Controller
                       name={`lignes.${index}.paiements.${pIndex}.montant`}
                       control={control}
@@ -996,7 +996,7 @@ function TransactionForm({
                   </Grid>
 
                   {/* Type de paiement */}
-                  <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                  <Grid item xs={12} sm={6} md={4}>
                     <Controller
                       name={`lignes.${index}.paiements.${pIndex}.type`}
                       control={control}
@@ -1048,7 +1048,7 @@ function TransactionForm({
                   </Grid>
 
                   {/* Date du paiement */}
-                  <Grid item xs={12} md={watchedTypeEntite === 'client' ? 12 : 4}>
+                  <Grid item xs={12} md={4}>
                     <Controller
                       name={`lignes.${index}.paiements.${pIndex}.date`}
                       control={control}
@@ -1072,7 +1072,7 @@ function TransactionForm({
                   {/* Champs conditionnels */}
                   {paiement.type === 'cheque' && (
                     <>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.numero_cheque`}
                           control={control}
@@ -1081,7 +1081,7 @@ function TransactionForm({
                           )}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.banque`}
                           control={control}
@@ -1095,7 +1095,7 @@ function TransactionForm({
 
                   {(paiement.source_reglement === 'banque' || (!paiement.source_reglement && paiement.type === 'virement')) && (
                     <>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.id_compte`}
                           control={control}
@@ -1127,7 +1127,7 @@ function TransactionForm({
                   )}
                   {paiement.type === 'virement' && (
                     <>
-                      <Grid item xs={12} sm={watchedTypeEntite === 'client' ? 12 : 6}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
                           name={`lignes.${index}.paiements.${pIndex}.reference`}
                           control={control}
@@ -1441,10 +1441,10 @@ function TransactionForm({
               <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 2, borderRadius: 2.5, bgcolor: 'background.paper' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
                   <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800 }}>1</Box>
-                  <Typography variant="subtitle1" fontWeight={800}>{isSale ? 'Client et date' : 'Fournisseur et date'}</Typography>
+                  <Typography variant="subtitle1" fontWeight={800}>{isSale ? 'Client et dates' : 'Fournisseur et dates'}</Typography>
                 </Box>
                 <Grid container spacing={1.25}>
-                  <Grid item xs={12} md={8}>
+                  <Grid item xs={12} md={6}>
               {/* Sélection Client OU Fournisseur */}
               <FormControl component="fieldset" margin="dense" fullWidth error={!!errors.type_entite} sx={{ display: 'none' }}>
                 <FormLabel component="legend">Type d'entité</FormLabel>
@@ -1547,7 +1547,7 @@ function TransactionForm({
               )}
 
                   </Grid>
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} sm={6} md={3}>
               {/* Date de transaction */}
               <Controller
                 name="date_transaction"
@@ -1571,6 +1571,30 @@ function TransactionForm({
                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || ''}
                     required
+                    disabled={loading}
+                    margin="dense"
+                    variant="outlined"
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                )}
+              />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+              {/* Date d'échéance (optionnel) */}
+              <Controller
+                name="date_echeance"
+                control={control}
+                render={({ field, fieldState: { error } }) => (
+                  <DateField
+                    {...field}
+                    fullWidth
+                    label="Date d'échéance du paiement (facultatif)"
+                    size="small"
+                    error={!!error}
+                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
+                    helperText={error?.message || 'Date limite pour le paiement'}
                     disabled={loading}
                     margin="dense"
                     variant="outlined"
@@ -1788,35 +1812,6 @@ function TransactionForm({
                         );
                   })}
                 </Box>
-                {/* Due date: only relevant while something remains to be paid. */}
-                {montantRestant > 0 && (
-                  <Grid container spacing={1.25} sx={{ mt: 1 }}>
-                  <Grid item xs={12} sm={6} md={4}>
-              {/* Date d'échéance (optionnel) */}
-              <Controller
-                name="date_echeance"
-                control={control}
-                render={({ field, fieldState: { error } }) => (
-                  <DateField
-                    {...field}
-                    fullWidth
-                    label="À payer avant le (facultatif)"
-                    size="small"
-                    error={!!error}
-                    sx={getRequiredFieldAnimation(error, animateInvalidFields)}
-                    helperText={error?.message || 'Date limite de paiement pour ce qui reste à payer'}
-                    disabled={loading}
-                    margin="dense"
-                    variant="outlined"
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                  />
-                )}
-              />
-                  </Grid>
-                  </Grid>
-                )}
               </Paper>
               </Box>
             </Box>
