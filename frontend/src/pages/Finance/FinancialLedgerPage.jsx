@@ -42,13 +42,27 @@ const money = (value) => new Intl.NumberFormat('fr-FR', {
 }).format(Number(value || 0));
 
 const statusLabel = {
-  impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
+  impaye: 'Impayé', partiel: 'Partiel', cheque_en_attente: 'Chèque en attente', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
 };
+
+// Owed: a cheque handed over but not cashed yet is no longer owed.
+const owed = (item) => Number(item?.montant_du ?? item?.montant_restant ?? 0);
+const pendingAmount = (item) => Number(item?.montant_en_attente || 0);
+const statusColor = (item) => {
+  if (item.est_en_retard) return 'error';
+  if (item.statut_paiement === 'paye' || item.statut_paiement === 'surpaye') return 'success';
+  if (item.statut_paiement === 'cheque_en_attente') return 'info';
+  return 'warning';
+};
+const PendingNote = ({ item }) => (pendingAmount(item) > 0
+  ? <Typography variant="caption" color="info.main" display="block">Chèque en attente {money(pendingAmount(item))}</Typography>
+  : null);
+PendingNote.propTypes = { item: PropTypes.object.isRequired };
 
 const createIdempotencyKey = () => window.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 function PaymentDialog({ item, open, onClose, onSaved }) {
-  const [amount, setAmount] = useState(Number(item?.montant_restant || 0).toFixed(2));
+  const [amount, setAmount] = useState(Math.max(0, owed(item)).toFixed(2));
   const [type, setType] = useState('cash');
   const [date, setDate] = useState(getBusinessDateInput);
   const [notes, setNotes] = useState('');
@@ -58,7 +72,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
 
   useEffect(() => {
     if (open) {
-      setAmount(Number(item?.montant_restant || 0).toFixed(2));
+      setAmount(Math.max(0, owed(item)).toFixed(2));
       setType('cash');
       setDate(getBusinessDateInput());
       setNotes('');
@@ -101,7 +115,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Transaction #{item?.id_transaction} · reste {money(item?.montant_restant)}
+            Transaction #{item?.id_transaction} · reste {money(owed(item))}
           </Typography>
           {error && <Alert severity="error">{error}</Alert>}
           <DateField label="Date"  value={date} onChange={(event) => setDate(event.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
@@ -118,7 +132,7 @@ function PaymentDialog({ item, open, onClose, onSaved }) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Annuler</Button>
-        <Button onClick={submit} variant="contained" disabled={saving}>{saving ? 'Enregistrement…' : Math.round(Number(amount) * 100) >= Math.round(Number(item?.montant_restant || 0) * 100) ? 'Marquer comme payé' : 'Enregistrer le paiement'}</Button>
+        <Button onClick={submit} variant="contained" disabled={saving}>{saving ? 'Enregistrement…' : Math.round(Number(amount) * 100) >= Math.round(owed(item) * 100) ? 'Marquer comme payé' : 'Enregistrer le paiement'}</Button>
       </DialogActions>
     </Dialog>
   );
@@ -159,6 +173,9 @@ function SummaryCards({ summary }) {
             <CardContent>
               <Typography variant="caption" color="text.secondary">{label}</Typography>
               <Typography variant="h6" sx={{ color, fontWeight: 700, mt: 0.5 }}>{count ? Number(value || 0).toLocaleString('fr-FR') : money(value)}</Typography>
+              {label === 'Reste' && Number(summary?.en_attente || 0) > 0 && (
+                <Typography variant="caption" color="info.main">+ {money(summary.en_attente)} en chèques non encaissés</Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -172,6 +189,7 @@ SummaryCards.propTypes = {
     total: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     paye: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     reste: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    en_attente: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     overdue_count: PropTypes.number,
   }),
 };
@@ -363,7 +381,7 @@ function FinancialLedgerPage({ direction }) {
             </colgroup>
             <TableHead><TableRow><TableCell>{partyLabel}</TableCell><TableCell>Produit</TableCell><TableCell>Échéance</TableCell><TableCell align="right">Total</TableCell><TableCell align="right">Reste</TableCell><TableCell>Statut</TableCell><TableCell align="right">Action</TableCell></TableRow></TableHead>
             <TableBody>{rows.map((item) => <TableRow key={item.id_transaction} hover sx={item.est_en_retard ? { backgroundColor: 'rgba(211, 47, 47, 0.06)' } : undefined}>
-              <TableCell>{partyPath(item) ? <Button variant="text" size="small" onClick={() => goToParty(item)} title={item.client_nom || item.fournisseur_nom || ''} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0, maxWidth: '100%', justifyContent: 'flex-start', textAlign: 'left' }}><CellText component="span" variant="body2" fontWeight={700} lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText></Button> : <CellText variant="body2" lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText>}</TableCell><TableCell><CellText variant="body2" lines={2}>{item.produit_nom || '—'}</CellText></TableCell><TableCell>{item.date_echeance || '—'}</TableCell><TableCell align="right">{money(item.montant_total)}</TableCell><TableCell align="right">{money(item.montant_restant)}</TableCell><TableCell><Chip size="small" color={item.est_en_retard ? 'error' : item.statut_paiement === 'paye' ? 'success' : 'warning'} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></TableCell><TableCell align="right"><Button size="small" startIcon={<AddIcon />} onClick={() => setSelected(item)} disabled={Number(item.montant_restant) <= 0}>Paiement</Button></TableCell>
+              <TableCell>{partyPath(item) ? <Button variant="text" size="small" onClick={() => goToParty(item)} title={item.client_nom || item.fournisseur_nom || ''} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0, maxWidth: '100%', justifyContent: 'flex-start', textAlign: 'left' }}><CellText component="span" variant="body2" fontWeight={700} lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText></Button> : <CellText variant="body2" lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText>}</TableCell><TableCell><CellText variant="body2" lines={2}>{item.produit_nom || '—'}</CellText></TableCell><TableCell>{item.date_echeance || '—'}</TableCell><TableCell align="right">{money(item.montant_total)}</TableCell><TableCell align="right">{money(owed(item))}<PendingNote item={item} /></TableCell><TableCell><Chip size="small" color={statusColor(item)} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></TableCell><TableCell align="right"><Button size="small" startIcon={<AddIcon />} onClick={() => setSelected(item)} disabled={owed(item) <= 0}>Paiement</Button></TableCell>
             </TableRow>)}</TableBody>
           </Table>
           <TablePagination component="div" count={data.summary?.count || 0} page={page} onPageChange={(_, nextPage) => setPage(nextPage)} rowsPerPage={pageSize} rowsPerPageOptions={[pageSize]} labelDisplayedRows={({ from, to, count }) => `${from}–${to} sur ${count}`} />
@@ -375,7 +393,7 @@ function FinancialLedgerPage({ direction }) {
 }
 
 function LedgerCard({ item, partyLabel, onPay, onParty }) {
-  return <Card variant="outlined" sx={item.est_en_retard ? { borderColor: 'error.main' } : undefined}><CardContent><Stack spacing={1}><Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}><Button variant="text" onClick={onParty} disabled={!onParty} title={item.client_nom || item.fournisseur_nom || ''} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0, justifyContent: 'flex-start', textAlign: 'left' }}><CellText component="span" variant="body1" fontWeight={700} lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText></Button><Chip size="small" color={item.est_en_retard ? 'error' : item.statut_paiement === 'paye' ? 'success' : 'warning'} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></Stack><Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{partyLabel} · {item.produit_nom || 'Produit'} · échéance {item.date_echeance || 'non définie'}</Typography><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="caption" color="text.secondary">Reste</Typography><Typography fontWeight={700}>{money(item.montant_restant)}</Typography></Box><Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={onPay} disabled={Number(item.montant_restant) <= 0}>Ajouter</Button></Stack></Stack></CardContent></Card>;
+  return <Card variant="outlined" sx={item.est_en_retard ? { borderColor: 'error.main' } : undefined}><CardContent><Stack spacing={1}><Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}><Button variant="text" onClick={onParty} disabled={!onParty} title={item.client_nom || item.fournisseur_nom || ''} sx={{ textTransform: 'none', fontWeight: 700, p: 0, minWidth: 0, justifyContent: 'flex-start', textAlign: 'left' }}><CellText component="span" variant="body1" fontWeight={700} lines={2}>{item.client_nom || item.fournisseur_nom || '—'}</CellText></Button><Chip size="small" color={statusColor(item)} label={statusLabel[item.statut_paiement] || item.statut_paiement} /></Stack><Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{partyLabel} · {item.produit_nom || 'Produit'} · échéance {item.date_echeance || 'non définie'}</Typography><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="caption" color="text.secondary">Reste</Typography><Typography fontWeight={700}>{money(owed(item))}</Typography><PendingNote item={item} /></Box><Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={onPay} disabled={owed(item) <= 0}>Ajouter</Button></Stack></Stack></CardContent></Card>;
 }
 
 LedgerCard.propTypes = {

@@ -400,7 +400,7 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
       total = amount(row.getCell(netCol!).value);
       expect(amount(row.getCell(totalCol!).value)).toBe(125.5);
       expect(row.getCell(headings.get('Payé')!).value).toBe(9.31);
-      expect(row.getCell(headings.get('Reste')!).value).toBe(116.19);
+      expect(row.getCell(headings.get('Reste')!).value).toBe(108.69); // 83.19 owed + 25.50
     }
   }
   expect(transactions).toHaveLength(3);
@@ -427,7 +427,8 @@ test('transaction register preserves exact settlements, legacy deferred quantiti
     .toEqual(['26/10/26', 'Chèque', 'CHQ-001']);
   expect(settlementValue(paymentRows[0], 'Référence')).toBeNull();
   expect(deferredRow.getCell(headings.get('Payé')!).value).toBe(9.31);
-  expect(deferredRow.getCell(headings.get('Reste')!).value).toBe(90.69);
+  // Reste is what is owed: pending payments (3.20 cash en attente + 4.30 uncashed cheque) are not owed.
+  expect(deferredRow.getCell(headings.get('Reste')!).value).toBe(83.19);
   expect(deferredRow.getCell(headings.get('Quantité couverte')!).value).toBe(10);
   expect(deferredRow.getCell(headings.get('Stock prêt à compléter')!).value).toBe(5);
   expect(deferredRow.getCell(headings.get('Reste à fournir')!).value).toBe(10);

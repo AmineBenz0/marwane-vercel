@@ -292,7 +292,12 @@ def test_pending_cheque_becomes_effective_only_when_encashed(client, auth_header
     }, headers=auth_headers)
     assert cheque.status_code == 201, cheque.text
     assert cheque.json()["statut"] == "en_attente"
-    assert client.get(f"/api/v1/transactions/{transaction['id_transaction']}/payment-summary", headers=auth_headers).json()["statut_paiement"] == "impaye"
+    pending = client.get(f"/api/v1/transactions/{transaction['id_transaction']}/payment-summary", headers=auth_headers).json()
+    # Not paid in the ledger yet, but no longer owed: the cheque is on its way.
+    assert pending["statut_paiement"] == "cheque_en_attente"
+    assert Decimal(pending["montant_paye"]) == 0
+    assert Decimal(pending["montant_restant"]) == 100
+    assert Decimal(pending["montant_du"]) == 0
 
     encashed = client.put(
         f"/api/v1/paiements/{cheque.json()['id_paiement']}",
@@ -396,6 +401,7 @@ def test_receivables_page_is_database_paginated_but_summary_covers_all_matches(
         "total_brut": "60.00",
         "total_avoirs": "0.00",
         "paye": "5.00",
+        "en_attente": "0.00",
         "reste": "55.00",
         "count": 3,
         "overdue_count": 1,
@@ -809,7 +815,8 @@ def test_monthly_report_distinguishes_ledger_cutoffs_and_cheque_settlement(clien
     assert oct_report["date_soldes_historiques"] == "2026-10-31"
     assert nov_report["date_soldes_historiques"] == "2026-11-30"
     assert nov_report["date_soldes_actuels"] == "2026-11-08"
-    assert Decimal(oct_report["creances"]) == 150
+    # The 75 cheque was handed over on 28 Oct (cashed 2 Nov): not owed at end of October.
+    assert Decimal(oct_report["creances"]) == 75
     assert Decimal(nov_report["creances_actuelles"]) == 75
     assert Decimal(nov_report["creances"]) == 55
     assert Decimal(oct_report["solde_caisse_historique"]) == 100

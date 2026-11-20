@@ -135,6 +135,8 @@ def get_payment_summary(
         montant_net=transaction.montant_net,
         montant_paye=transaction.montant_paye,
         montant_restant=transaction.montant_restant,
+        montant_en_attente=transaction.montant_en_attente,
+        montant_du=transaction.montant_du,
         pourcentage_paye=transaction.pourcentage_paye,
         statut_paiement=payment_status(transaction),
         est_en_retard=payment_status(transaction) == "en_retard",

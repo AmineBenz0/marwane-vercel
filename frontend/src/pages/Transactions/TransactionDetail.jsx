@@ -479,7 +479,7 @@ function TransactionDetail() {
     setEditingPaiement(null);
     resetPaiement({
       date_paiement: format(new Date(), 'yyyy-MM-dd'),
-      montant: statutPaiement?.montant_restant || 0,
+      montant: Math.max(0, Number(statutPaiement?.montant_du ?? statutPaiement?.montant_restant ?? 0)),
       type_paiement: 'cash',
       statut_cheque: 'a_encaisser',
       numero_cheque: '',
@@ -576,7 +576,9 @@ function TransactionDetail() {
   // so "Impayé" never hides money that is on its way.
   const pendingAmount = pendingPaymentAmount(paiements);
   const remaining = Number(statutPaiement?.montant_restant || 0);
-  const stillOwed = Math.max(0, remaining - pendingAmount);
+  const stillOwed = statutPaiement?.montant_du != null
+    ? Math.max(0, Number(statutPaiement.montant_du))
+    : Math.max(0, remaining - pendingAmount);
   const paymentLabel = (p) => {
     if (p.nature === 'remboursement') return 'Remboursement';
     if (p.est_affectation || ['credit_recu', 'credit_transfere'].includes(p.nature)) return 'Crédit affecté';
@@ -875,7 +877,7 @@ function TransactionDetail() {
             onClose={handleClosePaiementDialog}
             subtitle={editingPaiement
               ? `Paiement n° ${editingPaiement.id_paiement}`
-              : statutPaiement ? `Transaction n° ${id} · reste à payer ${formatMontant(statutPaiement.montant_restant)}` : null}
+              : statutPaiement ? `Transaction n° ${id} · reste à payer ${formatMontant(Math.max(0, Number(statutPaiement.montant_du ?? statutPaiement.montant_restant)))}` : null}
           >
             {editingPaiement ? 'Modifier le paiement' : 'Ajouter un paiement'}
           </DialogTitleWithClose>

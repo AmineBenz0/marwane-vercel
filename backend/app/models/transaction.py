@@ -8,6 +8,9 @@ from decimal import Decimal
 from app.database import Base
 from app.utils.business_date import business_date
 
+# Nothing is owed any more in these statuses, so they are never overdue.
+SETTLED_PAYMENT_STATUSES = frozenset({"paye", "surpaye", "cheque_en_attente"})
+
 
 class Transaction(Base):
     """
@@ -180,9 +183,33 @@ class Transaction(Base):
 
     @property
     def montant_restant(self) -> Decimal:
-        """Net customer balance, negative when paid above the corrected sale."""
+        """Net customer balance, negative when paid above the corrected sale.
+
+        Ledger figure: only effective (cashed) payments count. Credits, refunds
+        and reconciliation rely on it, so pending cheques never change it.
+        """
         return self.montant_net - self.montant_paye
-    
+
+    @property
+    def montant_en_attente(self) -> Decimal:
+        """Payments handed over but not effective yet (e.g. uncashed cheques)."""
+        return sum(
+            (Decimal(str(p.montant)) for p in (self.paiements or []) if p.est_en_attente),
+            Decimal("0"),
+        )
+
+    @property
+    def montant_du(self) -> Decimal:
+        """What is still owed once the pending payments arrive.
+
+        Business rule: an uncashed cheque no longer counts as owed. A credit
+        (negative balance) is kept as is; pending payments never create one.
+        """
+        remaining = self.montant_restant
+        if remaining <= 0:
+            return remaining
+        return max(Decimal("0"), remaining - self.montant_en_attente)
+
     @property
     def statut_paiement(self) -> str:
         """
@@ -191,27 +218,34 @@ class Transaction(Base):
         Statuts possibles:
         - 'surpaye': Montant payé dépasse le montant total
         - 'paye': Montant totalement payé
+        - 'cheque_en_attente': Plus rien n'est dû, mais une partie n'est pas
+          encore encaissée (chèque remis, pas encore encaissé)
         - 'partiel': Montant partiellement payé
         - 'impaye': Aucun paiement reçu
-        
+
         Returns:
             str: Statut du paiement
         """
         montant_paye = self.montant_paye
         montant_total = self.montant_net
-        
+
         # Surpayé
         if montant_paye > montant_total:
             return 'surpaye'
-        
+
         # Totalement payé
         if montant_paye >= montant_total:
             return 'paye'
-        
+
+        # Couvert par des paiements pas encore encaissés
+        en_attente = self.montant_en_attente
+        if montant_paye + en_attente >= montant_total:
+            return 'cheque_en_attente'
+
         # Aucun paiement
-        if montant_paye == 0:
+        if montant_paye == 0 and en_attente == 0:
             return 'impaye'
-        
+
         # Partiellement payé
         return 'partiel'
     
@@ -229,8 +263,8 @@ class Transaction(Base):
         if not hasattr(self, 'date_echeance') or self.date_echeance is None:
             return False
         
-        # Si entièrement payé, pas de retard
-        if self.statut_paiement in {'paye', 'surpaye'}:
+        # Si entièrement payé (ou couvert par un chèque pas encore encaissé), pas de retard
+        if self.statut_paiement in SETTLED_PAYMENT_STATUSES:
             return False
         
         # Vérifier si la date d'échéance est dépassée

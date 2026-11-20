@@ -4,6 +4,8 @@ export const isPendingPayment = (payment) => Boolean(payment)
   && payment.statut !== 'annule'
   && payment.statut !== 'rejete'
   && payment.nature !== 'remboursement'
+  // Same rule as the API: a cheque marked cashed, rejected or cancelled is never pending.
+  && !['encaisse', 'rejete', 'annule'].includes(payment.statut_cheque)
   && (payment.statut === 'en_attente'
     || (payment.type_paiement === 'cheque' && ['a_encaisser', 'en_attente', 'emis'].includes(payment.statut_cheque)));
 
@@ -16,4 +18,13 @@ export const remainingAfterPending = (montantRestant, payments) => {
   const remaining = Number(montantRestant || 0);
   if (remaining <= 0) return remaining;
   return Math.max(0, remaining - pendingPaymentAmount(payments));
+};
+
+// What is still owed, as shown on screens. The API sends it as montant_du
+// (cheques handed over but not cashed are not owed); older payloads without it
+// fall back to the same rule computed from the listed payments.
+export const owedAmount = (transaction) => {
+  if (!transaction) return 0;
+  if (transaction.montant_du !== undefined && transaction.montant_du !== null) return Number(transaction.montant_du);
+  return remainingAfterPending(transaction.montant_restant, transaction.paiements);
 };

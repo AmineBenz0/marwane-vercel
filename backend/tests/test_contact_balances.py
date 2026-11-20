@@ -81,7 +81,10 @@ def test_bulk_balances_and_list_contract(client, db_session, ledger):
 
     response = client.get(f"/api/v1/{endpoint}", params={"include_balance": True})
     assert response.status_code == 200, response.text
-    assert {row[id_field]: Decimal(str(row["outstanding_balance"])) for row in response.json()} == expected
+    # Lists show what is owed: pending payments (uncashed cheques) no longer count.
+    # "partial": first purchase 100 - 32 paid is covered by pending payments; second owes 35.
+    owed = {**expected, ids["partial"]: Decimal("35")}
+    assert {row[id_field]: Decimal(str(row["outstanding_balance"])) for row in response.json()} == owed
     default = client.get(f"/api/v1/{endpoint}")
     assert default.status_code == 200
     assert all("outstanding_balance" not in row for row in default.json())
@@ -103,7 +106,7 @@ def test_balance_opt_in_preserves_filters_and_pagination(client, ledger):
     partial = client.get(f"/api/v1/{endpoint}", params={"recherche": " partial ", "include_balance": True}).json()
     assert len(partial) == 1
     assert partial[0][id_field] == ids["partial"]
-    assert Decimal(str(partial[0]["outstanding_balance"])) == Decimal("103")
+    assert Decimal(str(partial[0]["outstanding_balance"])) == Decimal("35")
     inactive = client.get(f"/api/v1/{endpoint}", params={"est_actif": False, "include_balance": True}).json()
     assert [row[id_field] for row in inactive] == [ids["inactive"]]
 

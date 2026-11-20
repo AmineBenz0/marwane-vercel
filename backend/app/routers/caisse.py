@@ -227,7 +227,7 @@ def get_solde_complet(
     
     # Outstanding amounts include commercial credits, non-cash payments and
     # advances; cash movements alone cannot determine customer/supplier debt.
-    position = financial_position_as_of(db, business_date())
+    position = financial_position_as_of(db, business_date(), include_pending=True)
     creances_clients = position['receivables']
     dettes_fournisseurs = position['payables']
     
