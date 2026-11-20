@@ -319,7 +319,7 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
         <Grid item xs={12}>
           <TextField
             {...register('notes')}
-            label="Notes (optionnel)"
+            label="Notes (facultatif)"
             fullWidth
             multiline
             rows={3}

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Box, Button, Dialog, DialogActions, DialogContent,
   MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { lotProductionService } from '../../services/productionService';
 import { localToday } from './useProductionView';
+import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 const makeLotName = (buildingName, date, strain) => {
   const building = String(buildingName || '').trim().replace(/^(?:bâtiment|batiment|bat)\s*/i, '').trim();
@@ -85,7 +86,7 @@ export default function LotCreateDialog({ building, available = [], onClose, onC
   return (
     <Dialog open onClose={() => { if (!saving) onClose(); }} maxWidth="sm" fullWidth aria-labelledby="lot-create-title">
       <Box component="form" onSubmit={submit}>
-        <DialogTitle id="lot-create-title">Démarrer un lot</DialogTitle>
+        <DialogTitleWithClose id="lot-create-title" onClose={onClose} disabled={saving}>Démarrer un lot</DialogTitleWithClose>
         <DialogContent>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Stack spacing={2} sx={{ pt: 1 }}>

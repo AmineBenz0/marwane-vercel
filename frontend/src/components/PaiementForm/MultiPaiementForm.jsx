@@ -1,5 +1,5 @@
 import DateField from '../../utils/DateField';
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import {
   Box,
   TextField,
@@ -94,10 +94,21 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
   const totalSaisi = watchedFields?.reduce((sum, item) => sum + (parseFloat(item.montant) || 0), 0) || 0;
   const montantRestant = transaction?.montant_restant || 0;
   const difference = montantRestant - totalSaisi;
+  // Half a centime of tolerance so rounding never shows as an overpayment.
+  const overpaid = difference < -0.005;
+  const settled = Math.abs(difference) <= 0.005;
 
-  // Si c'est vide au début, ajouter une ligne
+  // Si c'est vide au début, ajouter une ligne (une seule fois : en développement,
+  // React StrictMode exécute les effets deux fois et ajoutait deux lignes).
+  const initialRowAdded = useRef(false);
   useEffect(() => {
-    if (fields.length === 0) {
+    // Once a row exists, allow adding one again if the user later removes them all.
+    if (fields.length > 0) {
+      initialRowAdded.current = false;
+      return;
+    }
+    if (!initialRowAdded.current) {
+      initialRowAdded.current = true;
       append({
         date_paiement: format(new Date(), 'yyyy-MM-dd'),
         montant: montantRestant > 0 ? montantRestant : 0,
@@ -124,23 +135,29 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
         </Alert>
       )}
       {accountError && <Alert severity="error" sx={{ mb: 2 }}>{accountError}</Alert>}
-      <Alert icon={false} severity={difference < 0 ? "warning" : "info"} sx={{ mb: 3, '& .MuiAlert-message': { width: '100%' } }}>
+      <Alert icon={false} severity={overpaid ? 'warning' : 'info'} sx={{ mb: 3, '& .MuiAlert-message': { width: '100%' } }}>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={4}>
-            <Typography variant="caption" color="text.secondary">À régler</Typography>
+            <Typography variant="caption" color="text.secondary">Montant dû</Typography>
             <Typography variant="h6">{formatMontant(montantRestant)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
-            <Typography variant="caption" color="text.secondary">Total saisi</Typography>
+            <Typography variant="caption" color="text.secondary">Ce paiement</Typography>
             <Typography variant="h6" color="primary">{formatMontant(totalSaisi)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
-            <Typography variant="caption" color="text.secondary">Reste à régler</Typography>
-            <Typography variant="h6" color={difference < 0 ? "warning.main" : "text.primary"}>
-              {formatMontant(difference)}
+            {/* Never show a negative "reste": an overpayment is named as such. */}
+            <Typography variant="caption" color="text.secondary">{overpaid ? 'Trop payé' : 'Reste après ce paiement'}</Typography>
+            <Typography variant="h6" color={overpaid ? 'warning.dark' : settled ? 'success.main' : 'text.primary'}>
+              {formatMontant(Math.abs(difference))}
             </Typography>
           </Grid>
         </Grid>
+        {overpaid && (
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Ce paiement dépasse le montant dû de {formatMontant(-difference)}. Vérifiez les montants avant d’enregistrer.
+          </Typography>
+        )}
       </Alert>
 
       <TableContainer component={Paper} variant="outlined">
