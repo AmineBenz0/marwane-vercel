@@ -1,400 +1,274 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
   Button,
   Card,
+  CardActionArea,
   CardContent,
-  CircularProgress,
+  Chip,
   Grid,
+  Skeleton,
   Stack,
   Typography,
   alpha,
-  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
   AccountBalanceWallet as WalletIcon,
-  AssignmentTurnedIn as TaskIcon,
-  Egg as EggIcon,
+  CallMade as ToPayIcon,
+  CallReceived as ToCollectIcon,
   Factory as FactoryIcon,
   MoneyOff as ExpenseIcon,
-  ReceiptLong as ReceiptIcon,
   ShoppingCart as PurchaseIcon,
   Storefront as SaleIcon,
-  TrendingDown as TrendingDownIcon,
   TrendingUp as TrendingUpIcon,
-  WarningAmber as WarningIcon,
 } from '@mui/icons-material';
 import {
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { endOfMonth, format, parseISO, startOfMonth, subDays } from 'date-fns';
+import { addDays, format, parseISO, startOfWeek, subWeeks } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import { getBusinessDateInput } from '../utils/businessDate';
 import { get } from '../services/api';
 import DeferredSalesCard from './Transactions/DeferredSalesCard';
 import { loadTransactionPages } from './Transactions/transactionPages';
 import { formatMontant, formatSimpleNumber } from '../utils/formatNumber';
-import { formatNumberForAxis, formatMontantForTooltip } from '../utils/formatNumberForChart';
+import { formatNumberForAxis } from '../utils/formatNumberForChart';
 import PageHeader from '../components/Layout/PageHeader';
 
-const ACTIONS = [
-  {
-    title: 'Vendre \u00e0 un client',
-    description: 'Cr\u00e9er une vente et ajouter le paiement si besoin.',
-    icon: <SaleIcon />,
-    color: '#1D6F50',
-    background: '#E0F1E7',
-    path: '/transactions',
-  },
-  {
-    title: 'Acheter fournisseur',
-    description: 'Enregistrer un achat, une dette ou un paiement.',
-    icon: <PurchaseIcon />,
-    color: '#A84435',
-    background: '#F8DED9',
-    path: '/transactions',
-  },
-  {
-    title: 'Saisir production',
-    description: 'Collecte quotidienne par b\u00e2timent et cartons.',
-    icon: <EggIcon />,
-    color: '#A96522',
-    background: '#F8E8CC',
-    path: '/production',
-  },
-  {
-    title: 'Nouvelle d\u00e9pense',
-    description: 'Ajouter une charge et sortir de la caisse.',
-    icon: <ExpenseIcon />,
-    color: '#8B3A2B',
-    background: '#F5DDD6',
-    path: '/charges',
-  },
+// Chart colours, validated for colour-blind readers (teal = ventes, burnt orange = achats).
+const SALES_COLOR = '#0D9488';
+const PURCHASES_COLOR = '#C2410C';
+const WEEKS_SHOWN = 5;
+
+const QUICK_ACTIONS = [
+  { label: 'Nouvelle vente', icon: <SaleIcon />, path: '/transactions?nouveau=vente' },
+  { label: 'Nouvel achat', icon: <PurchaseIcon />, path: '/transactions?nouveau=achat' },
+  { label: 'Nouvelle dépense', icon: <ExpenseIcon />, path: '/charges?nouveau=1' },
 ];
 
-const formatDate = (date) => {
-  return formatShortDate(date);
-};
+const isSale = (transaction) => transaction.id_client !== null && transaction.id_client !== undefined;
+const netAmount = (transaction) => Math.abs(Number(transaction.montant_net ?? transaction.montant_total ?? 0));
 
-const groupTransactionsByDay = (transactions) => {
-  const grouped = {};
-
-  transactions.forEach((transaction) => {
-    const dateKey = format(parseISO(transaction.date_transaction), 'yyyy-MM-dd');
-    if (!grouped[dateKey]) {
-      grouped[dateKey] = { date: dateKey, count: 0, total: 0 };
-    }
-    grouped[dateKey].count += 1;
-    grouped[dateKey].total += parseFloat(transaction.montant_net ?? transaction.montant_total ?? 0);
+/** Sales and purchases per week (Monday to Sunday), oldest week first. */
+const groupTransactionsByWeek = (transactions, today) => {
+  const firstWeek = startOfWeek(subWeeks(today, WEEKS_SHOWN - 1), { weekStartsOn: 1 });
+  const weeks = Array.from({ length: WEEKS_SHOWN }, (_, index) => {
+    const start = addDays(firstWeek, index * 7);
+    return {
+      weekKey: format(start, 'yyyy-MM-dd'),
+      label: `Sem. du ${format(start, 'dd/MM')}`,
+      ventes: 0,
+      achats: 0,
+    };
   });
-
-  const last30Days = [];
-  const today = parseISO(getBusinessDateInput());
-
-  for (let i = 29; i >= 0; i--) {
-    const date = subDays(today, i);
-    const dateKey = format(date, 'yyyy-MM-dd');
-    last30Days.push({
-      date: formatDate(date),
-      dateKey,
-      count: grouped[dateKey]?.count || 0,
-      total: grouped[dateKey]?.total || 0,
-    });
-  }
-
-  return last30Days;
+  transactions.forEach((transaction) => {
+    if (!transaction.date_transaction) return;
+    const key = format(startOfWeek(parseISO(transaction.date_transaction), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const week = weeks.find((item) => item.weekKey === key);
+    if (!week) return;
+    if (isSale(transaction)) week.ventes += netAmount(transaction);
+    else week.achats += netAmount(transaction);
+  });
+  return weeks;
 };
 
 function Dashboard() {
-  const theme = useTheme();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [soldeCaisse, setSoldeCaisse] = useState(0);
-  const [nbTransactionsMois, setNbTransactionsMois] = useState(0);
-  const [totalVentes, setTotalVentes] = useState(0);
-  const [totalAchats, setTotalAchats] = useState(0);
-  const [totalOeufsAujourdhui, setTotalOeufsAujourdhui] = useState(0);
-  const [totalCartonsAujourdhui, setTotalCartonsAujourdhui] = useState(0);
-  const [transactionsRecentes, setTransactionsRecentes] = useState([]);
-  const [chartData, setChartData] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [data, setData] = useState({
+    argentDisponible: 0,
+    aEncaisser: 0,
+    aPayer: 0,
+    ventesMois: 0,
+    achatsMois: 0,
+    oeufs: 0,
+    cartons: 0,
+    weeks: [],
+    recent: [],
+  });
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const today = parseISO(getBusinessDateInput());
+      const todayKey = format(today, 'yyyy-MM-dd');
+      const rangeStart = startOfWeek(subWeeks(today, WEEKS_SHOWN - 1), { weekStartsOn: 1 });
 
-        const now = parseISO(getBusinessDateInput());
-        const debutMois = startOfMonth(now);
-        const finMois = endOfMonth(now);
-        const dateDebut30Jours = subDays(now, 30);
+      const [solde, transactions, productions, report, clients, fournisseurs] = await Promise.all([
+        get('/caisse/solde/complet'),
+        loadTransactionPages(get, {
+          date_debut: format(rangeStart, 'yyyy-MM-dd'),
+          date_fin: todayKey,
+          est_actif: true,
+        }, 1000),
+        get('/productions', { params: { date_debut: todayKey, date_fin: todayKey } }),
+        get('/reports/monthly', { params: { month: format(today, 'yyyy-MM') } }),
+        get('/clients', { params: { limit: 1000 } }),
+        get('/fournisseurs', { params: { limit: 1000 } }),
+      ]);
 
-        const [
-          soldeResponse,
-          transactionsMoisResponse,
-          transactions30JoursResponse,
-          productionResponse,
-          monthlyReport,
-        ] = await Promise.all([
-          get('/caisse/solde/complet'),
-          loadTransactionPages(get, {
-            date_debut: format(debutMois, 'yyyy-MM-dd'),
-            date_fin: format(finMois, 'yyyy-MM-dd'),
-            est_actif: true,
-          }, 1000),
-          loadTransactionPages(get, {
-            date_debut: format(dateDebut30Jours, 'yyyy-MM-dd'),
-            date_fin: format(now, 'yyyy-MM-dd'),
-            est_actif: true,
-          }, 1000),
-          get('/productions', {
-            params: {
-              date_debut: format(now, 'yyyy-MM-dd'),
-              date_fin: format(now, 'yyyy-MM-dd'),
-            },
-          }),
-          get('/reports/monthly', { params: { month: format(now, 'yyyy-MM') } }),
-        ]);
+      const clientNames = new Map((clients || []).map((c) => [c.id_client, c.nom_client]));
+      const fournisseurNames = new Map((fournisseurs || []).map((f) => [f.id_fournisseur, f.nom_fournisseur]));
+      const rows = transactions || [];
+      const productionsToday = productions || [];
 
-        const transactionsMois = transactionsMoisResponse || [];
-        const transactions30Jours = transactions30JoursResponse || [];
-        const productionsToday = productionResponse || [];
-
-        setSoldeCaisse(parseFloat(soldeResponse.solde_reel ?? soldeResponse.solde_theorique ?? 0));
-        setNbTransactionsMois(transactionsMois.length);
-        setTotalVentes(Number(monthlyReport.ventes_nettes ?? monthlyReport.ventes ?? 0));
-        setTotalAchats(Number(monthlyReport.achats ?? 0));
-        setChartData(groupTransactionsByDay(transactions30Jours));
-        setTransactionsRecentes(
-          [...transactions30Jours]
-            .sort((a, b) => new Date(b.date_transaction) - new Date(a.date_transaction))
-            .slice(0, 4)
-        );
-        setTotalOeufsAujourdhui(
-          productionsToday.reduce((sum, p) => sum + (p.nombre_oeufs || 0), 0)
-        );
-        setTotalCartonsAujourdhui(
-          productionsToday.reduce((sum, p) => sum + (p.nombre_cartons || 0), 0)
-        );
-      } catch (err) {
-        console.error('Erreur lors du chargement du dashboard:', err);
-        setError(err.message || 'Une erreur est survenue lors du chargement des donn\u00e9es.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboardData();
+      setData({
+        argentDisponible: Number(solde?.solde_reel ?? solde?.solde_theorique ?? 0),
+        aEncaisser: Math.max(0, Number(solde?.creances_clients ?? 0)),
+        aPayer: Math.max(0, Number(solde?.dettes_fournisseurs ?? 0)),
+        ventesMois: Number(report?.ventes_nettes ?? report?.ventes ?? 0),
+        achatsMois: Number(report?.achats ?? 0),
+        oeufs: productionsToday.reduce((sum, p) => sum + (p.nombre_oeufs || 0), 0),
+        cartons: productionsToday.reduce((sum, p) => sum + (p.nombre_cartons || 0), 0),
+        weeks: groupTransactionsByWeek(rows, today),
+        recent: [...rows]
+          .sort((a, b) => (b.date_transaction || '').localeCompare(a.date_transaction || '')
+            || Number(b.id_transaction || 0) - Number(a.id_transaction || 0))
+          .slice(0, 5)
+          .map((transaction) => ({
+            ...transaction,
+            partnerName: isSale(transaction)
+              ? (clientNames.get(transaction.id_client) || `Client n° ${transaction.id_client}`)
+              : (fournisseurNames.get(transaction.id_fournisseur) || `Fournisseur n° ${transaction.id_fournisseur}`),
+          })),
+      });
+    } catch (err) {
+      console.error('Erreur lors du chargement du dashboard:', err);
+      setError(err.message || 'Une erreur est survenue lors du chargement des données.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => { load(); }, [load, reloadKey]);
+
+  // Money alerts only: today's production has its own card next to this one.
   const alerts = useMemo(() => {
+    if (loading || error) return [];
     const items = [];
-    const balanceBetweenSalesAndPurchases = totalVentes - totalAchats;
-
-    if (totalOeufsAujourdhui === 0) {
+    if (data.argentDisponible < 0) {
       items.push({
-        title: 'Production du jour \u00e0 saisir',
-        description: "Aucun oeuf enregistr\u00e9 aujourd'hui. V\u00e9rifiez les b\u00e2timents.",
-        action: 'Saisir',
-        path: '/production',
-        severity: 'warning',
-      });
-    }
-
-    if (soldeCaisse < 0) {
-      items.push({
-        title: 'Solde caisse n\u00e9gatif',
-        description: 'La caisse demande une v\u00e9rification rapide.',
-        action: 'Voir',
+        title: 'Solde de caisse négatif',
+        description: 'La caisse demande une vérification rapide.',
+        action: 'Voir la caisse',
         path: '/caisse',
-        severity: 'error',
+        color: '#A84435',
       });
     }
-
-    if (balanceBetweenSalesAndPurchases < 0) {
+    if (data.achatsMois > data.ventesMois) {
       items.push({
-        title: 'Achats sup\u00e9rieurs aux ventes',
+        title: 'Plus d’achats que de ventes ce mois-ci',
         description: 'Le mois est en sortie nette pour le moment.',
-        action: 'Analyser',
-        path: '/transactions',
-        severity: 'warning',
+        action: 'Voir le mois',
+        path: '/rapports/mensuel',
+        color: '#A96522',
       });
     }
+    return items;
+  }, [data, loading, error]);
 
-    if (items.length === 0) {
-      items.push({
-        title: 'Production et caisse à jour',
-        description: 'Aucune alerte de production ou de caisse détectée.',
-        action: 'Caisse',
-        path: '/caisse',
-        severity: 'success',
-      });
-    }
-
-    return items.slice(0, 3);
-  }, [soldeCaisse, totalAchats, totalOeufsAujourdhui, totalVentes]);
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 420 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mb: 3 }}>
-        {error}
-      </Alert>
-    );
-  }
+  const noProductionYet = !loading && !error && data.oeufs === 0;
 
   return (
     <Box sx={{ maxWidth: 1480, mx: 'auto', pb: 3 }}>
       <PageHeader
         title="Accueil quotidien"
-        description="Les priorités du jour, la production et les actions rapides au même endroit."
+        description="Les priorités du jour, l’argent et la production au même endroit."
       />
+
+      {error && (
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          action={<Button color="inherit" onClick={() => setReloadKey((value) => value + 1)}>Réessayer</Button>}
+        >
+          {error}
+        </Alert>
+      )}
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} lg={7}>
-          <Card
-            sx={{
-              height: '100%',
-              borderRadius: 3,
-              borderColor: '#DED2BD',
-              backgroundColor: '#FFFDF8',
-              boxShadow: '0 18px 44px rgba(55, 44, 24, 0.08)',
-            }}
-          >
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                <Box>
-                  <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.45rem' }}>
-                    &Agrave; traiter maintenant
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Les points importants avant de continuer la journ&eacute;e.
-                  </Typography>
+          <SectionCard title="À traiter maintenant" subtitle="Les points importants avant de continuer la journée.">
+            <Stack spacing={1.5}>
+              <DeferredSalesCard />
+              {loading ? (
+                <Skeleton variant="rounded" height={72} />
+              ) : alerts.length > 0 ? alerts.map((alert) => (
+                <Box
+                  key={alert.title}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'auto 1fr', sm: 'auto 1fr auto' },
+                    gap: 1.5,
+                    alignItems: 'center',
+                    p: { xs: 1.5, md: 2 },
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: alpha(alert.color, 0.3),
+                    backgroundColor: '#FFFCF6',
+                  }}
+                >
+                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: alert.color }} />
+                  <Box>
+                    <Typography sx={{ fontWeight: 800 }}>{alert.title}</Typography>
+                    <Typography variant="body2" color="text.secondary">{alert.description}</Typography>
+                  </Box>
+                  <Button
+                    variant="outlined"
+                    onClick={() => navigate(alert.path)}
+                    sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
+                  >
+                    {alert.action}
+                  </Button>
                 </Box>
-                <WarningIcon sx={{ color: '#A96522' }} />
-              </Stack>
-
-              <Stack spacing={1.5}>
-                <DeferredSalesCard />
-                {alerts.map((alert) => {
-                  const isError = alert.severity === 'error';
-                  const isSuccess = alert.severity === 'success';
-                  const alertColor = isError ? '#A84435' : isSuccess ? '#1D6F50' : '#A96522';
-
-                  return (
-                    <Box
-                      key={alert.title}
-                      sx={{
-                        display: 'grid',
-                        gridTemplateColumns: { xs: 'auto 1fr', sm: 'auto 1fr auto' },
-                        gap: 1.5,
-                        alignItems: 'center',
-                        p: { xs: 1.5, md: 2 },
-                        borderRadius: 2,
-                        border: '1px solid',
-                        borderColor: isError ? alpha('#A84435', 0.32) : alpha(alertColor, 0.28),
-                        backgroundColor: isSuccess ? '#F0F8F3' : '#FFFCF6',
-                      }}
-                    >
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: alertColor }} />
-                      <Box>
-                        <Typography sx={{ fontWeight: 900, fontSize: '1rem' }}>{alert.title}</Typography>
-                        <Typography variant="body2" sx={{ color: '#69736D', lineHeight: 1.55, mt: 0.25 }}>
-                          {alert.description}
-                        </Typography>
-                      </Box>
-                      <Button
-                        size="medium"
-                        variant="contained"
-                        onClick={() => navigate(alert.path)}
-                        sx={{
-                          gridColumn: { xs: '1 / -1', sm: 'auto' },
-                          borderRadius: 2,
-                          backgroundColor: '#17211D',
-                          '&:hover': { backgroundColor: '#24332B' },
-                        }}
-                      >
-                        {alert.action}
-                      </Button>
-                    </Box>
-                  );
-                })}
-              </Stack>
-            </CardContent>
-          </Card>
+              )) : !error && (
+                <Typography color="text.secondary">Rien d’urgent pour le moment.</Typography>
+              )}
+            </Stack>
+          </SectionCard>
         </Grid>
 
         <Grid item xs={12} lg={5}>
-          <Card
-            sx={{
-              height: '100%',
-              borderRadius: 3,
-              borderColor: '#D8E3DD',
-              boxShadow: '0 18px 44px rgba(28, 38, 34, 0.08)',
-            }}
-          >
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                <Box>
-                  <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.45rem' }}>
-                    Production aujourd&apos;hui
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    R&eacute;sum&eacute; de la collecte du jour.
-                  </Typography>
-                </Box>
-                <FactoryIcon sx={{ color: '#A96522' }} />
-              </Stack>
-              <Grid container spacing={1.5}>
-                <Grid item xs={6}>
-                  <Box sx={{ p: 2, borderRadius: 2, backgroundColor: '#F8E8CC' }}>
-                    <Typography variant="caption" sx={{ color: '#A96522', fontWeight: 900 }}>
-                      Oeufs
-                    </Typography>
-                    <Typography sx={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1 }}>
-                      {formatSimpleNumber(totalOeufsAujourdhui)}
-                    </Typography>
+          <SectionCard title="Production aujourd’hui" subtitle="La collecte du jour, tous bâtiments." icon={<FactoryIcon sx={{ color: '#A96522' }} />}>
+            <Grid container spacing={1.5}>
+              {[['Œufs', data.oeufs, '#F8E8CC', '#7A4A12'], ['Cartons', data.cartons, '#E0F1E7', '#1D6F50']].map(([label, value, bg, fg]) => (
+                <Grid item xs={6} key={label}>
+                  <Box sx={{ p: 2, borderRadius: 2, backgroundColor: bg }}>
+                    <Typography variant="caption" sx={{ color: fg, fontWeight: 800 }}>{label}</Typography>
+                    {loading
+                      ? <Skeleton width="60%" height={40} />
+                      : <Typography sx={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1.1 }}>{formatSimpleNumber(value)}</Typography>}
                   </Box>
                 </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ p: 2, borderRadius: 2, backgroundColor: '#E0F1E7' }}>
-                    <Typography variant="caption" sx={{ color: '#1D6F50', fontWeight: 900 }}>
-                      Cartons
-                    </Typography>
-                    <Typography sx={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1 }}>
-                      {formatSimpleNumber(totalCartonsAujourdhui)}
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/production')}
-                sx={{ mt: 2, borderRadius: 2, minHeight: 46 }}
-              >
-                Saisir ou consulter la production
-              </Button>
-            </CardContent>
-          </Card>
+              ))}
+            </Grid>
+            {noProductionYet && (
+              <Typography variant="body2" sx={{ mt: 1.5, color: '#7A4A12', fontWeight: 700 }}>
+                Aucune collecte saisie aujourd’hui.
+              </Typography>
+            )}
+            <Button
+              fullWidth
+              variant={noProductionYet ? 'contained' : 'outlined'}
+              startIcon={noProductionYet ? <AddIcon /> : null}
+              onClick={() => navigate('/production')}
+              sx={{ mt: 1.5, minHeight: 44 }}
+            >
+              {noProductionYet ? 'Saisir la production' : 'Voir la production'}
+            </Button>
+          </SectionCard>
         </Grid>
       </Grid>
 
@@ -402,302 +276,201 @@ function Dashboard() {
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
             label="Argent disponible"
-            value={formatMontant(soldeCaisse, { useCompactNotation: false })}
-            helper={soldeCaisse < 0 ? 'Caisse et lettres de crédit disponibles — à régulariser' : 'Caisse et lettres de crédit disponibles'}
+            value={formatMontant(data.argentDisponible, { useCompactNotation: false })}
+            helper="Caisse et lettres de crédit utilisables"
             icon={<WalletIcon />}
-            color={soldeCaisse < 0 ? '#A84435' : '#1D6F50'}
+            color={data.argentDisponible < 0 ? '#A84435' : '#1D6F50'}
+            loading={loading}
+            onClick={() => navigate('/caisse')}
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
-            label="Transactions du mois"
-            value={formatSimpleNumber(nbTransactionsMois)}
-            helper="Opérations enregistrées"
-            icon={<ReceiptIcon />}
-            color="#315F85"
+            label="À encaisser"
+            value={formatMontant(data.aEncaisser, { useCompactNotation: false })}
+            helper="Ce que les clients doivent encore"
+            icon={<ToCollectIcon />}
+            color="#A96522"
+            loading={loading}
+            onClick={() => navigate('/creances')}
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
-            label="Ventes"
-            value={formatMontant(totalVentes, { useCompactNotation: false })}
+            label="À payer"
+            value={formatMontant(data.aPayer, { useCompactNotation: false })}
+            helper="Ce qui reste à payer aux fournisseurs"
+            icon={<ToPayIcon />}
+            color="#A84435"
+            loading={loading}
+            onClick={() => navigate('/dettes')}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <MetricCard
+            label="Ventes du mois"
+            value={formatMontant(data.ventesMois, { useCompactNotation: false })}
             helper="Ventes nettes du mois, avoirs à leur date d’émission"
             icon={<TrendingUpIcon />}
-            color="#1D6F50"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} lg={3}>
-          <MetricCard
-            label="Achats"
-            value={formatMontant(totalAchats, { useCompactNotation: false })}
-            helper="Total fournisseur ce mois"
-            icon={<TrendingDownIcon />}
-            color="#A84435"
+            color="#315F85"
+            loading={loading}
+            onClick={() => navigate('/rapports/mensuel')}
           />
         </Grid>
       </Grid>
 
-      <Card sx={{ mb: 3, borderRadius: 3 }}>
-        <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            spacing={2}
-            alignItems={{ xs: 'stretch', md: 'center' }}
-            justifyContent="space-between"
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 3 }}>
+        {QUICK_ACTIONS.map((action) => (
+          <Button
+            key={action.label}
+            variant="outlined"
+            startIcon={action.icon}
+            onClick={() => navigate(action.path)}
+            sx={{ minHeight: 48, flex: { sm: 1 }, justifyContent: { xs: 'flex-start', sm: 'center' } }}
           >
-            <Box>
-              <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.25rem' }}>
-                Actions rapides
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Les op&eacute;rations les plus utilis&eacute;es.
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                flex: 1,
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, minmax(0, 1fr))',
-                  lg: 'repeat(auto-fit, minmax(190px, 1fr))',
-                },
-                gap: 1.25,
-                minWidth: 0,
-              }}
-            >
-              {ACTIONS.map((action) => (
-                <Button
-                  key={action.title}
-                  fullWidth
-                  onClick={() => navigate(action.path)}
-                  sx={{
-                    justifyContent: 'flex-start',
-                    gap: 1.25,
-                    minHeight: 66,
-                    px: 1.5,
-                    borderRadius: 2,
-                    border: '1px solid',
-                    borderColor: '#DCE4DF',
-                    backgroundColor: '#FFFDF8',
-                    color: '#17211D',
-                    textAlign: 'left',
-                    overflow: 'hidden',
-                    '&:hover': {
-                      borderColor: action.color,
-                      backgroundColor: alpha(action.color, 0.06),
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: action.color,
-                      backgroundColor: action.background,
-                      flexShrink: 0,
-                      '& .MuiSvgIcon-root': { fontSize: 20 },
-                    }}
-                  >
-                    {action.icon}
-                  </Box>
-                  <Typography
-                    sx={{
-                      minWidth: 0,
-                      fontWeight: 900,
-                      fontSize: '0.9rem',
-                      lineHeight: 1.18,
-                      whiteSpace: 'normal',
-                      overflowWrap: 'anywhere',
-                    }}
-                  >
-                    {action.title}
-                  </Typography>
-                </Button>
-              ))}
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+            {action.label}
+          </Button>
+        ))}
+      </Stack>
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={7}>
-          <Card sx={{ height: '100%', borderRadius: 3 }}>
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
-                <Box>
-                  <Typography component="h2" sx={{ fontWeight: 800, fontSize: '1.35rem' }}>
-                    Activit&eacute; des 30 derniers jours
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Volume et montant net actuel des transactions, regroup&eacute;s par date de vente ou d’achat.
-                  </Typography>
-                </Box>
-                <Button variant="outlined" onClick={() => navigate('/transactions')}>
-                  Voir transactions
-                </Button>
-              </Stack>
-
-              <Box sx={{ height: { xs: 300, md: 350 } }}>
-                <ResponsiveContainer>
-                  <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.text.primary, 0.08)} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} angle={-35} textAnchor="end" height={65} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={36} />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      tickFormatter={(value) => formatNumberForAxis(value)}
-                      tick={{ fontSize: 11 }}
-                      width={70}
-                    />
+          <SectionCard
+            title="Ventes et achats par semaine"
+            subtitle={`Les ${WEEKS_SHOWN} dernières semaines, montants nets.`}
+            action={<Button onClick={() => navigate('/transactions')}>Voir le détail</Button>}
+          >
+            <Stack direction="row" spacing={2.5} sx={{ mb: 1.5 }} aria-hidden="true">
+              {[['Ventes', SALES_COLOR], ['Achats', PURCHASES_COLOR]].map(([label, color]) => (
+                <Stack key={label} direction="row" spacing={0.75} alignItems="center">
+                  <Box sx={{ width: 12, height: 12, borderRadius: 0.5, backgroundColor: color }} />
+                  <Typography variant="body2" color="text.secondary">{label}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+            {loading ? <Skeleton variant="rounded" height={260} /> : (
+              <Box sx={{ width: '100%', height: 260 }} role="img" aria-label="Ventes et achats par semaine">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.weeks} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barGap={2} barCategoryGap="28%">
+                    <CartesianGrid vertical={false} stroke="#EEF1EF" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#69736D' }} />
+                    <YAxis width={56} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#69736D' }} tickFormatter={(value) => formatNumberForAxis(value)} />
                     <Tooltip
-                      formatter={(value, name) => {
-                        if (name === 'count') return [`${value} transaction(s)`, 'Nombre'];
-                        if (name === 'total') return [formatMontantForTooltip(value), 'Montant'];
-                        return [value, name];
-                      }}
-                      labelFormatter={(label) => `Date: ${label}`}
+                      cursor={{ fill: 'rgba(15, 23, 42, 0.04)' }}
+                      formatter={(value, name) => [formatMontant(value, { useCompactNotation: false }), name]}
                     />
-                    <Line
-                      yAxisId="left"
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#1D6F50"
-                      strokeWidth={2}
-                      name="Nombre"
-                      dot={false}
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#A96522"
-                      strokeWidth={2}
-                      name="Montant"
-                      dot={false}
-                    />
-                  </LineChart>
+                    <Bar dataKey="ventes" name="Ventes" fill={SALES_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="achats" name="Achats" fill={PURCHASES_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                  </BarChart>
                 </ResponsiveContainer>
               </Box>
-            </CardContent>
-          </Card>
+            )}
+          </SectionCard>
         </Grid>
 
         <Grid item xs={12} lg={5}>
-          <Card sx={{ borderRadius: 3 }}>
-            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                <Box>
-                  <Typography component="h2" sx={{ fontWeight: 800, fontSize: '1.35rem' }}>
-                    Derni&egrave;res op&eacute;rations
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Les transactions les plus r&eacute;centes.
-                  </Typography>
-                </Box>
-                <TaskIcon sx={{ color: '#315F85' }} />
-              </Stack>
-              <Stack spacing={1.25}>
-                {transactionsRecentes.length === 0 ? (
-                  <Alert severity="info">Aucune transaction r&eacute;cente trouv&eacute;e.</Alert>
-                ) : (
-                  transactionsRecentes.map((transaction) => {
-                    const isSale = transaction.id_client !== null;
-                    return (
-                      <Box
-                        key={transaction.id_transaction}
-                        sx={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr auto',
-                          gap: 1.5,
-                          alignItems: 'center',
-                          p: 1.5,
-                          borderRadius: 2.5,
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          backgroundColor: 'background.paper',
-                        }}
-                      >
-                        <Box>
-                          <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>
-                            {isSale ? 'Vente client' : 'Achat fournisseur'} #{transaction.id_transaction}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                  {formatShortDate(transaction.date_transaction)}
-                          </Typography>
+          <SectionCard
+            title="Dernières opérations"
+            subtitle="Les ventes et achats les plus récents."
+            action={<Button onClick={() => navigate('/transactions')}>Tout voir</Button>}
+          >
+            {loading ? (
+              <Stack spacing={1}>{[0, 1, 2].map((key) => <Skeleton key={key} variant="rounded" height={56} />)}</Stack>
+            ) : data.recent.length === 0 ? (
+              <Typography color="text.secondary">Aucune opération ces dernières semaines.</Typography>
+            ) : (
+              <Stack spacing={1}>
+                {data.recent.map((transaction) => {
+                  const sale = isSale(transaction);
+                  return (
+                    <CardActionArea
+                      key={transaction.id_transaction}
+                      onClick={() => navigate(`/transactions/${transaction.id_transaction}`)}
+                      sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                    >
+                      <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+                        <Box sx={{ minWidth: 0 }}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip
+                              size="small"
+                              label={sale ? 'Vente' : 'Achat'}
+                              sx={{ fontWeight: 800, color: sale ? 'success.main' : 'error.main', backgroundColor: sale ? 'rgba(46, 125, 50, 0.09)' : 'rgba(211, 47, 47, 0.09)' }}
+                            />
+                            <Typography fontWeight={800} noWrap title={transaction.partnerName}>{transaction.partnerName}</Typography>
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">{formatShortDate(transaction.date_transaction)}</Typography>
                         </Box>
-                        <Typography
-                          sx={{
-                            fontWeight: 900,
-                            color: isSale ? 'success.main' : 'error.main',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {isSale ? '+' : '-'}
-                          {formatMontant(transaction.montant_net ?? transaction.montant_total, { useCompactNotation: false })}
+                        <Typography fontWeight={900} sx={{ whiteSpace: 'nowrap', color: sale ? 'success.main' : 'error.main' }}>
+                          {sale ? '+' : '−'}{formatMontant(netAmount(transaction), { useCompactNotation: false })}
                         </Typography>
-                      </Box>
-                    );
-                  })
-                )}
+                      </Stack>
+                    </CardActionArea>
+                  );
+                })}
               </Stack>
-            </CardContent>
-          </Card>
+            )}
+          </SectionCard>
         </Grid>
       </Grid>
     </Box>
   );
 }
 
-function MetricCard({ label, value, helper, icon, color }) {
+function SectionCard({ title, subtitle, icon, action, children }) {
   return (
     <Card sx={{ height: '100%', borderRadius: 3 }}>
-      <CardContent sx={{ p: 2.5 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-          <Box>
-            <Typography
-              variant="overline"
-              sx={{ color: 'text.secondary', fontWeight: 800, letterSpacing: '0.08em' }}
-            >
+      <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.3rem' }}>{title}</Typography>
+            {subtitle && <Typography variant="body2" color="text.secondary">{subtitle}</Typography>}
+          </Box>
+          {action || icon}
+        </Stack>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricCard({ label, value, helper, icon, color, loading, onClick }) {
+  return (
+    <Card sx={{ height: '100%', borderRadius: 3 }}>
+      <CardActionArea onClick={onClick} sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start' }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.4 }}>
               {label}
             </Typography>
-            <Typography
+            <Box
               sx={{
-                mt: 0.75,
-                fontWeight: 900,
-                fontSize: { xs: '1.45rem', sm: '1.65rem' },
-                lineHeight: 1.1,
-                letterSpacing: '-0.035em',
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color,
+                backgroundColor: alpha(color, 0.13),
+                flexShrink: 0,
+                '& .MuiSvgIcon-root': { fontSize: 20 },
               }}
             >
-              {value}
+              {icon}
+            </Box>
+          </Stack>
+          {/* Full card width for the amount, never broken inside a number or the currency. */}
+          {loading ? <Skeleton width={140} height={38} /> : (
+            <Typography sx={{ mt: 0.75, fontWeight: 900, fontSize: { xs: '1.45rem', lg: '1.5rem' }, lineHeight: 1.2 }}>
+              {/* The number keeps its non-breaking spaces; only the space before the currency may break. */}
+              {String(value).replace(/\u00A0(MAD)$/, ' $1')}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-              {helper}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              width: 42,
-              height: 42,
-              borderRadius: 2.25,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color,
-              backgroundColor: alpha(color, 0.13),
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
-        </Stack>
-      </CardContent>
+          )}
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            {helper}
+          </Typography>
+        </CardContent>
+      </CardActionArea>
     </Card>
   );
 }

@@ -86,6 +86,7 @@ function TransactionsList() {
 
   // ðtat pour la modal de création/édition
   const [modalOpen, setModalOpen] = useState(false);
+  const [newTransactionType, setNewTransactionType] = useState('client');
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -373,12 +374,25 @@ function TransactionsList() {
   /**
    * Gère l'ouverture de la modal pour créer une nouvelle transaction.
    */
-  const handleCreate = () => {
+  const handleCreate = (type = 'client') => {
     setEditingTransaction(null);
     setPrefillBatimentId(null);
     setFormError(null);
+    setNewTransactionType(type);
     setModalOpen(true);
   };
+
+  // Shortcut links such as /transactions?nouveau=vente (from the home page)
+  // open the creation form directly; the parameter is removed afterwards.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requested = params.get('nouveau');
+    if (requested !== 'vente' && requested !== 'achat') return;
+    handleCreate(requested === 'achat' ? 'fournisseur' : 'client');
+    params.delete('nouveau');
+    navigate({ pathname: location.pathname, search: params.toString() ? `?${params}` : '' }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   /**
    * Gère l'ouverture de la page de détails d'une transaction.
@@ -640,7 +654,7 @@ function TransactionsList() {
             >
               Exporter PDF
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleCreate()}>
               Nouvelle transaction
             </Button>
           </>
@@ -784,6 +798,7 @@ function TransactionsList() {
           loading={formLoading}
           errorMessage={formError}
           prefillBatimentId={prefillBatimentId}
+          initialType={newTransactionType}
         />
       )}
 

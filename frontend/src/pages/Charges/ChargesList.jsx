@@ -41,7 +41,7 @@ import compteBancaireService from '../../services/compteBancaireService';
 import useNotification from '../../hooks/useNotification';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import { formatMontant } from '../../utils/formatNumber';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { productionLink } from '../Production/useProductionView';
 import { formatVaccineMoney } from '../../utils/vaccineExpenses';
 import PageHeader from '../../components/Layout/PageHeader';
@@ -96,6 +96,7 @@ const getPeriodStart = (period) => {
 
 function ChargesList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const notification = useNotification();
@@ -195,6 +196,16 @@ function ChargesList() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // /charges?nouveau=1 (shortcut from the home page) opens the creation form directly.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('nouveau')) return;
+    handleOpenDialog();
+    params.delete('nouveau');
+    navigate({ pathname: location.pathname, search: params.toString() ? `?${params}` : '' }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const handleOpenDialog = (charge = null) => {
     if (charge?.source_journaliere) {
