@@ -48,7 +48,7 @@ export function CorrectionImpact({ preview, names = {}, transaction }) {
     {impact?.contact_balance && <Typography variant="body2" color="text.secondary">Les paiements suivront le nouveau contact.</Typography>}
   </Stack>;
 }
-export default function CorrectionReview({ flow, names, transaction, onCancel }) {
+export default function CorrectionReview({ flow, names, transaction }) {
   return <Stack spacing={2} aria-label="Confirmer la modification">
     <Typography component="h2" variant="subtitle1" fontWeight={800}>Confirmer la modification</Typography>
     <CorrectionImpact preview={flow.review} names={names} transaction={transaction} />

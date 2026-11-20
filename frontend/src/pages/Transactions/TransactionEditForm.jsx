@@ -93,7 +93,7 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
     PaperProps={{ component: 'form', onSubmit: submit }} aria-labelledby="transaction-edit-title">
     <DialogTitleWithClose id="transaction-edit-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{transaction.id_client ? 'Modifier la vente' : 'Modifier l’achat'} n° {transaction.id_transaction}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
-      {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
+      {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} /> : <>
       {inactive && <Alert severity="info">Réactivez cette transaction avant de la modifier.</Alert>}
         {referenceError && <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{referenceError}</Alert>}
         {(error || flow.error) && <Alert severity="error" role="alert">{error || flow.error}</Alert>}
