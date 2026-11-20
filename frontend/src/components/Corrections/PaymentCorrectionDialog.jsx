@@ -57,7 +57,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
     aria-labelledby="payment-correction-title" PaperProps={{ component: 'form', onSubmit: submit }}>
     <DialogTitleWithClose id="payment-correction-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>Modifier le paiement n° {payment.id_paiement}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
-      {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
+      {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} /> : <>
         {(error || flow.error) && <Alert severity="error" role="alert">{error || flow.error}</Alert>}
         <DateField label="Date du paiement" value={values.date_paiement} onChange={update('date_paiement')} disabled={!(financial || cheque) || flow.busy} fullWidth required />
         {cheque && <>
