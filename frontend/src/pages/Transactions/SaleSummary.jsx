@@ -1,16 +1,28 @@
 import { Controller } from 'react-hook-form';
-import { Alert, Box, Checkbox, FormControlLabel, Grid, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Checkbox, FormControlLabel, Grid, Stack, Typography } from '@mui/material';
+import DateField from '../../utils/DateField';
 import { saleStockSummary } from './saleStockSummary';
 
 /**
  * Stock situation, deferred delivery and payment for ONE sale line, shown under
  * that line (it used to be a side panel listing every line).
  */
-export default function SaleLineDetails({ line, index, lines, control, saleDate, loading, renderPayment }) {
+export default function SaleLineDetails({ line, index, lines, products = [], control, saleDate, loading, renderPayment, onDeferredChange }) {
   const stock = saleStockSummary(line, index, lines);
   const format = (value) => value.toLocaleString('fr-FR');
+  const productName = products.find((p) => Number(p.id_produit) === Number(line.id_produit))?.nom_produit;
   return (
     <Box sx={{ mt: 1.5 }}>
+      {/* Tell the user what is still missing: the sale cannot be saved without an egg type. */}
+      {productName ? (
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Type d’œufs : <Box component="span" fontWeight={800}>{productName}</Box>
+        </Typography>
+      ) : (
+        <Typography variant="body2" sx={{ mb: 1, color: 'warning.dark', fontWeight: 700 }}>
+          Choisissez le bâtiment, puis cliquez sur le type d’œufs vendu.
+        </Typography>
+      )}
       <Box
         aria-label={`Stock pour la vente ${index + 1}`}
         aria-live="polite"
@@ -34,7 +46,7 @@ export default function SaleLineDetails({ line, index, lines, control, saleDate,
               sx={{ m: 0 }}
               label="Livraison différée"
               disabled={loading}
-              control={<Checkbox {...field} checked={!!field.value} onChange={(event) => field.onChange(event.target.checked)} />}
+              control={<Checkbox {...field} checked={!!field.value} onChange={(event) => { field.onChange(event.target.checked); onDeferredChange?.(); }} />}
             />
           )} />
           {stock.ready && stock.pending > 0 && (
@@ -44,14 +56,13 @@ export default function SaleLineDetails({ line, index, lines, control, saleDate,
           )}
           {line.est_promesse && (
             <Controller name={`lignes.${index}.date_livraison_prevue`} control={control} render={({ field, fieldState }) => (
-              <TextField
+              <DateField
                 {...field}
                 value={field.value || ''}
                 inputRef={field.ref}
                 disabled={loading}
                 fullWidth
                 size="small"
-                type="date"
                 label="Date prévue de livraison *"
                 InputLabelProps={{ shrink: true }}
                 inputProps={{ min: saleDate }}

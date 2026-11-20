@@ -339,6 +339,7 @@ function TransactionForm({
     clearErrors,
     watch,
     setValue,
+    trigger,
   } = useForm({
     resolver: yupResolver(transactionValidationSchema),
     defaultValues: {
@@ -1753,7 +1754,8 @@ function TransactionForm({
                         disabled={loading} transactionId={initialValues.id_transaction}
                         saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
                       {shouldShowBatimentSource && <SaleLineDetails
-                        line={ligne} index={index} lines={watchedLignes || []} control={control}
+                        line={ligne} index={index} lines={watchedLignes || []} products={produits} control={control}
+                        onDeferredChange={() => setTimeout(() => trigger(`lignes.${index}.quantite`), 0)}
                         saleDate={watch('date_transaction')} loading={loading} renderPayment={renderLinePayment} />}
                       <Grid container spacing={1.25}>
                         {!shouldShowBatimentSource && <>
@@ -1764,9 +1766,10 @@ function TransactionForm({
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
                                 <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
-                                  <InputLabel>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
+                                  <InputLabel id={`ligne-${index}-produit-label`}>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
+                                      labelId={`ligne-${index}-produit-label`}
                                       size="small"
                                       value={field.value || ''}
                                     label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}

@@ -51,7 +51,7 @@ describe('sale entry preserves user input', () => {
     }} />);
     await screen.findByText('Stock et prélèvements prévus');
     expect(screen.getByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
-    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('29/10/99');
     expect(quantity()).toHaveValue(50);
   });
 
@@ -65,7 +65,7 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(price(), { target: { value: '1.5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Livraison différée' }));
-    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '26/10/2099' } });
     fireEvent.change(quantity(), { target: { value: '60' } });
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
     expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(price(), { target: { value: '1.5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux Moyen' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Livraison différée' }));
-    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '26/10/2099' } });
 
     await selectBuilding('Bâtiment B');
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
@@ -112,7 +112,7 @@ describe('sale entry preserves user input', () => {
       quantite: 1000, prix_unitaire: 1.5, est_promesse: true, allocation_automatique: true,
     }} />);
     expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
-    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('2099-10-29');
+    expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('29/10/99');
     await screen.findByRole('button', { name: 'Choisir Normaux Moyen' });
     await waitFor(() => expect(get).toHaveBeenCalledWith('/transactions/production-sources', expect.objectContaining({ params: expect.objectContaining({ through_date: new Date().toISOString().slice(0, 10), exclude_transaction_id: 31 }) })));
     fireEvent.change(price(), { target: { value: '1.6' } });
@@ -140,7 +140,7 @@ describe('sale entry preserves user input', () => {
       quantite: 1000, prix_unitaire: '1.50', est_promesse: true, allocation_automatique: true,
     }} />);
     const expectedDate = await screen.findByLabelText(/Date prévue de livraison/);
-    fireEvent.change(expectedDate, { target: { value: '2099-10-30' } });
+    fireEvent.change(expectedDate, { target: { value: '30/10/2099' } });
     const save = screen.getByRole('button', { name: 'Vérifier les modifications' });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
@@ -172,7 +172,7 @@ describe('sale entry preserves user input', () => {
     const save = screen.getByRole('button', { name: 'Enregistrer la vente' });
     expect(save).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Livraison différée' }));
-    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '2099-10-26' } });
+    fireEvent.change(screen.getByLabelText(/Date prévue de livraison/), { target: { value: '26/10/2099' } });
     await waitFor(() => expect(save).toBeEnabled());
     fireEvent.click(save);
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
