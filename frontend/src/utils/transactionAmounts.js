@@ -1,3 +1,5 @@
+import { owedAmount } from '../pages/Transactions/pendingPayments';
+
 const cents = value => Math.round(Number(value ?? 0) * 100);
 
 function netCents(transaction) {
@@ -17,7 +19,7 @@ export function sumActiveTransactionAmounts(transactions) {
     totals.net += netCents(transaction);
     totals.paid += cents(transaction.montant_paye);
     // Owed: cheques handed over but not cashed are not owed (montant_du).
-    totals.remaining += cents(transaction.montant_du ?? transaction.montant_restant);
+    totals.remaining += cents(owedAmount(transaction));
   }
   return {
     gross: totals.gross / 100,

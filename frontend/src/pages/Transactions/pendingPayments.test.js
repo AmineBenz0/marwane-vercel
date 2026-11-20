@@ -8,6 +8,7 @@ describe('pending payments', () => {
     expect(isPendingPayment({ ...cheque, statut: 'valide', statut_cheque: 'encaisse' })).toBe(false);
     expect(isPendingPayment({ ...cheque, statut: 'annule' })).toBe(false);
     expect(isPendingPayment({ ...cheque, statut_cheque: 'rejete', statut: 'rejete' })).toBe(false);
+    expect(isPendingPayment({ ...cheque, statut: 'en_attente', statut_cheque: 'encaisse' })).toBe(false);
     expect(isPendingPayment({ type_paiement: 'cash', statut: 'valide', montant: '5' })).toBe(false);
   });
   it('subtracts pending amounts from what is still owed, never below zero', () => {
