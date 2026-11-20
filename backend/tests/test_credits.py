@@ -270,16 +270,17 @@ def test_one_cent_advance_as_of_position_retries_and_historical_balances(db_sess
     from app.services.credit_balances import advance_balances
     source, target = credit_pair
     day = business_date() - timedelta(days=1)
-    before = financial_position_as_of(db_session, day)
+    net = lambda position: position['receivables'] - position['receivables_credits']
+    before = net(financial_position_as_of(db_session, day))
     c = cmd('advance', id_client=source.id_client, montant='0.01', date_effet=day, type_paiement='cash')
     result = apply(db_session, c, test_user)
     same = c.model_copy(update={'montant': Decimal('0.010')})
     assert apply_credit(db_session, same, 'ignored-on-retry', test_user)['record'] == result['record']
     assert advance_balances(db_session, direction='receivable', as_of=day - timedelta(days=1)) == {}
-    assert financial_position_as_of(db_session, day)['receivables'] == before['receivables'] - Decimal('0.01')
+    assert net(financial_position_as_of(db_session, day)) == before - Decimal('0.01')
     alloc = cmd('allocate', id_avance=c.operation_id, id_transaction_cible=target.id_transaction, montant='0.01', date_effet=business_date())
     apply(db_session, alloc, test_user)
-    assert financial_position_as_of(db_session, day)['receivables'] == before['receivables'] - Decimal('0.01')
+    assert net(financial_position_as_of(db_session, day)) == before - Decimal('0.01')
     assert advance_balances(db_session, direction='receivable')[source.id_client] == 0
     with pytest.raises(HTTPException):
         preview_credit(db_session, cmd('return_advance', id_avance=c.operation_id, montant='0.01', date_effet=business_date(), type_paiement='cash'))
