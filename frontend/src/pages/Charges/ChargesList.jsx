@@ -46,6 +46,7 @@ import { productionLink } from '../Production/useProductionView';
 import { formatVaccineMoney } from '../../utils/vaccineExpenses';
 import PageHeader from '../../components/Layout/PageHeader';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
+import CellText from '../../components/CellText';
 
 const CATEGORIES = [
   'Fixe (Loyer, Salaire...)',
@@ -100,6 +101,8 @@ function ChargesList() {
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // The 7-column table needs ~900px: next to the sidebar, use the cards below 1200px.
+  const narrowTable = useMediaQuery(theme.breakpoints.down('lg'));
   const notification = useNotification();
 
   const [charges, setCharges] = useState([]);
@@ -408,7 +411,7 @@ function ChargesList() {
             </Box>
           ) : visibleCharges.length === 0 ? (
             <EmptyState hasFilters={Boolean(search || categoryFilter !== 'all' || period !== 'month')} onCreate={() => handleOpenDialog()} />
-          ) : isMobile ? (
+          ) : narrowTable ? (
             <Stack spacing={1.5}>
               {visibleCharges.map((charge) => (
                 <ExpenseMobileCard
@@ -422,7 +425,16 @@ function ChargesList() {
             </Stack>
           ) : (
             <TableContainer sx={{ overflowX: 'auto' }}>
-              <Table sx={{ minWidth: 920 }}>
+              <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
+                <colgroup>
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: 96 }} />
+                </colgroup>
                 <TableHead>
                   <TableRow>
                     <TableCell>Date</TableCell>
@@ -438,7 +450,7 @@ function ChargesList() {
                   {visibleCharges.map((charge) => (
                     <TableRow key={charge.id_charge} hover>
                       <TableCell>{formatDate(charge.date_charge)}</TableCell>
-                      <TableCell sx={{ fontWeight: 900 }}>{charge.libelle}
+                      <TableCell sx={{ fontWeight: 900 }}><CellText variant="body2" fontWeight={900} lines={2}>{charge.libelle}</CellText>
                         {charge.source_journaliere && <Typography variant="caption" display="block" color="text.secondary">
                           {Number(charge.quantite)} {charge.unite} × {formatVaccineMoney(charge.prix_unitaire)} · Saisie journalière
                         </Typography>}
@@ -446,10 +458,8 @@ function ChargesList() {
                       <TableCell>
                         <CategoryChip category={charge.categorie} />
                       </TableCell>
-                      <TableCell>{getPaymentSource(charge, comptesMap)}</TableCell>
-                      <TableCell sx={{ color: 'text.secondary', maxWidth: 260 }}>
-                        {charge.notes || '-'}
-                      </TableCell>
+                      <TableCell><CellText variant="body2" lines={2}>{getPaymentSource(charge, comptesMap)}</CellText></TableCell>
+                      <TableCell><CellText variant="body2" color="text.secondary" lines={2}>{charge.notes || '-'}</CellText></TableCell>
                       <TableCell align="right" sx={{ fontWeight: 900, color: 'error.main', whiteSpace: 'nowrap' }}>
                         {formatExpenseAmount(charge.montant)}
                       </TableCell>
@@ -457,7 +467,7 @@ function ChargesList() {
                         <IconButton size="small" onClick={() => handleOpenDialog(charge)}>
                           <EditIcon fontSize="small" />
                         </IconButton>
-                        <IconButton size="small" color="error" disabled={charge.source_journaliere} onClick={() => setDeleteTarget(charge)}>
+                        <IconButton size="small" color="error" disabled={charge.source_journaliere} onClick={() => setDeleteTarget(charge)} sx={{ ml: 0.5 }}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
