@@ -304,6 +304,8 @@ function TransactionForm({
   prefillClientId = null,
   prefillFournisseurId = null,
   prefillBatimentId = null,
+  // 'client' (vente) or 'fournisseur' (achat): preselected type for a new transaction.
+  initialType = 'client',
 }) {
   const initialValues = providedInitialValues?.id_transaction ? providedInitialValues : EMPTY_INITIAL_VALUES;
 
@@ -519,7 +521,7 @@ function TransactionForm({
           reset({
             date_transaction: today(),
             date_echeance: getDefaultDueDate(today()),
-            type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : 'client',
+            type_entite: hasPrefillClient ? 'client' : hasPrefillFournisseur ? 'fournisseur' : (initialType === 'fournisseur' ? 'fournisseur' : 'client'),
             id_client: hasPrefillClient ? prefillClientId : '',
             id_fournisseur: hasPrefillFournisseur ? prefillFournisseurId : '',
             lignes: [createLineDefaults(prefillBatimentId)],
@@ -530,7 +532,7 @@ function TransactionForm({
     };
 
     loadFormData();
-  }, [open, initialValues, reset, clearErrors, prefillClientId, prefillFournisseurId, prefillBatimentId]);
+  }, [open, initialValues, reset, clearErrors, prefillClientId, prefillFournisseurId, prefillBatimentId, initialType]);
 
   useEffect(() => {
     setEditReview(null);
