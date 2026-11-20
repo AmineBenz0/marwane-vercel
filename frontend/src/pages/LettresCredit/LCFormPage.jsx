@@ -102,7 +102,7 @@ function LCFormPage() {
           Retour
         </Button>
         <Typography variant="h4" component="h1">
-          {isEdit ? 'Modifier la LC' : 'Nouvelle Lettre de Crédit'}
+          {isEdit ? 'Modifier la LC' : 'Nouvelle lettre de crédit'}
         </Typography>
       </Stack>
 
@@ -147,7 +147,7 @@ function LCFormPage() {
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('banque_emettrice')}
-                label="Banque Émettrice (optionnel)"
+                label="Banque émettrice (facultatif)"
                 fullWidth
                 error={!!errors.banque_emettrice}
                 helperText={errors.banque_emettrice?.message}
@@ -190,7 +190,7 @@ function LCFormPage() {
                 startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
                 disabled={isSubmitting}
               >
-                {isEdit ? 'Mettre à jour' : 'Créer la Lettre de Crédit'}
+                {isEdit ? 'Mettre à jour' : 'Enregistrer la LC'}
               </Button>
             </Grid>
           </Grid>

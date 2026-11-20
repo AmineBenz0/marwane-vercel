@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   FormControlLabel,
   Grid,
   MenuItem,
@@ -17,6 +16,7 @@ import {
 import { Controller, useForm } from 'react-hook-form';
 import { addDays, addHours, differenceInCalendarDays, format, isValid, parseISO } from 'date-fns';
 import DateField from '../../utils/DateField';
+import DialogTitleWithClose from '../DialogTitleWithClose';
 
 const DATE = 'yyyy-MM-dd';
 const DATE_TIME = "yyyy-MM-dd'T'HH:mm";
@@ -169,9 +169,9 @@ function TaskModal({ open, onClose, task, onSave, onDelete, calendar = false }) 
       maxWidth={calendar ? 'sm' : 'xs'}
       fullWidth
     >
-      <DialogTitle id="task-form-title">
+      <DialogTitleWithClose id="task-form-title" onClose={onClose} disabled={isSubmitting}>
         {isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'}
-      </DialogTitle>
+      </DialogTitleWithClose>
       <form onSubmit={handleSubmit(handleFormSubmit)}>
         <DialogContent dividers>
           <Grid container spacing={2}>

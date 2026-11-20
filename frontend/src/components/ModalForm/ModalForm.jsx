@@ -173,7 +173,6 @@ function ModalForm({
                       onBlur={onBlur}
                       displayEmpty
                       size="small"
-                      sx={{ borderRadius: 2 }}
                       renderValue={(v) => {
                         if (!v && !options.find(o => o.value === v)) {
                           return <Typography color="text.disabled" fontSize="0.875rem">Choisir…</Typography>;
@@ -296,7 +295,6 @@ function ModalForm({
                     helperText={errors[name]?.message || fieldHelperText || ''}
                     disabled={disabled || loading}
                     InputLabelProps={{ shrink: true }}
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Box>
               );
@@ -318,7 +316,6 @@ function ModalForm({
                     error={!!errors[name]}
                     helperText={errors[name]?.message || fieldHelperText || ''}
                     disabled={disabled || loading}
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Box>
               );
@@ -342,7 +339,6 @@ function ModalForm({
                     multiline={multiline}
                     rows={multiline ? rows : undefined}
                     disabled={disabled || loading}
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Box>
               );
@@ -383,14 +379,10 @@ function ModalForm({
             size="small"
             onClick={handleClose}
             disabled={loading}
-            sx={{
-              color: 'text.secondary',
-              border: '1px solid',
-              borderColor: 'divider',
-              '&:hover': { backgroundColor: 'grey.100' },
-            }}
+            aria-label="Fermer"
+            sx={{ color: 'text.secondary' }}
           >
-            <CloseIcon sx={{ fontSize: 18 }} />
+            <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
 
@@ -422,9 +414,7 @@ function ModalForm({
           <Button
             onClick={handleClose}
             disabled={loading}
-            variant="outlined"
             fullWidth={isMobile}
-            sx={{ borderRadius: 2 }}
           >
             Annuler
           </Button>
@@ -434,13 +424,7 @@ function ModalForm({
             disabled={loading || !isDirty}
             fullWidth={isMobile}
             startIcon={loading ? <CircularProgress size={15} color="inherit" /> : null}
-            sx={{
-              borderRadius: 2,
-              minWidth: 120,
-              background: 'linear-gradient(135deg, #14B8A6, #0D9488)',
-              '&:hover': { background: 'linear-gradient(135deg, #0D9488, #0F766E)' },
-              '&:disabled': { background: 'grey.200', color: 'text.disabled' },
-            }}
+            sx={{ minWidth: 120 }}
           >
             {loading ? 'Enregistrement…' : submitLabel}
           </Button>

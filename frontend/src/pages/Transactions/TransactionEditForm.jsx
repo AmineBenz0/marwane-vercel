@@ -108,7 +108,7 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
         <TextField label="Quantité" type="number" value={values.quantite} onChange={update('quantite')} disabled={flow.busy || inactive} required inputProps={{ min: minimum, step: 1 }} helperText={transaction.est_promesse ? `Minimum : ${minimum} (œufs fournis et reliquat clôturé)` : ''} />
         <TextField label="Prix unitaire (MAD)" type="number" value={values.prix_unitaire} onChange={update('prix_unitaire')} disabled={flow.busy || inactive} required inputProps={{ min: 0.01, step: '0.01' }} />
         <Typography fontWeight={700}>Montant total : {money(Number(values.quantite) * Number(values.prix_unitaire))}</Typography>
-        <DateField label="Date d’échéance du paiement (optionnel)" value={values.date_echeance || ''} onChange={update('date_echeance')} disabled={flow.busy || inactive} fullWidth />
+        <DateField label="Date d’échéance du paiement (facultatif)" value={values.date_echeance || ''} onChange={update('date_echeance')} disabled={flow.busy || inactive} fullWidth />
         {eggs && <>
           <TextField select label="Bâtiment source" value={values.id_batiment} onChange={update('id_batiment')} disabled={flow.busy || inactive}>
             {!names.id_batiment[values.id_batiment] && <MenuItem value={values.id_batiment}>Bâtiment n° {values.id_batiment}</MenuItem>}

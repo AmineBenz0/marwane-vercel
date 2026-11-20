@@ -478,14 +478,14 @@ function FournisseurProfile() {
     },
     {
       name: 'mode_reglement_prefere',
-      label: 'Source de règlement préférée',
+      label: 'Payer ce fournisseur depuis',
       type: 'select',
       required: true,
       options: [
         { value: 'caisse', label: 'Caisse' },
         { value: 'banque', label: 'Compte bancaire' },
       ],
-      helperText: 'Les paiements débitent cette source, quel que soit le type de paiement choisi.',
+      helperText: 'Les paiements à ce fournisseur sortent de la caisse ou du compte bancaire choisi.',
     },
   ];
 

@@ -375,7 +375,9 @@ const theme = createTheme({
     },
     MuiDialogContent: {
       styleOverrides: {
-        root: { padding: '20px 24px' },
+        // MUI removes the top padding of content that follows a DialogTitle, which
+        // glued the first field (and its floating label) to the title's divider.
+        root: { padding: '20px 24px', '.MuiDialogTitle-root + &': { paddingTop: 20 } },
       },
     },
     MuiDialogActions: {

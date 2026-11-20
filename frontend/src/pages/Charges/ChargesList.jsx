@@ -45,6 +45,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { productionLink } from '../Production/useProductionView';
 import { formatVaccineMoney } from '../../utils/vaccineExpenses';
 import PageHeader from '../../components/Layout/PageHeader';
+import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 const CATEGORIES = [
   'Fixe (Loyer, Salaire...)',
@@ -626,9 +627,9 @@ function ChargeDialog({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <Box component="form" onSubmit={onSubmit}>
-        <DialogTitle>
+        <DialogTitleWithClose onClose={onClose}>
           {editingCharge ? 'Modifier la dépense' : 'Nouvelle dépense'}
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ pt: 0.5 }}>
             <TextField
