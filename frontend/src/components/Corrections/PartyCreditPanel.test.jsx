@@ -119,3 +119,13 @@ it('removes the available-advance hint when the last advance is used and balance
   expect(screen.queryByRole('button', { name: /Avances au compte/ })).not.toBeInTheDocument();
   expect(screen.queryByText('Aucune avance au compte actuellement.')).not.toBeInTheDocument();
 });
+
+it('shows what is owed without uncashed cheques, like the rest of the profile', async () => {
+  get.mockResolvedValue({ ...empty, balance: '1875.00', montant_du: '875.00', montant_en_attente: '1000.00' });
+  render(<Profile totalActivity={2400} />);
+  await screen.findByText('Reste net à encaisser');
+  const card = screen.getByText('Reste net à encaisser').closest('.MuiCard-root') || document.body;
+  expect(card.textContent.replace(/\s/g, ' ')).toMatch(/875 MAD/);
+  expect(card.textContent).not.toMatch(/1\s875/);
+  expect(screen.getByText(/en chèques non encaissés/).textContent.replace(/\s/g, ' ')).toBe('+ 1 000 MAD en chèques non encaissés');
+});

@@ -396,7 +396,12 @@ def party_credit_history(db, *, id_client=None, id_fournisseur=None):
     ids = db.query(Transaction.id_transaction).filter(tx_key == (id_client or id_fournisseur))
     allocations = db.query(AffectationCredit).filter(AffectationCredit.id_transaction_cible.in_(ids)).order_by(AffectationCredit.date_effet.desc(), AffectationCredit.id_affectation).all()
     from app.services.financial import contact_balances
-    balance = contact_balances(db, direction='receivable' if id_client is not None else 'payable', contact_ids=[id_client or id_fournisseur])[id_client or id_fournisseur]
+    direction = 'receivable' if id_client is not None else 'payable'
+    contact = id_client or id_fournisseur
+    # Strict ledger balance: credit logic relies on it.
+    balance = contact_balances(db, direction=direction, contact_ids=[contact])[contact]
+    # What screens show as owed: uncashed cheques are on their way, not owed.
+    owed = contact_balances(db, direction=direction, contact_ids=[contact], include_pending=True)[contact]
     sales = db.query(Transaction).filter(
         tx_key == (id_client or id_fournisseur), Transaction.est_actif.is_(True),
     ).order_by(Transaction.id_transaction).all()
@@ -414,6 +419,9 @@ def party_credit_history(db, *, id_client=None, id_fournisseur=None):
     } for t in adjusted]
     return {
         'balance': str(balance), 'debt_total': str(debt_total),
+        'montant_du': str(owed),
+        # Part of the balance covered by cheques handed over but not cashed yet.
+        'montant_en_attente': str(max(Decimal('0.00'), balance - owed)),
         'advances': items, 'allocations': [row_snapshot(a) for a in allocations],
         # Existing "available" means unallocated *cash advances* only.
         'available': str(sum((a.montant_disponible for a in records if a.nature == 'avance'), Decimal('0'))),
