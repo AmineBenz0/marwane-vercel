@@ -69,6 +69,7 @@ import FinancialInsights from '../../components/FinancialInsights/FinancialInsig
 import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
 import BalanceCardList from '../../components/BalanceCardList';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
+import { owedAmount } from '../Transactions/pendingPayments';
 import { get, put, post } from '../../services/api';
 import { buildTransactionPaymentBatch } from '../Transactions/transactionPaymentBatch';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -296,7 +297,7 @@ function ClientProfile() {
         total: summary.total + Number(transaction.montant_net ?? transaction.montant_total ?? 0),
         encaisse: summary.encaisse + Number(transaction.montant_paye || 0),
         // A customer's surplus is not an unpaid receivable.
-        reste: summary.reste + Math.max(0, Number(transaction.montant_restant || 0)),
+        reste: summary.reste + Math.max(0, owedAmount(transaction)),
       }),
       { total: 0, encaisse: 0, reste: 0 }
     );
@@ -429,9 +430,10 @@ function ClientProfile() {
           if (value === null || value === undefined) return '-';
           return exportMoney(value);
         },
-        montant_restant: (value) => {
+        // Owed: a cheque handed over but not cashed is not owed.
+        montant_restant: (value, row) => {
           if (value === null || value === undefined) return '-';
-          return exportMoney(value);
+          return exportMoney(owedAmount(row));
         },
         reglement: (value, row) => getPaymentReglementSummary(row),
         statut_paiement: (value, row) => {
@@ -439,6 +441,8 @@ function ClientProfile() {
           const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
           return {
             paye: 'Payé',
+            surpaye: 'Surpayé',
+            cheque_en_attente: 'Chèque en attente',
             partiel: 'Partiel',
             impaye: 'Impayé',
             en_retard: 'En retard',
@@ -816,8 +820,8 @@ function ClientProfile() {
                 detail: `${transaction.quantite} × ${formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}` + (transaction.id_batiment ? ` · ${batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`}` : ''),
                 amount: formatMontant(Number(transaction.montant_net ?? transaction.montant_total ?? 0), { useCompactNotation: false }),
                 paid: formatMontant(Math.abs(Number(transaction.montant_paye || 0)), { useCompactNotation: false }),
-                remaining: formatMontant(Math.abs(Number(transaction.montant_restant || 0)), { useCompactNotation: false }),
-                hasRemaining: Number(transaction.montant_restant || 0) > 0,
+                remaining: formatMontant(Math.abs(owedAmount(transaction)), { useCompactNotation: false }),
+                hasRemaining: owedAmount(transaction) > 0,
                 payment: getPaymentLabel(transaction),
                 due: formatDate(transaction.date_echeance),
               }))}
@@ -872,8 +876,8 @@ function ClientProfile() {
                         <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
                           {formatMontant(Math.abs(Number(transaction.montant_paye || 0)), { useCompactNotation: false })}
                         </TableCell>
-                        <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
-                          {formatMontant(Math.abs(Number(transaction.montant_restant || 0)), { useCompactNotation: false })}
+                        <TableCell align="right" sx={{ color: owedAmount(transaction) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
+                          {formatMontant(Math.abs(owedAmount(transaction)), { useCompactNotation: false })}
                         </TableCell>
                       </TableRow>
                     ))

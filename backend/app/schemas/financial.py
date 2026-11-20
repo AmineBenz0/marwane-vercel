@@ -21,7 +21,9 @@ class FinancialTransactionRead(BaseModel):
     montant_avoir: Decimal = Decimal('0.00')
     montant_net: Decimal = Decimal('0.00')
     montant_paye: Decimal
-    montant_restant: Decimal
+    montant_restant: Decimal  # Ledger balance: cashed payments only
+    montant_en_attente: Decimal = Decimal('0.00')  # Handed over, not cashed yet
+    montant_du: Decimal = Decimal('0.00')  # Owed once pending payments arrive
     statut_paiement: str
     est_en_retard: bool
     nombre_paiements: int
@@ -35,7 +37,8 @@ class FinancialSummary(BaseModel):
     total_brut: Decimal = Decimal('0.00')
     total_avoirs: Decimal = Decimal('0.00')
     paye: Decimal
-    reste: Decimal
+    reste: Decimal  # Owed: pending payments (uncashed cheques) excluded
+    en_attente: Decimal = Decimal('0.00')
     count: int
     overdue_count: int
 

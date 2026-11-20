@@ -16,7 +16,8 @@ export function sumActiveTransactionAmounts(transactions) {
     totals.credits += cents(transaction.montant_avoir);
     totals.net += netCents(transaction);
     totals.paid += cents(transaction.montant_paye);
-    totals.remaining += cents(transaction.montant_restant);
+    // Owed: cheques handed over but not cashed are not owed (montant_du).
+    totals.remaining += cents(transaction.montant_du ?? transaction.montant_restant);
   }
   return {
     gross: totals.gross / 100,
