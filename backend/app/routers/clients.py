@@ -82,6 +82,7 @@ def get_clients(
     balances = contact_balances(
         db, direction="receivable",
         contact_ids=[row.id_client for row in clients],
+        include_pending=True,
     )
     return [
         ClientListRead.model_validate(row).model_copy(
@@ -675,8 +676,9 @@ def get_client_insights_financiers(
     taux_paiement = float(
         montant_paye / montant_total * 100 if montant_total > 0 else 0
     )
+    # Owed amounts: a cheque handed over but not cashed yet is not owed.
     montant_impaye = sum((
-        max(Decimal("0.00"), tx.montant_restant) for tx in active_sales
+        max(Decimal("0.00"), tx.montant_du) for tx in active_sales
     ), Decimal("0.00"))
 
     # 5. Calculer le délai moyen de paiement (jours entre date_transaction et date_paiement)
@@ -734,11 +736,11 @@ def get_client_insights_financiers(
     late = [
         tx for tx in active_sales
         if tx.date_echeance and tx.date_echeance < today
-        and tx.montant_restant > Decimal("0.00")
+        and tx.montant_du > Decimal("0.00")
     ]
     nombre_transactions_en_retard = len(late)
     montant_en_retard = sum(
-        (tx.montant_restant for tx in late), Decimal("0.00"),
+        (tx.montant_du for tx in late), Decimal("0.00"),
     )
 
     # 9. Calculer la tendance (comparer ce mois vs mois précédent)

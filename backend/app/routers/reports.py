@@ -73,8 +73,9 @@ def monthly_report(
     bank_current = bank_ledgers_as_of(db, current_date)
     bank_activity_end = bank_activity_as_of(db, date_fin)
     bank_activity_start = bank_activity_as_of(db, previous_day)
-    historical_position = financial_position_as_of(db, date_fin)
-    current_position = financial_position_as_of(db, current_date)
+    # Owed amounts on screens: cheques handed over but not cashed are not owed.
+    historical_position = financial_position_as_of(db, date_fin, include_pending=True)
+    current_position = financial_position_as_of(db, current_date, include_pending=True)
     inventory_count, inventory_quantity_delta = db.query(
         func.count(MouvementStock.id_mouvement_stock),
         func.coalesce(func.sum(MouvementStock.quantite_delta), 0),

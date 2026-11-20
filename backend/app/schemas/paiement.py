@@ -191,9 +191,11 @@ class StatutPaiementTransaction(BaseModel):
     montant_net: Decimal = Decimal("0.00")
     montant_paye: Decimal = Field(..., description="Montant déjà payé")
     montant_rembourse: Decimal = Decimal('0')
-    montant_restant: Decimal = Field(..., description="Montant restant à payer")
+    montant_restant: Decimal = Field(..., description="Montant restant à payer (paiements encaissés seulement)")
+    montant_en_attente: Decimal = Field(Decimal("0"), description="Paiements remis mais pas encore encaissés")
+    montant_du: Decimal = Field(Decimal("0"), description="Montant encore dû une fois les paiements en attente encaissés")
     pourcentage_paye: float = Field(..., description="Pourcentage payé (0-100)")
-    statut_paiement: str = Field(..., description="Statut du paiement (paye, partiel, impaye)")
+    statut_paiement: str = Field(..., description="Statut du paiement (paye, cheque_en_attente, partiel, impaye)")
     est_en_retard: bool = Field(..., description="Indique si le paiement est en retard")
     nombre_paiements: int = Field(..., description="Nombre de paiements effectués")
 

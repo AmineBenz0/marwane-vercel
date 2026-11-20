@@ -30,7 +30,7 @@ import { format } from 'date-fns';
 import { formatShortDate } from '../utils/dateFormatting';
 import PaymentStatusBadge from './PaymentStatusBadge';
 import DeferredSaleStatusBadge from '../pages/Transactions/DeferredSaleStatusBadge';
-import { isPendingPayment, remainingAfterPending } from '../pages/Transactions/pendingPayments';
+import { isPendingPayment, owedAmount } from '../pages/Transactions/pendingPayments';
 import { transactionNetAmount } from '../utils/transactionAmounts';
 
 const PAYMENT_TYPE_LABELS = {
@@ -209,7 +209,7 @@ function TransactionsExcelRegister({
         }
         group.paid += Math.abs(Number(transaction.montant_paye || 0));
         // Uncashed cheques are on their way: they are not counted as still owed.
-        group.remaining += remainingAfterPending(transaction.montant_restant, transaction.paiements);
+        group.remaining += owedAmount(transaction);
 
         const status = getPaymentStatus(transaction);
         if (status === 'impaye' || status === 'partiel' || status === 'en_retard') {
@@ -587,7 +587,7 @@ function TransactionMobileCard({
   const isSale = isClientTransaction(transaction);
   const inactive = transaction.est_actif === false;
   const status = getPaymentStatus(transaction);
-  const remaining = remainingAfterPending(transaction.montant_restant, transaction.paiements);
+  const remaining = owedAmount(transaction);
   const partner = getClientOuFournisseur?.(transaction) || '-';
   const product = produitsMap.get(transaction.id_produit) || `Produit #${transaction.id_produit || '-'}`;
   const batiment = transaction.id_batiment
@@ -674,7 +674,7 @@ function TransactionExcelRow({
     ? (batimentsMap.get(transaction.id_batiment) || `Bâtiment #${transaction.id_batiment}`)
     : '-';
   const paidAmount = Number(transaction.montant_paye || 0);
-  const remainingAmount = remainingAfterPending(transaction.montant_restant, transaction.paiements);
+  const remainingAmount = owedAmount(transaction);
   const totalAmount = getSignedAmount(transaction);
   const inactive = transaction.est_actif === false;
   const rowBackground = inactive ? 'grey.50' : 'background.paper';

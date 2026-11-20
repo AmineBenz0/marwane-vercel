@@ -92,7 +92,8 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
   };
 
   const totalSaisi = watchedFields?.reduce((sum, item) => sum + (parseFloat(item.montant) || 0), 0) || 0;
-  const montantRestant = transaction?.montant_restant || 0;
+  // Owed: uncashed cheques already handed over are not owed any more.
+  const montantRestant = Number(transaction?.montant_du ?? transaction?.montant_restant ?? 0);
   const difference = montantRestant - totalSaisi;
   // Half a centime of tolerance so rounding never shows as an overpayment.
   const overpaid = difference < -0.005;
@@ -422,6 +423,7 @@ MultiPaiementForm.propTypes = {
   supplierSource: PropTypes.oneOf(['caisse', 'banque']),
   transaction: PropTypes.shape({
     montant_restant: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    montant_du: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   }),
   fields: PropTypes.arrayOf(paymentFieldPropType).isRequired,
   append: PropTypes.func.isRequired,

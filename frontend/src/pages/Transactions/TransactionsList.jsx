@@ -58,6 +58,7 @@ import useNotification from '../../hooks/useNotification';
 import { buildTransactionPaymentBatch } from './transactionPaymentBatch';
 import { formatMontant as formatMontantUtil, formatMontantComplet } from '../../utils/formatNumber';
 import TransactionsExcelRegister from '../../components/TransactionsExcelRegister';
+import { owedAmount } from './pendingPayments';
 import PageHeader from '../../components/Layout/PageHeader';
 
 const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
@@ -1007,10 +1008,10 @@ export const exportTransactionWorkbook = (rows) => {
         .map(avoir => `${formatShortDate(avoir.date_effet)} : ${formatMontantComplet(avoir.montant_avoir)}`)
         .join(' | '),
       montant_paye: Number(row.montant_paye ?? 0),
-      montant_restant: Number(row.montant_restant ?? 0),
+      montant_restant: owedAmount(row),
       etat_transaction: row.est_actif === false ? 'Annulée' : 'Active',
       statut_paiement: {
-        impaye: 'Impayé', partiel: 'Partiel', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
+        impaye: 'Impayé', partiel: 'Partiel', cheque_en_attente: 'Chèque en attente', paye: 'Payé', surpaye: 'Surpayé', en_retard: 'En retard',
       }[status] || status || '-',
       quantite_couverte: row.est_promesse ? row.quantite_couverte : '',
       quantite_reservee: row.est_promesse ? row.quantite_reservee : '',

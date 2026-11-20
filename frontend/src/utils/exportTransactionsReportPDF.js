@@ -103,7 +103,7 @@ export function exportTransactionsReportPDF(rows, filename = 'rapport_transactio
     pdfInteger(row.quantite),
     pdfMoney(transactionNetAmount(row), false),
     pdfMoney(row.montant_paye, false),
-    pdfMoney(row.montant_restant, false),
+    pdfMoney(row.montant_du ?? row.montant_restant, false),
     row.status,
   ]);
   const sections = [];

@@ -71,6 +71,7 @@ import FinancialInsights from '../../components/FinancialInsights/FinancialInsig
 import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
 import BalanceCardList from '../../components/BalanceCardList';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
+import { owedAmount } from '../Transactions/pendingPayments';
 import { get, put, post } from '../../services/api';
 import { buildTransactionPaymentBatch } from '../Transactions/transactionPaymentBatch';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
@@ -299,7 +300,7 @@ function FournisseurProfile() {
       (summary, transaction) => ({
         total: summary.total + Number(transaction.montant_total || 0),
         paye: summary.paye + Number(transaction.montant_paye || 0),
-        solde: summary.solde + Number(transaction.montant_restant || 0),
+        solde: summary.solde + owedAmount(transaction),
       }),
       { total: 0, paye: 0, solde: 0 }
     );
@@ -417,9 +418,10 @@ function FournisseurProfile() {
           if (value === null || value === undefined) return '-';
           return formatMontant(value, { useCompactNotation: false });
         },
-        montant_restant: (value) => {
+        // Owed: a cheque handed over but not cashed is not owed.
+        montant_restant: (value, row) => {
           if (value === null || value === undefined) return '-';
-          return formatMontant(value, { useCompactNotation: false });
+          return formatMontant(owedAmount(row), { useCompactNotation: false });
         },
         reglement: (value, row) => getPaymentReglementSummary(row),
         statut_paiement: (value, row) => {
@@ -427,6 +429,8 @@ function FournisseurProfile() {
           const statut = row.est_en_retard ? 'en_retard' : (row.statut_paiement || 'impaye');
           return {
             paye: 'Payé',
+            surpaye: 'Surpayé',
+            cheque_en_attente: 'Chèque en attente',
             partiel: 'Partiel',
             impaye: 'Impayé',
             en_retard: 'En retard',
@@ -784,8 +788,8 @@ function FournisseurProfile() {
                 detail: `${transaction.quantite} × ${formatMontant(transaction.prix_unitaire, { useCompactNotation: false })}`,
                 amount: formatMontant(transaction.montant_total, { useCompactNotation: false }),
                 paid: formatMontant(transaction.montant_paye || 0, { useCompactNotation: false }),
-                remaining: formatMontant(transaction.montant_restant || 0, { useCompactNotation: false }),
-                hasRemaining: Number(transaction.montant_restant || 0) > 0,
+                remaining: formatMontant(owedAmount(transaction), { useCompactNotation: false }),
+                hasRemaining: owedAmount(transaction) > 0,
                 payment: getPaymentLabel(transaction),
                 due: formatDate(transaction.date_echeance),
               }))}
@@ -839,8 +843,8 @@ function FournisseurProfile() {
                         <TableCell align="right" sx={{ color: 'success.main', fontWeight: 800 }}>
                           {formatMontant(transaction.montant_paye || 0, { useCompactNotation: false })}
                         </TableCell>
-                        <TableCell align="right" sx={{ color: Number(transaction.montant_restant || 0) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
-                          {formatMontant(transaction.montant_restant || 0, { useCompactNotation: false })}
+                        <TableCell align="right" sx={{ color: owedAmount(transaction) > 0 ? 'warning.main' : 'success.main', fontWeight: 900 }}>
+                          {formatMontant(owedAmount(transaction), { useCompactNotation: false })}
                         </TableCell>
                       </TableRow>
                     ))

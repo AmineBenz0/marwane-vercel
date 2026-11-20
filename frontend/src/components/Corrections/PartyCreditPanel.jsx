@@ -23,17 +23,25 @@ export default function PartyCreditPanel({ partyType, partyId, partyName, totalA
   const balanceLabel = data && Number(data.balance) < 0 ? client ? 'Crédit du client' : 'Crédit chez le fournisseur'
     : client ? 'Reste net à encaisser' : 'Reste net à payer';
   const available = Number(data?.available || 0);
+  const ledger = Number(data?.balance || 0);
+  // A debt is shown as owed: cheques handed over but not cashed are not owed (same as the
+  // rest of the page). A credit stays the strict ledger figure the credit logic uses.
+  const shown = data ? (ledger > 0 && data.montant_du != null ? Math.max(0, Number(data.montant_du)) : Math.abs(ledger)) : null;
+  const pending = ledger > 0 ? Number(data?.montant_en_attente || 0) : 0;
+  const money = (value) => formatMontant(value, { useCompactNotation: false, minimumFractionDigits: 2 });
   const retry = () => setReload(v => v + 1);
   return <>
     {showSummary && <Box sx={{ mb: 3 }}>
       <Grid container spacing={2}>
         <Grid item xs={12} sm={6}><StatCard title={client ? 'Total ventes' : 'Total achats'} value={totalActivity} icon={<ReceiptLongOutlined />} valueFormat="currency" useCompactNotation={false}
           subtitle={totalTransactions === null ? 'Depuis le début' : `Depuis le début · ${totalTransactions} ${totalTransactions === 1 ? 'transaction' : 'transactions'}`} /></Grid>
-        <Grid item xs={12} sm={6}><StatCard title={balanceLabel} value={data ? Math.abs(Number(data.balance)) : null} icon={<AccountBalanceWalletOutlined />} valueFormat="currency" color="primary" useCompactNotation={false}
-          subtitle={!data ? 'Vérification du solde…' : available > 0 ?
-            <Button size="small" onClick={onOpen} aria-haspopup="dialog" endIcon={<ChevronRight />} sx={{ display: 'flex', px: 0, py: 0.5, mt: 0.5, minWidth: 0, justifyContent: 'flex-start', textAlign: 'left', fontWeight: 500, fontSize: '0.75rem' }}>
-              Avances au compte : {formatMontant(available, { useCompactNotation: false, minimumFractionDigits: 2 })}
-            </Button> : undefined} /></Grid>
+        <Grid item xs={12} sm={6}><StatCard title={balanceLabel} value={shown} icon={<AccountBalanceWalletOutlined />} valueFormat="currency" color="primary" useCompactNotation={false}
+          subtitle={!data ? 'Vérification du solde…' : (pending > 0 || available > 0) ? <>
+            {pending > 0 && <Box component="span" sx={{ display: 'block' }}>+ {formatMontant(pending, { useCompactNotation: false })} en chèques non encaissés</Box>}
+            {available > 0 && <Button size="small" onClick={onOpen} aria-haspopup="dialog" endIcon={<ChevronRight />} sx={{ display: 'flex', px: 0, py: 0.5, mt: 0.5, minWidth: 0, justifyContent: 'flex-start', textAlign: 'left', fontWeight: 500, fontSize: '0.75rem' }}>
+              Avances au compte : {money(available)}
+            </Button>}
+          </> : undefined} /></Grid>
       </Grid>
       {error && !open && <Alert severity="error" sx={{ mt: 2 }} action={<Button onClick={retry}>Réessayer</Button>}>{error}</Alert>}
     </Box>}

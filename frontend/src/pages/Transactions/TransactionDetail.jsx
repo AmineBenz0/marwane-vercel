@@ -51,11 +51,10 @@ import TransactionForm from './TransactionForm';
 import { isPendingPayment, pendingPaymentAmount } from './pendingPayments';
 import TransactionEditForm from './TransactionEditForm';
 import { deferredCancellationEnabled } from './deferredCancellationAccess';
-import TransactionAuditHistory from './TransactionAuditHistory';
+import TransactionHistory from './TransactionHistory';
 import PaymentCorrectionDialog from '../../components/Corrections/PaymentCorrectionDialog';
 import RefundDialog from '../../components/Corrections/RefundDialog';
 import TransactionCreditPanel from '../../components/Corrections/TransactionCreditPanel';
-import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
 import ExpandableDetails from '../../components/ExpandableDetails';
 import DetailRows from '../../components/DetailRows';
@@ -480,7 +479,7 @@ function TransactionDetail() {
     setEditingPaiement(null);
     resetPaiement({
       date_paiement: format(new Date(), 'yyyy-MM-dd'),
-      montant: statutPaiement?.montant_restant || 0,
+      montant: Math.max(0, Number(statutPaiement?.montant_du ?? statutPaiement?.montant_restant ?? 0)),
       type_paiement: 'cash',
       statut_cheque: 'a_encaisser',
       numero_cheque: '',
@@ -577,7 +576,9 @@ function TransactionDetail() {
   // so "Impayé" never hides money that is on its way.
   const pendingAmount = pendingPaymentAmount(paiements);
   const remaining = Number(statutPaiement?.montant_restant || 0);
-  const stillOwed = Math.max(0, remaining - pendingAmount);
+  const stillOwed = statutPaiement?.montant_du != null
+    ? Math.max(0, Number(statutPaiement.montant_du))
+    : Math.max(0, remaining - pendingAmount);
   const paymentLabel = (p) => {
     if (p.nature === 'remboursement') return 'Remboursement';
     if (p.est_affectation || ['credit_recu', 'credit_transfere'].includes(p.nature)) return 'Crédit affecté';
@@ -599,11 +600,12 @@ function TransactionDetail() {
       <Typography fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...sx }}>{value}</Typography>
     </Stack>
   );
+  const cancelled = transaction.est_actif === false;
   const cardSx = { height: '100%' };
   const cardContentSx = { p: { xs: 2, sm: 2.5 } };
 
   return (
-    <Box sx={{ maxWidth: '100%', overflowX: 'hidden' }}>
+    <Box sx={{ maxWidth: 1200, overflowX: 'hidden' }}>
       <Button
         startIcon={<ArrowBackIcon />}
         onClick={() => navigate(returnPath)}
@@ -616,6 +618,12 @@ function TransactionDetail() {
 
       {/* Summary: who, how much, paid or not. */}
       <Card sx={{ mb: 2.5 }}>
+        {cancelled && <Box role="status" sx={{ px: { xs: 2, sm: 2.5 }, py: 1.25, bgcolor: 'grey.100', borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="body2" fontWeight={700}>
+            {isSale ? 'Vente annulée' : 'Achat annulé'}{transaction.date_annulation ? ` le ${formatShortDate(transaction.date_annulation)}` : ''}
+            <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary' }}> · ne compte plus dans les totaux.</Box>
+          </Typography>
+        </Box>}
         <CardContent sx={cardContentSx}>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'flex-start' }} spacing={2}>
             <Box sx={{ minWidth: 0 }}>
@@ -628,17 +636,16 @@ function TransactionDetail() {
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {[formatDate(transaction.date_transaction), transaction.nom_batiment_source].filter(Boolean).join(' · ')}
               </Typography>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }}>
-                {transaction.est_actif === false && <Chip size="small" label={isSale ? 'Vente annulée' : 'Achat annulé'} />}
+              {!cancelled && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }}>
                 {statutPaiement && <PaymentStatusBadge statut={statutPaiement.est_en_retard ? 'en_retard' : statutPaiement.statut_paiement} />}
                 {pendingAmount > 0 && <Chip size="small" color="warning" label={`Chèque en attente : ${money(pendingAmount)}`} />}
                 {transaction.est_promesse && transaction.date_livraison_prevue && <Chip size="small" variant="outlined" label={`Livraison le ${formatShortDate(transaction.date_livraison_prevue)}`} />}
-              </Stack>
+              </Stack>}
             </Box>
             <Stack alignItems={{ xs: 'flex-start', md: 'flex-end' }} spacing={1.5} sx={{ flexShrink: 0 }}>
               <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
                 <Typography variant="caption" color="text.secondary">{hasCredits ? 'Montant initial' : 'Montant total'}</Typography>
-                <Typography sx={{ fontSize: { xs: '1.5rem', sm: '1.85rem' }, fontWeight: 800, color: 'primary.main', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: { xs: '1.5rem', sm: '1.85rem' }, fontWeight: 800, color: cancelled ? 'text.disabled' : 'primary.main', textDecoration: cancelled ? 'line-through' : 'none', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                   {money(transaction.montant_total)}
                 </Typography>
               </Box>
@@ -722,14 +729,16 @@ function TransactionDetail() {
           <Card sx={cardSx}>
             <CardContent sx={cardContentSx}>
               <Typography component="h2" variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>Paiement</Typography>
-              {transaction.est_promesse && hasCredits
+              {cancelled
+                ? <Typography variant="body2" color="text.secondary">{isSale ? 'Rien à encaisser : la vente est annulée.' : 'Rien à payer : l’achat est annulé.'}</Typography>
+                : transaction.est_promesse && hasCredits
                 ? <DeferredSaleFinancialSummary sale={transaction} />
                 : <Stack spacing={1}>
                   {amountRow(isSale ? 'Encaissé' : 'Payé', money(statutPaiement.montant_paye))}
                   {pendingAmount > 0 && amountRow('Chèque en attente', money(pendingAmount), { color: 'warning.dark' })}
                   {remaining > 0 && amountRow(isSale ? 'Reste à encaisser' : 'Reste à payer', money(stillOwed), { color: stillOwed > 0 ? 'warning.dark' : 'text.primary' })}
                 </Stack>}
-              {transaction.date_echeance && remaining > 0 && (
+              {!cancelled && transaction.date_echeance && remaining > 0 && (
                 <Typography variant="body2" sx={{ mt: 1 }} color={statutPaiement.est_en_retard ? 'error.main' : 'text.secondary'}>
                   Échéance : {formatDate(transaction.date_echeance)}
                 </Typography>
@@ -789,10 +798,7 @@ function TransactionDetail() {
       </Grid>
 
       <Box sx={{ mb: { xs: 2, sm: 3 } }}>
-        <TransactionAuditHistory key={transaction.id_transaction} transactionId={transaction.id_transaction} />
-        {CORRECTION_WRITES_ENABLED && (
-          <CorrectionHistory transactionId={transaction.id_transaction} readOnly revision={transaction.row_version} />
-        )}
+        <TransactionHistory key={transaction.id_transaction} transaction={transaction} includeCorrections={CORRECTION_WRITES_ENABLED} />
       </Box>
       {editOpen && (CORRECTION_WRITES_ENABLED ? (
         <TransactionEditForm
@@ -871,7 +877,7 @@ function TransactionDetail() {
             onClose={handleClosePaiementDialog}
             subtitle={editingPaiement
               ? `Paiement n° ${editingPaiement.id_paiement}`
-              : statutPaiement ? `Transaction n° ${id} · reste à payer ${formatMontant(statutPaiement.montant_restant)}` : null}
+              : statutPaiement ? `Transaction n° ${id} · reste à payer ${formatMontant(Math.max(0, Number(statutPaiement.montant_du ?? statutPaiement.montant_restant)))}` : null}
           >
             {editingPaiement ? 'Modifier le paiement' : 'Ajouter un paiement'}
           </DialogTitleWithClose>

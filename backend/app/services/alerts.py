@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.alert import Alerte
-from app.models.transaction import Transaction
+from app.models.transaction import SETTLED_PAYMENT_STATUSES, Transaction
 from app.utils.business_date import business_date
 from app.utils.date_formatting import DISPLAY_DATE_FORMAT
 
@@ -21,7 +21,8 @@ def create_overdue_alerts(db: Session, reference_date: date | None = None) -> in
     ).all()
     created = 0
     for transaction in transactions:
-        if transaction.statut_paiement in {"paye", "surpaye"}:
+        # Paid, or covered by a cheque not cashed yet: nothing is owed, no alert.
+        if transaction.statut_paiement in SETTLED_PAYMENT_STATUSES:
             continue
         exists = db.query(Alerte.id_alerte).filter(
             Alerte.id_transaction == transaction.id_transaction,
