@@ -58,6 +58,7 @@ import TransactionCreditPanel from '../../components/Corrections/TransactionCred
 import CorrectionHistory from '../../components/Corrections/CorrectionHistory';
 import DeferredSaleStockSummary from './DeferredSaleStockSummary';
 import ExpandableDetails from '../../components/ExpandableDetails';
+import DetailRows from '../../components/DetailRows';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 
 const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
@@ -702,10 +703,14 @@ function TransactionDetail() {
                   </Alert>}
                 </Box>
               ) : transaction.id_production ? (
-                <ExpandableDetails label="Origine du stock">
-                  {transaction.repartition_stock?.length ? transaction.repartition_stock.map(source =>
-                    <Typography variant="body2" key={source.id_production}>{formatShortDate(source.date_production)} : {Number(source.quantite).toLocaleString('fr-FR')} œufs prélevés</Typography>)
-                    : <Typography variant="body2">Saisie du {formatShortDate(transaction.date_production)}</Typography>}
+                <ExpandableDetails label="Voir l’origine du stock" sx={{ mt: 1 }}>
+                  {transaction.repartition_stock?.length
+                    ? <DetailRows ariaLabel="Origine du stock" rows={transaction.repartition_stock.map(source => ({
+                      key: source.id_production,
+                      label: `Production du ${formatShortDate(source.date_production)}`,
+                      value: `${Number(source.quantite).toLocaleString('fr-FR')} œufs`,
+                    }))} />
+                    : <Typography variant="body2">Production du {formatShortDate(transaction.date_production)}</Typography>}
                 </ExpandableDetails>
               ) : null}
             </CardContent>

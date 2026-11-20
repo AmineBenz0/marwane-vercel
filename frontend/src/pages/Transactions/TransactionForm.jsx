@@ -28,6 +28,7 @@ import { keyframes } from '@emotion/react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
+  Stack,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -362,6 +363,10 @@ function TransactionForm({
   const watchedTypeEntite = watch('type_entite');
   const watchedFournisseurId = watch('id_fournisseur');
   const isEditingTransaction = Boolean(initialValues?.id_transaction);
+  // The server refuses changes to the amounts/identity of a paid transaction, and to the
+  // identity of a deferred delivery: lock those fields up front instead of failing on save.
+  const financialLocked = isEditingTransaction && paiementsExistants.length > 0;
+  const identityLocked = financialLocked || (isEditingTransaction && Boolean(initialValues?.est_promesse));
   useEffect(() => {
     if (!open || isEditingTransaction || watchedTypeEntite !== 'client') return;
     (watchedLignes || []).forEach((line, index, lines) => {
@@ -1246,7 +1251,7 @@ function TransactionForm({
           {loading
             ? 'Enregistrement...'
             : isEditing
-              ? 'Vérifier les modifications'
+              ? 'Enregistrer les modifications'
               : isSale
                 ? 'Enregistrer la vente'
                 : "Enregistrer l’achat"}
@@ -1304,13 +1309,20 @@ function TransactionForm({
                   letterSpacing: '-0.03em',
                 }}
               >
-                {isEditing ? 'Modifier la transaction' : 'Nouvelle transaction'}
+                {isEditing
+                  ? `${isSale ? 'Modifier la vente' : 'Modifier l’achat'} n° ${initialValues.id_transaction}`
+                  : 'Nouvelle transaction'}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {!isEditing && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {isSale
                   ? 'Le client, les œufs vendus, puis le paiement.'
                   : 'Le fournisseur, les produits achetés, puis le paiement.'}
-              </Typography>
+              </Typography>}
+              {isEditing && identityLocked && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {financialLocked
+                  ? 'Déjà payée en partie : seules l’échéance et les paiements peuvent changer.'
+                  : 'Livraison différée : le client, la date, le bâtiment et le type d’œufs sont fixes.'}
+              </Typography>}
             </Box>
             <IconButton onClick={handleClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
               <CloseIcon />
@@ -1327,7 +1339,7 @@ function TransactionForm({
               ? `À compléter ou corriger : ${fieldPaths.map((path) => getFieldLabel(path, watchedTypeEntite)).join(', ')}.`
               : genericError
                 ? 'Une information obligatoire manque. Vérifiez les champs signalés en rouge.'
-                : errors.root?.message || errorMessage;
+                : shortServerError(errors.root?.message || errorMessage);
             return (
               <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
                 <Typography fontWeight={800}>{summary}</Typography>
@@ -1357,7 +1369,7 @@ function TransactionForm({
             </Box>
           ) : (
             <Box sx={{ mt: 1 }}>
-              <Controller
+              {!isEditing && <Controller
                 name="type_entite"
                 control={control}
                 render={({ field }) => (
@@ -1434,7 +1446,7 @@ function TransactionForm({
                     })}
                   </Box>
                 )}
-              />
+              />}
               {errors.type_entite && (
                 <FormHelperText error>{errors.type_entite.message}</FormHelperText>
               )}
@@ -1495,7 +1507,7 @@ function TransactionForm({
                       error={!!error}
                       sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
-                      disabled={loading || (prefillClientId !== null && prefillClientId !== undefined)}
+                      disabled={loading || identityLocked || (prefillClientId !== null && prefillClientId !== undefined)}
                       value={field.value || ''}
                     >
                       <MenuItem value="">
@@ -1528,7 +1540,7 @@ function TransactionForm({
                       error={!!error}
                       sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                       helperText={error?.message}
-                      disabled={loading || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
+                      disabled={loading || identityLocked || (prefillFournisseurId !== null && prefillFournisseurId !== undefined)}
                       value={field.value || ''}
                     >
                       <MenuItem value="">
@@ -1572,7 +1584,7 @@ function TransactionForm({
                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                     helperText={error?.message || ''}
                     required
-                    disabled={loading}
+                    disabled={loading || identityLocked}
                     margin="dense"
                     variant="outlined"
                     InputLabelProps={{
@@ -1679,7 +1691,7 @@ function TransactionForm({
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message}
                                     size="small"
-                                    disabled={loading}
+                                    disabled={loading || financialLocked}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
@@ -1712,7 +1724,7 @@ function TransactionForm({
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                                     helperText={error?.message || ''}
                                     size="small"
-                                    disabled={loading}
+                                    disabled={loading || financialLocked}
                                     onChange={(e) => {
                                       const value = e.target.value;
                                       field.onChange(value === '' ? undefined : value);
@@ -1751,7 +1763,7 @@ function TransactionForm({
                       {shouldShowBatimentSource && <ProductionSourcePicker
                         index={index} control={control} setValue={setValue} batiments={batiments}
                         produits={produits}
-                        disabled={loading} transactionId={initialValues.id_transaction}
+                        disabled={loading || identityLocked} transactionId={initialValues.id_transaction}
                         saleDate={isEditingTransaction && ligne.est_promesse ? today() : watch('date_transaction')}>{amountFields}</ProductionSourcePicker>}
                       {shouldShowBatimentSource && <SaleLineDetails
                         line={ligne} index={index} lines={watchedLignes || []} products={produits} control={control}
@@ -1765,7 +1777,7 @@ function TransactionForm({
                                 name={`lignes.${index}.id_produit`}
                                 control={control}
                                 render={({ field, fieldState: { error } }) => (
-                                <FormControl fullWidth size="small" error={!!error} disabled={loading} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
+                                <FormControl fullWidth size="small" error={!!error} disabled={loading || financialLocked} sx={getRequiredFieldAnimation(error, animateInvalidFields)}>
                                   <InputLabel id={`ligne-${index}-produit-label`}>{watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}</InputLabel>
                                     <Select
                                       {...field}
@@ -1773,7 +1785,7 @@ function TransactionForm({
                                       size="small"
                                       value={field.value || ''}
                                     label={watchedTypeEntite === 'client' ? 'Produit vendu *' : 'Produit acheté *'}
-                                      disabled={loading}
+                                      disabled={loading || financialLocked}
                                       onChange={(event) => {
                                         field.onChange(event);
                                         const selected = produits.find(p => Number(p.id_produit) === Number(event.target.value));
@@ -1840,81 +1852,84 @@ function TransactionForm({
 
     <Dialog open={Boolean(editReview && open)}
       onClose={reviewSaving ? undefined : () => setEditReview(null)}
-      fullWidth maxWidth="sm" aria-labelledby="edit-review-title">
-      <DialogTitle id="edit-review-title">Vérifier les modifications</DialogTitle>
+      fullWidth maxWidth="xs" aria-labelledby="edit-review-title">
+      <DialogTitle id="edit-review-title">Confirmer la modification</DialogTitle>
       <DialogContent>
-        <Box sx={{ pt: 1 }}>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Cet aperçu compare les valeurs saisies. Il ne valide ni le stock ni les mouvements
-            comptables. Les règles du serveur seront appliquées à l’enregistrement.
-          </Alert>
-          {reviewError && <Alert severity="error" sx={{ mb: 2 }}>{reviewError}</Alert>}
-          {editReview && (() => {
-            const keys = [
-              ['date_transaction', 'Date de transaction'], ['date_echeance', 'Date d’échéance'],
-              ['id_client', 'Client'], ['id_fournisseur', 'Fournisseur'],
-              ['id_produit', 'Produit'], ['id_batiment', 'Bâtiment source'],
-              ['id_production', 'Saisie source'], ['quantite', 'Quantité'],
-              ['prix_unitaire', 'Prix unitaire'], ['est_promesse', 'Livraison différée'],
-              ['date_livraison_prevue', 'Date prévue de livraison'],
-            ];
-            const normalize = (key, value) => {
-              if (value === undefined || value === null || value === '') return null;
-              if (key === 'est_promesse') return Boolean(value);
-              if (['quantite', 'prix_unitaire', 'id_client', 'id_fournisseur',
-                'id_produit', 'id_batiment', 'id_production'].includes(key)) return Number(value);
-              if (key.startsWith('date_')) return String(value).slice(0, 10);
-              return value;
-            };
-            const changed = keys.filter(([key]) => key in editReview.payload
-              && normalize(key, initialValues[key]) !== normalize(key, editReview.payload[key]));
-            const labelValue = (key, value) => {
-              const normalized = normalize(key, value);
-              if (normalized === null) return 'Non renseigné';
-              if (key === 'est_promesse') return normalized ? 'Oui' : 'Non';
-              if (key.startsWith('date_')) return normalized.split('-').reverse().join('/');
-              if (key === 'prix_unitaire') return formatMontant(normalized, { useCompactNotation: false });
-              return String(normalized);
-            };
-            return <Box>
-              {changed.length === 0 && <Typography variant="body2" color="text.secondary">
-                Aucun champ de la transaction n’a changé. Vérifiez les paiements associés.
-              </Typography>}
-              {changed.map(([key, label]) => <Box key={key} sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="body2" fontWeight={700}>{label}</Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 0.5 }}>
-                  <Box><Typography variant="caption" color="text.secondary">Avant</Typography>
-                    <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{labelValue(key, initialValues[key])}</Typography></Box>
-                  <Box><Typography variant="caption" color="text.secondary">Après</Typography>
-                    <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{labelValue(key, editReview.payload[key])}</Typography></Box>
-                </Box>
-              </Box>)}
-              {changed.some(([key]) => ['quantite', 'prix_unitaire'].includes(key)) && (
-                <Typography variant="body2" sx={{ mt: 2 }} fontWeight={700}>
-                  Montant total estimé : {formatMontant(
-                    Number(editReview.payload.quantite ?? initialValues.quantite) *
-                    Number(editReview.payload.prix_unitaire ?? initialValues.prix_unitaire),
-                    { useCompactNotation: false })}
-                </Typography>
-              )}
-              {paiementsExistants.length > 0 && <Alert severity="warning" sx={{ mt: 2 }}>
-                Cette transaction possède des paiements. Les modifications financières restent
-                limitées par le serveur.
-              </Alert>}
-            </Box>;
-          })()}
-        </Box>
+        {editReview && (() => {
+          const keys = [
+            ['date_transaction', 'Date'], ['date_echeance', 'Échéance'],
+            ['id_client', 'Client'], ['id_fournisseur', 'Fournisseur'],
+            ['id_produit', 'Produit'], ['id_batiment', 'Bâtiment'],
+            ['quantite', 'Quantité'], ['prix_unitaire', 'Prix unitaire'],
+            ['est_promesse', 'Livraison différée'], ['date_livraison_prevue', 'Livraison prévue'],
+          ];
+          const normalize = (key, value) => {
+            if (value === undefined || value === null || value === '') return null;
+            if (key === 'est_promesse') return Boolean(value);
+            if (['quantite', 'prix_unitaire', 'id_client', 'id_fournisseur',
+              'id_produit', 'id_batiment'].includes(key)) return Number(value);
+            if (key.startsWith('date_')) return String(value).slice(0, 10);
+            return value;
+          };
+          const changed = keys.filter(([key]) => key in editReview.payload
+            && normalize(key, initialValues[key]) !== normalize(key, editReview.payload[key]));
+          const money = (value) => formatMontant(value, { minimumFractionDigits: 2, useCompactNotation: false });
+          const labelValue = (key, value) => {
+            const v = normalize(key, value);
+            if (v === null) return '—';
+            if (key === 'est_promesse') return v ? 'Oui' : 'Non';
+            if (key.startsWith('date_')) return v.split('-').reverse().join('/');
+            if (key === 'prix_unitaire') return money(v);
+            if (key === 'quantite') return v.toLocaleString('fr-FR');
+            if (key === 'id_client') return clients.find((c) => Number(c.id_client) === v)?.nom_client || '—';
+            if (key === 'id_fournisseur') return fournisseurs.find((f) => Number(f.id_fournisseur) === v)?.nom_fournisseur || '—';
+            if (key === 'id_produit') return produits.find((p) => Number(p.id_produit) === v)?.nom_produit || '—';
+            if (key === 'id_batiment') return batiments.find((b) => Number(b.id_batiment) === v)?.nom || '—';
+            return String(v);
+          };
+          const totalChanged = changed.some(([key]) => ['quantite', 'prix_unitaire'].includes(key));
+          const newTotal = Number(editReview.payload.quantite ?? initialValues.quantite)
+            * Number(editReview.payload.prix_unitaire ?? initialValues.prix_unitaire);
+          const newPayments = (editReview.payload.paiements || []).filter((p) => !p.id_paiement);
+          return <Stack spacing={1.25}>
+            {changed.length === 0 && newPayments.length === 0 && <Typography variant="body2" color="text.secondary">Rien n’a changé.</Typography>}
+            {changed.map(([key, label]) => <Box key={key}>
+              <Typography variant="caption" color="text.secondary">{label}</Typography>
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                <Box component="span" sx={{ color: 'text.secondary', textDecoration: 'line-through' }}>{labelValue(key, initialValues[key])}</Box>
+                {' → '}
+                <Box component="span" fontWeight={800}>{labelValue(key, editReview.payload[key])}</Box>
+              </Typography>
+            </Box>)}
+            {newPayments.length > 0 && <Typography variant="body2">
+              {newPayments.length === 1 ? 'Nouveau paiement' : `${newPayments.length} nouveaux paiements`} :{' '}
+              <Box component="span" fontWeight={800}>{money(newPayments.reduce((sum, p) => sum + Number(p.montant || 0), 0))}</Box>
+            </Typography>}
+            {totalChanged && <Typography variant="body2" sx={{ pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+              Nouveau total : <Box component="span" fontWeight={800}>{money(newTotal)}</Box>
+            </Typography>}
+            {reviewError && <Alert severity="error">{shortServerError(reviewError)}</Alert>}
+          </Stack>;
+        })()}
       </DialogContent>
       <DialogActions sx={{ p: 2, gap: 1 }}>
         <Button color="inherit" disabled={reviewSaving || loading}
-          onClick={() => { setEditReview(null); setReviewError(''); }}>Retour aux modifications</Button>
+          onClick={() => { setEditReview(null); setReviewError(''); }}>Retour</Button>
         <Button variant="contained" disabled={reviewSaving || loading} onClick={confirmEditReview}>
-          {reviewSaving || loading ? 'Enregistrement…' : 'Confirmer l’enregistrement'}
+          {reviewSaving || loading ? 'Enregistrement…' : 'Enregistrer'}
         </Button>
       </DialogActions>
     </Dialog>
     </>
   );
+}
+
+// Server refusals are long and technical: keep only what the user needs to do.
+function shortServerError(message) {
+  if (/historique de paiement est immuable/i.test(message)) return 'Cette transaction a déjà un paiement : ce changement est impossible. Annulez-la et créez-en une nouvelle.';
+  if (/livraison différée sont fixes/i.test(message)) return 'Livraison différée : ce changement est impossible. Annulez-la et créez-en une nouvelle.';
+  if (/inférieure au stock déjà réservé/i.test(message)) return 'La quantité ne peut pas être inférieure aux œufs déjà réservés.';
+  return message;
 }
 
 export default TransactionForm;

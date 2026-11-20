@@ -1,44 +1,24 @@
 import { Controller } from 'react-hook-form';
-import { Alert, Box, Checkbox, FormControlLabel, Grid, Stack, Typography } from '@mui/material';
+import { Alert, Box, Checkbox, FormControlLabel, Grid, Typography } from '@mui/material';
 import DateField from '../../utils/DateField';
 import { saleStockSummary } from './saleStockSummary';
 
 /**
- * Stock situation, deferred delivery and payment for ONE sale line, shown under
- * that line (it used to be a side panel listing every line).
+ * Under ONE sale line: what is still missing, the deferred delivery when the stock is short,
+ * and the payment. The stock itself is shown by the source picker.
  */
 export default function SaleLineDetails({ line, index, lines, products = [], control, saleDate, loading, renderPayment, onDeferredChange }) {
   const stock = saleStockSummary(line, index, lines);
   const format = (value) => value.toLocaleString('fr-FR');
   const productName = products.find((p) => Number(p.id_produit) === Number(line.id_produit))?.nom_produit;
   return (
-    <Box sx={{ mt: 1.5 }}>
-      {/* Tell the user what is still missing: the sale cannot be saved without an egg type. */}
-      {productName ? (
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          Type d’œufs : <Box component="span" fontWeight={800}>{productName}</Box>
-        </Typography>
-      ) : (
+    <Box sx={{ mt: 1 }}>
+      {/* The sale cannot be saved without an egg type: say so instead of leaving Save greyed out. */}
+      {!productName && (
         <Typography variant="body2" sx={{ mb: 1, color: 'warning.dark', fontWeight: 700 }}>
-          Choisissez le bâtiment, puis cliquez sur le type d’œufs vendu.
+          {line.id_batiment ? 'Choisissez le type d’œufs vendu.' : 'Choisissez le bâtiment d’où viennent les œufs.'}
         </Typography>
       )}
-      <Box
-        aria-label={`Stock pour la vente ${index + 1}`}
-        aria-live="polite"
-        sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1, p: 1.25, borderRadius: 2, bgcolor: 'background.default' }}
-      >
-        {[
-          ['Œufs vendus', format(stock.requested)],
-          ['Disponibles maintenant (stock)', stock.ready ? format(stock.covered) : '—'],
-          ['À produire plus tard', stock.ready ? format(stock.pending) : '—'],
-        ].map(([label, value]) => (
-          <Stack key={label} direction={{ xs: 'row', sm: 'column' }} justifyContent="space-between" spacing={0.25}>
-            <Typography variant="caption" color="text.secondary">{label}</Typography>
-            <Typography variant="body2" fontWeight={800}>{value}</Typography>
-          </Stack>
-        ))}
-      </Box>
       {((stock.ready && stock.pending > 0) || line.est_promesse) && (
         <Box sx={{ mt: 1.25, p: 1.25, border: '1px solid', borderColor: 'warning.main', borderRadius: 2 }}>
           <Controller name={`lignes.${index}.est_promesse`} control={control} render={({ field }) => (
@@ -51,6 +31,7 @@ export default function SaleLineDetails({ line, index, lines, products = [], con
           )} />
           {stock.ready && stock.pending > 0 && (
             <Typography variant="body2" sx={{ mb: 1 }}>
+              Stock insuffisant : {format(stock.covered)} œufs disponibles maintenant.
               Les {format(stock.pending)} œufs manquants seront fournis ultérieurement.
             </Typography>
           )}
