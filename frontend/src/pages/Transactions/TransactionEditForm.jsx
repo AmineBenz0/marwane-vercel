@@ -91,10 +91,10 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
     && Boolean(eggCategory(row.nom_produit)) === Boolean(eggCategory(oldProduct?.nom_produit)));
   return <Dialog open={open} onClose={() => !flow.busy && !flow.uncertain && onClose()} fullWidth maxWidth="sm"
     PaperProps={{ component: 'form', onSubmit: submit }} aria-labelledby="transaction-edit-title">
-    <DialogTitleWithClose id="transaction-edit-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>Modifier la transaction n° {transaction.id_transaction}</DialogTitleWithClose>
+    <DialogTitleWithClose id="transaction-edit-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{transaction.id_client ? 'Modifier la vente' : 'Modifier l’achat'} n° {transaction.id_transaction}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} onCancel={onClose} /> : <>
-      <Alert severity="info">{inactive ? 'Réactivez cette transaction depuis son détail avant de la modifier.' : 'Les conséquences sur le paiement et le stock seront présentées avant confirmation.'}</Alert>
+      {inactive && <Alert severity="info">Réactivez cette transaction avant de la modifier.</Alert>}
         {referenceError && <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{referenceError}</Alert>}
         {(error || flow.error) && <Alert severity="error" role="alert">{error || flow.error}</Alert>}
         <DateField label="Date de la transaction" value={values.date_transaction} onChange={update('date_transaction')} disabled={flow.busy || inactive} fullWidth required />
@@ -117,17 +117,17 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
           </TextField>
           <FormControlLabel control={<Checkbox checked={manual} onChange={event => setManual(event.target.checked)} disabled={flow.busy || inactive} />} label="Choisir les productions à utiliser" />
           {manual && <>
-            <Typography variant="body2">Indiquez les œufs pour cette vente par production. Les quantités déjà fournies doivent être conservées.</Typography>
+            <Typography variant="body2" color="text.secondary">Œufs à prendre dans chaque production.</Typography>
             {sourceError && <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{sourceError}</Alert>}
             {sourceRows.filter(row => Number(allocations[row.id_production]) > 0 || !category || row.type_oeuf === category[0] && (row.calibre || null) === category[1]).map(row => <TextField key={row.id_production} type="number"
               label={names.id_production[row.id_production]} value={allocations[row.id_production] || ''} disabled={flow.busy || inactive} inputProps={{ min: 0, step: 1 }}
-              onChange={event => setAllocations(v => ({ ...v, [row.id_production]: event.target.value }))} helperText={row.disponible === undefined ? 'Origine enregistrée précédemment' : `${row.disponible} œufs proposés · la disponibilité finale sera vérifiée`} />)}
+              onChange={event => setAllocations(v => ({ ...v, [row.id_production]: event.target.value }))} helperText={row.disponible === undefined ? 'Déjà utilisée' : `${Number(row.disponible).toLocaleString('fr-FR')} disponibles`} />)}
           </>}
         </>}
       </>}
     </Stack></DialogContent>
     {!flow.review && <DialogActions><Button onClick={onClose} disabled={flow.busy}>Annuler</Button>
       {flow.stale && <Button onClick={flow.refresh} disabled={flow.busy}>Actualiser l’aperçu</Button>}
-      <Button type="submit" variant="contained" disabled={flow.busy || inactive}>{flow.busy ? 'Vérification…' : 'Vérifier les modifications'}</Button></DialogActions>}
+      <Button type="submit" variant="contained" disabled={flow.busy || inactive}>{flow.busy ? 'Vérification…' : 'Continuer'}</Button></DialogActions>}
   </Dialog>;
 }
