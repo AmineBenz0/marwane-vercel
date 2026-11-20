@@ -70,6 +70,7 @@ import StatCardWithGauge from '../../components/StatCard/StatCardWithGauge';
 import BalanceCardList from '../../components/BalanceCardList';
 import TransactionsExcelRegister, { getPaymentReglementSummary } from '../../components/TransactionsExcelRegister';
 import { get, put, post } from '../../services/api';
+import { buildTransactionPaymentBatch } from '../Transactions/transactionPaymentBatch';
 import { exportToExcelAdvanced } from '../../utils/exportToExcel';
 import useNotification from '../../hooks/useNotification';
 import { formatMontant } from '../../utils/formatNumber';
@@ -548,15 +549,25 @@ function ClientProfile() {
     setTransactionFormError(null);
 
     try {
-      // Mode création : POST
-      await post('/transactions', data);
+      // The form submits one or more lines (+ payments) as a batch; send them
+      // through the atomic endpoint, like the main Transactions page does.
+      const result = await post(
+        '/transactions/batch-with-payments',
+        buildTransactionPaymentBatch(data)
+      );
 
       // Fermer la modal et rafraîchir les données du profil
       setTransactionModalOpen(false);
       await fetchClientProfile();
       
       // Afficher une notification de succès
-      notification.success('Transaction créée avec succès');
+      const paymentCount = result.reduce(
+        (total, item) => total + (item.paiements?.length || 0),
+        0
+      );
+      notification.success(
+        `${result.length} transaction(s) créée(s) avec ${paymentCount} paiement(s).`
+      );
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
       const errorMessage = err?.message || 'Une erreur est survenue lors de l\'enregistrement';

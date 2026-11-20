@@ -11,11 +11,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import FournisseurProfile from './FournisseurProfile';
-import { get } from '../../services/api';
+import { get, post } from '../../services/api';
+
+const transactionFormProps = vi.hoisted(() => ({ current: null }));
 
 // Mock des dépendances
 vi.mock('../../services/api', () => ({
   get: vi.fn(),
+  put: vi.fn(),
+  post: vi.fn(),
 }));
 
 vi.mock('../../hooks/useNotification', () => ({
@@ -120,7 +124,10 @@ vi.mock('../../components/ModalForm/ModalForm', () => ({
 }));
 
 vi.mock('../Transactions/TransactionForm', () => ({
-  default: () => null,
+  default: (props) => {
+    transactionFormProps.current = props;
+    return null;
+  },
 }));
 
 vi.mock('../../components/FinancialInsights/FinancialInsights', () => ({
@@ -311,6 +318,38 @@ describe('FournisseurProfile', () => {
     await waitFor(() => {
       expect(screen.getByText(/Fournisseur introuvable/i)).toBeInTheDocument();
     });
+  });
+  it('crée un achat via l’endpoint batch (pas POST /transactions)', async () => {
+    configureProfileApi({
+      fournisseur: { id_fournisseur: 1, nom_fournisseur: 'Test Fournisseur', est_actif: true },
+      statistiques: { total_transactions: 0, montant_total_achats: 0, montant_moyen_transaction: 0 },
+      transactions: [],
+    });
+    post.mockResolvedValue([{ client_ref: 'r1', transaction: {}, paiements: [] }]);
+
+    render(
+      <BrowserRouter>
+        <FournisseurProfile />
+      </BrowserRouter>
+    );
+    await waitFor(() => expect(transactionFormProps.current?.onSubmit).toBeTypeOf('function'));
+
+    const transaction = {
+      date_transaction: '2026-11-20', date_echeance: null, id_client: null, id_fournisseur: 1,
+      id_produit: 4, id_batiment: null, quantite: 10, prix_unitaire: 12.5, est_actif: true,
+    };
+    await transactionFormProps.current.onSubmit({
+      batch: true,
+      transactions: [transaction],
+      lignesData: [{ ajouter_paiement: false, paiements: [] }],
+    });
+
+    expect(post).toHaveBeenCalledTimes(1);
+    const [url, body] = post.mock.calls[0];
+    expect(url).toBe('/transactions/batch-with-payments');
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].transaction).toEqual(transaction);
+    expect(body.items[0].paiements).toEqual([]);
   });
 });
 
