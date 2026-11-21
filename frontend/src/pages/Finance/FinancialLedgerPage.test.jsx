@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReceivablesPage } from './FinancialLedgerPage';
@@ -14,7 +14,11 @@ describe('FinancialLedgerPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    get.mockImplementation((path) => path === '/clients' ? Promise.resolve([{ id_client: 7, nom_client: 'Client Test' }]) : Promise.resolve(financialResponse));
+    get.mockImplementation((path) => {
+      if (path === '/clients') return Promise.resolve([{ id_client: 7, nom_client: 'Client Test' }]);
+      if (path === '/lettres-credit/disponibles') return Promise.resolve([]);
+      return Promise.resolve(financialResponse);
+    });
     post.mockResolvedValue({});
     vi.stubGlobal('confirm', vi.fn(() => true));
   });
@@ -23,9 +27,14 @@ describe('FinancialLedgerPage', () => {
     render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
     expect(await screen.findByRole('heading', { name: 'À encaisser' })).toBeVisible();
     fireEvent.click(await screen.findByRole('button', { name: /paiement/i }));
-    expect(await screen.findByRole('dialog')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: /marquer comme payé|enregistrer le paiement/i }));
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/paiements', expect.objectContaining({ id_transaction: 12, montant: 100, type_paiement: 'cash' })));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeVisible();
+    // Same form as the transaction page; the whole amount owed is prefilled in cash.
+    await within(dialog).findAllByText(/Montant restant|Reste/i);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/paiements/batch', {
+      paiements: [expect.objectContaining({ id_transaction: 12, montant: 100, type_paiement: 'cash' })],
+    }));
   });
 
   it('shows the empty state when no receivables match', async () => {
@@ -67,12 +76,14 @@ describe('FinancialLedgerPage', () => {
     });
   });
 
-  it('does not post when the user cancels the financial confirmation', async () => {
-    window.confirm.mockReturnValue(false);
+  it('offers only cash, cheque, transfer and letter of credit', async () => {
     render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: /paiement/i }));
-    fireEvent.click(screen.getByRole('button', { name: /marquer comme payé|enregistrer le paiement/i }));
-    await waitFor(() => expect(window.confirm).toHaveBeenCalled());
+    const dialog = await screen.findByRole('dialog');
+    const typeSelect = (await within(dialog).findAllByRole('combobox')).find((el) => /Espèces/.test(el.textContent));
+    fireEvent.mouseDown(typeSelect);
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent.trim());
+    expect(options).toEqual(['Espèces', 'Chèque', 'Virement', 'Lettre de crédit']);
     expect(post).not.toHaveBeenCalled();
   });
 });
