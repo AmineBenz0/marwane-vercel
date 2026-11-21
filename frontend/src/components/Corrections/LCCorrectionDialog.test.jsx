@@ -21,7 +21,7 @@ afterEach(cleanup);
 it('previews the linked deposit, freezes the opening version and confirms separately', async () => {
   const saved = vi.fn();
   const view = render(<LCCorrectionDialog lc={lc} onClose={vi.fn()} onSaved={saved} />);
-  const amount = await screen.findByRole('spinbutton', { name: 'Montant de la LC (MAD)' });
+  const amount = await screen.findByRole('textbox', { name: 'Montant de la LC (MAD)' });
   fireEvent.change(amount, { target: { value: '6.50' } });
   view.rerender(<LCCorrectionDialog lc={{ ...lc, version_utilisation: 9 }} onClose={vi.fn()} onSaved={saved} />);
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -63,7 +63,7 @@ it('labels surplus as credit instead of a negative amount due', async () => {
   post.mockResolvedValue({ before: lc, after: { ...lc, montant: '6.00' }, usage: 'payment',
     remaining_after: '-1.00', balance_side: 'client', money_effect: 'replaced', dependency_fingerprint: 'a'.repeat(64) });
   render(<LCCorrectionDialog lc={lc} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(await screen.findByRole('spinbutton', { name: 'Montant de la LC (MAD)' }), { target: { value: '6.00' } });
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Montant de la LC (MAD)' }), { target: { value: '6.00' } });
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect(await screen.findByText(/Crédit client après correction/)).toHaveTextContent('1 MAD');
   expect(screen.queryByText(/Reste à régler après/)).not.toBeInTheDocument();

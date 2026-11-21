@@ -6,6 +6,7 @@ import useCorrectionFlow from './useCorrectionFlow';
 import CorrectionReview from './CorrectionReview';
 import { changedValues, methods } from './correctionValues';
 import DialogTitleWithClose from '../DialogTitleWithClose';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 const initial = payment => ({ date_paiement: payment.date_paiement?.slice(0, 10) || '', montant: String(payment.montant),
   date_encaissement_effective: payment.date_encaissement_effective?.slice(0, 10) || '', statut_cheque: payment.statut_cheque || '',
@@ -41,6 +42,11 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
     let payload = {};
     if (financial) {
       if (!values.date_paiement || !Number.isFinite(Number(values.montant)) || Number(values.montant) <= 0) { setError('Indiquez une date et un montant positif.'); return; }
+      // An increase larger than the whole transaction is a typo (an extra zero), not a correction.
+      const increase = Number(values.montant) - Number(payment.montant);
+      if (Number(transaction?.montant_total) > 0 && increase > Number(transaction.montant_total) + 0.005) {
+        setError('Montant trop élevé : la hausse dépasse le montant de la transaction. Vérifiez le montant saisi.'); return;
+      }
       if (bank && !values.id_compte) { setError('Sélectionnez le compte bancaire utilisé.'); return; }
       payload = { ...payload, date_paiement: values.date_paiement, montant: values.montant, type_paiement: values.type_paiement,
         id_compte: bank ? Number(values.id_compte) : null };
@@ -69,7 +75,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
           {values.statut_cheque === 'encaisse' && <DateField required fullWidth label="Date d’encaissement effective" value={values.date_encaissement_effective} onChange={update('date_encaissement_effective')} disabled={flow.busy} />}
         </>}
         {payment.id_lc && <Button component="a" href={`/lettres-credit/${payment.id_lc}`}>Modifier la lettre de crédit liée</Button>}
-        <TextField label="Montant (MAD)" type="number" value={values.montant} onChange={update('montant')} disabled={!financial || flow.busy} inputProps={{ min: 0.01, step: '0.01' }} required />
+        <TextField label="Montant (MAD)" type="text" value={values.montant} onChange={update('montant')} disabled={!financial || flow.busy} inputProps={{ ...DECIMAL_INPUT_PROPS, min: 0.01, step: '0.01' }} required />
         <TextField select label="Mode de paiement" value={values.type_paiement} disabled={!financial || flow.busy} onChange={event => setValues(v => ({ ...v,
           type_paiement: event.target.value, ...(!supplier && event.target.value !== 'virement' ? { id_compte: '' } : {}),
           ...(supplier && !v.source_reglement && event.target.value === 'virement' && v.type_paiement !== 'virement' ? { source_reglement: 'caisse', id_compte: '' } : {}) }))}>

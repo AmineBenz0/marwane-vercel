@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import App from './App.jsx'
 import { recoverFailedChunk } from './utils/chunkRecovery'
+import { installDecimalInputNormalizer } from './utils/decimalInput'
 import theme from './theme'
 import './index.css'
 
@@ -13,6 +14,9 @@ import './index.css'
 window.addEventListener('vite:preloadError', (event) => {
   if (recoverFailedChunk(event.payload)) event.preventDefault();
 });
+
+// Typed commas in amount fields become dots (see utils/decimalInput.js).
+installDecimalInputNormalizer();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

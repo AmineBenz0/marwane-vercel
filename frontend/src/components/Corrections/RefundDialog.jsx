@@ -7,6 +7,7 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { getBusinessDateInput } from '../../utils/businessDate';
 import { announceCorrection } from './useCorrectionFlow';
 import DialogTitleWithClose from '../DialogTitleWithClose';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 export default function RefundDialog({ transaction, credit, onClose, onSaved }) {
   const [values, setValues] = useState(() => ({ montant: String(credit), date_paiement: getBusinessDateInput(), type_paiement: 'cash', id_compte: '' }));
@@ -32,6 +33,9 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
   const prepare = async event => {
     event.preventDefault();
     if (running.current || uncertain) return;
+    const amount = Number(values.montant);
+    if (!Number.isFinite(amount) || amount <= 0) { setError('Indiquez un montant supérieur à 0.'); return; }
+    if (amount > Number(credit) + 0.005) { setError(`Le remboursement ne peut pas dépasser le crédit disponible (${formatMontant(credit)}).`); return; }
     running.current = true; setBusy(true); setError(''); setStale(false);
     try {
       const next = { ...values, operation_id: crypto.randomUUID(), id_transaction: transaction.id_transaction,
@@ -74,8 +78,8 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
         <Alert severity="info">La vente ou l’achat et les paiements d’origine restent dans l’historique.</Alert>
       </> : <>
         <Typography>Crédit disponible : <strong>{formatMontant(credit)}</strong></Typography>
-        <TextField required label="Montant remboursé (MAD)" type="number" value={values.montant} onChange={update('montant')}
-          disabled={busy} inputProps={{ min: '0.01', max: credit, step: '0.01' }} />
+        <TextField required label="Montant remboursé (MAD)" type="text" value={values.montant} onChange={update('montant')}
+          disabled={busy} inputProps={{ ...DECIMAL_INPUT_PROPS, min: '0.01', max: credit, step: '0.01' }} />
         <DateField required label="Date du remboursement" value={values.date_paiement} onChange={update('date_paiement')} disabled={busy} fullWidth />
         <TextField select label="Mode du remboursement" value={values.type_paiement} onChange={update('type_paiement')} disabled={busy}>
           <MenuItem value="cash">Espèces</MenuItem><MenuItem value="virement">Virement bancaire</MenuItem>

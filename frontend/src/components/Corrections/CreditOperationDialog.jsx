@@ -7,6 +7,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import { get } from '../../services/api';
 import useCreditFlow from './useCreditFlow';
 import DialogTitleWithClose from '../DialogTitleWithClose';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 const titles = { advance: 'Enregistrer une avance', return_advance: 'Restituer une avance',
   cancel_allocation: 'Annuler l’affectation', cancel_advance: 'Annuler l’avance' };
@@ -18,6 +19,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
     date_effet: getBusinessDateInput(), type_paiement: 'cash', id_compte: '' }));
   const [accounts, setAccounts] = useState([]);
   const [loadError, setLoadError] = useState('');
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
   const [reload, setReload] = useState(0);
   const flow = useCreditFlow(onSaved);
@@ -33,6 +35,8 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
   const update = key => event => setValues(v => ({ ...v, [key]: event.target.value }));
   const submit = event => {
     event.preventDefault();
+    if (!cancel && !(Number(values.montant) > 0)) { setFormError('Indiquez un montant supérieur à 0.'); return; }
+    setFormError('');
     let payload = { action, reason: titles[action] };
     if (!cancel) payload = { ...payload, montant: values.montant, date_effet: values.date_effet };
     if (money) payload = { ...payload, type_paiement: values.type_paiement, id_compte: values.type_paiement === 'virement' ? Number(values.id_compte) : null };
@@ -45,7 +49,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
     onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', onSubmit: submit }}>
     <DialogTitleWithClose id="credit-dialog-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{titles[action]}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
-      {(flow.error || loadError) && <Alert severity="error" action={loadError ? <Button onClick={() => setReload(v => v + 1)}>Réessayer</Button> : undefined}>{flow.error || loadError}</Alert>}
+      {(formError || flow.error || loadError) && <Alert severity="error" action={loadError ? <Button onClick={() => setReload(v => v + 1)}>Réessayer</Button> : undefined}>{formError || flow.error || loadError}</Alert>}
       {flow.review ? <>
         <Typography>Montant : <strong>{formatMontant(flow.review.montant)}</strong></Typography>
         {!cancel && <Typography>Date : {formatShortDate(values.date_effet)}</Typography>}
@@ -56,7 +60,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
             : `${flow.review.direction === 'ENTREE' ? 'Argent reçu' : 'Argent versé'} · ${values.type_paiement === 'cash' ? 'Espèces' : `Compte : ${accounts.find(a => a.id_compte === Number(values.id_compte))?.nom_banque || 'Compte bancaire'}`}`}</Alert>}
       </> : <>
         {!cancel && <>
-          <TextField required label="Montant (MAD)" type="number" value={values.montant} onChange={update('montant')} disabled={flow.busy} inputProps={{ min: '0.01', step: '0.01' }} />
+          <TextField required label="Montant (MAD)" type="text" value={values.montant} onChange={update('montant')} disabled={flow.busy} inputProps={{ ...DECIMAL_INPUT_PROPS, min: '0.01', step: '0.01' }} />
           <DateField required label="Date de l’opération" value={values.date_effet} onChange={update('date_effet')} disabled={flow.busy} fullWidth />
         </>}
         {money && <>

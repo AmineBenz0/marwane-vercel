@@ -17,6 +17,9 @@ import {
   Collapse,
   Grid,
   Alert,
+  Checkbox,
+  FormControlLabel,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,6 +31,10 @@ import { formatMontant } from '../../utils/formatNumber';
 import { format } from 'date-fns';
 import PropTypes from 'prop-types';
 import { get } from '../../services/api';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
+
+// Exact amounts: a compact "100 M MAD" would hide the figure being confirmed.
+const money = (value) => formatMontant(value, { useCompactNotation: false, minimumFractionDigits: 2 });
 
 const TYPES_PAIEMENT = [
   { value: 'cash', label: 'Espèces' },
@@ -41,6 +48,8 @@ const TYPES_PAIEMENT = [
  */
 function MultiPaiementForm({ transaction, fields, append, remove, register, errors, watch, setValue, availableLcs, loadingLcs, supplierSource = null }) {
   const watchedFields = watch('paiements');
+  // Phones get one stacked card per payment instead of a five-column table.
+  const isPhone = useMediaQuery('(max-width: 599.95px)');
   const detailsId = useId();
   const [expandedRows, setExpandedRows] = useState({});
   const [accounts, setAccounts] = useState([]);
@@ -103,6 +112,27 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
     || (payment?.type_paiement === 'lc' && !payment?.id_lc)
     || (supplierSource === 'banque' && !payment?.id_compte));
   const nothingLeft = difference <= 0.005;
+  // An overpayment needs an explicit tick; one larger than the whole transaction is a typo
+  // (an extra zero), and an advance belongs in « Avances et crédits ».
+  const overpaidBy = Math.max(0, -difference);
+  const overpayLimit = Math.max(Number(transaction?.montant_total) || 0, montantRestant);
+  const overpayBlocked = overpaid && overpaidBy > overpayLimit + 0.005;
+  const creditText = transaction?.id_fournisseur && !transaction?.id_client
+    ? `vous aurez un crédit de ${money(overpaidBy)} chez le fournisseur`
+    : `le client aura un crédit de ${money(overpaidBy)}`;
+  const overpayRegistration = register('confirmer_trop_paye', {
+    validate: (checked) => {
+      if (!overpaid) return true;
+      if (overpayBlocked) return 'Montant trop élevé : vérifiez le montant saisi.';
+      return checked === true || 'Cochez la case pour confirmer ce trop-payé.';
+    },
+  });
+  const overpayError = errors?.confirmer_trop_paye?.message;
+  // A confirmation is for one amount: changing the amounts asks again.
+  const overpaidCents = Math.round(overpaidBy * 100);
+  useEffect(() => {
+    setValue('confirmer_trop_paye', false);
+  }, [overpaidCents, setValue]);
   const addBlockedReason = unfilled ? 'Complétez d’abord le paiement en cours.'
     : nothingLeft ? 'Le montant dû est déjà couvert.' : '';
 
@@ -147,28 +177,64 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
         <Grid container spacing={2}>
           <Grid item xs={12} sm={4}>
             <Typography variant="caption" color="text.secondary">Montant dû</Typography>
-            <Typography variant="h6">{formatMontant(montantRestant)}</Typography>
+            <Typography variant="h6">{money(montantRestant)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
             <Typography variant="caption" color="text.secondary">Ce paiement</Typography>
-            <Typography variant="h6" color="primary">{formatMontant(totalSaisi)}</Typography>
+            <Typography variant="h6" color="primary">{money(totalSaisi)}</Typography>
           </Grid>
           <Grid item xs={12} sm={4}>
             {/* Never show a negative "reste": an overpayment is named as such. */}
             <Typography variant="caption" color="text.secondary">{overpaid ? 'Trop payé' : 'Reste après ce paiement'}</Typography>
             <Typography variant="h6" color={overpaid ? 'warning.dark' : settled ? 'success.main' : 'text.primary'}>
-              {formatMontant(Math.abs(difference))}
+              {money(Math.abs(difference))}
             </Typography>
           </Grid>
         </Grid>
-        {overpaid && (
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            Ce paiement dépasse le montant dû de {formatMontant(-difference)}. Vérifiez les montants avant d’enregistrer.
+        {overpaid && overpayBlocked && (
+          <Typography variant="body2" color="error.main" fontWeight={600} sx={{ mt: 1 }} role="alert">
+            Ce paiement dépasse le montant dû de {money(overpaidBy)}, plus que le montant de la transaction.
+            Vérifiez le montant (un zéro en trop ?). Pour une avance, utilisez « Avances et crédits ».
           </Typography>
+        )}
+        {overpaid && !overpayBlocked && (
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="body2">Ce paiement dépasse le montant dû de {money(overpaidBy)}.</Typography>
+            <FormControlLabel
+              sx={{ mt: 0.5, alignItems: 'flex-start', '& .MuiCheckbox-root': { pt: 0.25 } }}
+              control={<Checkbox size="small" {...overpayRegistration} checked={Boolean(watch('confirmer_trop_paye'))}
+                onChange={(event) => setValue('confirmer_trop_paye', event.target.checked, { shouldValidate: true })} />}
+              label={`Je confirme ce trop-payé : ${creditText}.`}
+            />
+            {overpayError && <Typography variant="caption" color="error.main" display="block" role="alert">{overpayError}</Typography>}
+          </Box>
         )}
       </Alert>
 
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer component={Paper} variant="outlined" sx={{
+        '@media (max-width: 599.95px)': {
+          '& thead': { display: 'none' },
+          '& table, & tbody': { display: 'block' },
+          '& tr.payment-row': {
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
+            gridTemplateAreas: '"amount remove" "date date" "mode mode" "more more"',
+            gap: 1.5,
+            p: 1.5,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+          },
+          '& tr.payment-row:first-of-type': { borderTop: 0 },
+          '& tr.payment-row > td': { display: 'block', p: 0, border: 0, minWidth: 0 },
+          '& tr.payment-row > td:nth-of-type(1)': { gridArea: 'more' },
+          '& tr.payment-row > td:nth-of-type(2)': { gridArea: 'date' },
+          '& tr.payment-row > td:nth-of-type(3)': { gridArea: 'mode' },
+          '& tr.payment-row > td:nth-of-type(4)': { gridArea: 'amount' },
+          '& tr.payment-row > td:nth-of-type(5)': { gridArea: 'remove', alignSelf: 'center' },
+          '& tr.payment-details, & tr.payment-details > td': { display: 'block' },
+          '& tr.payment-details > td': { px: 1.5 },
+        },
+      }}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: 'grey.50' }}>
@@ -191,8 +257,20 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
               });
               return (
                 <React.Fragment key={item.id}>
-                  <TableRow sx={{ '& > *': { borderBottom: 'unset !important' } }}>
+                  <TableRow className="payment-row" sx={{ '& > *': { borderBottom: 'unset !important' } }}>
                     <TableCell>
+                      {isPhone ? (
+                        <Button
+                          size="small"
+                          onClick={() => toggleExpand(index)}
+                          aria-expanded={Boolean(expandedRows[index])}
+                          aria-controls={`${detailsId}-${item.id}`}
+                          startIcon={expandedRows[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                          sx={{ textTransform: 'none', px: 0.5 }}
+                        >
+                          {expandedRows[index] ? 'Masquer les détails' : 'Détails (chèque, virement, notes)'}
+                        </Button>
+                      ) : (
                         <IconButton
                           size="small"
                           onClick={() => toggleExpand(index)}
@@ -202,6 +280,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         >
                         {expandedRows[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
+                      )}
                     </TableCell>
                     <TableCell>
                       <DateField
@@ -210,6 +289,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                           validate: (value) => !transaction?.date_transaction || value >= transaction.date_transaction || 'La date du paiement ne peut pas être antérieure à la transaction',
                         })}
 
+                        label={isPhone ? 'Date du paiement' : undefined}
                         size="small"
                         fullWidth
                         InputLabelProps={{ shrink: true }}
@@ -228,6 +308,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                         }}
                         value={type || 'cash'}
                         select
+                        label={isPhone ? 'Mode de paiement' : undefined}
                         size="small"
                         fullWidth
                         error={!!errors?.paiements?.[index]?.type_paiement}
@@ -266,19 +347,20 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                       <TextField
                         {...lcRegistration}
                         select
+                        label={isPhone ? 'Lettre de crédit' : undefined}
                         value={watch(`paiements.${index}.id_lc`) || ''}
                         onChange={(event) => handleLcChange(index, event.target.value)}
                         size="small"
                         fullWidth
                         SelectProps={{ displayEmpty: true, inputProps: { 'aria-label': `Lettre de crédit du paiement ${index + 1}` }, renderValue: value => {
                           const selected = availableLcs.find(lc => Number(lc.id_lc) === Number(value));
-                          return selected ? `${selected.numero_reference} (${formatMontant(selected.montant)})` : 'Sélectionnez une LC';
+                          return selected ? `${selected.numero_reference} (${money(selected.montant)})` : 'Sélectionnez une LC';
                         } }}
                         disabled={loadingLcs}
                         error={!!errors?.paiements?.[index]?.id_lc}
                         helperText={errors?.paiements?.[index]?.id_lc?.message || ''}
                       >
-                        {availableLcs.map(lc => <MenuItem key={lc.id_lc} value={lc.id_lc}>{lc.numero_reference} ({formatMontant(lc.montant)})</MenuItem>)}
+                        {availableLcs.map(lc => <MenuItem key={lc.id_lc} value={lc.id_lc}>{lc.numero_reference} ({money(lc.montant)})</MenuItem>)}
                       </TextField>
                       </> : <TextField
                         {...register(`paiements.${index}.montant`, {
@@ -286,10 +368,11 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                           required: 'Le montant est requis',
                           validate: (value) => Number.isFinite(value) && value > 0 || 'Le montant doit être supérieur à 0',
                         })}
-                        type="number"
+                        type="text"
+                        label={isPhone ? 'Montant (MAD)' : undefined}
                         size="small"
                         fullWidth
-                        inputProps={{ step: '0.01', min: '0.01', 'aria-label': `Montant du paiement ${index + 1}` }}
+                        inputProps={{ ...DECIMAL_INPUT_PROPS, step: '0.01', min: '0.01', 'aria-label': `Montant du paiement ${index + 1}` }}
                         error={!!errors?.paiements?.[index]?.montant}
                         helperText={errors?.paiements?.[index]?.montant?.message}
                       />}
@@ -308,7 +391,7 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
                   </TableRow>
                   
                   {/* Ligne de détails expansible */}
-                  <TableRow>
+                  <TableRow className="payment-details">
                     <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
                       <Collapse in={expandedRows[index]} timeout="auto" unmountOnExit>
                         <Box id={`${detailsId}-${item.id}`} role="region" aria-label={`Détails du paiement ${index + 1}`} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1.5, mb: 1.5 }}>
