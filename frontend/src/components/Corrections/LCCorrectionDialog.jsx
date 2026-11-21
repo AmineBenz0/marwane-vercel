@@ -18,6 +18,7 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const [suppliers, setSuppliers] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [amountError, setAmountError] = useState(false);
+  const [formMessage, setFormMessage] = useState('');
   const [reload, setReload] = useState(0);
   const [values, setValues] = useState({ montant: String(lc.montant), date_emission: lc.date_emission,
     numero_reference: lc.numero_reference || '', banque_emettrice: lc.banque_emettrice || '',
@@ -40,8 +41,16 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const submit = event => {
     event.preventDefault();
     const changes = {};
-    if (!cancelUsage && !(Number(values.montant) > 0)) { setAmountError(true); return; }
-    setAmountError(false);
+    if (!cancelUsage) {
+      const missing = !(Number(values.montant) > 0) ? 'Indiquez un montant supérieur à 0.'
+        : !String(values.numero_reference || '').trim() ? 'Indiquez le numéro de la LC.'
+        : !values.date_emission || !values.date_disponibilite ? 'Indiquez les dates d’émission et de disponibilité.'
+        : context?.date_effet && !values.date_effet ? 'Indiquez la date de l’utilisation.'
+        : context?.usage === 'deposit' && !values.id_compte ? 'Choisissez le compte du versement.' : '';
+      setAmountError(!(Number(values.montant) > 0));
+      setFormMessage(missing);
+      if (missing) return;
+    }
     if (!cancelUsage) {
       for (const field of [...Object.keys(metadataLabels), 'montant', 'date_emission', 'date_disponibilite']) {
         const value = field === 'banque_emettrice' ? values[field] || null : values[field];
@@ -61,10 +70,10 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const preview = flow.review;
   const accountLabel = id => accounts.find(a => a.id_compte === id)?.nom_banque || `Compte n° ${id}`;
   return <Dialog open maxWidth="sm" fullWidth aria-labelledby="lc-correction-title"
-    onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', onSubmit: submit }}>
+    onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', noValidate: true, onSubmit: submit }}>
     <DialogTitleWithClose id="lc-correction-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{cancelUsage ? 'Annuler l’utilisation de la LC' : 'Modifier la lettre de crédit'}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
-      {(loadError || flow.error) && <Alert severity="error">{loadError || flow.error}</Alert>}
+      {(formMessage || loadError || flow.error) && <Alert severity="error">{formMessage || loadError || flow.error}</Alert>}
       {loadError && <Button onClick={() => setReload(v => v + 1)}>Réessayer le chargement</Button>}
       {!context && !loadError && <CircularProgress aria-label="Chargement des opérations liées" />}
       {preview ? <>

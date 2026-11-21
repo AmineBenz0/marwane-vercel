@@ -91,7 +91,7 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
     && (row.usage ? row.usage === (transaction.id_client ? 'vendu' : 'achete') : row[transaction.id_client ? 'pour_clients' : 'pour_fournisseurs'])
     && Boolean(eggCategory(row.nom_produit)) === Boolean(eggCategory(oldProduct?.nom_produit)));
   return <Dialog open={open} onClose={() => !flow.busy && !flow.uncertain && onClose()} fullWidth maxWidth="sm"
-    PaperProps={{ component: 'form', onSubmit: submit }} aria-labelledby="transaction-edit-title">
+    PaperProps={{ component: 'form', noValidate: true, onSubmit: submit }} aria-labelledby="transaction-edit-title">
     <DialogTitleWithClose id="transaction-edit-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{transaction.id_client ? 'Modifier la vente' : 'Modifier l’achat'} n° {transaction.id_transaction}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} /> : <>

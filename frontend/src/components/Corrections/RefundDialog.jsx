@@ -35,13 +35,15 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
     if (running.current || uncertain) return;
     const amount = Number(values.montant);
     if (!Number.isFinite(amount) || amount <= 0) { setError('Indiquez un montant supérieur à 0.'); return; }
+    if (!values.date_paiement) { setError('Indiquez la date du remboursement.'); return; }
+    if (values.type_paiement === 'virement' && !values.id_compte) { setError('Choisissez le compte bancaire.'); return; }
     if (amount > Number(credit) + 0.005) { setError(`Le remboursement ne peut pas dépasser le crédit disponible (${formatMontant(credit)}).`); return; }
     running.current = true; setBusy(true); setError(''); setStale(false);
     try {
       const next = { ...values, operation_id: crypto.randomUUID(), id_transaction: transaction.id_transaction,
         reason: 'Remboursement enregistré',
         id_compte: values.type_paiement === 'virement' ? Number(values.id_compte) : null };
-      const preview = await post('/remboursements/preview', next);
+      const preview = await post('/remboursements/preview', next, { silent: true });
       command.current = { ...next, dependency_fingerprint: preview.dependency_fingerprint };
       setReview(preview);
     } catch (err) { setError(err.message || 'Le remboursement ne peut pas être vérifié.'); }
@@ -51,7 +53,7 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
     if (running.current || !command.current || stale) return;
     running.current = true; setBusy(true); setError('');
     let result;
-    try { result = await post('/remboursements/apply', command.current); }
+    try { result = await post('/remboursements/apply', command.current, { silent: true }); }
     catch (err) {
       const ambiguous = !err.status || err.status >= 500;
       setUncertain(ambiguous); setStale(err.status === 409);
@@ -65,7 +67,7 @@ export default function RefundDialog({ transaction, credit, onClose, onSaved }) 
   };
   const back = () => { command.current = null; setReview(null); setError(''); setStale(false); };
   return <Dialog open onClose={() => !busy && !uncertain && onClose()} maxWidth="sm" fullWidth aria-labelledby="refund-title"
-    PaperProps={{ component: 'form', onSubmit: prepare }}>
+    PaperProps={{ component: 'form', noValidate: true, onSubmit: prepare }}>
     <DialogTitleWithClose id="refund-title" onClose={onClose} disabled={busy || uncertain}>{customer ? 'Enregistrer un remboursement au client' : 'Enregistrer un remboursement du fournisseur'}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {error && <Alert severity="error">{error}</Alert>}

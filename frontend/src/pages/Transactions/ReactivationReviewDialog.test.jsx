@@ -41,7 +41,7 @@ it('requires explicit stock confirmation and preserves cancelled payments', asyn
     dependency_fingerprint: review.dependency_fingerprint,
     restore_stock: true,
     restore_cancelled_payments: false,
-  });
+  }, { silent: true });
 });
 
 it('requires a new review and confirmation after stock changes', async () => {

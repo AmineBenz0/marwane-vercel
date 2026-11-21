@@ -34,7 +34,21 @@ describe('FinancialLedgerPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/paiements/batch', {
       paiements: [expect.objectContaining({ id_transaction: 12, montant: 100, type_paiement: 'cash' })],
-    }));
+    }, { silent: true }));
+  });
+
+  it('asks before closing a payment that has been typed in', async () => {
+    render(<MemoryRouter><ReceivablesPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: /paiement/i }));
+    const dialog = await screen.findByRole('dialog');
+    const amount = await within(dialog).findByRole('textbox', { name: 'Montant du paiement 1' });
+    fireEvent.input(amount, { target: { value: '40' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
+    expect(await screen.findByRole('dialog', { name: 'Abandonner ce paiement ?' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer la saisie' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Abandonner ce paiement ?' })).not.toBeInTheDocument());
+    expect(screen.getByRole('textbox', { name: 'Montant du paiement 1' })).toHaveValue('40');
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('shows the empty state when no receivables match', async () => {
