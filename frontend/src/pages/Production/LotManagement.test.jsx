@@ -52,10 +52,10 @@ describe('Independent lot management', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir le lot Lot A' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Modifier le lot' }));
     expect(screen.getByRole('combobox', { name: 'Bâtiment' })).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif de départ' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Effectif de départ' }), {
       target: { value: '90' },
     });
-    fireEvent.change(screen.getByRole('spinbutton', { name: "Âge à l'arrivée (semaines)" }), {
+    fireEvent.change(screen.getByRole('textbox', { name: "Âge à l'arrivée (semaines)" }), {
       target: { value: '20' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -63,7 +63,7 @@ describe('Independent lot management', () => {
       age_depart_semaines: 20,
       effectif_initial: 90,
       repartitions: [{ id_batiment: 1, effectif_initial: 90 }],
-    })));
+    }), { silent: true }));
   });
 
   it('opens the lot overview with stable tabs and lifecycle controls', async () => {
@@ -83,7 +83,7 @@ describe('Independent lot management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rattacher' }));
     await waitFor(() => expect(cycleProductionService.assignHistory).toHaveBeenCalledWith(1, expect.objectContaining({
       date_debut: '2026-10-01',
-    })));
+    }), { silent: true }));
   });
 });
 

@@ -15,6 +15,8 @@ import {
   Divider,
   useMediaQuery,
   useTheme,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { productionService, cycleProductionService } from '../../services/productionService';
@@ -23,14 +25,21 @@ import compteBancaireService from '../../services/compteBancaireService';
 import VaccineExpenseFields from './VaccineExpenseFields';
 import { carriedFeedFormula } from '../../utils/feedFormula';
 import { isClosingDayToday, localToday } from './useProductionView';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
+import DiscardChangesDialog from '../../components/DiscardChangesDialog';
 
 const EGG_TYPES = [
-  { value: 'normal', label: 'Oeufs normaux' },
+  { value: 'normal', label: 'Œufs normaux' },
   { value: 'double_jaune', label: 'Double jaune' },
-  { value: 'blanc', label: 'Oeufs blancs' },
-  { value: 'casse', label: 'Oeufs casses' },
-  { value: 'perdu', label: 'Oeuf perdu' },
+  { value: 'blanc', label: 'Œufs blancs' },
+  { value: 'casse', label: 'Œufs cassés' },
+  { value: 'perdu', label: 'Œufs perdus' },
 ];
+
+// Daily sanity limits per hen present.
+const EGGS_BLOCK_PER_HEN = 2;
+const FEED_CONFIRM_KG_PER_HEN = 0.2;
+const FEED_BLOCK_KG_PER_HEN = 0.5;
 
 const quantityError = (value) => {
   if (value === '' || value === undefined) return '';
@@ -72,7 +81,7 @@ function ProductionForm({
   const [comptes, setComptes] = useState([]);
   const [vaccinesLoading, setVaccinesLoading] = useState(false);
   const [vaccinesError, setVaccinesError] = useState('');
-  const { control, register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting } } = useForm({
+  const { control, register, handleSubmit, watch, setValue, reset, setError, formState: { errors, isSubmitting, isDirty } } = useForm({
     defaultValues: {
       date_production: initialData?.date_production?.slice(0, 10) || preselectedDate,
       id_batiment: initialData?.id_batiment || preselectedBatimentId || '',
@@ -86,6 +95,7 @@ function ProductionForm({
   });
 
   const quantities = watch('quantites') || {};
+  const savedMortality = useRef(0);
   const watchedBatiment = watch('id_batiment');
   const trayWeight = watch('poids_plateau');
   const watchedMortality = watch('mortalite');
@@ -107,9 +117,23 @@ function ProductionForm({
   const missingCycle = !initialData && !!currentContext && !contextError && !cycleContext?.cycle;
   const closedToday = !initialData && isClosingDayToday(cycleContext?.cycle, watchedDate);
   const entryBlocked = loadingDaily || !!loadError || closedToday || (!initialData && !cycleContext?.cycle);
+  // Hens present that day: the lot's live count, plus the deaths already saved for the day being edited.
+  // Hens alive at the start of the day; 0 means unknown, which turns the limits off.
+  const currentHens = Number(cycleContext?.cycle?.effectif_actuel || 0);
+  const hensPresent = currentHens > 0 ? currentHens + Number(savedMortality.current || 0) : 0;
   const totalEggs = EGG_TYPES.reduce(
     (sum, type) => sum + (['casse', 'perdu'].includes(type.value) ? 0 : previewCount(quantities[type.value])), 0,
   );
+  const layedEggs = EGG_TYPES.reduce((sum, type) => sum + previewCount(quantities[type.value]), 0);
+  // A hen lays at most one egg a day. Above that the figure needs a confirmation, and above
+  // twice that (or with absurd feed) it is a typo such as an extra zero, so it is refused.
+  const eggsTooMany = hensPresent > 0 && layedEggs > hensPresent * EGGS_BLOCK_PER_HEN;
+  const unusualFigures = hensPresent > 0 ? [
+    layedEggs > hensPresent && !eggsTooMany
+      && `${layedEggs.toLocaleString('fr-FR')} œufs pour ${hensPresent.toLocaleString('fr-FR')} poules (plus d’un œuf par poule)`,
+    Number(watchedFeed) > hensPresent * FEED_CONFIRM_KG_PER_HEN && Number(watchedFeed) <= hensPresent * FEED_BLOCK_KG_PER_HEN
+      && `${Number(watchedFeed).toLocaleString('fr-FR')} kg d’aliment (plus de ${FEED_CONFIRM_KG_PER_HEN * 1000} g par poule)`,
+  ].filter(Boolean) : [];
   const cartonPreview = EGG_TYPES.reduce((sum, type) => {
     const count = previewCount(quantities[type.value]);
     if (count <= 0 || ['casse', 'perdu'].includes(type.value)) return sum;
@@ -148,7 +172,7 @@ function ProductionForm({
         id_batiment: initialData.id_batiment,
         quantites: counts,
         poids_plateau: weightCount ? Number(((Number(avgWeight.toFixed(2)) + 2) * 30).toFixed(2)) : '',
-        mortalite: rows.reduce((sum, row) => sum + Number(row.mortalite || 0), 0),
+        mortalite: (savedMortality.current = rows.reduce((sum, row) => sum + Number(row.mortalite || 0), 0)),
         consommation_aliment_kg: Number(rows.reduce((sum, row) => sum + Number(row.consommation_aliment_kg || 0), 0).toFixed(2)),
         formule: rows.find((row) => row.formule)?.formule || '',
         depenses_vaccins: (daily.depenses_vaccins || []).map((line) => ({
@@ -230,8 +254,34 @@ function ProductionForm({
     return match || null;
   })();
 
+  // Échap, × and « Annuler » ask before throwing away typed figures; outside clicks are ignored then.
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const requestClose = (_event, reason) => {
+    if (isSubmitting) return;
+    if (!isDirty) { onClose(); return; }
+    if (reason === 'backdropClick') return;
+    setDiscardOpen(true);
+  };
+  // A confirmation is for the figures shown: changing them asks again.
+  const unusualKey = unusualFigures.join('|');
+  useEffect(() => { setValue('confirmer_chiffres', false); }, [unusualKey, setValue]);
+  // A new error is shown at the top: bring it into view.
+  const contentRef = useRef(null);
+  const rootError = errors.root?.message;
+  useEffect(() => {
+    if (rootError && contentRef.current) contentRef.current.scrollTo?.({ top: 0, behavior: 'smooth' });
+  }, [rootError]);
+
   const onSubmit = async (data) => {
     if (entryBlocked) return;
+    if (eggsTooMany) {
+      setError('root', { message: `${layedEggs.toLocaleString('fr-FR')} œufs pour ${hensPresent.toLocaleString('fr-FR')} poules : c’est plus de deux œufs par poule. Vérifiez les nombres (un zéro en trop ?).` });
+      return;
+    }
+    if (unusualFigures.length && !data.confirmer_chiffres) {
+      setError('confirmer_chiffres', { message: 'Cochez la case pour confirmer ces chiffres inhabituels.' });
+      return;
+    }
     const counts = Object.fromEntries(Object.entries(data.quantites).map(
       ([type, count]) => [type, Number(count || 0)],
     ));
@@ -259,25 +309,26 @@ function ProductionForm({
       };
       let result;
       if (initialData) {
-        result = await productionService.updateDailyProduction(payload);
+        result = await productionService.updateDailyProduction(payload, { silent: true });
         notification.success('Saisie quotidienne mise à jour');
       } else {
-        result = await productionService.createDailyProduction(payload);
+        result = await productionService.createDailyProduction(payload, { silent: true });
         notification.success('Production quotidienne enregistrée');
       }
       onSuccess({ ...result, id_batiment: payload.id_batiment });
     } catch (err) {
-      const detail = err.data?.detail || err.response?.data?.detail;
-      const message = typeof detail === 'string' ? detail : (err.message || 'Une erreur est survenue');
+      // One message, inside the form; a server failure keeps the plain-language text from the API layer.
+      const detail = err.status >= 500 ? null : (err.data?.detail || err.response?.data?.detail);
+      const message = typeof detail === 'string' ? detail : (err.message || 'La saisie n’a pas pu être enregistrée.');
       setError('root', { message });
-      notification.error(message);
     }
   };
 
   return (
+    <>
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={requestClose}
       maxWidth="lg"
       fullWidth
       fullScreen={isMobile}
@@ -298,6 +349,7 @@ function ProductionForm({
           {title || (initialData ? 'Modifier la saisie' : 'Saisir la production du jour')}
         </DialogTitle>
         <DialogContent
+          ref={contentRef}
           sx={{
             py: 2,
             '&&.MuiDialogContent-root': { pt: 2 },
@@ -433,11 +485,11 @@ function ProductionForm({
                       validate: (value) => quantityError(value) || true,
                     })}
                     label={type.label}
-                    type="number"
+                    type="text"
                     // react-hook-form reset() can fill an already mounted field.
                     // Shrink its label so it never overlays the numeric value.
                     InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: 0, step: 1 }}
+                    inputProps={DECIMAL_INPUT_PROPS}
                     fullWidth
                     disabled={entryBlocked}
                     error={!!quantityError(quantities[type.value])}
@@ -458,9 +510,9 @@ function ProductionForm({
                       },
                     })}
                     label="Poids du plateau (g)"
-                    type="number"
+                    type="text"
                     InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: 60.01, step: '0.01' }}
+                    inputProps={DECIMAL_INPUT_PROPS}
                     value={trayWeight ?? ''}
                     fullWidth
                     disabled={entryBlocked}
@@ -520,23 +572,18 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('mortalite', {
-                  min: { value: 0, message: 'Doit etre positif' },
+                  validate: (value) => {
+                    if (value === '' || value == null) return true;
+                    const count = Number(value);
+                    if (!Number.isInteger(count) || count < 0) return 'Indiquez un nombre entier positif ou nul';
+                    if (hensPresent > 0 && count > hensPresent) return `Plus que les ${hensPresent.toLocaleString('fr-FR')} sujets présents.`;
+                    return true;
+                  },
                 })}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (value === '') {
-                    setValue('mortalite', '');
-                    return;
-                  }
-                  const parsedValue = Number(value);
-                  setValue('mortalite', Number.isFinite(parsedValue) ? Math.max(0, Math.trunc(parsedValue)) : 0, {
-                    shouldValidate: true,
-                  });
-                }}
                 label="Mortalité"
-                type="number"
+                type="text"
                 InputLabelProps={{ shrink: true }}
-                inputProps={{ min: 0, step: 1 }}
+                inputProps={DECIMAL_INPUT_PROPS}
                 fullWidth
                 disabled={entryBlocked}
                 error={!!errors.mortalite}
@@ -546,12 +593,20 @@ function ProductionForm({
             <Grid item xs={12} sm={6}>
               <TextField
                 {...register('consommation_aliment_kg', {
-                  min: { value: 0, message: 'Doit etre positif' },
+                  validate: (value) => {
+                    if (value === '' || value == null) return true;
+                    const kg = Number(value);
+                    if (!Number.isFinite(kg) || kg < 0) return 'Indiquez un poids positif, par exemple 125,5.';
+                    if (hensPresent > 0 && kg > hensPresent * FEED_BLOCK_KG_PER_HEN) {
+                      return `Plus de ${FEED_BLOCK_KG_PER_HEN * 1000} g par poule : vérifiez la quantité (un zéro en trop ?).`;
+                    }
+                    return true;
+                  },
                 })}
                 label="Aliment consommé (kg)"
-                type="number"
+                type="text"
                 InputLabelProps={{ shrink: true }}
-                inputProps={{ step: '0.01' }}
+                inputProps={DECIMAL_INPUT_PROPS}
                 fullWidth
                 disabled={entryBlocked}
                 error={!!errors.consommation_aliment_kg}
@@ -596,7 +651,7 @@ function ProductionForm({
           <Grid item xs={12} md={4}>
             <Box
               component="aside"
-              aria-label="Recapitulatif de la journee"
+              aria-label="Récapitulatif de la journée"
               sx={{
                 p: 2.5,
                 borderRadius: 3,
@@ -608,25 +663,25 @@ function ProductionForm({
               }}
             >
               <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 2 }}>
-                Recapitulatif de la journee
+                Récapitulatif de la journée
               </Typography>
               <Box sx={{ display: 'grid', gap: 1.5 }}>
                 {[
-                  ['Oeufs collectes', `${totalEggs.toLocaleString('fr-FR')} oeufs`],
-                  ['Casses et perdus', `${lostEggs.toLocaleString('fr-FR')} oeufs`],
+                  ['Œufs collectés', `${totalEggs.toLocaleString('fr-FR')} œufs`],
+                  ['Cassés et perdus', `${lostEggs.toLocaleString('fr-FR')} œufs`],
                   ['Poids moyen', averageEggWeight === null
                     ? '-'
                     : `${averageEggWeight.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} g`],
                   ['Calibre', deducedCalibre?.label || '-'],
-                  ['Cartons calcules', `${cartonPreview}`],
-                  ['Mortalite', watchedMortality !== '' && watchedMortality != null
+                  ['Cartons calculés', `${cartonPreview}`],
+                  ['Mortalité', watchedMortality !== '' && watchedMortality != null
                     ? `${Number(watchedMortality).toLocaleString('fr-FR')} sujets`
                     : '-'],
-                  ['Aliment consomme', watchedFeed !== '' && watchedFeed != null
+                  ['Aliment consommé', watchedFeed !== '' && watchedFeed != null
                     ? `${Number(watchedFeed).toLocaleString('fr-FR')} kg`
                     : '-'],
-                  ['Formule', formules.find((item) => item.value === watchedFormula)?.label || 'Non precisee'],
-                  ['Depenses vaccins', `${vaccineTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`],
+                  ['Formule', formules.find((item) => item.value === watchedFormula)?.label || 'Non précisée'],
+                  ['Dépenses vaccins', `${vaccineTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MAD`],
                 ].map(([label, value], index, items) => (
                   <Box
                     key={label}
@@ -649,19 +704,45 @@ function ProductionForm({
           </Grid>
           </Grid>
         </DialogContent>
+        {(unusualFigures.length > 0 || eggsTooMany) && (
+          <Box sx={{ px: 3, pt: 1.5, flexShrink: 0, bgcolor: 'background.paper' }}>
+            {eggsTooMany ? (
+              <Alert severity="error" role="alert">
+                {layedEggs.toLocaleString('fr-FR')} œufs pour {hensPresent.toLocaleString('fr-FR')} poules : c’est plus de deux œufs par poule. Vérifiez les nombres (un zéro en trop ?).
+              </Alert>
+            ) : (
+              <Alert severity="warning" sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+                <Typography variant="body2" fontWeight={700}>Chiffres inhabituels : {unusualFigures.join(' · ')}.</Typography>
+                <FormControlLabel
+                  control={<Checkbox size="small" {...register('confirmer_chiffres')} checked={Boolean(watch('confirmer_chiffres'))}
+                    onChange={(event) => setValue('confirmer_chiffres', event.target.checked, { shouldValidate: true })} />}
+                  label="Je confirme ces chiffres."
+                />
+                {errors.confirmer_chiffres && <Typography variant="caption" color="error.main" display="block" role="alert">{errors.confirmer_chiffres.message}</Typography>}
+              </Alert>
+            )}
+          </Box>
+        )}
         <DialogActions sx={{ px: 3, pb: 2, flexShrink: 0, bgcolor: 'background.paper' }}>
-          <Button onClick={onClose} color="inherit">Annuler</Button>
+          <Button onClick={requestClose} color="inherit" disabled={isSubmitting}>Annuler</Button>
           <Button
             type="submit"
             variant="contained"
             disabled={isSubmitting || entryBlocked}
             sx={{ px: 4, borderRadius: 2 }}
           >
-            {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre a jour' : 'Enregistrer')}
+            {isSubmitting ? 'Enregistrement...' : (initialData ? 'Mettre à jour' : 'Enregistrer')}
           </Button>
         </DialogActions>
       </form>
     </Dialog>
+    <DiscardChangesDialog
+      open={discardOpen && open}
+      title="Abandonner cette saisie ?"
+      onKeep={() => setDiscardOpen(false)}
+      onDiscard={() => { setDiscardOpen(false); onClose(); }}
+    />
+    </>
   );
 }
 

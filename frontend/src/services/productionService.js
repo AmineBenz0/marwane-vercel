@@ -34,8 +34,8 @@ export const productionService = {
   getDailyProduction: (idBatiment, dateProduction) => get('/productions/daily', {
     params: { id_batiment: idBatiment, date_production: dateProduction },
   }),
-  createDailyProduction: (data) => post('/productions/daily', data),
-  updateDailyProduction: (data) => put('/productions/daily', data),
+  createDailyProduction: (data, config) => post('/productions/daily', data, config),
+  updateDailyProduction: (data, config) => put('/productions/daily', data, config),
 
   /**
    * Récupère la liste des productions avec filtres.
@@ -96,15 +96,15 @@ export const productionService = {
 export const lotProductionService = {
   getLots: () => get('/lots-production'),
   getEggEvolution: (idLot) => get(`/lots-production/${idLot}/egg-evolution`),
-  createLot: (data) => post('/lots-production', data),
-  updateLot: (idLot, data) => put(`/lots-production/${idLot}`, data),
-  terminateLot: (idLot, data) => post(`/lots-production/${idLot}/terminer`, data),
+  createLot: (data, config) => post('/lots-production', data, config),
+  updateLot: (idLot, data, config) => put(`/lots-production/${idLot}`, data, config),
+  terminateLot: (idLot, data, config) => post(`/lots-production/${idLot}/terminer`, data, config),
 };
 
 export const cycleProductionService = {
   getContext: (idBatiment, dateSaisie) => get(`/cycles-production/context/${idBatiment}`, { params: { date_saisie: dateSaisie } }),
   getInsights: (idCycle) => get(`/cycles-production/${idCycle}/insights`),
-  assignHistory: (idCycle, data) => post(`/cycles-production/${idCycle}/rattacher`, data),
+  assignHistory: (idCycle, data, config) => post(`/cycles-production/${idCycle}/rattacher`, data, config),
   getCycles: (params = {}) => get('/cycles-production', { params }),
   getActiveCycle: (idBatiment) => get(`/cycles-production/active/${idBatiment}`),
   createCycle: (data) => post('/cycles-production', data),

@@ -8,6 +8,8 @@ import { formatShortDate } from '../../utils/dateFormatting';
 import { lotProductionService } from '../../services/productionService';
 import { localToday } from './useProductionView';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
+import DiscardChangesDialog from '../../components/DiscardChangesDialog';
 
 const makeLotName = (buildingName, date, strain) => {
   const building = String(buildingName || '').trim().replace(/^(?:bâtiment|batiment|bat)\s*/i, '').trim();
@@ -24,8 +26,17 @@ const estimateLotEndDate = (startDate, durationWeeks = 100) => {
   return formatShortDate(endDate);
 };
 const message = (error) => {
-  const detail = error.data?.detail || error.response?.data?.detail;
+  // A server failure keeps the plain-language text from the API layer.
+  const detail = error.status >= 500 ? null : (error.data?.detail || error.response?.data?.detail);
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
+};
+
+/** Reason shown under a whole-number field ('' when the value is fine or empty). */
+export const wholeNumberError = (value, minimum, label) => {
+  if (value === '' || value == null) return '';
+  const count = Number(value);
+  if (!Number.isInteger(count)) return 'Indiquez un nombre entier, par exemple 1200.';
+  return count < minimum ? `${label} doit être d’au moins ${minimum}.` : '';
 };
 
 export default function LotCreateDialog({ building, available = [], onClose, onCreated }) {
@@ -43,12 +54,22 @@ export default function LotCreateDialog({ building, available = [], onClose, onC
   const [automaticName, setAutomaticName] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Typing anything makes closing ask first (Échap, ×, Annuler); outside clicks are ignored then.
+  const [touched, setTouched] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const requestClose = (_event, reason) => {
+    if (saving) return;
+    if (!touched) { onClose(); return; }
+    if (reason === 'backdropClick') return;
+    setDiscardOpen(true);
+  };
 
   const generatedName = (source) => {
     const selectedBuilding = building ?? available.find((row) => Number(row.id_batiment) === Number(source.id_batiment));
     return makeLotName(selectedBuilding?.nom, source.date_debut, source.souche);
   };
   const field = (name, value) => {
+    setTouched(true);
     if (name === 'nom_lot') setAutomaticName(false);
     setValues((old) => {
       const next = { ...old, [name]: value };
@@ -63,9 +84,16 @@ export default function LotCreateDialog({ building, available = [], onClose, onC
   const count = Number(values.effectif_initial);
   const canSave = (building || available.some((row) => Number(row.id_batiment) === Number(values.id_batiment)))
     && values.date_debut && values.nom_lot.trim() && Number.isInteger(count) && count > 0;
+  const effectifError = wholeNumberError(values.effectif_initial, 1, 'L’effectif');
   const submit = async (event) => {
     event.preventDefault();
-    if (saving || !canSave) return;
+    if (saving) return;
+    if (!canSave) {
+      // The field already explains a wrong number; other gaps get one line at the top.
+      setError(effectifError ? '' : !values.effectif_initial ? 'Indiquez l’effectif de départ.'
+        : !values.nom_lot.trim() ? 'Indiquez le nom du lot.' : !values.date_debut ? 'Indiquez la date de mise en place.' : 'Choisissez le bâtiment.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -74,7 +102,7 @@ export default function LotCreateDialog({ building, available = [], onClose, onC
         age_depart_semaines: 0, effectif_initial: count,
         souche: values.souche || null, duree_semaines: 100, date_fin_prevue: null,
         repartitions: [{ id_batiment: Number(values.id_batiment), effectif_initial: count }],
-      });
+      }, { silent: true });
       onCreated(result);
     } catch (err) {
       setError(message(err));
@@ -84,9 +112,10 @@ export default function LotCreateDialog({ building, available = [], onClose, onC
   };
 
   return (
-    <Dialog open onClose={() => { if (!saving) onClose(); }} maxWidth="sm" fullWidth aria-labelledby="lot-create-title">
-      <Box component="form" onSubmit={submit}>
-        <DialogTitleWithClose id="lot-create-title" onClose={onClose} disabled={saving}>Démarrer un lot</DialogTitleWithClose>
+    <>
+    <Dialog open onClose={requestClose} maxWidth="sm" fullWidth aria-labelledby="lot-create-title">
+      <Box component="form" noValidate onSubmit={submit}>
+        <DialogTitleWithClose id="lot-create-title" onClose={requestClose} disabled={saving}>Démarrer un lot</DialogTitleWithClose>
         <DialogContent>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -103,7 +132,8 @@ export default function LotCreateDialog({ building, available = [], onClose, onC
               </Box>
             </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField label="Effectif de départ" required fullWidth type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
+              <TextField label="Effectif de départ" required fullWidth type="text" inputProps={DECIMAL_INPUT_PROPS} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)}
+                error={Boolean(effectifError)} helperText={effectifError || undefined} />
               <TextField label="Souche (facultatif)" fullWidth inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
             </Box>
             <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
@@ -116,10 +146,13 @@ export default function LotCreateDialog({ building, available = [], onClose, onC
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button color="inherit" disabled={saving} onClick={onClose}>Annuler</Button>
-          <Button type="submit" variant="contained" disabled={saving || !canSave}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Button>
+          <Button color="inherit" disabled={saving} onClick={requestClose}>Annuler</Button>
+          <Button type="submit" variant="contained" disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Button>
         </DialogActions>
       </Box>
     </Dialog>
+    <DiscardChangesDialog open={discardOpen} title="Abandonner ce lot ?" onKeep={() => setDiscardOpen(false)}
+      onDiscard={() => { setDiscardOpen(false); onClose(); }} />
+    </>
   );
 }

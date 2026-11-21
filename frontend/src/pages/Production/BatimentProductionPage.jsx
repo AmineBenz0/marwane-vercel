@@ -62,6 +62,9 @@ function BatimentProductionPage() {
   const loadRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
+  // Day waiting for confirmation in the app dialog (replaces the browser pop-up).
+  const [pendingCancel, setPendingCancel] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
   const [savedProduction, setSavedProduction] = useState(null);
   const [editingProduction, setEditingProduction] = useState(null);
   const [preselectedEggType, setPreselectedEggType] = useState('normal');
@@ -200,23 +203,35 @@ function BatimentProductionPage() {
       const daily = await productionService.getDailyProduction(day.id_batiment, day.date);
       const currentDay = groupDailyProductions(daily.records)[0];
       if (!currentDay) {
-        notifyError('Cette journée a déjà été désactivée.');
+        notifyError('Cette journée a déjà été annulée.');
         await loadData();
         return;
       }
-      if (!window.confirm(
-        `Désactiver toute la saisie du ${formatShortDate(day.date)} : ${formatNumber(currentDay.collected)} œufs collectés et ${formatNumber(currentDay.lost)} cassés ?${daily.depenses_vaccins?.length ? ' Les dépenses de vaccins et leurs débits seront aussi annulés.' : ''}`,
-      )) return;
+      setPendingCancel({ day, daily, currentDay });
+    } catch (err) {
+      notifyError(err?.message || 'Impossible de charger cette journée.');
+    }
+  };
+
+  const confirmCancel = async () => {
+    if (!pendingCancel || cancelling) return;
+    const { day, daily } = pendingCancel;
+    setCancelling(true);
+    try {
       await productionService.deleteDailyProduction({
         id_batiment: day.id_batiment,
         date_production: day.date,
         versions: daily.versions,
         charge_versions: daily.charge_versions || {},
       });
-      notifySuccess('Saisie quotidienne désactivée');
+      setPendingCancel(null);
+      notifySuccess('Journée annulée');
       await Promise.all([refreshAfterChange(), reloadStock()]);
     } catch (err) {
-      notifyError(err?.message || 'Erreur lors de la désactivation');
+      setPendingCancel(null);
+      notifyError(err?.message || 'La journée n’a pas pu être annulée.');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -360,7 +375,22 @@ function BatimentProductionPage() {
           description={formDescription}
         />
       )}
-
+      <Dialog open={Boolean(pendingCancel)} onClose={() => { if (!cancelling) setPendingCancel(null); }} maxWidth="xs" fullWidth aria-labelledby="cancel-day-title">
+        <DialogTitle id="cancel-day-title">Annuler la journée du {pendingCancel ? formatShortDate(pendingCancel.day.date) : ''} ?</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>Toute la saisie de cette journée sera annulée :</Typography>
+          <List dense disablePadding>
+            <ListItem disableGutters><ListItemText primary={`${formatNumber(pendingCancel?.currentDay.collected || 0)} œufs collectés`} /></ListItem>
+            <ListItem disableGutters><ListItemText primary={`${formatNumber(pendingCancel?.currentDay.lost || 0)} œufs cassés ou perdus`} /></ListItem>
+            {pendingCancel?.daily.depenses_vaccins?.length > 0 && <ListItem disableGutters><ListItemText primary="Les dépenses de vaccins de ce jour et leurs débits" /></ListItem>}
+          </List>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Vous pourrez saisir cette journée à nouveau.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" disabled={cancelling} onClick={() => setPendingCancel(null)}>Retour</Button>
+          <Button variant="contained" color="error" disabled={cancelling} onClick={confirmCancel}>{cancelling ? 'Annulation…' : 'Annuler la journée'}</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -435,7 +465,7 @@ function HistoryCard({ days, onEdit, onDelete }) {
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{day.vaccineExpenses?.length ? formatVaccineMoney(day.vaccineExpenses.reduce((sum, expense) => sum + Number(expense.montant), 0)) : '—'}</TableCell>
                   <TableCell><Stack direction="row">
                     <IconButton aria-label={'Modifier la journée du ' + formatShortDate(day.date)} size="small" onClick={() => onEdit(day.representative)}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton aria-label={'Désactiver la journée du ' + formatShortDate(day.date)} size="small" onClick={() => onDelete(day)}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton aria-label={'Annuler la journée du ' + formatShortDate(day.date)} size="small" onClick={() => onDelete(day)}><DeleteIcon fontSize="small" /></IconButton>
                   </Stack></TableCell>
                 </TableRow>
               ))}</TableBody>
