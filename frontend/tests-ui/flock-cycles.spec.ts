@@ -170,7 +170,9 @@ test('new arrivals reject nonpositive flock sizes and use the free building', as
   const dialog = page.getByRole('dialog');
   for (const value of ['0', '-1']) {
     await dialog.getByLabel(/^Effectif de départ/).fill(value);
-    await expect(dialog.getByRole('button', { name: 'Enregistrer', exact: true })).toBeDisabled();
+    await expect(dialog.getByText('L’effectif doit être d’au moins 1.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    await expect(dialog).toBeVisible();
   }
   expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
 });
