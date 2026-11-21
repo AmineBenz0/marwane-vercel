@@ -98,6 +98,13 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
   // Half a centime of tolerance so rounding never shows as an overpayment.
   const overpaid = difference < -0.005;
   const settled = Math.abs(difference) <= 0.005;
+  // A row is unfilled while it has no amount, no LC chosen, or no bank account for a bank payment.
+  const unfilled = (watchedFields || []).some((payment) => !(Number(payment?.montant) > 0)
+    || (payment?.type_paiement === 'lc' && !payment?.id_lc)
+    || (supplierSource === 'banque' && !payment?.id_compte));
+  const nothingLeft = difference <= 0.005;
+  const addBlockedReason = unfilled ? 'Complétez d’abord le paiement en cours.'
+    : nothingLeft ? 'Le montant dû est déjà couvert.' : '';
 
   // Si c'est vide au début, ajouter une ligne (une seule fois : en développement,
   // React StrictMode exécute les effets deux fois et ajoutait deux lignes).
@@ -387,20 +394,27 @@ function MultiPaiementForm({ transaction, fields, append, remove, register, erro
             })}
           </TableBody>
         </Table>
-        <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'center' }}>
-          <Button 
-            startIcon={<AddIcon />} 
-            variant="outlined" 
+        <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+          <Button
+            startIcon={<AddIcon />}
+            variant="outlined"
             size="small"
+            disabled={Boolean(addBlockedReason)}
+            aria-describedby={addBlockedReason ? `${detailsId}-add-hint` : undefined}
             onClick={() => append({
               date_paiement: format(new Date(), 'yyyy-MM-dd'),
-              montant: difference > 0 ? difference : 0,
+              montant: Math.round(difference * 100) / 100,
               type_paiement: supplierSource === 'banque' ? 'virement' : 'cash',
               statut_cheque: 'a_encaisser'
             })}
           >
             Ajouter un autre paiement
           </Button>
+          {addBlockedReason && (
+            <Typography id={`${detailsId}-add-hint`} variant="caption" color="text.secondary">
+              {addBlockedReason}
+            </Typography>
+          )}
         </Box>
       </TableContainer>
     </Box>

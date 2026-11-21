@@ -40,6 +40,29 @@ describe('MultiPaiementForm', () => {
     expect(props.remove).toHaveBeenCalledWith(0);
   });
 
+  it('does not add a row while a payment is unfilled', () => {
+    const props = makeProps([{ id: 'payment-1' }, { id: 'payment-2' }]);
+    props.watch = vi.fn((name) => (name === 'paiements'
+      ? [{ montant: 40, type_paiement: 'cash' }, { montant: 0, type_paiement: 'cash' }]
+      : 'cash'));
+    render(<MultiPaiementForm {...props} />);
+
+    const add = screen.getByRole('button', { name: 'Ajouter un autre paiement' });
+    expect(add).toBeDisabled();
+    expect(screen.getByText('Complétez d’abord le paiement en cours.')).toBeInTheDocument();
+    fireEvent.click(add);
+    expect(props.append).not.toHaveBeenCalled();
+  });
+
+  it('does not add a row once the amount due is covered', () => {
+    const props = makeProps([{ id: 'payment-1' }]);
+    props.watch = vi.fn((name) => (name === 'paiements' ? [{ montant: 100, type_paiement: 'cash' }] : 'cash'));
+    render(<MultiPaiementForm {...props} />);
+
+    expect(screen.getByRole('button', { name: 'Ajouter un autre paiement' })).toBeDisabled();
+    expect(screen.getByText('Le montant dû est déjà couvert.')).toBeInTheDocument();
+  });
+
   it('initializes an empty editor with one payment', async () => {
     const props = makeProps([]);
     render(<MultiPaiementForm {...props} />);
