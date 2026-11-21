@@ -38,20 +38,20 @@ describe('Daily tray weight', () => {
   ])('converts a %s g tray to %s g and %s for display and save', async (tray, average, category) => {
     renderForm();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
-    fireEvent.change(screen.getByLabelText('Oeufs normaux'), { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText('Œufs normaux'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: tray } });
     const result = screen.getByRole('status', { name: 'Poids moyen de l\u2019\u0153uf' });
     expect(result).toHaveTextContent(`${average.replace('.', ',')} g`);
     await waitFor(() => expect(screen.getByText('Calibre').parentElement).toHaveTextContent(category));
     fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
-    await waitFor(() => expect(productionService.createDailyProduction).toHaveBeenCalledWith(expect.objectContaining({ grammage: Number(average) })));
+    await waitFor(() => expect(productionService.createDailyProduction).toHaveBeenCalledWith(expect.objectContaining({ grammage: Number(average) }), { silent: true }));
     expect(productionService.createDailyProduction.mock.calls[0][0]).not.toHaveProperty('poids_plateau');
   });
 
   it.each(['', '0', '-30', '59', '60'])('rejects invalid tray weight %s when eggs are collected', async (tray) => {
     renderForm();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeEnabled());
-    fireEvent.change(screen.getByLabelText('Oeufs normaux'), { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText('Œufs normaux'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Poids du plateau (g)'), { target: { value: tray } });
     fireEvent.submit(screen.getByRole('button', { name: 'Enregistrer' }).closest('form'));
     expect(await screen.findByText(tray === '' ? 'Champ requis' : 'Le poids du plateau doit \u00eatre sup\u00e9rieur \u00e0 60 g.')).toBeVisible();
@@ -63,10 +63,10 @@ describe('Daily tray weight', () => {
     const record = { id_production: 1, id_batiment: 7, date_production: '2026-09-01', type_oeuf: 'normal', nombre_oeufs: 30, grammage: '60.12' };
     productionService.getDailyProduction.mockResolvedValue({ records: [record], versions: { 1: 'v1' } });
     renderForm({ initialData: record });
-    await waitFor(() => expect(screen.getByLabelText('Poids du plateau (g)')).toHaveValue(1863.6));
+    await waitFor(() => expect(screen.getByLabelText('Poids du plateau (g)')).toHaveValue('1863.6'));
     expect(screen.getByRole('status', { name: 'Poids moyen de l\u2019\u0153uf' })).toHaveTextContent('60,12 g');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Mettre a jour' })).toBeEnabled());
-    fireEvent.submit(screen.getByRole('button', { name: 'Mettre a jour' }).closest('form'));
-    await waitFor(() => expect(productionService.updateDailyProduction).toHaveBeenCalledWith(expect.objectContaining({ grammage: 60.12, versions: { 1: 'v1' } })));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mettre à jour' })).toBeEnabled());
+    fireEvent.submit(screen.getByRole('button', { name: 'Mettre à jour' }).closest('form'));
+    await waitFor(() => expect(productionService.updateDailyProduction).toHaveBeenCalledWith(expect.objectContaining({ grammage: 60.12, versions: { 1: 'v1' } }), { silent: true }));
   });
 });

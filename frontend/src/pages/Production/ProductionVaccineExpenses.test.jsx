@@ -40,7 +40,7 @@ describe('Daily vaccine expenses', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       depenses_vaccins: [{ id_vaccin: 3, quantite: '2', prix_unitaire: '50.25', id_compte: null }],
-    })));
+    }), { silent: true }));
   });
 
   it('offers to save a changed daily price as the future catalogue tariff', async () => {
@@ -55,7 +55,7 @@ describe('Daily vaccine expenses', () => {
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       depenses_vaccins: [expect.objectContaining({ prix_unitaire: '52', mettre_a_jour_tarif: true })],
-    })));
+    }), { silent: true }));
   });
 
   it('rejects zero and fractional vaccine quantities', async () => {
@@ -102,12 +102,12 @@ describe('Daily vaccine expenses', () => {
     renderForm({ initialData: { id_batiment: 7, date_production: '2026-10-01' } });
     expect(await screen.findByText(/2 unités ×/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Modifier le prix' })).toBeVisible();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Mettre a jour' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: 'Mettre a jour' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mettre à jour' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Mettre à jour' }));
     await waitFor(() => expect(put).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       charge_versions: { 9: 'expense-version' },
       depenses_vaccins: [{ id_charge: 9, id_vaccin: 3, quantite: '2', prix_unitaire: '50.25', id_compte: null }],
-    })));
+    }), { silent: true }));
   });
 
   it('requires a first price and explains that it will become the future tariff', async () => {
@@ -128,6 +128,6 @@ describe('Daily vaccine expenses', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/productions/daily', expect.objectContaining({
       depenses_vaccins: [{ id_vaccin: 3, quantite: '1', prix_unitaire: '50', id_compte: null }],
-    })));
+    }), { silent: true }));
   });
 });

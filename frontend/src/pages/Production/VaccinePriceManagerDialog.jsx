@@ -51,7 +51,7 @@ export default function VaccinePriceManagerDialog({ open, onClose, vaccins, onPr
             <TextField size="small" fullWidth type="text" label={`Tarif ${vaccine.nom} (DH)`} value={price}
               inputProps={{ ...DECIMAL_INPUT_PROPS, min: '0.01', step: '0.01' }}
               onChange={(event) => setPrices((current) => ({ ...current, [vaccine.id_vaccin]: event.target.value }))}
-              error={!valid} helperText={price === '' ? 'Vide : à saisir au besoin' : undefined} sx={{ maxWidth: { sm: 170 } }} />
+              error={!valid} helperText={price === '' ? 'Vide : à saisir au besoin' : !valid ? (Number(price) <= 0 ? 'Le prix doit être supérieur à 0.' : 'Prix invalide, par exemple 12,50.') : undefined} sx={{ maxWidth: { sm: 170 } }} />
             <Button size="small" sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }} disabled={!changed || !valid || savingId === vaccine.id_vaccin}
               onClick={() => savePrice(vaccine)}>{savingId === vaccine.id_vaccin ? 'Enregistrement…' : 'Enregistrer'}</Button>
           </Stack>;
