@@ -437,7 +437,7 @@ function TransactionsList() {
         const transactionData = { ...data };
         delete transactionData.paiement;
         
-        result = await put(`/transactions/${editingTransaction.id_transaction}`, transactionData);
+        result = await put(`/transactions/${editingTransaction.id_transaction}`, transactionData, { silent: true });
         
         // Gérer les paiements si présents
         if (data.paiements && data.paiements.length > 0) {
@@ -447,9 +447,9 @@ function TransactionsList() {
               id_transaction: editingTransaction.id_transaction,
             };
             if (p.id_paiement) {
-              return put(`/paiements/${p.id_paiement}`, pData);
+              return put(`/paiements/${p.id_paiement}`, pData, { silent: true });
             } else {
-              return post('/paiements', pData);
+              return post('/paiements', pData, { silent: true });
             }
           });
           try {
@@ -466,7 +466,9 @@ function TransactionsList() {
         if (data.batch && data.transactions) {
           result = await post(
             '/transactions/batch-with-payments',
-            buildTransactionPaymentBatch(data)
+            buildTransactionPaymentBatch(data),
+            // The form shows the error itself; no second pop-up over its buttons.
+            { silent: true }
           );
           const paymentCount = result.reduce(
             (total, item) => total + (item.paiements?.length || 0),
@@ -477,7 +479,7 @@ function TransactionsList() {
           );
         } else {
           // Création simple : POST /transactions
-          result = await post('/transactions', data);
+          result = await post('/transactions', data, { silent: true });
         }
       }
 
@@ -809,21 +811,22 @@ function TransactionsList() {
         aria-labelledby="delete-dialog-title"
         aria-describedby="delete-dialog-description"
       >
-        <DialogTitle id="delete-dialog-title">Confirmer la suppression</DialogTitle>
+        <DialogTitle id="delete-dialog-title">
+          {transactionToDelete?.id_client ? 'Annuler la vente' : 'Annuler l’achat'}
+          {transactionToDelete?.id_transaction ? ` n° ${transactionToDelete.id_transaction}` : ''} ?
+        </DialogTitle>
         <DialogContent>
           <DialogContentText id="delete-dialog-description">
-            Retirer cette transaction du registre actif ?
-            <br />
-            <br />
-            Elle restera dans l'historique.
+            {transactionToDelete?.id_client ? 'Elle' : 'Il'} ne comptera plus dans les totaux et restera visible dans l’historique.
+            Vous pourrez {transactionToDelete?.id_client ? 'la' : 'le'} réactiver plus tard.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDeleteCancel} disabled={deleteLoading} color="inherit">
-            Annuler
+            Retour
           </Button>
           <Button onClick={handleDeleteConfirm} disabled={deleteLoading} color="error" variant="contained">
-            {deleteLoading ? 'Suppression...' : 'Supprimer'}
+            {deleteLoading ? 'Annulation…' : (transactionToDelete?.id_client ? 'Annuler la vente' : 'Annuler l’achat')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -59,6 +59,7 @@ import DeferredSaleStockSummary from './DeferredSaleStockSummary';
 import ExpandableDetails from '../../components/ExpandableDetails';
 import DetailRows from '../../components/DetailRows';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
+import DiscardChangesDialog from '../../components/DiscardChangesDialog';
 
 const CORRECTION_WRITES_ENABLED = import.meta.env.VITE_ENABLE_CORRECTION_WRITES === 'true';
 const CREDIT_REFUNDS_ENABLED = import.meta.env.VITE_ENABLE_CREDIT_REFUND_WRITES === 'true';
@@ -67,6 +68,7 @@ const CREDIT_REFUNDS_ENABLED = import.meta.env.VITE_ENABLE_CREDIT_REFUND_WRITES 
  * Composant TransactionDetail.
  */
 // Readable labels for payment and cheque statuses (the API returns codes such as 'en_attente').
+const PAYMENT_TYPE_LABELS = { cash: 'Espèces', cheque: 'Chèque', virement: 'Virement', carte: 'Carte bancaire', lc: 'Lettre de crédit', compensation: 'Compensation', autre: 'Autre' };
 const PAYMENT_STATUS_LABELS = { valide: 'Validé', en_attente: 'En attente', annule: 'Annulé', rejete: 'Rejeté' };
 const CHEQUE_STATUS_LABELS = { a_encaisser: 'À encaisser', emis: 'Émis', en_attente: 'En attente', encaisse: 'Encaissé', rejete: 'Rejeté', annule: 'Annulé' };
 const readableStatus = (code) => {
@@ -394,6 +396,7 @@ function TransactionDetail() {
    * Gère la soumission du formulaire de paiement (création ou modification).
    */
   const onSubmitPaiement = async (data) => {
+    setPaymentSubmitError('');
     try {
       // Préparer les données
       // Financial attributes are immutable; editing sends operational fields only.
@@ -421,7 +424,7 @@ function TransactionDetail() {
       // Mode édition ou création
       if (editingPaiement) {
         // Modification (toujours individuel)
-        await put(`/paiements/${editingPaiement.id_paiement}`, paiementData);
+        await put(`/paiements/${editingPaiement.id_paiement}`, paiementData, { silent: true });
         notification.success('Paiement modifié avec succès');
       } else {
         // Création (Multi-lignes)
@@ -440,12 +443,12 @@ function TransactionDetail() {
               id_lc: p.type_paiement === 'lc' ? p.id_lc || null : null,
             }))
           };
-          await post('/paiements/batch', batchData);
+          await post('/paiements/batch', batchData, { silent: true });
           notification.success(`${data.paiements.length} paiement(s) ajouté(s) avec succès`);
         } else {
           // Fallback au mode simple si jamais
           paiementData.id_transaction = parseInt(id);
-          await post('/paiements', paiementData);
+          await post('/paiements', paiementData, { silent: true });
           notification.success('Paiement ajouté avec succès');
         }
       }
@@ -459,7 +462,8 @@ function TransactionDetail() {
       resetPaiement();
     } catch (err) {
       console.error('Erreur lors de la soumission du paiement:', err);
-      notification.error(err?.message || 'Une erreur est survenue lors de l\'enregistrement du paiement');
+      // Shown inside the window, next to the amounts the user can correct.
+      setPaymentSubmitError(err?.message || 'Le paiement n’a pas pu être enregistré.');
     }
   };
 
@@ -468,8 +472,24 @@ function TransactionDetail() {
    */
   const handleClosePaiementDialog = () => {
     setPaiementDialogOpen(false);
+    setPaymentTouched(false);
+    setPaymentDiscardOpen(false);
     setEditingPaiement(null);
     resetPaiement();
+  };
+
+  // Typing anything makes closing ask first (Échap, ×, Annuler); outside clicks are ignored then.
+  const [paymentTouched, setPaymentTouched] = useState(false);
+  const [paymentSubmitError, setPaymentSubmitError] = useState('');
+  useEffect(() => {
+    if (paiementDialogOpen) { setPaymentTouched(false); setPaymentSubmitError(''); }
+  }, [paiementDialogOpen]);
+  const [paymentDiscardOpen, setPaymentDiscardOpen] = useState(false);
+  const requestClosePaiementDialog = (_event, reason) => {
+    if (isPaiementSubmitting) return;
+    if (!paymentTouched) { handleClosePaiementDialog(); return; }
+    if (reason === 'backdropClick') return;
+    setPaymentDiscardOpen(true);
   };
 
   /**
@@ -867,14 +887,14 @@ function TransactionDetail() {
       {/* Modal d'ajout/édition de paiement */}
       <Dialog
         open={paiementDialogOpen}
-        onClose={handleClosePaiementDialog}
+        onClose={requestClosePaiementDialog}
         maxWidth="md"
         fullWidth
         fullScreen={isMobile}
       >
-        <form noValidate onSubmit={handleSubmitPaiement(onSubmitPaiement)}>
+        <form noValidate onSubmit={handleSubmitPaiement(onSubmitPaiement)} onInput={() => setPaymentTouched(true)}>
           <DialogTitleWithClose
-            onClose={handleClosePaiementDialog}
+            onClose={requestClosePaiementDialog}
             subtitle={editingPaiement
               ? `Paiement n° ${editingPaiement.id_paiement}`
               : statutPaiement ? `Transaction n° ${id} · reste à payer ${formatMontant(Math.max(0, Number(statutPaiement.montant_du ?? statutPaiement.montant_restant)))}` : null}
@@ -883,6 +903,7 @@ function TransactionDetail() {
           </DialogTitleWithClose>
           <DialogContent>
             <Box sx={{ pt: 1 }}>
+              {paymentSubmitError && <Alert severity="error" sx={{ mb: 2 }} role="alert">{paymentSubmitError}</Alert>}
               {editingPaiement ? (
                 <PaiementForm
                   defaultValues={editingPaiement}
@@ -914,7 +935,7 @@ function TransactionDetail() {
           </DialogContent>
           <DialogActions sx={{ p: 2, gap: 1 }}>
             <Button 
-              onClick={handleClosePaiementDialog}
+              onClick={requestClosePaiementDialog}
               disabled={isPaiementSubmitting}
             >
               Annuler
@@ -929,6 +950,8 @@ function TransactionDetail() {
           </DialogActions>
         </form>
       </Dialog>
+      <DiscardChangesDialog open={paymentDiscardOpen && paiementDialogOpen} title="Abandonner ce paiement ?"
+        onKeep={() => setPaymentDiscardOpen(false)} onDiscard={handleClosePaiementDialog} />
 
       {/* Dialog de confirmation de suppression de paiement */}
       <Dialog
@@ -937,10 +960,10 @@ function TransactionDetail() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogTitle>Annuler ce paiement ?</DialogTitle>
         <DialogContent>
           <Typography>
-            Êtes-vous sûr de vouloir supprimer ce paiement ?
+            Le paiement restera visible dans l’historique, marqué « Annulé ».
           </Typography>
           {paiementToDelete && (
             <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
@@ -951,12 +974,12 @@ function TransactionDetail() {
                 <strong>Date :</strong> {formatDate(paiementToDelete.date_paiement)}
               </Typography>
               <Typography variant="body2">
-                <strong>Type :</strong> {paiementToDelete.type_paiement}
+                <strong>Mode :</strong> {PAYMENT_TYPE_LABELS[paiementToDelete.type_paiement] || paiementToDelete.type_paiement}
               </Typography>
             </Box>
           )}
           <Alert severity="warning" sx={{ mt: 2 }}>
-            Cette action est irréversible. Le montant restant sera recalculé automatiquement.
+            Une annulation ne peut pas être défaite. Le reste à payer sera recalculé.
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -964,7 +987,7 @@ function TransactionDetail() {
             onClick={() => setDeletePaiementDialogOpen(false)}
             disabled={deleteLoading}
           >
-            Annuler
+            Retour
           </Button>
           <Button
             onClick={handleConfirmDeletePaiement}
@@ -972,7 +995,7 @@ function TransactionDetail() {
             variant="contained"
             disabled={deleteLoading}
           >
-            {deleteLoading ? 'Suppression...' : 'Supprimer'}
+            {deleteLoading ? 'Annulation…' : 'Annuler le paiement'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -52,6 +52,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
         id_compte: bank ? Number(values.id_compte) : null };
       if (supplier && (values.source_reglement !== fundingOriginal || payment.source_reglement || values.type_paiement !== payment.type_paiement)) payload.source_reglement = values.source_reglement;
     }
+    if (cheque && values.statut_cheque === 'encaisse' && !values.date_encaissement_effective) { setError('Indiquez la date d’encaissement.'); return; }
     if (cheque) payload = { ...payload, date_paiement: values.date_paiement,
       ...(values.statut_cheque ? { statut_cheque: values.statut_cheque, date_encaissement_effective: values.statut_cheque === 'encaisse' ? values.date_encaissement_effective || null : null } : {}) };
     const changes = changedValues(payload, payment);
@@ -60,7 +61,7 @@ export default function PaymentCorrectionDialog({ payment, transaction, initialC
   };
   const names = { id_compte: Object.fromEntries(accounts.map(row => [row.id_compte, `${row.nom_banque} · ${row.numero_compte}`])) };
   return <Dialog open onClose={() => !flow.busy && !flow.uncertain && onClose()} maxWidth="sm" fullWidth
-    aria-labelledby="payment-correction-title" PaperProps={{ component: 'form', onSubmit: submit }}>
+    aria-labelledby="payment-correction-title" PaperProps={{ component: 'form', noValidate: true, onSubmit: submit }}>
     <DialogTitleWithClose id="payment-correction-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>Modifier le paiement n° {payment.id_paiement}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {flow.review ? <CorrectionReview flow={flow} names={names} transaction={transaction} /> : <>

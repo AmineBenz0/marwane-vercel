@@ -36,6 +36,8 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
   const submit = event => {
     event.preventDefault();
     if (!cancel && !(Number(values.montant) > 0)) { setFormError('Indiquez un montant supérieur à 0.'); return; }
+    if (!cancel && !values.date_effet) { setFormError('Indiquez la date de l’opération.'); return; }
+    if (money && values.type_paiement === 'virement' && !values.id_compte) { setFormError('Choisissez le compte bancaire.'); return; }
     setFormError('');
     let payload = { action, reason: titles[action] };
     if (!cancel) payload = { ...payload, montant: values.montant, date_effet: values.date_effet };
@@ -46,7 +48,7 @@ export default function CreditOperationDialog({ action, partyType, partyId, adva
     flow.prepare(payload);
   };
   return <Dialog open fullWidth maxWidth="sm" aria-labelledby="credit-dialog-title"
-    onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', onSubmit: submit }}>
+    onClose={() => !flow.busy && !flow.uncertain && onClose()} PaperProps={{ component: 'form', noValidate: true, onSubmit: submit }}>
     <DialogTitleWithClose id="credit-dialog-title" onClose={onClose} disabled={flow.busy || flow.uncertain}>{titles[action]}</DialogTitleWithClose>
     <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
       {(formError || flow.error || loadError) && <Alert severity="error" action={loadError ? <Button onClick={() => setReload(v => v + 1)}>Réessayer</Button> : undefined}>{formError || flow.error || loadError}</Alert>}

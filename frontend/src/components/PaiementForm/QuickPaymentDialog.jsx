@@ -7,6 +7,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import DialogTitleWithClose from '../DialogTitleWithClose';
 import MultiPaiementForm from './MultiPaiementForm';
 import { buildPaymentBatch } from './paymentBatch';
+import DiscardChangesDialog from '../DiscardChangesDialog';
 
 const owed = (item) => Math.max(0, Number(item?.montant_du ?? item?.montant_restant ?? 0));
 
@@ -25,12 +26,17 @@ export default function QuickPaymentDialog({ item, open, onClose, onSaved }) {
   const [supplierSource, setSupplierSource] = useState(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
+  // Typing anything makes closing ask first (Échap, ×, Annuler); outside clicks are ignored then.
+  const [touched, setTouched] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !item) return undefined;
     let active = true;
     reset({ paiements: [] });
     setError('');
+    setTouched(false);
+    setDiscardOpen(false);
     setReady(false);
     setLoadingLcs(true);
     const params = item.id_client ? { id_client: item.id_client } : { id_fournisseur: item.id_fournisseur };
@@ -59,7 +65,7 @@ export default function QuickPaymentDialog({ item, open, onClose, onSaved }) {
       return;
     }
     try {
-      await post('/paiements/batch', buildPaymentBatch(item.id_transaction, paiements));
+      await post('/paiements/batch', buildPaymentBatch(item.id_transaction, paiements), { silent: true });
       onSaved?.();
       onClose();
     } catch (err) {
@@ -67,11 +73,18 @@ export default function QuickPaymentDialog({ item, open, onClose, onSaved }) {
     }
   };
 
+  const requestClose = (_event, reason) => {
+    if (isSubmitting) return;
+    if (!touched) { onClose(); return; }
+    if (reason === 'backdropClick') return;
+    setDiscardOpen(true);
+  };
+
   const party = item?.client_nom || item?.fournisseur_nom;
   return (
-    <Dialog open={open} onClose={isSubmitting ? undefined : onClose} fullWidth maxWidth="md">
-      <form onSubmit={handleSubmit(submit)} noValidate>
-        <DialogTitleWithClose onClose={onClose} disabled={isSubmitting}
+    <Dialog open={open} onClose={requestClose} fullWidth maxWidth="md">
+      <form onSubmit={handleSubmit(submit)} noValidate onInput={() => setTouched(true)}>
+        <DialogTitleWithClose onClose={requestClose} disabled={isSubmitting}
           subtitle={item ? `${party ? `${party} · ` : ''}Transaction n° ${item.id_transaction} · reste ${formatMontant(owed(item), { useCompactNotation: false, minimumFractionDigits: 2 })}` : null}>
           Ajouter un paiement
         </DialogTitleWithClose>
@@ -96,12 +109,14 @@ export default function QuickPaymentDialog({ item, open, onClose, onSaved }) {
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={onClose} disabled={isSubmitting}>Annuler</Button>
+          <Button onClick={requestClose} disabled={isSubmitting}>Annuler</Button>
           <Button type="submit" variant="contained" disabled={isSubmitting || !ready}>
             {isSubmitting ? 'Enregistrement…' : 'Enregistrer'}
           </Button>
         </DialogActions>
       </form>
+      <DiscardChangesDialog open={discardOpen} title="Abandonner ce paiement ?"
+        onKeep={() => setDiscardOpen(false)} onDiscard={() => { setDiscardOpen(false); onClose(); }} />
     </Dialog>
   );
 }

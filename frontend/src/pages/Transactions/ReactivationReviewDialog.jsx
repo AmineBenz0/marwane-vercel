@@ -45,7 +45,7 @@ export default function ReactivationReviewDialog({ transaction, onClose, onSaved
         dependency_fingerprint: preview.dependency_fingerprint,
         restore_stock: true,
         restore_cancelled_payments: false,
-      });
+      }, { silent: true });
     } catch (err) {
       setError(err.message || 'La réactivation a échoué.');
       setPreview(null);
