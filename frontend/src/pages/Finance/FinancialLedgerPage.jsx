@@ -1,4 +1,3 @@
-import DateField from '../../utils/DateField';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
@@ -9,12 +8,7 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Grid,
-  MenuItem,
   Paper,
   Stack,
   Table,
@@ -24,18 +18,17 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import { Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { get, post } from '../../services/api';
-import { getBusinessDateInput } from '../../utils/businessDate';
+import { get } from '../../services/api';
 import SmartFilterPanel from '../../components/Filters/SmartFilterPanel';
 import PageHeader from '../../components/Layout/PageHeader';
 import CellText from '../../components/CellText';
+import QuickPaymentDialog from '../../components/PaiementForm/QuickPaymentDialog';
 
 const money = (value) => new Intl.NumberFormat('fr-FR', {
   style: 'currency', currency: 'MAD', maximumFractionDigits: 2,
@@ -59,85 +52,6 @@ const PendingNote = ({ item }) => (pendingAmount(item) > 0
   : null);
 PendingNote.propTypes = { item: PropTypes.object.isRequired };
 
-const createIdempotencyKey = () => window.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-function PaymentDialog({ item, open, onClose, onSaved }) {
-  const [amount, setAmount] = useState(Math.max(0, owed(item)).toFixed(2));
-  const [type, setType] = useState('cash');
-  const [date, setDate] = useState(getBusinessDateInput);
-  const [notes, setNotes] = useState('');
-  const [idempotencyKey, setIdempotencyKey] = useState(createIdempotencyKey);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (open) {
-      setAmount(Math.max(0, owed(item)).toFixed(2));
-      setType('cash');
-      setDate(getBusinessDateInput());
-      setNotes('');
-      setIdempotencyKey(createIdempotencyKey());
-      setError(null);
-    }
-  }, [open, item]);
-
-  const submit = async () => {
-    if (!amount || Number(amount) <= 0) {
-      setError('Le montant doit être supérieur à zéro.');
-      return;
-    }
-    if (!window.confirm(`Confirmer le paiement de ${money(amount)} pour la transaction #${item.id_transaction} ?`)) {
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await post('/paiements', {
-        id_transaction: item.id_transaction,
-        date_paiement: date,
-        montant: Number(amount),
-        type_paiement: type,
-        notes: notes || null,
-        cle_idempotence: idempotencyKey,
-      });
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Le paiement n’a pas pu être enregistré.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Ajouter un paiement</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            Transaction #{item?.id_transaction} · reste {money(owed(item))}
-          </Typography>
-          {error && <Alert severity="error">{error}</Alert>}
-          <DateField label="Date"  value={date} onChange={(event) => setDate(event.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
-          <TextField label="Montant (MAD)" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} inputProps={{ min: 0.01, step: 0.01 }} fullWidth />
-          <TextField label="Mode de paiement" select value={type} onChange={(event) => setType(event.target.value)} fullWidth>
-            <MenuItem value="cash">Espèces</MenuItem>
-            <MenuItem value="virement">Virement</MenuItem>
-            <MenuItem value="carte">Carte bancaire</MenuItem>
-            <MenuItem value="cheque">Chèque</MenuItem>
-            <MenuItem value="autre">Autre</MenuItem>
-          </TextField>
-          <TextField label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} fullWidth />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Annuler</Button>
-        <Button onClick={submit} variant="contained" disabled={saving}>{saving ? 'Enregistrement…' : Math.round(Number(amount) * 100) >= Math.round(owed(item) * 100) ? 'Marquer comme payé' : 'Enregistrer le paiement'}</Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
 const financialItemPropType = PropTypes.shape({
   id_transaction: PropTypes.number,
   id_client: PropTypes.number,
@@ -150,13 +64,6 @@ const financialItemPropType = PropTypes.shape({
   est_en_retard: PropTypes.bool,
   statut_paiement: PropTypes.string,
 });
-
-PaymentDialog.propTypes = {
-  item: financialItemPropType,
-  open: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  onSaved: PropTypes.func.isRequired,
-};
 
 function SummaryCards({ summary, isReceivable }) {
   const cards = [
@@ -394,7 +301,7 @@ function FinancialLedgerPage({ direction }) {
           <TablePagination component="div" count={data.summary?.count || 0} page={page} onPageChange={(_, nextPage) => setPage(nextPage)} rowsPerPage={pageSize} rowsPerPageOptions={[pageSize]} labelDisplayedRows={({ from, to, count }) => `${from}–${to} sur ${count}`} />
         </TableContainer>
       )}
-      <PaymentDialog item={selected} open={Boolean(selected)} onClose={() => setSelected(null)} onSaved={load} />
+      <QuickPaymentDialog item={selected} open={Boolean(selected)} onClose={() => setSelected(null)} onSaved={load} />
     </Box>
   );
 }
