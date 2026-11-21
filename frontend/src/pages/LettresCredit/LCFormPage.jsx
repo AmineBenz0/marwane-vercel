@@ -18,6 +18,7 @@ import lettreCreditService from '../../services/lettreCreditService';
 import { get } from '../../services/api';
 import useNotification from '../../hooks/useNotification';
 import { format } from 'date-fns';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 function LCFormPage() {
   const { id } = useParams();
@@ -121,13 +122,13 @@ function LCFormPage() {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                {...register('montant', { required: 'Le montant est requis', valueAsNumber: true })}
+                {...register('montant', { required: 'Le montant est requis', valueAsNumber: true, validate: (value) => (Number.isFinite(value) && value > 0) || 'Indiquez un montant supérieur à 0' })}
                 label="Montant (MAD)"
-                type="number"
+                type="text"
                 fullWidth
                 required
                 error={!!errors.montant}
-                inputProps={{ step: '0.01' }}
+                inputProps={{ ...DECIMAL_INPUT_PROPS, step: '0.01' }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

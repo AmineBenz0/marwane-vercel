@@ -47,6 +47,7 @@ import { formatVaccineMoney } from '../../utils/vaccineExpenses';
 import PageHeader from '../../components/Layout/PageHeader';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 import CellText from '../../components/CellText';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 const CATEGORIES = [
   'Fixe (Loyer, Salaire...)',
@@ -239,6 +240,10 @@ function ChargesList() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!(Number(formData.montant) > 0)) {
+      notification.error('Indiquez un montant supérieur à 0.');
+      return;
+    }
     setSubmitting(true);
 
     const payload = {
@@ -654,9 +659,9 @@ function ChargeDialog({
               <TextField
                 fullWidth
                 label="Montant"
-                type="number"
+                type="text"
                 required
-                inputProps={{ step: '0.01', min: '0.01' }}
+                inputProps={{ ...DECIMAL_INPUT_PROPS, step: '0.01', min: '0.01' }}
                 value={formData.montant}
                 onChange={(event) => setFormData({ ...formData, montant: event.target.value })}
               />

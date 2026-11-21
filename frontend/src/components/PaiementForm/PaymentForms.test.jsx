@@ -79,26 +79,26 @@ describe('Unpaid transaction payment forms', () => {
   it('automatically uses the selected LC amount and clears it when switching methods', async () => {
     const submit = vi.fn();
     render(<NewSingleForm onSubmit={submit} />);
-    const amount = screen.getByRole('spinbutton', { name: 'Montant de la LC (MAD)' });
+    const amount = screen.getByRole('textbox', { name: 'Montant de la LC (MAD)' });
     expect(amount).toHaveAttribute('readonly');
-    await waitFor(() => expect(amount).toHaveValue(null));
+    await waitFor(() => expect(amount).toHaveValue(''));
     const select = async label => {
       await waitFor(() => expect(screen.getByRole('combobox', { name: 'Choisir une Lettre de Crédit' })).not.toHaveAttribute('aria-disabled', 'true'));
       fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Choisir une Lettre de Crédit' }));
       fireEvent.click(await screen.findByRole('option', { name: label }));
     };
     await select(/LC-7/);
-    await waitFor(() => expect(amount).toHaveValue(100));
+    await waitFor(() => expect(amount).toHaveValue('100'));
     await select(/LC-8/);
-    await waitFor(() => expect(amount).toHaveValue(125.5));
+    await waitFor(() => expect(amount).toHaveValue('125.5'));
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer', exact: true }));
     await waitFor(() => expect(submit).toHaveBeenCalledOnce());
     expect(submit.mock.calls[0][0]).toMatchObject({ id_lc: 8, montant: 125.5, type_paiement: 'lc' });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Type de paiement' }));
     fireEvent.click(await screen.findByRole('option', { name: /Espèces/ }));
-    const cash = screen.getByRole('spinbutton', { name: 'Montant (MAD)' });
+    const cash = screen.getByRole('textbox', { name: 'Montant (MAD)' });
     expect(cash).not.toHaveAttribute('readonly');
-    await waitFor(() => expect(cash).toHaveValue(null));
+    await waitFor(() => expect(cash).toHaveValue(''));
     fireEvent.change(cash, { target: { value: '12.50' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer', exact: true }));
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
@@ -110,7 +110,7 @@ describe('Unpaid transaction payment forms', () => {
     const type = screen.getByRole('combobox', { name: 'Type de paiement' });
     expect(type).toHaveTextContent('Compensation (historique)');
     expect(type).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByLabelText(/Montant \(MAD\)/)).toHaveValue(40);
+    expect(screen.getByLabelText(/Montant \(MAD\)/)).toHaveValue('40');
   });
 
   it('keeps LC amount locked after a batch LC change and resets on method change', async () => {
@@ -123,12 +123,14 @@ describe('Unpaid transaction payment forms', () => {
     fireEvent.mouseDown(select);
     fireEvent.click(await screen.findByRole('option', { name: /LC-8/ }));
     expect(select).toHaveTextContent('LC-8');
+    // The LC is worth more than the amount owed: the overpayment must be confirmed.
+    fireEvent.click(screen.getByRole('checkbox', { name: /Je confirme ce trop-payé/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
     await waitFor(() => expect(submit).toHaveBeenCalledOnce());
     expect(submit.mock.calls[0][0].paiements[0]).toMatchObject({ type_paiement: 'lc', id_lc: 8, montant: 125.5 });
     fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
     fireEvent.click(await screen.findByRole('option', { name: 'Espèces' }));
-    const cash = screen.getByRole('spinbutton', { name: 'Montant du paiement 1' });
+    const cash = screen.getByRole('textbox', { name: 'Montant du paiement 1' });
     fireEvent.change(cash, { target: { value: '30' } });
     fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
     fireEvent.click(await screen.findByRole('option', { name: 'Lettre de crédit' }));
@@ -178,7 +180,7 @@ describe('Unpaid transaction payment forms', () => {
   it('persists the selected LC and its full amount in the submitted form', async () => {
     const submit = vi.fn();
     render(<BatchForm onSubmit={submit} payments={[{ ...payment, type_paiement: 'lc', id_lc: null }]} />);
-    expect(screen.queryByRole('spinbutton', { name: 'Montant du paiement 1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Montant du paiement 1' })).not.toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' }));
     fireEvent.click(await screen.findByRole('option', { name: /LC-7/ }));
     expect(screen.getByRole('combobox', { name: 'Lettre de crédit du paiement 1' })).toHaveTextContent('LC-7');
@@ -206,7 +208,7 @@ describe('Unpaid transaction payment forms', () => {
   it('blocks a missing amount', async () => {
     const submit = vi.fn();
     render(<BatchForm onSubmit={submit} />);
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Montant du paiement 1' }), { target: { value: '' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Montant du paiement 1' }), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le paiement' }));
     expect(await screen.findByText('Le montant est requis')).toBeVisible();
     expect(submit).not.toHaveBeenCalled();
@@ -233,7 +235,7 @@ describe('Unpaid transaction payment forms', () => {
   it('retains an existing partial payment amount and locks its financial fields', async () => {
     const submit = vi.fn();
     render(<EditForm onSubmit={submit} />);
-    expect(screen.getByLabelText(/Montant \(MAD\)/)).toHaveValue(40);
+    expect(screen.getByLabelText(/Montant \(MAD\)/)).toHaveValue('40');
     expect(screen.getByLabelText(/Montant \(MAD\)/)).toBeDisabled();
     expect(screen.getByLabelText(/Date du paiement/)).toHaveValue('13/10/26');
     expect(screen.getByLabelText(/Date du paiement/)).toBeDisabled();
@@ -249,6 +251,6 @@ describe('Unpaid transaction payment forms', () => {
     const select = screen.getByRole('combobox', { name: /Choisir une Lettre de Crédit/ });
     expect(select).toHaveTextContent('LC-7');
     expect(select).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByLabelText(/Montant de la LC \(MAD\)/)).toHaveValue(40);
+    expect(screen.getByLabelText(/Montant de la LC \(MAD\)/)).toHaveValue('40');
   });
 });

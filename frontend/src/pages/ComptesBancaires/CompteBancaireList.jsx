@@ -44,6 +44,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import PageHeader from '../../components/Layout/PageHeader';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
 import CellText from '../../components/CellText';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 const SOURCE_OPTIONS = [
   { value: 'virement', label: 'Virement' },
@@ -744,11 +745,11 @@ function AddAccountDialog({ open, form, setForm, submitting, onClose, onSubmit }
             />
             <TextField
               label="Solde actuel (MAD)"
-              type="number"
+              type="text"
               fullWidth
               value={form.solde_initial}
               onChange={(event) => setForm({ ...form, solde_initial: event.target.value })}
-              inputProps={{ step: '0.01' }}
+              inputProps={{ ...DECIMAL_INPUT_PROPS, step: '0.01' }}
               helperText="Mettez 0 si vous voulez commencer sans solde."
             />
           </Stack>
@@ -850,12 +851,12 @@ function MovementDialog({ open, comptes, form, setForm, submitting, onClose, onS
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
                 label="Montant (MAD)"
-                type="number"
+                type="text"
                 fullWidth
                 required
                 value={form.montant}
                 onChange={(event) => setForm({ ...form, montant: event.target.value })}
-                inputProps={{ min: 0, step: '0.01' }}
+                inputProps={{ ...DECIMAL_INPUT_PROPS, min: 0, step: '0.01' }}
                 disabled={form.source === 'lc'}
                 helperText={form.source === 'lc' ? 'Le montant est défini par la lettre de crédit sélectionnée' : ''}
               />

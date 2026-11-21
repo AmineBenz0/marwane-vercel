@@ -4,6 +4,7 @@ import { Alert, Box, Button, Checkbox, Divider, FormControlLabel, MenuItem, Stac
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { formatVaccineMoney, vaccineExpenseTotal } from '../../utils/vaccineExpenses';
 import VaccinePriceManagerDialog from './VaccinePriceManagerDialog';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 export default function VaccineExpenseFields({ control, register, setValue, errors, vaccins, onVaccinsChange, comptes, loading, loadError, disabled }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'depenses_vaccins' });
@@ -69,15 +70,15 @@ export default function VaccineExpenseFields({ control, register, setValue, erro
           {vaccins.map((vaccine) => <MenuItem key={vaccine.id_vaccin} value={vaccine.id_vaccin}>{vaccine.nom}</MenuItem>)}
         </TextField>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-          <TextField fullWidth type="number" label="Quantité" disabled={disabled}
-            inputProps={{ min: '1', step: '1', max: '999999999' }}
+          <TextField fullWidth type="text" label="Quantité" disabled={disabled}
+            inputProps={{ ...DECIMAL_INPUT_PROPS, min: '1', step: '1', max: '999999999' }}
             {...register(`${prefix}.quantite`, { required: 'Indiquez la quantité', min: { value: 1, message: 'La quantité doit être un entier positif' },
               max: { value: 999999999, message: 'La quantité dépasse la limite autorisée' },
               validate: (value) => /^[1-9]\d*$/.test(String(value)) || 'La quantité doit être un entier positif' })}
             error={!!lineErrors.quantite} helperText={lineErrors.quantite?.message || selected?.unite || line.unite || 'Unité'} />
           {isEditingPrice ? <Stack spacing={0.25}>
-            <TextField fullWidth type="number" label="Prix unitaire (DH)" disabled={disabled}
-              inputProps={{ min: '0.01', step: '0.01', max: '9999999999.99' }}
+            <TextField fullWidth type="text" label="Prix unitaire (DH)" disabled={disabled}
+              inputProps={{ ...DECIMAL_INPUT_PROPS, min: '0.01', step: '0.01', max: '9999999999.99' }}
               {...register(`${prefix}.prix_unitaire`, { required: 'Indiquez le prix', min: { value: 0.01, message: 'Le prix doit être positif' },
                 validate: (value) => /^\d+(?:\.\d{1,2})?$/.test(String(value)) || 'Maximum 2 décimales' })}
               error={!!lineErrors.prix_unitaire} helperText={lineErrors.prix_unitaire?.message || (!hasCataloguePrice

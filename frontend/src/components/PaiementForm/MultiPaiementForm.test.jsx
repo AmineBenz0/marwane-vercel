@@ -63,6 +63,26 @@ describe('MultiPaiementForm', () => {
     expect(screen.getByText('Le montant dû est déjà couvert.')).toBeInTheDocument();
   });
 
+  it('asks to confirm an overpayment and refuses one larger than the transaction', () => {
+    const props = makeProps([{ id: 'payment-1' }]);
+    props.register = vi.fn((name) => ({ name, onChange: vi.fn(), onBlur: vi.fn(), ref: vi.fn() }));
+    props.transaction = { montant_restant: 100, montant_total: 100, id_client: 4 };
+    props.watch = vi.fn((name) => (name === 'paiements' ? [{ montant: 150, type_paiement: 'cash' }] : name === 'confirmer_trop_paye' ? false : 'cash'));
+    const { unmount } = render(<MultiPaiementForm {...props} />);
+    expect(screen.getByRole('checkbox', { name: /Je confirme ce trop-payé : le client aura un crédit de 50,00/ })).toBeInTheDocument();
+    const rule = props.register.mock.calls.find(([name]) => name === 'confirmer_trop_paye')[1];
+    expect(rule.validate(false)).toBe('Cochez la case pour confirmer ce trop-payé.');
+    expect(rule.validate(true)).toBe(true);
+    unmount();
+
+    props.watch = vi.fn((name) => (name === 'paiements' ? [{ montant: 1000, type_paiement: 'cash' }] : 'cash'));
+    render(<MultiPaiementForm {...props} />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText(/plus que le montant de la transaction/)).toBeInTheDocument();
+    const blocked = props.register.mock.calls.filter(([name]) => name === 'confirmer_trop_paye').pop()[1];
+    expect(blocked.validate(true)).toBe('Montant trop élevé : vérifiez le montant saisi.');
+  });
+
   it('initializes an empty editor with one payment', async () => {
     const props = makeProps([]);
     render(<MultiPaiementForm {...props} />);

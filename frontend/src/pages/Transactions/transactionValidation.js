@@ -157,6 +157,24 @@ export const transactionValidationSchema = yup.object().shape({
       }
       return true;
     })
+    .test('payment-not-above-line', 'Le paiement dépasse le montant de la ligne', function(lines) {
+      // A payment typed with an extra zero would otherwise create a large false credit.
+      // Advances are recorded from the client or supplier page, not on a new transaction.
+      for (let i = 0; i < (lines || []).length; i += 1) {
+        const line = lines[i];
+        if (!line?.ajouter_paiement || !Array.isArray(line.paiements)) continue;
+        const total = (Number(line.quantite) || 0) * (Number(line.prix_unitaire) || 0);
+        const paid = line.paiements.reduce((sum, payment) => sum + (Number(payment?.montant) || 0), 0);
+        if (total > 0 && paid > total + 0.005) {
+          const formatted = total.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return this.createError({
+            path: `lignes.${i}.paiements.0.montant`,
+            message: `Le paiement dépasse le montant de la ligne (${formatted} MAD). Pour une avance, utilisez « Avances et crédits ».`,
+          });
+        }
+      }
+      return true;
+    })
     .min(1, 'Au moins une ligne est requise')
     .required('Au moins une ligne est requise'),
 });
