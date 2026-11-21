@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Collapse, IconButton, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Typography, useTheme,
@@ -72,8 +72,10 @@ export default function LotEggChart({ lotId, refreshKey }) {
   }, [lotId, refreshKey, retry]);
 
   const activeDemo = demosEnabled ? demoScenario : '';
-  const chartData = activeDemo ? createLotEggDemo(activeDemo) : data;
-  const weeks = (chartData?.semaines || []).map((week) => ({ ...week, ...week.quantites }));
+  const chartData = useMemo(() => activeDemo ? createLotEggDemo(activeDemo) : data, [activeDemo, data]);
+  // Keep the same array between renders: the slider resets its handles whenever its data changes,
+  // so a new array on every drag step made the handles jump back.
+  const weeks = useMemo(() => (chartData?.semaines || []).map((week) => ({ ...week, ...week.quantites })), [chartData]);
   const recorded = weeks.some((week) => week.saisies > 0);
   const incomplete = weeks.some((week) => week.incomplete);
   const visible = SERIES.filter((series) => !hidden.includes(series.key));
@@ -186,9 +188,9 @@ export default function LotEggChart({ lotId, refreshKey }) {
           </Box>
           {weeks.length > 16 && <Box sx={{ width: '100%', height: 52, mt: 2 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={weeks} margin={{ top: 5, right: 12, left: 60, bottom: 5 }}>
+              <LineChart data={weeks} margin={{ top: 5, right: 40, left: 64, bottom: 5 }}>
                 <Brush dataKey="semaine" height={30} stroke={theme.palette.primary.main} tickFormatter={(value) => `S. ${value}`}
-                  startIndex={startIndex} endIndex={endIndex} onChange={setPeriod} travellerWidth={10} />
+                  startIndex={startIndex} endIndex={endIndex} onChange={setPeriod} travellerWidth={14} />
               </LineChart>
             </ResponsiveContainer>
           </Box>}
