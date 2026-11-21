@@ -70,6 +70,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
 import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
+import DiscardChangesDialog from '../../components/DiscardChangesDialog';
 
 const EMPTY_INITIAL_VALUES = {};
 
@@ -655,8 +656,8 @@ function TransactionForm({
       // Keep the edit draft until review confirmation succeeds.
       if (!isEditing) reset();
     } catch (error) {
-      // Gérer les erreurs de validation serveur
-      if (error?.data?.detail) {
+      // Gérer les erreurs de validation serveur (a server failure keeps the API's plain-language message)
+      if (error?.data?.detail && !(error?.status >= 500)) {
         const detail = error.data.detail;
 
         if (Array.isArray(detail)) {
@@ -766,12 +767,30 @@ function TransactionForm({
    */
   const handleClose = () => {
     if (!loading) {
+      setDiscardOpen(false);
       reset();
       clearErrors();
       setEditReview(null);
       setReviewError('');
       onClose();
     }
+  };
+
+  // Échap, × and « Annuler » ask before throwing away typed data; a click
+  // outside the window never closes it once something has been entered.
+  const [discardOpen, setDiscardOpen] = useState(false);
+
+  // The save button is at the bottom; bring a new server error (shown at the top) into view.
+  const contentRef = useRef(null);
+  const rootErrorMessage = errors.root?.message;
+  useEffect(() => {
+    if ((rootErrorMessage || errorMessage) && contentRef.current) contentRef.current.scrollTo?.({ top: 0, behavior: 'smooth' });
+  }, [rootErrorMessage, errorMessage]);
+  const requestClose = (_event, reason) => {
+    if (loading) return;
+    if (!isDirty) { handleClose(); return; }
+    if (reason === 'backdropClick') return;
+    setDiscardOpen(true);
   };
 
   /**
@@ -1242,7 +1261,7 @@ function TransactionForm({
         width: { xs: '100%', md: 'auto' },
         flexShrink: 0,
       }}>
-        <Button onClick={handleClose} disabled={loading} color="inherit" sx={{ whiteSpace: 'nowrap' }}>
+        <Button onClick={requestClose} disabled={loading} color="inherit" sx={{ whiteSpace: 'nowrap' }}>
           Annuler
         </Button>
         <Button
@@ -1268,7 +1287,7 @@ function TransactionForm({
     <>
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={requestClose}
       maxWidth="lg"
       fullWidth
       fullScreen={isPhone}
@@ -1276,7 +1295,8 @@ function TransactionForm({
         // Let React Hook Form render consistent French errors for every required field.
         component: 'form',
         noValidate: true,
-        onSubmit: handleSubmit(handleFormSubmit, handleInvalidSubmit),
+        // The error is already shown in the window; don't leave an unhandled rejection behind.
+        onSubmit: (event) => handleSubmit(handleFormSubmit, handleInvalidSubmit)(event).catch(() => {}),
         sx: {
           minHeight: { xs: 0, sm: '640px' },
           maxHeight: { xs: '100%', sm: '90vh' },
@@ -1323,13 +1343,13 @@ function TransactionForm({
                   : 'Livraison différée : le client, la date, le bâtiment et le type d’œufs sont fixes.'}
               </Typography>}
             </Box>
-            <IconButton onClick={handleClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
+            <IconButton onClick={requestClose} disabled={loading} aria-label="Fermer" sx={{ mt: -0.5, mr: -0.5, borderRadius: 2 }}>
               <CloseIcon />
             </IconButton>
           </Box>
         </DialogTitle>
 
-        <DialogContent dividers sx={{ backgroundColor: 'background.default', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
+        <DialogContent ref={contentRef} dividers sx={{ backgroundColor: 'background.default', px: { xs: 1.5, sm: 2, md: 3 }, py: { xs: 1.5, sm: 2 } }}>
           {/* Afficher l'erreur serveur générale si présente */}
           {(errorMessage || errors.root) && (() => {
             const fieldPaths = [...new Set(getFieldErrorPaths(errors))];
@@ -1844,6 +1864,13 @@ function TransactionForm({
           {totalsAndActions}
         </DialogActions>
     </Dialog>
+
+    <DiscardChangesDialog
+      open={discardOpen && open}
+      title={isEditingTransaction ? 'Abandonner les modifications ?' : (isSale ? 'Abandonner cette vente ?' : 'Abandonner cet achat ?')}
+      onKeep={() => setDiscardOpen(false)}
+      onDiscard={handleClose}
+    />
 
     <Dialog open={Boolean(editReview && open)}
       onClose={reviewSaving ? undefined : () => setEditReview(null)}

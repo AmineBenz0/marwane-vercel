@@ -69,7 +69,7 @@ export default function DeferredSaleCancellationDialog({
         quantite_en_attente_attendue: preview.quantite_en_attente_attendue,
         montant_paye_attendu: preview.montant_paye,
         date_effet_attendue: preview.date_effet,
-      });
+      }, { silent: true });
       await onCompleted?.(result);
       onClose?.();
     } catch (err) {

@@ -79,7 +79,8 @@ const useNotificationStore = create((set, get) => ({
       message,
       type = NOTIFICATION_TYPES.INFO,
       duration,
-      anchorOrigin = NOTIFICATION_POSITIONS.BOTTOM_RIGHT,
+      // Top of the screen: a pop-up must never cover a window's action buttons.
+      anchorOrigin = NOTIFICATION_POSITIONS.TOP_CENTER,
       persist = false,
       actionLabel,
       onAction,

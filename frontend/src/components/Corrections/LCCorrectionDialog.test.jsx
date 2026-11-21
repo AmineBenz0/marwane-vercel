@@ -26,7 +26,7 @@ it('previews the linked deposit, freezes the opening version and confirms separa
   view.rerender(<LCCorrectionDialog lc={{ ...lc, version_utilisation: 9 }} onClose={vi.fn()} onSaved={saved} />);
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   await screen.findByRole('button', { name: 'Enregistrer les modifications' });
-  expect(post.mock.calls[0]).toEqual(['/lettres-credit/corrections/preview', expect.objectContaining({ expected_version: 2, changes: { montant: '6.50' } })]);
+  expect(post.mock.calls[0]).toEqual(['/lettres-credit/corrections/preview', expect.objectContaining({ expected_version: 2, changes: { montant: '6.50' } }), { silent: true }]);
   expect(saved).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());

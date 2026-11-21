@@ -151,7 +151,7 @@ it('confirms a server-quoted financial avoir and keeps delivery history visible 
     operation_id: expect.stringMatching(/^[a-f0-9-]{36}$/i),
     expected_version: 1, quantite_en_attente_attendue: 5,
     montant_paye_attendu: '105.00', date_effet_attendue: '2026-11-11',
-  });
+  }, { silent: true });
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Annuler les œufs restants ?' })).not.toBeInTheDocument());
   expect(within(panel).getByText(/Avoir de .*7,50/)).toBeVisible();
   const payment = within(panel).getByRole('region', { name: 'Paiement de la vente' });

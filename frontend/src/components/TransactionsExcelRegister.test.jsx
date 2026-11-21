@@ -88,7 +88,7 @@ describe('TransactionsExcelRegister row actions on the card layout', () => {
 
   it.each([
     ['Modifier', 'onEdit'],
-    ['Désactiver', 'onDelete'],
+    [/^Annuler l(a vente|’achat)$/, 'onDelete'],
   ])('"%s" runs its own action without also opening the detail page', async (label, handlerName) => {
     const restore = useCardLayout();
     try {

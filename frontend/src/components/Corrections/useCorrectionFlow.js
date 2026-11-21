@@ -29,7 +29,7 @@ export default function useCorrectionFlow({ entityType, record, onSaved }) {
       if (!current?.row_version) throw new Error('Rechargez cet enregistrement avant de le modifier.');
       const next = { operation_id: crypto.randomUUID(), reason: reason.trim() || 'Correction des informations enregistrées',
         target: { entity_type: entityType, entity_id: entityId, expected_version: current.row_version }, changes };
-      const preview = await post('/corrections/preview', next);
+      const preview = await post('/corrections/preview', next, { silent: true });
       command.current = { ...next, dependency_fingerprint: preview.dependency_fingerprint };
       setReview(preview); setStale(false);
     } catch (err) { setError(err.message || 'L’aperçu ne peut pas être chargé.'); setStale(err.status === 409); }
@@ -39,7 +39,7 @@ export default function useCorrectionFlow({ entityType, record, onSaved }) {
     if (running.current || !command.current || stale) return;
     running.current = true; setBusy(true); setError('');
     let result;
-    try { result = await post('/corrections/apply', command.current); }
+    try { result = await post('/corrections/apply', command.current, { silent: true }); }
     catch (err) {
       const ambiguous = !err.status || err.status >= 500;
       setUncertain(ambiguous); setStale(err.status === 409);

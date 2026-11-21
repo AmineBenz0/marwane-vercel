@@ -15,7 +15,7 @@ export default function useCreditFlow(onSaved, basePath = '/credits') {
     running.current = true; setBusy(true); setError(''); setStale(false); command.current = null;
     try {
       const next = { ...values, operation_id: crypto.randomUUID() };
-      const preview = await post(`${basePath}/preview`, next);
+      const preview = await post(`${basePath}/preview`, next, { silent: true });
       command.current = { command: next, dependency_fingerprint: preview.dependency_fingerprint };
       setReview(preview);
     } catch (err) { setError(err.message || 'Le crédit ne peut pas être vérifié.'); }
@@ -25,7 +25,7 @@ export default function useCreditFlow(onSaved, basePath = '/credits') {
     if (running.current || !command.current || stale) return;
     running.current = true; setBusy(true); setError('');
     let result;
-    try { result = await post(`${basePath}/apply`, command.current); }
+    try { result = await post(`${basePath}/apply`, command.current, { silent: true }); }
     catch (err) {
       const ambiguous = !err.status || err.status >= 500;
       setUncertain(ambiguous); setStale(err.status === 409);

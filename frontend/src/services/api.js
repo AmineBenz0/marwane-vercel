@@ -191,7 +191,16 @@ const mapHttpErrorToMessage = (status, defaultMessage = 'Une erreur est survenue
  * @param {number} status - Le code de statut HTTP
  * @returns {string} Le message d'erreur extrait
  */
+const SERVER_ERROR_MESSAGE = 'Le serveur n’a pas pu terminer l’opération. Vos saisies sont conservées : réessayez dans un instant.';
+
 const extractErrorMessage = (responseData, status) => {
+  // A generic server failure ("Erreur interne", "Internal Server Error") means nothing to the
+  // user; specific French messages from the API are kept.
+  if (status >= 500) {
+    const detail = typeof responseData?.detail === 'string' ? responseData.detail : responseData?.message;
+    if (!detail || /internal server error|erreur interne|server error|traceback|exception/i.test(detail)) return SERVER_ERROR_MESSAGE;
+  }
+
   // Format FastAPI : { detail: string | array }
   if (responseData?.detail) {
     if (typeof responseData.detail === 'string') {
