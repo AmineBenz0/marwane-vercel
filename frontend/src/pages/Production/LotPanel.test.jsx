@@ -56,14 +56,14 @@ describe('LotPanel independent building lots', () => {
     getLots.mockResolvedValue([activeLot]);
     renderPanel();
     fireEvent.click(await screen.findByRole('button', { name: 'Démarrer un lot' }));
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Effectif de départ' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Effectif de départ' }), {
       target: { value: '80' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(createLot).toHaveBeenCalledWith(expect.objectContaining({
       effectif_initial: 80,
       repartitions: [{ id_batiment: 2, effectif_initial: 80 }],
-    })));
+    }), { silent: true }));
   });
 
   it('generates a concise lot name from its building, date, and strain while keeping the default setup simple', async () => {
@@ -117,7 +117,7 @@ describe('LotPanel independent building lots', () => {
     renderPanel();
     fireEvent.click(await screen.findByRole('button', { name: 'Terminer ce lot' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Terminer le lot' }));
-    await waitFor(() => expect(terminateLot).toHaveBeenCalledWith(1, { date_fin_reelle: expect.any(String) }));
+    await waitFor(() => expect(terminateLot).toHaveBeenCalledWith(1, { date_fin_reelle: expect.any(String) }, { silent: true }));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lot B' })).toBeVisible());
   });
   it('shows all active lots by default and filters only finished lots by building', async () => {

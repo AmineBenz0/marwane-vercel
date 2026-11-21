@@ -16,7 +16,7 @@ const stock = {
   totals: { unassigned_sold_eggs: 0 },
   batiments: [{ id_batiment: 7, available_eggs: 125, mortalite: 9, consommation_aliment_kg: 99, categories: [
     { type_oeuf: 'normal', calibre: 'gros', label: 'Normal - Gros', produced_eggs: 200, sold_eggs: 75, available_eggs: 125 },
-    { type_oeuf: 'casse', label: 'Oeufs casses', lost_eggs: 5, available_eggs: 0 },
+    { type_oeuf: 'casse', label: 'Œufs cassés', lost_eggs: 5, available_eggs: 0 },
   ] }],
 };
 const daily = {
@@ -51,14 +51,14 @@ describe('Building production views', () => {
     const building = within(dialog).getByRole('textbox', { name: 'Bâtiment' });
     expect(building).toHaveValue('Batiment 7');
     expect(building).toHaveAttribute('readonly');
-    fireEvent.change(within(dialog).getByRole('spinbutton', { name: /Effectif de départ/ }), { target: { value: '1000' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Effectif de départ/ }), { target: { value: '1000' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByRole('button', { name: 'Saisir la journée' })).toBeEnabled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(post).toHaveBeenCalledWith('/lots-production', expect.objectContaining({
       date_debut: localToday(),
       repartitions: [{ id_batiment: 7, effectif_initial: 1000 }],
-    }));
+    }), { silent: true });
     expect(get).toHaveBeenCalledWith('/productions/stock/daily', { params: { date_stock: localToday() } });
   });
 

@@ -8,14 +8,15 @@ import DateField from '../../utils/DateField';
 import { formatShortDate } from '../../utils/dateFormatting';
 import { cycleProductionService, lotProductionService } from '../../services/productionService';
 import LotDetails from './LotDetails';
-import LotCreateDialog from './LotCreateDialog';
+import LotCreateDialog, { wholeNumberError } from './LotCreateDialog';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 import { localToday } from './useProductionView';
 
 const number = (value) => value == null ? '-' : Number(value).toLocaleString('fr-FR');
 const displayLotName = (lot) => lot.statut === 'termine' ? lot.nom_lot
   : lot.nom_lot?.replace(/\s+en cours$/i, '').trim() || lot.nom_lot;
 const message = (error) => {
-  const detail = error.data?.detail || error.response?.data?.detail;
+  const detail = error.status >= 500 ? null : (error.data?.detail || error.response?.data?.detail);
   return typeof detail === 'string' ? detail : error.message || "Impossible d'enregistrer le lot.";
 };
 
@@ -93,7 +94,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     setSaving(true);
     setError('');
     try {
-      await cycleProductionService.assignHistory(historyCycle.id_cycle, historyPeriod);
+      await cycleProductionService.assignHistory(historyCycle.id_cycle, historyPeriod, { silent: true });
       setHistoryCycle(null);
       setRevision((old) => old + 1);
       onChange?.();
@@ -101,8 +102,22 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
     finally { setSaving(false); }
   };
 
+  const numberErrors = dialog === 'edit' ? {
+    effectif_initial: values.effectif_initial === '' ? 'Indiquez l’effectif de départ.' : wholeNumberError(values.effectif_initial, 1, 'L’effectif'),
+    age_depart_semaines: wholeNumberError(values.age_depart_semaines, 0, 'L’âge'),
+    duree_semaines: wholeNumberError(values.duree_semaines, 1, 'La durée'),
+  } : {};
+  const firstNumberError = Object.values(numberErrors).find(Boolean);
   const submit = async (event) => {
     event.preventDefault();
+    if (firstNumberError) return; // shown under the field
+    if (dialog === 'end') {
+      const end = values.date_fin_reelle || '';
+      if (!end) { setError('Indiquez la date de fin.'); return; }
+      if (end > localToday()) { setError('La date de fin ne peut pas être dans le futur.'); return; }
+      if (selected?.date_debut && end < selected.date_debut) { setError(`La date de fin doit suivre le début du lot (${formatShortDate(selected.date_debut)}).`); return; }
+    } else if (!String(values.nom_lot || '').trim()) { setError('Indiquez le nom du lot.'); return; }
+    else if (!values.date_debut) { setError('Indiquez la date de mise en place.'); return; }
     setSaving(true);
     setError('');
     try {
@@ -110,7 +125,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       if (dialog === 'end') {
         result = await lotProductionService.terminateLot(selected.id_lot, {
           date_fin_reelle: values.date_fin_reelle,
-        });
+        }, { silent: true });
       } else {
         const count = Number(values.effectif_initial);
         const data = {
@@ -121,7 +136,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           date_fin_prevue: values.date_fin_prevue || null,
           repartitions: [{ id_batiment: Number(values.id_batiment), effectif_initial: count }],
         };
-        result = await lotProductionService.updateLot(selected.id_lot, data);
+        result = await lotProductionService.updateLot(selected.id_lot, data, { silent: true });
       }
       finish(result);
     } catch (err) { setError(message(err)); }
@@ -289,7 +304,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
       </Dialog>
       {dialog === 'create' && <LotCreateDialog available={available} onClose={() => setDialog('')} onCreated={finish} />}
       <Dialog open={dialog === 'edit' || dialog === 'end'} onClose={() => { if (!saving) { setDialog(''); setError(''); } }} maxWidth="sm" fullWidth>
-        <Box component="form" onSubmit={submit}>
+        <Box component="form" noValidate onSubmit={submit}>
           <DialogTitle>{dialog === 'edit' ? 'Modifier le lot' : 'Terminer le lot'}</DialogTitle>
           <DialogContent>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -304,9 +319,12 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
                     .map((building) => <MenuItem key={building.id_batiment} value={building.id_batiment}>{building.nom}</MenuItem>)}
                 </TextField>
                 <DateField label="Date de mise en place" required value={values.date_debut || ''} onChange={(event) => field('date_debut', event.target.value)} />
-                <TextField label="Effectif de départ" required type="number" inputProps={{ min: 1, step: 1 }} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)} />
-                <TextField label="Âge à l'arrivée (semaines)" required type="number" inputProps={{ min: 0, step: 1 }} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)} helperText="L'âge est propre à ce lot." />
-                <TextField label="Durée prévue (semaines)" required type="number" inputProps={{ min: 1, step: 1 }} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)} />
+                <TextField label="Effectif de départ" required type="text" inputProps={DECIMAL_INPUT_PROPS} value={values.effectif_initial ?? ''} onChange={(event) => field('effectif_initial', event.target.value)}
+                  error={Boolean(numberErrors.effectif_initial)} helperText={numberErrors.effectif_initial || undefined} />
+                <TextField label="Âge à l'arrivée (semaines)" required type="text" inputProps={DECIMAL_INPUT_PROPS} value={values.age_depart_semaines ?? 0} onChange={(event) => field('age_depart_semaines', event.target.value)}
+                  error={Boolean(numberErrors.age_depart_semaines)} helperText={numberErrors.age_depart_semaines || "L'âge est propre à ce lot."} />
+                <TextField label="Durée prévue (semaines)" required type="text" inputProps={DECIMAL_INPUT_PROPS} value={values.duree_semaines ?? 100} onChange={(event) => field('duree_semaines', event.target.value)}
+                  error={Boolean(numberErrors.duree_semaines)} helperText={numberErrors.duree_semaines || undefined} />
                 <DateField label="Date de fin prévue (facultatif)" value={values.date_fin_prevue || ''} onChange={(event) => field('date_fin_prevue', event.target.value)} helperText="Cette date est indicative. La clôture reste une action manuelle." />
                 <TextField label="Souche (facultatif)" inputProps={{ maxLength: 100 }} value={values.souche || ''} onChange={(event) => field('souche', event.target.value)} />
                 <TextField label="Notes (facultatif)" multiline minRows={2} value={values.notes || ''} onChange={(event) => field('notes', event.target.value)} />
@@ -315,7 +333,7 @@ export default function LotPanel({ buildings, refreshKey, onChange, managementMo
           </DialogContent>
           <DialogActions>
             <Button color="inherit" disabled={saving} onClick={() => { setDialog(''); setError(''); }}>Annuler</Button>
-            <Button type="submit" variant="contained" color={dialog === 'end' ? 'error' : 'primary'} disabled={saving || (dialog !== 'end' && (!values.id_batiment || Number(values.effectif_initial) <= 0))}>
+            <Button type="submit" variant="contained" color={dialog === 'end' ? 'error' : 'primary'} disabled={saving}>
               {saving ? 'Enregistrement...' : dialog === 'end' ? 'Terminer le lot' : 'Enregistrer'}
             </Button>
           </DialogActions>
