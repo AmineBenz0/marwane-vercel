@@ -9,8 +9,8 @@ const sources = [
   { id_production: 12, date_production: '2026-10-21', type_oeuf: 'normal', calibre: 'gros', grammage: 66, nombre_oeufs: 80, disponible: 80, vendable: true },
 ];
 const props = { open: true, onClose: vi.fn(), onSubmit: vi.fn() };
-const quantity = () => screen.getByRole('spinbutton', { name: /Quantité vendue/ });
-const price = () => screen.getByRole('spinbutton', { name: /Prix unitaire/ });
+const quantity = () => screen.getByRole('textbox', { name: /Quantité vendue/ });
+const price = () => screen.getByRole('textbox', { name: /Prix unitaire/ });
 const selectBuilding = async (name) => {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Bâtiment source/ }));
   fireEvent.click(await screen.findByRole('option', { name, exact: true }));
@@ -52,7 +52,7 @@ describe('sale entry preserves user input', () => {
     await screen.findByText('Voir le stock par date');
     expect(screen.getByRole('checkbox', { name: 'Livraison différée' })).toBeChecked();
     expect(screen.getByLabelText(/Date prévue de livraison/)).toHaveValue('29/10/99');
-    expect(quantity()).toHaveValue(50);
+    expect(quantity()).toHaveValue('50');
   });
 
   it('clears a new deferred sale when its quantity fits stock and requires acceptance again if increased', async () => {
@@ -69,7 +69,7 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(quantity(), { target: { value: '60' } });
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
     expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
-    expect(price()).toHaveValue(1.5);
+    expect(price()).toHaveValue('1.5');
     fireEvent.change(quantity(), { target: { value: '100' } });
     expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Enregistrer la vente' })).toBeDisabled();
@@ -95,8 +95,8 @@ describe('sale entry preserves user input', () => {
     await selectBuilding('Bâtiment B');
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Livraison différée' })).not.toBeInTheDocument());
     expect(screen.queryByLabelText(/Date prévue de livraison/)).not.toBeInTheDocument();
-    expect(quantity()).toHaveValue(100);
-    expect(price()).toHaveValue(1.5);
+    expect(quantity()).toHaveValue('100');
+    expect(price()).toHaveValue('1.5');
 
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
     expect(await screen.findByRole('checkbox', { name: 'Livraison différée' })).not.toBeChecked();
@@ -191,8 +191,8 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(price(), { target: { value: '1.25' } });
     await selectBuilding('Bâtiment A');
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
-    expect(quantity()).toHaveValue(50);
-    expect(price()).toHaveValue(1.25);
+    expect(quantity()).toHaveValue('50');
+    expect(price()).toHaveValue('1.25');
     expect(screen.getByRole('group', { name: 'Récapitulatif des montants' })).toHaveTextContent('62,50 MAD');
   });
 
@@ -202,15 +202,15 @@ describe('sale entry preserves user input', () => {
     fireEvent.change(quantity(), { target: { value: '70' } });
     fireEvent.change(price(), { target: { value: '2.5' } });
     view.rerender(<TransactionForm {...props} initialValues={{}} />);
-    expect(quantity()).toHaveValue(70);
-    expect(price()).toHaveValue(2.5);
+    expect(quantity()).toHaveValue('70');
+    expect(price()).toHaveValue('2.5');
     await selectBuilding('Bâtiment A');
     fireEvent.click(screen.getByRole('button', { name: 'Choisir Normaux' }));
     await screen.findByText(/Il manque 10 œufs/);
-    expect(quantity()).toHaveValue(70);
-    expect(price()).toHaveValue(2.5);
+    expect(quantity()).toHaveValue('70');
+    expect(price()).toHaveValue('2.5');
     await selectBuilding('Bâtiment B');
-    expect(quantity()).toHaveValue(70);
-    expect(price()).toHaveValue(2.5);
+    expect(quantity()).toHaveValue('70');
+    expect(price()).toHaveValue('2.5');
   });
 });

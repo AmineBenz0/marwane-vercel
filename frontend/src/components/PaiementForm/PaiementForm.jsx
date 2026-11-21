@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import { formatMontant } from '../../utils/formatNumber';
 import { get } from '../../services/api';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 /**
  * Types de paiement disponibles.
@@ -147,14 +148,14 @@ function PaiementForm({ defaultValues = {}, isEditing = false, transaction, regi
             })}
             label={typePaiement === 'lc' ? 'Montant de la LC (MAD)' : 'Montant (MAD)'}
             disabled={isEditing}
-            type="number"
+            type="text"
             fullWidth
             required
             error={!!errors.montant}
             helperText={errors.montant?.message || (typePaiement === 'lc' ? '' : 'Montant en dirhams')}
             placeholder={typePaiement === 'lc' ? 'Sélectionnez une LC' : undefined}
             InputProps={{ readOnly: typePaiement === 'lc' }}
-            inputProps={{ 
+            inputProps={{ ...DECIMAL_INPUT_PROPS, 
               step: '0.01',
               min: '0.01',
             }}

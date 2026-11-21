@@ -69,6 +69,7 @@ import { get, getProduitsParType } from '../../services/api';
 import { formatMontant } from '../../utils/formatNumber';
 import { getDefaultDueDate } from '../../utils/dueDates';
 import { transactionValidationSchema } from './transactionValidation';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 const EMPTY_INITIAL_VALUES = {};
 
@@ -991,12 +992,12 @@ function TransactionForm({
                           {...field}
                           fullWidth
                           label="Montant (MAD)"
-                          type="number"
+                          type="text"
                           error={!!error}
                           sx={getRequiredFieldAnimation(error, animateInvalidFields)}
                           helperText={error?.message}
                           disabled={loading}
-                          inputProps={{ step: '0.01', min: '0.01' }}
+                          inputProps={{ ...DECIMAL_INPUT_PROPS, step: '0.01', min: '0.01' }}
                           InputLabelProps={{ shrink: true }}
                           size="small"
                         />
@@ -1672,8 +1673,8 @@ function TransactionForm({
                                     {...field}
                                     fullWidth
                                     label={shouldShowBatimentSource ? "Quantité vendue (œufs) *" : "Quantité *"}
-                                    type="number"
-                                    inputProps={{ min: 1, step: 1 }}
+                                    type="text"
+                                    inputProps={{ ...DECIMAL_INPUT_PROPS, min: 1, step: 1 }}
                                     value={field.value ?? ''}
                                     error={!!error}
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}
@@ -1705,8 +1706,8 @@ function TransactionForm({
                                     {...field}
                                     fullWidth
                                     label="Prix unitaire (MAD) *"
-                                    type="number"
-                                    inputProps={{ min: 0, step: 0.01 }}
+                                    type="text"
+                                    inputProps={{ ...DECIMAL_INPUT_PROPS, min: 0, step: 0.01 }}
                                     value={field.value ?? ''}
                                     error={!!error}
                                     sx={getRequiredFieldAnimation(error, animateInvalidFields)}

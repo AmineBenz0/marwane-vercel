@@ -6,6 +6,7 @@ import { formatMontant } from '../../utils/formatNumber';
 import { formatShortDate } from '../../utils/dateFormatting';
 import useCreditFlow from './useCreditFlow';
 import DialogTitleWithClose from '../DialogTitleWithClose';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 const metadataLabels = { numero_reference: 'Référence LC', banque_emettrice: 'Banque émettrice' };
 
@@ -16,6 +17,7 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const [clients, setClients] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loadError, setLoadError] = useState('');
+  const [amountError, setAmountError] = useState(false);
   const [reload, setReload] = useState(0);
   const [values, setValues] = useState({ montant: String(lc.montant), date_emission: lc.date_emission,
     numero_reference: lc.numero_reference || '', banque_emettrice: lc.banque_emettrice || '',
@@ -38,6 +40,8 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
   const submit = event => {
     event.preventDefault();
     const changes = {};
+    if (!cancelUsage && !(Number(values.montant) > 0)) { setAmountError(true); return; }
+    setAmountError(false);
     if (!cancelUsage) {
       for (const field of [...Object.keys(metadataLabels), 'montant', 'date_emission', 'date_disponibilite']) {
         const value = field === 'banque_emettrice' ? values[field] || null : values[field];
@@ -84,7 +88,8 @@ export default function LCCorrectionDialog({ lc: sourceLc, cancelUsage = false, 
         {!cancelUsage && <>
           {Object.entries(metadataLabels).map(([field, label]) => <TextField key={field} label={label} value={values[field]} onChange={update(field)}
             required={field === 'numero_reference'} inputProps={{ maxLength: field === 'banque_emettrice' ? 100 : 50 }} disabled={flow.busy} />)}
-          <TextField label="Montant de la LC (MAD)" type="number" value={values.montant} onChange={update('montant')} inputProps={{ min: 0.01, step: '0.01' }} required disabled={flow.busy} />
+          <TextField label="Montant de la LC (MAD)" type="text" value={values.montant} onChange={update('montant')} inputProps={{ ...DECIMAL_INPUT_PROPS, min: 0.01, step: '0.01' }} required disabled={flow.busy}
+            error={amountError} helperText={amountError ? 'Indiquez un montant supérieur à 0.' : undefined} />
           <DateField fullWidth required label="Date d’émission" value={values.date_emission} onChange={update('date_emission')} disabled={flow.busy} />
           <DateField fullWidth required label="Date de disponibilité" value={values.date_disponibilite} onChange={update('date_disponibilite')} disabled={flow.busy} />
           {context.date_effet && <DateField fullWidth required label="Date de l’utilisation" value={values.date_effet} onChange={update('date_effet')} disabled={flow.busy} />}

@@ -109,6 +109,14 @@ describe('transactionValidationSchema', () => {
     expect(result.lignes[0].paiements[0].montant).toBe(31);
   });
 
+  it('refuses a payment above the line total on a new transaction', async () => {
+    const data = validTransaction();
+    data.lignes[0].ajouter_paiement = true;
+    data.lignes[0].paiements[0].montant = '310';
+
+    await expect(transactionValidationSchema.validate(data)).rejects.toThrow('Le paiement dépasse le montant de la ligne (31,00 MAD)');
+  });
+
   it('requires an LC when payment type is letter of credit', async () => {
     const data = validTransaction();
     data.lignes[0].ajouter_paiement = true;

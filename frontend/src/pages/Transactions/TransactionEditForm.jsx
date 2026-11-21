@@ -6,6 +6,7 @@ import useCorrectionFlow from '../../components/Corrections/useCorrectionFlow';
 import CorrectionReview from '../../components/Corrections/CorrectionReview';
 import { changedValues, eggCategory, money } from '../../components/Corrections/correctionValues';
 import DialogTitleWithClose from '../../components/DialogTitleWithClose';
+import { DECIMAL_INPUT_PROPS } from '../../utils/decimalInput';
 
 const original = tx => ({ date_transaction: tx.date_transaction?.slice(0, 10) || '', date_echeance: tx.date_echeance?.slice(0, 10) || '',
   quantite: String(tx.quantite), prix_unitaire: String(tx.prix_unitaire), id_produit: tx.id_produit || '', id_batiment: tx.id_batiment || '',
@@ -106,8 +107,8 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
           {!products.some(row => row.id_produit === Number(values.id_produit)) && <MenuItem value={values.id_produit}>Produit n° {values.id_produit}</MenuItem>}
           {products.map(row => <MenuItem key={row.id_produit} value={row.id_produit}>{row.nom_produit}</MenuItem>)}
         </TextField>
-        <TextField label="Quantité" type="number" value={values.quantite} onChange={update('quantite')} disabled={flow.busy || inactive} required inputProps={{ min: minimum, step: 1 }} helperText={transaction.est_promesse ? `Minimum : ${minimum} (œufs fournis et reliquat clôturé)` : ''} />
-        <TextField label="Prix unitaire (MAD)" type="number" value={values.prix_unitaire} onChange={update('prix_unitaire')} disabled={flow.busy || inactive} required inputProps={{ min: 0.01, step: '0.01' }} />
+        <TextField label="Quantité" type="text" value={values.quantite} onChange={update('quantite')} disabled={flow.busy || inactive} required inputProps={{ ...DECIMAL_INPUT_PROPS, min: minimum, step: 1 }} helperText={transaction.est_promesse ? `Minimum : ${minimum} (œufs fournis et reliquat clôturé)` : ''} />
+        <TextField label="Prix unitaire (MAD)" type="text" value={values.prix_unitaire} onChange={update('prix_unitaire')} disabled={flow.busy || inactive} required inputProps={{ ...DECIMAL_INPUT_PROPS, min: 0.01, step: '0.01' }} />
         <Typography fontWeight={700}>Montant total : {money(Number(values.quantite) * Number(values.prix_unitaire))}</Typography>
         <DateField label="Date d’échéance du paiement (facultatif)" value={values.date_echeance || ''} onChange={update('date_echeance')} disabled={flow.busy || inactive} fullWidth />
         {eggs && <>
@@ -119,8 +120,8 @@ export default function TransactionEditForm({ open, onClose, onCorrected, initia
           {manual && <>
             <Typography variant="body2" color="text.secondary">Œufs à prendre dans chaque production.</Typography>
             {sourceError && <Alert severity="error" action={<Button onClick={() => setReload(v => v + 1)}>Réessayer</Button>}>{sourceError}</Alert>}
-            {sourceRows.filter(row => Number(allocations[row.id_production]) > 0 || !category || row.type_oeuf === category[0] && (row.calibre || null) === category[1]).map(row => <TextField key={row.id_production} type="number"
-              label={names.id_production[row.id_production]} value={allocations[row.id_production] || ''} disabled={flow.busy || inactive} inputProps={{ min: 0, step: 1 }}
+            {sourceRows.filter(row => Number(allocations[row.id_production]) > 0 || !category || row.type_oeuf === category[0] && (row.calibre || null) === category[1]).map(row => <TextField key={row.id_production} type="text"
+              label={names.id_production[row.id_production]} value={allocations[row.id_production] || ''} disabled={flow.busy || inactive} inputProps={{ ...DECIMAL_INPUT_PROPS, min: 0, step: 1 }}
               onChange={event => setAllocations(v => ({ ...v, [row.id_production]: event.target.value }))} helperText={row.disponible === undefined ? 'Déjà utilisée' : `${Number(row.disponible).toLocaleString('fr-FR')} disponibles`} />)}
           </>}
         </>}
